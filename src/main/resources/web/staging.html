@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Loyalty · entorno local</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><a href="/preview" class="brand">come<span>back</span><i>●</i></a><span class="pill">Demo local</span></header>
+<main><div class="eyebrow">Tu proyecto, en marcha</div><h1>Explora Loyalty.</h1><p>Un negocio, dos sucursales y dos clientes ficticios para recorrer los avances.</p>
+<div class="grid">
+<section class="panel"><span class="tag">Admin</span><h2>Administra la plataforma</h2><p>Negocios, membresías, pagos registrados, avisos, suspensión e informes.</p><a class="button" href="/platform" target="_blank" rel="noopener">Abrir administración</a></section>
+<section class="panel"><span class="tag">Store</span><h2>Gestiona tu negocio</h2><p>Promociones, sucursales, compras y canjes. Consulta también tu estado de cuenta.</p><a class="button" href="/" target="_blank" rel="noopener">Abrir negocio</a></section>
+<section class="panel"><span class="tag">Clients</span><h2>Vuelve por una recompensa</h2><p>El registro ya no pide contraseña. Usa una cédula ficticia nueva para probarlo; Ana y Luis ya tienen tarjeta y se atienden desde caja.</p><a class="button" href="{{CLIENT_PATH}}" target="_blank" rel="noopener">Abrir registro sin contraseña</a></section>
+<section class="panel"><span class="tag">Recorrido sugerido</span><h2>De la compra al premio</h2><p>Entra al negocio y busca DEMO10001. Registra una compra o revisa un premio, verifica al titular y confirma el canje. La misma tarjeta acumula en Centro y Norte.</p><p class="small">Los accesos privados están en el archivo local que abre el instalador. Puedes volver a mostrarlos con <code>python3 scripts/staging.py credentials</code>.</p></section>
+</div><section class="panel"><h2>Datos que se conservan</h2><p>Reiniciar o reconstruir el servidor conserva los cambios del entorno local. No se repiten las compras de ejemplo ni se reemplazan tus credenciales.</p><p class="small">Wallet en teléfonos requiere HTTPS y las credenciales de Apple/Google. En local puedes probar el registro y caja; aún no se instala una tarjeta real en el teléfono.</p></section>
+<p class="small">Build {{BUILD}} · Entorno de demostración · Los pagos no son cobros bancarios.</p></main>
+<footer>Una tarjeta. Todas tus sucursales.</footer>
+</body></html>

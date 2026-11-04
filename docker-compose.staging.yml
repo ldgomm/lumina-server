@@ -1,0 +1,65 @@
+name: loyalty-staging
+services:
+  loyalty-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: loyalty_staging
+      POSTGRES_USER: loyalty
+      POSTGRES_PASSWORD: ${STAGING_DATABASE_PASSWORD:?Run scripts/staging.py init}
+    volumes:
+      - loyalty-staging-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loyalty -d loyalty_staging"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  loyalty-server:
+    image: loyalty-server:local-staging
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        LOYALTY_SOURCE_SHA: ${LOYALTY_SOURCE_SHA:-working-tree}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      loyalty-db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${LOYALTY_HTTP_PORT:-8097}:8080"
+    environment:
+      LOYALTY_PROFILE: local-staging
+      STAGING_INSTANCE_ID: ${STAGING_INSTANCE_ID:?Run scripts/staging.py init}
+      DATABASE_URL: jdbc:postgresql://loyalty-db:5432/loyalty_staging
+      DATABASE_USER: loyalty
+      DATABASE_PASSWORD: ${STAGING_DATABASE_PASSWORD:?Run scripts/staging.py init}
+      IDENTITY_PEPPER: ${STAGING_IDENTITY_PEPPER:?Run scripts/staging.py init}
+      PLATFORM_ADMIN_TOKEN: ${STAGING_ADMIN_TOKEN:?Run scripts/staging.py init}
+      STAGING_OWNER_TOKEN: ${STAGING_OWNER_TOKEN:?Run scripts/staging.py init}
+      STAGING_CASHIER_TOKEN: ${STAGING_CASHIER_TOKEN:?Run scripts/staging.py init}
+      STAGING_ALICE_PASSWORD: ${STAGING_ALICE_PASSWORD:?Run scripts/staging.py init}
+      STAGING_BOB_PASSWORD: ${STAGING_BOB_PASSWORD:?Run scripts/staging.py init}
+      PUBLIC_BASE_URL: http://localhost:${LOYALTY_HTTP_PORT:-8097}
+      APPLE_WALLET_ENABLED: "false"
+      GOOGLE_WALLET_ENABLED: "false"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  loyalty-staging-data:

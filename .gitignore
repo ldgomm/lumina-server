@@ -1,0 +1,42 @@
+
+
+# Loyalty v008 private files
+.gradle/
+build/
+.idea/
+*.iml
+.DS_Store
+.env
+.env.*
+!.env.example
+*.p12
+*.p8
+*.pem
+*.key
+*service-account*.json
+.loyalty-v001-state.json
+
+.local-demo.json
+
+.loyalty-v001.lock/
+
+# loyalty-workflow-v002
+.kotlin/
+__pycache__/
+*.pyc
+.loyalty-checkpoint.lock/
+
+# loyalty-wallet-v004
+*.pfx
+*.cer
+*.crt
+*.pkpass
+*.pkpasses
+
+# loyalty-staging-v005
+.local-staging/
+.loyalty-staging.lock/
+
+# loyalty-wallet-local-v007
+.local-wallet/
+.loyalty-wallet.lock/

@@ -1,0 +1,55 @@
+# loyalty
+
+This project was created using the [Ktor Project Generator](https://start.ktor.io).
+
+Here are some useful links to get you started:
+
+* [Ktor Documentation](https://ktor.io/docs/home.html)
+* [Ktor GitHub page](https://github.com/ktorio/ktor)
+* [Ktor Slack chat](https://app.slack.com/client/T09229ZC6/C0A974TJ9). [Request an invite](https://surveys.jetbrains.com/s3/kotlin-slack-sign-up).
+
+## Features
+
+Here's a list of features included in this project:
+
+| Name | Description |
+|------|-------------|
+
+## Building & Running
+
+To build or run the project, use one of the following tasks:
+
+| Task              | Description       |
+|-------------------|-------------------|
+| `./gradlew test`  | Run the tests     |
+| `./gradlew build` | Build the project |
+| `./gradlew run`   | Run the server    |
+
+If the server starts successfully, you'll see the following output:
+
+```
+2024-12-04 14:32:45.584 [main] INFO  Application - Application started in 0.303 seconds.
+2024-12-04 14:32:45.682 [main] INFO  Application - Responding at http://0.0.0.0:8080
+```
+
+<!-- loyalty-v008 -->
+
+## Loyalty: entorno local completo
+
+Desde `~/Downloads`, ejecuta `bash loyalty_continuar_v008.sh`. El proyecto de destino es `/Users/ldgomm/Developer/pdc/sales/loyalty`.
+
+El instalador corrige las referencias al paquete `com.premierdarkcoffee.loyalty`, restaura las pruebas e incorpora Docker/PostgreSQL, configuración privada, accesos y HTTPS. Conserva tu código y formato fuera de los cambios indicados. Crea un commit local después de las pruebas completas y Docker/gateway aprobados; después intenta HTTPS. Siempre guarda el resultado de la ejecución y el mismo script en un ZIP de Downloads. No hace push.
+
+- Vista de avances: `http://localhost:8097/preview`.
+- Administrador: `http://localhost:8097/platform`.
+- Negocio/caja: `http://localhost:8097/`.
+- Credenciales privadas: `.local-staging/access.html`.
+- Configuración del entorno: `.env`, creada con claves aleatorias y conservada al repetir.
+- Configuración Apple/Google: `.env.wallet`.
+- Guía de Wallet: `.local-wallet/guide.html`, disponible después de aprobar HTTPS.
+
+El registro del cliente no tiene contraseña. El QR del negocio abre el formulario y después permite añadir la tarjeta al teléfono cuando el proveedor esté configurado. Las tarjetas no se consideran verificadas hasta probar instalación y actualización real en iPhone/Android.
+
+Loyalty usa su propia base y volumen Docker; no importa automáticamente datos ni credenciales de Comeback. Conservar el proyecto anterior permite una futura migración explícita si se necesita. El nombre interno `comeback_migrations` y los identificadores de pases se mantienen para preservar compatibilidad; todas las declaraciones Kotlin usan el paquete Loyalty.
+
+Consulta `docs/local-v008.md` para los comandos de administración y las verificaciones.

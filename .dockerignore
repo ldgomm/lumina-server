@@ -1,0 +1,27 @@
+# Only compilation inputs enter the Docker build context.
+**
+!Dockerfile
+!gradlew
+!settings.gradle.kts
+!build.gradle.kts
+!gradle.properties
+!gradle/
+!gradle/**
+!src/
+!src/**
+**/.env*
+**/*secret*
+**/*credential*
+**/*service-account*
+**/*service_account*
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.p8
+**/*.key
+**/*.cer
+**/*.crt
+**/*.pkpass
+**/*.pkpasses
+**/*.log
+**/*.zip
