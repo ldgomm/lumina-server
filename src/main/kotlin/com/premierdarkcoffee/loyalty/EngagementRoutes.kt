@@ -1,0 +1,20 @@
+package com.premierdarkcoffee.loyalty
+
+import io.ktor.http.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+
+fun Route.engagementRoutes(service:LoyaltyService) {
+    get("/engagement.js"){call.web("engagement.js",ContentType.Application.JavaScript)}
+    post("/api/staff/purchases/quote"){val s=io{service.staff(call.bearer())};val p=call.body<Purchase>();call.respond(io{service.receiptQuote(s,p)})}
+    post("/api/staff/promotion-templates"){val s=io{service.staff(call.bearer())};val p=call.body<PromotionTemplate>();call.respond(io{service.createPromotion(s,p,call.key())})}
+    get("/api/staff/wallet-design"){val s=io{service.staff(call.bearer())};call.respond(io{service.design(s)})}
+    put("/api/staff/wallet-design"){val s=io{service.staff(call.bearer())};val p=call.body<WalletDesignChange>();call.respond(io{service.saveDesign(s,p)})}
+    get("/api/staff/customer-insights"){val s=io{service.staff(call.bearer())};val offset=call.request.queryParameters["offset"]?.toIntOrNull()?:0;call.respond(io{service.customerInsights(s,offset)})}
+    get("/api/staff/customer-insights/{id}"){val s=io{service.staff(call.bearer())};call.respond(io{service.customerDetail(s,call.parameters["id"]!!)})}
+    put("/api/staff/customer-insights/{id}/preferences"){val s=io{service.staff(call.bearer())};val p=call.body<CustomerPreferencesChange>();call.respond(io{service.savePreferences(s,call.parameters["id"]!!,p)})}
+    get("/api/staff/customer-events"){val s=io{service.staff(call.bearer())};call.respond(io{service.customerEvents(s)})}
+    post("/api/staff/customer-events"){val s=io{service.staff(call.bearer())};val p=call.body<CustomerEvent>();call.respond(io{service.createCustomerEvent(s,p,call.key())})}
+    delete("/api/staff/customer-events/{id}"){val s=io{service.staff(call.bearer())};call.respond(io{service.cancelCustomerEvent(s,call.parameters["id"]!!)})}
+    get("/wallet/brand/{slug}/logo.png"){val bytes=io{service.db.tx{c->val tenant=service.tenant(c,call.parameters["slug"]!!).getValue("id").toString().trim('"');walletDesign(c,tenant).logoPng?.let(::validateWalletLogo)?:walletLogo(160)}};call.respondBytes(bytes,ContentType.Image.PNG)}
+}

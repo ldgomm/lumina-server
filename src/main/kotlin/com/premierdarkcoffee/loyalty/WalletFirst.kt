@@ -23,7 +23,7 @@ object WalletFirstMigration {
     }
 }
 
-@Serializable data class WalletEnrollment(val name: String, val document: String, val acceptedTerms: Boolean)
+@Serializable data class WalletEnrollment(val name: String, val document: String, val acceptedTerms: Boolean, val preferences: CustomerPreferences = CustomerPreferences())
 @Serializable data class CounterRedemption(
     val memberId: String, val branchId: String, val rewardId: String,
     val expectedRevision: Long, val expectedRewardVersion: Int,
@@ -35,6 +35,7 @@ object WalletFirstMigration {
 /** A document is a unique identifier within a business, never an authentication secret. */
 fun LoyaltyService.enrollWithoutPassword(slug: String, input: WalletEnrollment): JsonObject {
     text(input.name, 80)
+    input.preferences.validate()
     need(input.acceptedTerms, "CONSENT_REQUIRED", "Debes aceptar las condiciones del piloto.")
     return db.tx { c ->
         val business = tenant(c, slug).getValue("id").jsonPrimitive.content
@@ -44,6 +45,7 @@ fun LoyaltyService.enrollWithoutPassword(slug: String, input: WalletEnrollment):
         val inserted = c.exec("INSERT INTO members(tenant_id,id,identity_hash,password_hash,name,card_code,terms_version) VALUES(?,?,?,NULL,?,?,'pilot-1') ON CONFLICT(tenant_id,identity_hash) DO NOTHING",
             business, memberId, identity, input.name.trim(), Security.token())
         need(inserted == 1, "ENROLLMENT_UNAVAILABLE", "No se puede crear otra tarjeta con esta cédula. Abre la que tienes en Wallet o pide al dueño del negocio que verifique tu identidad para recuperarla.", 409)
+        writePreferences(c,Member(business,memberId),input.preferences)
         changed(c, business, memberId)
         audit(c, business, memberId, "ENROLL_WALLET", memberId)
         session(c, Member(business, memberId))
@@ -58,6 +60,7 @@ fun LoyaltyService.redeemAtCounter(staff: Staff, input: CounterRedemption, key: 
     need(input.expectedRevision >= 0 && input.expectedRewardVersion > 0, "INVALID_VERSION", "Recarga los datos del cliente y del premio.")
     return db.tx { c -> once(c, staff.tenant, "counter-redeem", key, json.encodeToString(input)) {
         commercial.requireActive(c, staff.tenant)
+        requireCounterReward(c,staff.tenant,input.rewardId)
         branch(c, staff.tenant, input.branchId)
         lockMember(c, staff.tenant, input.memberId)
         releaseExpired(c, staff.tenant, input.memberId)

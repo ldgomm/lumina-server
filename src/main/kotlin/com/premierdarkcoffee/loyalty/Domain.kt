@@ -50,10 +50,12 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
     val name: String, val kind: Kind, val active: Boolean = true,
     val unitMinor: Long = 100, val pointsPerUnit: Long = 1, val cashbackBps: Int = 0,
     val stampsPerPurchase: Long = 1, val minimumSpendMinor: Long = 1,
-    val branchIds: Set<String> = emptySet(), val window: Window = Window(), val bonuses: List<Bonus> = emptyList()
+    val branchIds: Set<String> = emptySet(), val window: Window = Window(), val bonuses: List<Bonus> = emptyList(),
+    val productGroup: String = "", val countUnits: Boolean = false
 ) {
     fun validate() {
         text(name); window.validate()
+        need(productGroup.length <= 60 && (!countUnits || kind == Kind.STAMPS),"INVALID_PRODUCT_RULE","El conteo por productos se usa con sellos.")
         need(unitMinor in 1..1_000_000_000 && pointsPerUnit in 1..1_000_000 && cashbackBps in 0..10_000 && stampsPerPurchase in 1..100 && minimumSpendMinor in 1..1_000_000_000,"INVALID_RULE","Valores de acumulación fuera de rango.")
         need(kind != Kind.CASHBACK || cashbackBps > 0,"INVALID_RULE","Define el porcentaje de cashback.")
         need(bonuses.size <= 30 && bonuses.map { it.priority }.distinct().size == bonuses.size,"AMBIGUOUS_PRIORITY","Cada bono debe tener prioridad distinta; máximo 30.")
@@ -78,9 +80,12 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
 @Serializable data class Enrollment(val name: String, val document: String, val password: String, val acceptedTerms: Boolean)
 @Serializable data class Login(val document: String, val password: String)
 @Serializable data class ProgramChange(val expectedVersion: Int, val program: Program)
-@Serializable data class Reward(val programId: String, val name: String, val cost: Long, val active: Boolean = true)
+@Serializable data class Reward(val programId: String, val name: String, val cost: Long, val active: Boolean = true, val benefit: Benefit? = null)
 @Serializable data class RewardChange(val expectedVersion: Int, val reward: Reward)
-@Serializable data class Purchase(val memberId: String, val branchId: String, val receipt: String, val amountMinor: Long, val currency: String)
+@Serializable data class Purchase(val memberId: String, val branchId: String, val receipt: String, val amountMinor: Long, val currency: String,
+    val items: List<PurchaseItem> = emptyList(), val programIds: Set<String>? = null, val rewardId: String? = null,
+    val expectedRevision: Long? = null, val expectedRewardVersion: Int? = null,
+    val identityVerified: Boolean = false, val customerConfirmed: Boolean = false)
 @Serializable data class Reserve(val rewardId: String)
 @Serializable data class Confirm(val token: String, val branchId: String)
 @Serializable data class Lookup(val document: String? = null, val cardCode: String? = null)

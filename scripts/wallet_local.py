@@ -129,12 +129,13 @@ def gateway_config(nonce, upstream='loyalty-server:8080', resolver=True):
     # Match the original request target, not a normalized path. Encoded traversal never reaches Ktor.
     rules = [
         ('GET', r'/join/[a-z0-9][a-z0-9-]{1,60}'),
-        ('GET', r'/(?:app\.js|style\.css|wallet-ui\.js|scanner\.js|jsqr\.js|commercial\.js|commercial\.css|promotion-editor\.js)'),
+        ('GET', r'/(?:app\.js|style\.css|wallet-ui\.js|scanner\.js|jsqr\.js|commercial\.js|commercial\.css|promotion-editor\.js|engagement\.js)'),
         ('GET', r'/api/public/[a-z0-9][a-z0-9-]{1,60}(?:/qr)?'),
         ('POST', r'/api/public/[a-z0-9][a-z0-9-]{1,60}/(?:join|restore)'),
         ('GET', r'/api/me(?:/qr|/wallet-status|/access)?'),
         ('POST', r'/api/me/(?:logout|wallet/(?:apple|google)/link)'),
         ('GET', r'/wallet/logo\.png'),
+        ('GET', r'/wallet/brand/[a-z0-9][a-z0-9-]{1,60}/logo\.png'),
         ('GET', r'/wallet/apple/download/[A-Za-z0-9_-]{43}'),
         ('POST', r'/wallet/apple/v1/log'),
         ('GET', r'/wallet/apple/v1/devices/[A-Za-z0-9._-]+/registrations/[A-Za-z0-9.-]+'),
@@ -353,6 +354,9 @@ def probe(url, nonce, attempts=60, diagnostics=None, maximum_seconds=120):
 
 def verify_gateway(url, slug):
     checks = [('GET', '/join/' + slug, None, 200), ('GET', '/api/public/' + slug, None, 200),
+              ('GET', '/engagement.js', None, 200), ('GET', '/wallet/brand/' + slug + '/logo.png', None, 200),
+              ('GET', '/api/staff/customer-insights', None, 404), ('PUT', '/api/staff/wallet-design', {}, 404),
+              ('POST', '/api/staff/customer-events', {}, 404), ('POST', '/api/staff/purchases/quote', {}, 404),
               ('GET', '/api/me/wallet-status', None, 401), ('GET', '/api/me/access', None, 401),
               ('POST', '/api/public/' + slug + '/join', {}, 400),
               ('GET', '/platform', None, 404), ('GET', '/preview', None, 404),
@@ -404,9 +408,10 @@ class LocalWallet:
 
     def gateway_check(self):
         wallet = read_wallet(self.root / '.env.wallet')
-        # This preflight only starts/reconfigures the allowlisted gateway; no tunnel is opened.
+        # Recreate this service: replacing a bind-mounted file does not update nginx workers.
+        # Keep the existing tunnel and database; verify the effective routes afterwards.
         self.write_overlay(wallet, self.state.get('origin'))
-        self.run('gateway_start', 'up', '-d', '--no-deps', GATEWAY, timeout=300)
+        self.run('gateway_start', 'up', '-d', '--no-deps', '--force-recreate', GATEWAY, timeout=300)
         base = 'http://127.0.0.1:' + wallet.get('WALLET_GATEWAY_PORT', '8098')
         self.check_probe('local_gateway', base, 40)
         count = verify_gateway(base, 'demo-cafe-' + self.values['STAGING_INSTANCE_ID'][:8])
@@ -437,7 +442,7 @@ class LocalWallet:
             self.runner.secrets.append((self.folder / 'material/tunnel.token').read_text().strip())
         self.write_overlay(wallet, self.state.get('origin'))
         self.run('wallet_material', 'run', '--rm', '--no-deps', MATERIAL, timeout=120)
-        self.run('gateway_start', 'up', '-d', '--no-deps', GATEWAY, timeout=300)
+        self.run('gateway_start', 'up', '-d', '--no-deps', '--force-recreate', GATEWAY, timeout=300)
         local = 'http://127.0.0.1:' + wallet.get('WALLET_GATEWAY_PORT', '8098')
         self.check_probe('local_gateway', local, 40)
         self.report['phase'] = 'tunnel_discovery'
@@ -646,7 +651,7 @@ def main(argv=None):
             args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             args.output_dir.mkdir(exist_ok=True, parents=True)
-            name = 'loyalty_v009_wallet_' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+            name = 'loyalty_v010r1_wallet_' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
             destination = args.output_dir / (name + '.zip')
             with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr(name + '/RESULTADO.json', json.dumps(report, ensure_ascii=False, indent=2))

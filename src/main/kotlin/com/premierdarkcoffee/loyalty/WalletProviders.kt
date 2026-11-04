@@ -65,7 +65,7 @@ interface AppleWalletProvider {
 fun applePackage(pass: WalletPass, provider: AppleWalletProvider, origin: String): ByteArray {
         val files = linkedMapOf("pass.json" to pass.appleJson(provider.passType, provider.team, origin).toString().toByteArray(),
         "icon.png" to walletLogo(29), "icon@2x.png" to walletLogo(58), "icon@3x.png" to walletLogo(87),
-        "logo.png" to walletLogo(36), "logo@2x.png" to walletLogo(72), "logo@3x.png" to walletLogo(108))
+        "logo.png" to pass.brandLogo(1), "logo@2x.png" to pass.brandLogo(2), "logo@3x.png" to pass.brandLogo(3))
     val manifest = JsonObject(files.mapValues { (_, bytes) -> JsonPrimitive(MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }) }).toString().toByteArray()
     files["manifest.json"] = manifest; files["signature"] = provider.sign(manifest)
     return ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { zip -> files.forEach { (name, bytes) -> zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry() } } }.toByteArray()
@@ -171,6 +171,7 @@ class ServiceAccountGoogleProvider(
         if (response.status == 401) synchronized(this) { accessToken = null; accessExpires = 0 }
         return response
     }
+    private val classDesigns=mutableMapOf<String,Pair<Int,String>>()
     override fun sync(pass: WalletPass, origin: String) {
         val objectId = requireNotNull(pass.googleId); val classId = requireNotNull(pass.googleClass)
         require(objectId.startsWith("$issuer.") && classId.startsWith("$issuer."))
@@ -186,6 +187,16 @@ class ServiceAccountGoogleProvider(
             if (response.status == 409) response = call("PATCH", "loyaltyObject/$objectId", pass.googleJson(objectId, classId, origin))
         }
         if (response.status !in setOf(200, 201)) throw WalletDeliveryFailure("GOOGLE_OBJECT_${response.status}")
+        if(pass.snapshot.containsKey("design")) synchronized(classDesigns) {
+            val brand=pass.googleBrand(origin);val fingerprint=Security.hash(brand.toString())
+            val version=pass.snapshot["designVersion"]?.jsonPrimitive?.int?:0
+            val previous=classDesigns[classId]
+            if(previous==null || (version>=previous.first && previous.second!=fingerprint)) {
+                val updated=call("PATCH","loyaltyClass/$classId",brand)
+                if(updated.status!=200)throw WalletDeliveryFailure("GOOGLE_DESIGN_${updated.status}")
+                classDesigns[classId]=version to fingerprint
+            }
+        }
     }
     override fun saveLink(objectId: String, origin: String): String {
         require(objectId.matches(Regex("${Regex.escape(issuer)}\\.[A-Za-z0-9._-]+")))

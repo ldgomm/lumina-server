@@ -24,14 +24,14 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v009'
+VERSION = 'v010r1'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
 SOURCE_DIRS = {'src', 'gradle', 'scripts', 'docs'}
 SUITES = {
-    'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4},
-    'postgresTest': {'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 16, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8},
+    'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4, 'com.premierdarkcoffee.loyalty.EngagementDomainTest': 10, 'com.premierdarkcoffee.loyalty.EngagementGoogleTest': 1},
+    'postgresTest': {'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 16, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8, 'com.premierdarkcoffee.loyalty.EngagementPostgresTest': 17},
 }
 
 
@@ -290,7 +290,8 @@ def replace_kotlin_fragment(source, before, after):
     start = actual[old_matches[0]][1]
     end = actual[old_matches[0]+len(expected)-1][2]
     region = source[start:end]
-    if '//' in region or '/*' in region:
+    baseline_comments = kotlin_comments(before)
+    if kotlin_comments(region) != baseline_comments or any(comment not in kotlin_comments(after) for comment in baseline_comments):
         raise RuntimeError('El fragmento contiene comentarios nuevos; no se reemplazan automáticamente.')
     return source[:start] + after + source[end:]
 
@@ -533,7 +534,7 @@ def main(arguments=None, updates=None, origin=None):
         for attempt in (1, 2):
             before = snapshot(project)
             prefix = 'attempt_'+str(attempt)+'_'
-            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=86, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
+            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=90, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
             if workflow:
                 report['status'] = 'WORKFLOW_TESTS_FAILED_NO_COMMIT'
                 break
@@ -563,7 +564,7 @@ def main(arguments=None, updates=None, origin=None):
                 gateway_code = run(prefix+'gateway', [sys.executable,str(project/'scripts/wallet_local.py'),'gateway-check','--report',str(gateway_path)],600,env)
                 gateway = json.loads(gateway_path.read_text()) if gateway_path.exists() else {}
                 report['gateway'] = gateway
-                if gateway_code or gateway.get('status') != 'LOCAL_GATEWAY_PASS' or gateway.get('checks',0) < 16:
+                if gateway_code or gateway.get('status') != 'LOCAL_GATEWAY_PASS' or gateway.get('checks',0) < 22:
                     raise RuntimeError('El gateway público no pasó sus comprobaciones de rutas y autenticación.')
             except Exception as error:
                 if attempt == 1 and not same_snapshot(before, snapshot(project)):
@@ -908,6 +909,36 @@ def migrate_loyalty_kotlin(source, operation):
         source = source.replace(before, after)
     return source
 
+
+
+
+def kotlin_comments(source):
+    # Strings remain tokens, so URL slashes cannot be mistaken for comments.
+    tokens = kotlin_tokens(source)
+    positions = [(0, tokens[0][1])] if tokens else [(0, len(source))]
+    positions += [(a[2], b[1]) for a, b in zip(tokens, tokens[1:])]
+    if tokens:
+        positions.append((tokens[-1][2], len(source)))
+    comments = []
+    for start, end in positions:
+        gap = source[start:end]
+        i = 0
+        while i < len(gap):
+            if gap.startswith('//', i):
+                stop = gap.find('\n', i)
+                stop = len(gap) if stop < 0 else stop
+                comments.append(gap[i:stop]); i = stop
+            elif gap.startswith('/*', i):
+                begin, depth = i, 1
+                i += 2
+                while i < len(gap) and depth:
+                    if gap.startswith('/*', i): depth += 1; i += 2
+                    elif gap.startswith('*/', i): depth -= 1; i += 2
+                    else: i += 1
+                comments.append(gap[begin:i])
+            else:
+                i += 1
+    return comments
 
 if __name__ == '__main__':
     sys.exit(main())

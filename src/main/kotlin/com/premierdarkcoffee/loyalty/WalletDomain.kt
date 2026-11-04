@@ -54,9 +54,10 @@ fun WalletPass.summary(): String {
 }
 
 fun WalletPass.appleJson(passType: String, team: String, origin: String): JsonObject {
+    val design = design()
     return obj("formatVersion" to 1, "passTypeIdentifier" to passType, "serialNumber" to serial, "teamIdentifier" to team,
         "organizationName" to snapshot.getValue("businessName"), "description" to "Tarjeta de fidelización de ${snapshot.getValue("businessName").jsonPrimitive.content}",
-        "logoText" to snapshot.getValue("businessName"), "backgroundColor" to "rgb(32,78,65)", "foregroundColor" to "rgb(255,255,255)", "labelColor" to "rgb(219,243,139)",
+        "logoText" to design.displayName.ifBlank { snapshot.getValue("businessName").jsonPrimitive.content }, "backgroundColor" to walletRgb(design.background), "foregroundColor" to walletRgb(design.foreground), "labelColor" to walletRgb(design.label),
         "sharingProhibited" to true, "webServiceURL" to "$origin/wallet/apple", "authenticationToken" to token,
         "barcodes" to listOf(obj("format" to "PKBarcodeFormatQR", "message" to snapshot.getValue("cardCode"), "messageEncoding" to "iso-8859-1")),
         "storeCard" to appleStoreFields())
@@ -65,8 +66,9 @@ fun WalletPass.appleJson(passType: String, team: String, origin: String): JsonOb
 fun WalletPass.googleJson(objectId: String, classId: String, origin: String): JsonObject = obj(
     "id" to objectId, "classId" to classId, "state" to "ACTIVE", "accountName" to snapshot.getValue("name"), "accountId" to serial.take(8),
     "barcode" to obj("type" to "QR_CODE", "value" to snapshot.getValue("cardCode")),
+    "hexBackgroundColor" to design().background,
     "loyaltyPoints" to obj("label" to "Saldos disponibles", "balance" to obj("string" to summary().take(500))),
     "textModulesData" to listOf(obj("id" to "status", "header" to "Estado", "body" to if (snapshot.getValue("canOperate").jsonPrimitive.boolean) "Válida en todas las sucursales del negocio" else "Operaciones pausadas. Tus saldos se conservan."),
                 obj("id" to "activity", "header" to "Últimos consumos y canjes", "body" to recentActivity().take(1000)),
-        obj("id" to "usage", "header" to "Cómo usar tu tarjeta", "body" to "Presenta esta tarjeta en caja para acumular o pedir un premio. No necesitas contraseña ni entrar en la web. El negocio verifica al titular y confirma el saldo vigente.")),
+        obj("id" to "usage", "header" to "Cómo usar tu tarjeta", "body" to design().usage)) + (announcementFields()+progressFields()).take(7).map { obj("id" to it.getValue("key"),"header" to it.getValue("label"),"body" to it.getValue("value")) },
     "linksModuleData" to obj("uris" to listOf(obj("id" to "account", "uri" to "$origin/join/${snapshot.getValue("slug").jsonPrimitive.content}", "description" to "Ayuda para recuperar tu tarjeta"))))

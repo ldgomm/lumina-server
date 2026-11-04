@@ -81,15 +81,14 @@
         return document.querySelector('#commercialPane');
 ;
     }
-    function renderAccount() {
-                const root=shell();if(!root)return;
-        if(pane==='account')renderStatement(root);
-        else if(pane==='branches')renderLocations(root).catch(e=>notice(e.message));
-        else if(pane==='membership')renderMembership(root);
-        else if(pane==='access')renderAccess(root);
-;
-        else if(pane==='notices')renderNotices(root);
-        else if(pane==='metrics')renderMetrics(root).catch(e=>notice(e.message));
+        function renderAccount() {
+        const root=shell();if(!root)return;
+        if(pane==='account'){renderStatement(root);}
+        else if(pane==='branches'){renderLocations(root).catch(e=>notice(e.message));}
+        else if(pane==='membership'){renderMembership(root);}
+        else if(pane==='access'){renderAccess(root);}
+        else if(pane==='notices'){renderNotices(root);}
+        else if(pane==='metrics'){renderMetrics(root).catch(e=>notice(e.message));}
     }
     function warnings(d) {
         const a=d.access,s=d.summary,m=d.membership;

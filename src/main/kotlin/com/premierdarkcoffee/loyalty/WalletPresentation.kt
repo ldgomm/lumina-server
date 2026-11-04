@@ -8,7 +8,8 @@ import java.util.Locale
 
 /** Native Wallet fields; balances from different programs always remain separate. */
 fun WalletPass.appleStoreFields(): JsonObject {
-    val balances = snapshot.getValue("balances").jsonArray.map { it.jsonObject }
+    val design = design()
+    val balances = snapshot.getValue("balances").jsonArray.map { it.jsonObject }.sortedBy { if(it["programId"]?.jsonPrimitive?.content==design.featuredProgramId)0 else 1 }
     val currency = snapshot.getValue("currency").jsonPrimitive.content
     val first = balances.firstOrNull()
     val paused = !snapshot.getValue("canOperate").jsonPrimitive.boolean
@@ -27,12 +28,12 @@ fun WalletPass.appleStoreFields(): JsonObject {
     return obj(
         "headerFields" to listOf(obj("key" to "card_state", "label" to "MEMBRESÍA", "value" to if (paused) "Pausada" else "Activa")),
         "primaryFields" to listOf(obj("key" to "balance", "label" to (first?.getValue("name") ?: JsonPrimitive("Tu tarjeta")),
-            "value" to (first?.let { walletBalance(it, currency) } ?: "Bienvenido"), "changeMessage" to "Saldo disponible: %@")),
+            "value" to (first?.let { walletBalance(it, currency) } ?: design.welcome), "changeMessage" to "Saldo disponible: %@")),
         "secondaryFields" to listOf(obj("key" to "member", "label" to "Cliente", "value" to snapshot.getValue("name"))),
         "auxiliaryFields" to otherBalances,
-        "backFields" to (listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) + appleActivityFields() + listOf(
+        "backFields" to (listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) + progressFields() + announcementFields() + appleActivityFields() + listOf(
             obj("key" to "validity", "label" to "Estado de la tarjeta", "value" to if (paused) "Operaciones pausadas. Tus saldos se conservan." else "Válida en todas las sucursales de este negocio."),
-            obj("key" to "usage", "label" to "Cómo usar tu tarjeta", "value" to "Presenta el QR en caja para acumular o pedir un premio. No necesitas contraseña ni entrar en la web. El negocio verifica al titular y confirma el saldo vigente; Wallet puede tardar en actualizarse.")
+            obj("key" to "usage", "label" to "Cómo usar tu tarjeta", "value" to design.usage)
         ))
     )
 }

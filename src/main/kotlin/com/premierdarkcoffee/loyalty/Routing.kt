@@ -95,6 +95,7 @@ fun Application.loyaltyRoutes(service: LoyaltyService, platformToken: String, pu
         commercialRoutes(service, platformToken)
                 walletRoutes(service, platformToken)
         walletFirstRoutes(service, publicUrl)
+        engagementRoutes(service)
         get("/health/live") { call.respond(obj("status" to "UP", "version" to "0.1.0")) }
         get("/health/ready") { io { service.db.tx { c -> c.one("SELECT 1") { it.getInt(1) } } }; call.respond(
             obj(

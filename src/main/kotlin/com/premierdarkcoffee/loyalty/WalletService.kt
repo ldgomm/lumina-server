@@ -76,7 +76,7 @@ class WalletService(
         val balances = c.rows("SELECT b.program_id,b.available,p.kind,v.config->>'name' AS name FROM balances b JOIN programs p ON p.tenant_id=b.tenant_id AND p.id=b.program_id JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE b.tenant_id=? AND b.member_id=? ORDER BY b.program_id", member.tenant, member.id) {
             obj("programId" to it.getString(1), "available" to it.getLong(2), "kind" to it.getString(3), "name" to it.getString(4))
         }
-                return JsonObject(m + business + mapOf("recentActivity" to JsonArray(walletActivity(c, member)), "presentationVersion" to JsonPrimitive(7), "balances" to JsonArray(balances), "canOperate" to JsonPrimitive(access.getValue("effectiveState").jsonPrimitive.content == "ACTIVE")))
+                return JsonObject(m + business + walletEngagement(c,member,now(),access.getValue("effectiveState").jsonPrimitive.content == "ACTIVE") + mapOf("recentActivity" to JsonArray(walletActivity(c, member)), "presentationVersion" to JsonPrimitive(8), "balances" to JsonArray(balances), "canOperate" to JsonPrimitive(access.getValue("effectiveState").jsonPrimitive.content == "ACTIVE")))
     }
     /** Financial locks precede the pass lock; the transactional clock assigns commit-ordered tags. */
     fun materialize(member: Member, provider: String? = null): WalletPass = db.tx { c ->

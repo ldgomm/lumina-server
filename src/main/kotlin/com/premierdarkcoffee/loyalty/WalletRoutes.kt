@@ -12,7 +12,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private val passType = ContentType("application", "vnd.apple.pkpass")
-fun walletWeb(name: String, html: String) = if (name == "index.html" && "/wallet-ui.js" !in html) html.replace(Regex("</head>", RegexOption.IGNORE_CASE), "<script src=\"/promotion-editor.js\" defer></script><script src=\"/jsqr.js\" defer></script><script src=\"/scanner.js\" defer></script><script src=\"/wallet-ui.js\" defer></script></head>") else html
+fun walletWeb(name: String, html: String) = if (name == "index.html" && "/wallet-ui.js" !in html) html.replace(Regex("</head>", RegexOption.IGNORE_CASE), "<script src=\"/promotion-editor.js\" defer></script><script src=\"/jsqr.js\" defer></script><script src=\"/scanner.js\" defer></script><script src=\"/wallet-ui.js\" defer></script><script src=\"/engagement.js\" defer></script></head>") else html
 
 private fun ApplicationCall.appleToken(): String {
     val value = request.headers[HttpHeaders.Authorization] ?: ""
