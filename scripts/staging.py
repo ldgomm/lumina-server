@@ -212,6 +212,8 @@ class Runner:
         expect(b'startComebackScanner' in self.api('/scanner.js'), 'Falta el lector QR.')
         expect(b'/engagement.js' in self.api('/'), 'Falta la interfaz nueva de promociones.')
         expect(b'promotion-templates' in self.api('/engagement.js'), 'Falta el archivo de promociones en el servidor local.')
+        expect(b'fixContrast' in self.api('/engagement.js'), 'Falta el editor guiado de colores en el servidor local.')
+        expect(b'loyalty-wallet-design-colors' in self.api('/style.css'), 'Faltan los estilos del editor de colores.')
         expect(self.api('/wallet/brand/'+slug+'/logo.png').startswith(bytes.fromhex('89504e470d0a1a0a')), 'El logo público no es un PNG válido.')
         self.api('/api/staff/counter-redemptions',{},expected=401)
         self.api('/api/public/'+slug+'/join',{'name':'Prueba','document':'DEMO10001','acceptedTerms':True,'password':'not-accepted'},expected=400)

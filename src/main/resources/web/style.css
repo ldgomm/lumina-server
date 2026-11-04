@@ -2,3 +2,31 @@
 
 /* comeback-v006-hidden */
 [hidden]{display:none!important}
+
+/* loyalty-wallet-design-colors */
+.wallet-design-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(250px,.8fr);gap:32px;align-items:start}
+.wallet-design-layout form,.wallet-design-layout aside{min-width:0}
+#walletDesign fieldset{margin:0;padding:0;border:0;min-width:0}
+#walletDesign input[type=color]{height:54px;padding:5px;cursor:pointer}
+#walletDesign input[aria-invalid=true]{border:2px solid #9b2830}
+#walletDesign fieldset>button{margin-top:10px;width:100%}
+.design-colors-heading{margin-top:28px}
+.design-help,.design-color-status{font-size:13px;line-height:1.5;margin:8px 0;color:#46564e}
+.design-color-fields{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.design-feedback{border:1px solid #c5d8ce;border-radius:12px;background:#f0f7f3;padding:12px 14px;margin-top:12px}
+.design-feedback p{margin:0;color:#244d3d}
+.design-feedback .design-help:not(:empty){margin-top:8px}
+.design-feedback-error{border-color:#d7a6a7;background:#fff5f3}
+.design-feedback-error p,.design-error{color:#8f2029}
+.design-preview-wrap{position:sticky;top:24px;padding-top:16px}
+.design-preview{border:1px solid #0002;border-radius:22px;padding:24px;box-shadow:0 12px 28px #182b2714;overflow-wrap:anywhere}
+.design-preview-brand{display:flex;align-items:center;gap:10px;min-height:36px}
+.design-preview-brand img{max-width:120px;max-height:36px;object-fit:contain}
+.design-preview-brand strong{font-size:16px}
+.design-preview-hero{display:block;font-size:clamp(26px,3vw,40px);line-height:1.15;margin:32px 0}
+.design-preview-label{display:block;font-size:11px;font-weight:700;letter-spacing:.8px;color:var(--preview-label);margin-bottom:7px}
+.design-preview-balance{font-size:28px;font-weight:500;display:block;margin-bottom:36px}
+.design-preview-bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:14px}
+#previewStamps{font-size:20px;letter-spacing:1px}
+@media(max-width:750px){.wallet-design-layout{grid-template-columns:1fr;gap:12px}.design-preview-wrap{position:static;grid-row:1;padding-top:0;max-width:400px;width:100%;margin:0 auto 16px}.design-preview-hero{margin:22px 0}.design-preview-balance{margin-bottom:24px}}
+@media(max-width:360px){.design-color-fields{grid-template-columns:1fr;gap:0}}

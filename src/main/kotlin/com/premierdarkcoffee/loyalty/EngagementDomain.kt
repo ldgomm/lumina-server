@@ -46,7 +46,11 @@ import kotlin.math.pow
         for (color in listOf(background,foreground,label)) need(color.matches(Regex("#[a-fA-F0-9]{6}")),"INVALID_COLOR","Usa colores hexadecimales.")
         fun luminance(hex: String): Double { val channels=(1..5 step 2).map { hex.substring(it,it+2).toInt(16)/255.0 }.map { if(it<=0.04045)it/12.92 else ((it+0.055)/1.055).pow(2.4) };return channels[0]*.2126+channels[1]*.7152+channels[2]*.0722 }
         fun contrast(a:String,b:String):Double {val x=luminance(a);val y=luminance(b);return (maxOf(x,y)+.05)/(minOf(x,y)+.05)}
-        need(contrast(background,foreground)>=4.5 && contrast(background,label)>=3,"LOW_CONTRAST","El texto necesita más contraste con el fondo.")
+        val unreadable = mutableListOf<String>()
+        if (contrast(background,foreground)<4.5) unreadable.add("Color del texto")
+        if (contrast(background,label)<3) unreadable.add("Color de las etiquetas")
+        val suggested = if (contrast(background,"#000000")>=contrast(background,"#ffffff")) "negro (#000000)" else "blanco (#FFFFFF)"
+        need(unreadable.isEmpty(),"LOW_CONTRAST","Revisa ${unreadable.joinToString(" y ")}: no se distingue sobre el fondo $background. Usa $suggested en esos campos o pulsa «Corregir colores». El fondo puede conservarse.")
         logoPng?.let(::validateWalletLogo)
     }
 }

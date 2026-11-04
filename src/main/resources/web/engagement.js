@@ -75,19 +75,132 @@
         draw();
     }
 
+        function walletColorContrast(a, b) {
+        const luminance = hex => {
+            const channels = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+                .map(c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+            return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
+        };
+        const x = luminance(a), y = luminance(b);
+        return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
+    }
+
     async function designPage() {
-        const root = document.querySelector('#content'); const data = await api('/api/staff/wallet-design'); if (!root.isConnected || state.tab !== 'design') return;
-        const d = data.design; let logo = d.logoPng;
-        root.innerHTML = `<section class="panel narrow"><h2>Personaliza tu tarjeta</h2><p>El diseño se actualizará en las tarjetas existentes. Apple y Google determinan su distribución final.</p><form id="walletDesign">${field('displayName', 'Nombre en la tarjeta', 'text', d.displayName, 'maxlength="80"')}${field('background', 'Color de fondo', 'color', d.background)}${field('foreground', 'Color del texto', 'color', d.foreground)}${field('label', 'Color de las etiquetas', 'color', d.label)}<label>Logo PNG o JPG<input id="designLogo" type="file" accept="image/png,image/jpeg"></label><p id="logoStatus">${logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.'}</p><button type="button" class="quiet" id="removeLogo">Usar logo predeterminado</button>${select('featuredProgramId', 'Saldo destacado', [['', 'Mantener el orden actual'], ...state.data.programs.map(p => [p.id, p.config.name])], d.featuredProgramId || '')}${select('stampSymbol', 'Símbolo de los sellos', ['●', '★', '♥', '✂', '◆'].map(x => [x, x]), d.stampSymbol)}${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}${field('usage', 'Cómo usar la tarjeta', 'text', d.usage, 'required maxlength="350"')}${field('birthdayMessage', 'Felicitación de cumpleaños', 'text', d.birthdayMessage, 'required maxlength="250"')}<button>Guardar diseño</button></form></section>`;
-        action('removeLogo', () => { logo = null; document.querySelector('#logoStatus').textContent = 'Se usará el logo predeterminado.'; });
-        document.querySelector('#designLogo').onchange = async e => { try {
-            const file = e.target.files[0]; if (!file) return; if (file.size > 5 * 1024 * 1024) throw new Error('Elige una imagen de menos de 5 MB.');
-            const bitmap = await createImageBitmap(file); const scale = Math.min(160 / bitmap.width, 36 / bitmap.height, 1);
-            const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale)); canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
-            const value = canvas.toDataURL('image/png').split(',')[1]; if (value.length > 26668) throw new Error('El logo tiene demasiado detalle. Usa una imagen más sencilla.'); logo = value;
-            document.querySelector('#logoStatus').textContent = 'Logo preparado para guardar.';
-        } catch (error) { notice(error.message); } };
-        form('walletDesign', async v => { await api('/api/staff/wallet-design', {expectedVersion: data.version, design: {...v, featuredProgramId: v.featuredProgramId || null, logoPng: logo}}, 'PUT'); notice('Diseño guardado. Se actualizará en Wallet.'); await designPage(); });
+        const root = document.querySelector('#content'); const data = await api('/api/staff/wallet-design');
+        if (!root.isConnected || state.tab !== 'design') return;
+        const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0;
+        root.innerHTML = `<section class="panel wallet-design-panel"><h2>Personaliza tu tarjeta</h2><p>Elige el fondo de tu negocio. Te ayudamos a que sus textos se lean bien.</p><div class="wallet-design-layout"><form id="walletDesign"><fieldset id="designFields">
+            ${field('displayName', 'Nombre en la tarjeta', 'text', d.displayName, 'maxlength="80"')}
+            <h3 class="design-colors-heading">Colores</h3>
+            ${field('background', 'Color de fondo', 'color', d.background, 'aria-describedby="backgroundHelp"')}
+            <p id="backgroundHelp" class="design-help">Puedes usar cualquier fondo. El texto y las etiquetas deben distinguirse sobre él.</p>
+            <label class="check"><input id="autoContrast" type="checkbox" checked>Ajustar texto y etiquetas al cambiar el fondo</label>
+            <p class="design-help">Solo ajustamos los colores que no se leen. También puedes elegirlos manualmente abajo.</p>
+            <div class="design-color-fields"><div>${field('foreground', 'Color del texto', 'color', d.foreground, 'aria-describedby="foregroundStatus"')}<p id="foregroundStatus" class="design-color-status"></p></div><div>${field('label', 'Color de las etiquetas', 'color', d.label, 'aria-describedby="labelStatus"')}<p id="labelStatus" class="design-color-status"></p></div></div>
+            <div class="design-feedback" aria-live="polite" aria-atomic="true"><p id="contrastStatus"></p><p id="contrastAdjustment" class="design-help"></p></div>
+            <button type="button" class="quiet" id="fixContrast">Corregir colores</button>
+            <label>Logo PNG o JPG<input id="designLogo" type="file" accept="image/png,image/jpeg"></label><p id="logoStatus">${logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.'}</p><button type="button" class="quiet" id="removeLogo">Usar logo predeterminado</button>
+            ${select('featuredProgramId', 'Saldo destacado', [['', 'Mantener el orden actual'], ...state.data.programs.map(p => [p.id, p.config.name])], d.featuredProgramId || '')}
+            ${select('stampSymbol', 'Símbolo de los sellos', ['●', '★', '♥', '✂', '◆'].map(x => [x, x]), d.stampSymbol)}
+            ${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
+            ${field('usage', 'Cómo usar la tarjeta', 'text', d.usage, 'required maxlength="350"')}
+            ${field('birthdayMessage', 'Felicitación de cumpleaños', 'text', d.birthdayMessage, 'required maxlength="250"')}
+            </fieldset><p id="designSaveHint" class="design-help" aria-live="polite"></p><p id="designSaveError" class="design-error" role="alert" hidden></p><button id="saveDesign" type="submit" aria-describedby="designSaveHint">Guardar diseño</button></form>
+            <aside class="design-preview-wrap"><h3>Vista previa de colores</h3><p class="design-help">Datos de ejemplo. Apple y Google determinan la distribución final en Wallet.</p><div id="designPreview" class="design-preview"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><span id="previewWelcome" class="design-preview-hero"></span><span class="design-preview-label">SALDO DISPONIBLE</span><strong class="design-preview-balance">100 puntos</strong><div class="design-preview-bottom"><div><span class="design-preview-label">CLIENTE</span><span>Cliente de ejemplo</span></div><div><span class="design-preview-label">SELLOS</span><span id="previewStamps"></span></div></div></div><p class="design-help">Los cambios se enviarán a las tarjetas existentes al guardar.</p></aside></div></section>`;
+        const f = root.querySelector('#walletDesign'), fields = root.querySelector('#designFields');
+        const background = f.elements.background, foreground = f.elements.foreground, labels = f.elements.label;
+        const auto = root.querySelector('#autoContrast'), save = root.querySelector('#saveDesign'), fix = root.querySelector('#fixContrast');
+        const status = root.querySelector('#contrastStatus'), adjustment = root.querySelector('#contrastAdjustment');
+        const error = root.querySelector('#designSaveError'), preview = root.querySelector('#designPreview');
+        const specs = [{input: foreground, name: 'Texto', field: 'Color del texto', min: 4.5}, {input: labels, name: 'Etiquetas', field: 'Color de las etiquetas', min: 3}];
+        const invalidColors = () => specs.filter(s => walletColorContrast(background.value, s.input.value) < s.min);
+        const recommended = () => walletColorContrast(background.value, '#000000') >= walletColorContrast(background.value, '#ffffff') ? '#000000' : '#ffffff';
+        const clearError = () => { error.hidden = true; error.textContent = ''; };
+        function correctColors() {
+            const failed = invalidColors(), color = recommended();
+            failed.forEach(s => { s.input.value = color; });
+            adjustment.textContent = failed.length ? `${failed.map(s => s.name).join(' y ')}: ajustado a ${color === '#000000' ? 'negro' : 'blanco'} para conservar tu fondo. Revisa la vista previa antes de guardar.` : '';
+        }
+        function update() {
+            const failed = invalidColors();
+            for (const s of specs) {
+                const valid = !failed.includes(s), hint = root.querySelector('#' + s.input.name + 'Status');
+                s.input.setAttribute('aria-invalid', String(!valid));
+                s.input.setCustomValidity(valid ? '' : `${s.field} no se distingue sobre el fondo. Pulsa «Corregir colores».`);
+                hint.textContent = valid ? `${s.name}: se lee bien.` : `${s.name}: no se distingue. Prueba ${recommended() === '#000000' ? 'negro' : 'blanco'} o pulsa «Corregir colores».`;
+                hint.classList.toggle('design-error', !valid);
+            }
+            status.textContent = failed.length ? `Falta corregir: ${failed.map(s => s.field.toLowerCase()).join(' y ')}. Puedes conservar el fondo elegido.` : 'Esta combinación se lee bien. Puedes guardar el diseño.';
+            status.parentElement.classList.toggle('design-feedback-error', !!failed.length);
+            fix.disabled = saving || loadingLogo || !failed.length;
+            save.disabled = saving || loadingLogo || !!failed.length;
+            save.textContent = saving ? 'Guardando…' : 'Guardar diseño';
+            root.querySelector('#designSaveHint').textContent = saving ? 'Guardando el diseño…' : loadingLogo ? 'Espera a que termine de preparar el logo.' : failed.length ? 'Guardar está desactivado. Pulsa «Corregir colores» o cambia los campos indicados.' : 'Listo para guardar. La tarjeta conservará su QR y sus saldos.';
+            preview.style.backgroundColor = background.value; preview.style.color = foreground.value;
+            preview.style.setProperty('--preview-label', labels.value);
+            root.querySelector('#previewName').textContent = f.elements.displayName.value.trim() || state.data.business.name;
+            root.querySelector('#previewWelcome').textContent = f.elements.welcome.value || 'Bienvenido';
+            root.querySelector('#previewStamps').textContent = f.elements.stampSymbol.value.repeat(3) + '○○';
+            const image = root.querySelector('#previewLogo'); image.hidden = !logo;
+            if (logo) image.src = 'data:image/png;base64,' + logo; else image.removeAttribute('src');
+            return !failed.length;
+        }
+        function edited(e) {
+            if (saving) return;
+            clearError();
+            if (e.target === background || e.target === foreground || e.target === labels) {
+                // Browsers can emit both input and change for one color selection.
+                const palette = [background.value, foreground.value, labels.value].join('/');
+                if (f.dataset.palette !== palette) {
+                    adjustment.textContent = '';
+                    if (e.target === background && auto.checked) correctColors();
+                }
+            } else if (e.target === auto && auto.checked) correctColors();
+            f.dataset.palette = [background.value, foreground.value, labels.value].join('/');
+            update();
+        }
+        f.addEventListener('input', edited); f.addEventListener('change', edited);
+        fix.onclick = () => { clearError(); correctColors(); f.dataset.palette = [background.value, foreground.value, labels.value].join('/'); update(); };
+        root.querySelector('#removeLogo').onclick = () => {
+            logoRevision++; loadingLogo = false; logo = null; root.querySelector('#designLogo').value = '';
+            root.querySelector('#logoStatus').textContent = 'Se usará el logo predeterminado.'; clearError(); update();
+        };
+        root.querySelector('#designLogo').onchange = async e => {
+            const file = e.target.files[0]; if (!file) return;
+            const revision = ++logoRevision; loadingLogo = true; clearError(); update();
+            try {
+                if (file.size > 5 * 1024 * 1024) throw new Error('Elige una imagen de menos de 5 MB.');
+                const bitmap = await createImageBitmap(file);
+                if (revision !== logoRevision || !f.isConnected) { bitmap.close(); return; }
+                const scale = Math.min(160 / bitmap.width, 36 / bitmap.height, 1);
+                const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale)); canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
+                const value = canvas.toDataURL('image/png').split(',')[1];
+                if (value.length > 26668) throw new Error('El logo tiene demasiado detalle. Usa una imagen más sencilla.');
+                logo = value; root.querySelector('#logoStatus').textContent = 'Logo preparado para guardar.';
+            } catch (issue) {
+                if (revision === logoRevision && f.isConnected) { error.textContent = issue.message; error.hidden = false; }
+            } finally {
+                if (revision === logoRevision && f.isConnected) { loadingLogo = false; update(); }
+            }
+        };
+        f.addEventListener('submit', async e => {
+            e.preventDefault(); if (saving || loadingLogo) return;
+            if (!update()) { invalidColors()[0].input.focus(); return; }
+            if (!f.reportValidity()) return;
+            const values = Object.fromEntries(new FormData(f));
+            const payload = {expectedVersion: data.version, design: {...values, featuredProgramId: values.featuredProgramId || null, logoPng: logo}};
+            clearError(); saving = true; fields.disabled = true; update();
+            try {
+                await api('/api/staff/wallet-design', payload, 'PUT');
+                notice('Diseño guardado. Se actualizará en Wallet.');
+                if (f.isConnected && state.tab === 'design') await designPage();
+            } catch (issue) {
+                if (f.isConnected) { error.textContent = issue.message; error.hidden = false; }
+            } finally {
+                saving = false; fields.disabled = false; if (f.isConnected) update();
+            }
+        });
+        f.dataset.palette = [background.value, foreground.value, labels.value].join('/'); update();
     }
 
     async function customersPage(offset = 0) {
