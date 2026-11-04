@@ -54,22 +54,12 @@ fun WalletPass.summary(): String {
 }
 
 fun WalletPass.appleJson(passType: String, team: String, origin: String): JsonObject {
-    val balances = snapshot.getValue("balances").jsonArray
-    val first = balances.firstOrNull()?.jsonObject
-    val paused = !snapshot.getValue("canOperate").jsonPrimitive.boolean
-    val primary = obj("key" to "balance", "label" to (first?.getValue("name")?.jsonPrimitive?.content ?: "Tu tarjeta"),
-        "value" to (first?.let { walletBalance(it, snapshot.getValue("currency").jsonPrimitive.content) } ?: "Bienvenido"), "changeMessage" to "Saldo disponible: %@")
     return obj("formatVersion" to 1, "passTypeIdentifier" to passType, "serialNumber" to serial, "teamIdentifier" to team,
         "organizationName" to snapshot.getValue("businessName"), "description" to "Tarjeta de fidelización de ${snapshot.getValue("businessName").jsonPrimitive.content}",
         "logoText" to snapshot.getValue("businessName"), "backgroundColor" to "rgb(32,78,65)", "foregroundColor" to "rgb(255,255,255)", "labelColor" to "rgb(219,243,139)",
         "sharingProhibited" to true, "webServiceURL" to "$origin/wallet/apple", "authenticationToken" to token,
         "barcodes" to listOf(obj("format" to "PKBarcodeFormatQR", "message" to snapshot.getValue("cardCode"), "messageEncoding" to "iso-8859-1")),
-        "storeCard" to obj("primaryFields" to listOf(primary),
-            "secondaryFields" to listOf(obj("key" to "member", "label" to "Cliente", "value" to snapshot.getValue("name"))),
-            "auxiliaryFields" to listOf(obj("key" to "status", "label" to "Estado", "value" to if (paused) "Operaciones pausadas" else "Todas las sucursales")),
-            "backFields" to listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary()),
-                                obj("key" to "activity", "label" to "Últimos consumos y canjes", "value" to recentActivity()),
-                obj("key" to "usage", "label" to "Cómo usar tu tarjeta", "value" to "Presenta esta tarjeta en caja para acumular o pedir un premio. No necesitas contraseña ni entrar en la web. El negocio verifica al titular y confirma el saldo vigente; Wallet puede tardar en actualizarse."))))
+        "storeCard" to appleStoreFields())
 }
 
 fun WalletPass.googleJson(objectId: String, classId: String, origin: String): JsonObject = obj(

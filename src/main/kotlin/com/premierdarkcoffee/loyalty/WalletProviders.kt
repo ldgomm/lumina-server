@@ -63,8 +63,9 @@ interface AppleWalletProvider {
 }
 
 fun applePackage(pass: WalletPass, provider: AppleWalletProvider, origin: String): ByteArray {
-    val files = linkedMapOf("pass.json" to pass.appleJson(provider.passType, provider.team, origin).toString().toByteArray(),
-        "icon.png" to walletLogo(29), "icon@2x.png" to walletLogo(58), "icon@3x.png" to walletLogo(87))
+        val files = linkedMapOf("pass.json" to pass.appleJson(provider.passType, provider.team, origin).toString().toByteArray(),
+        "icon.png" to walletLogo(29), "icon@2x.png" to walletLogo(58), "icon@3x.png" to walletLogo(87),
+        "logo.png" to walletLogo(36), "logo@2x.png" to walletLogo(72), "logo@3x.png" to walletLogo(108))
     val manifest = JsonObject(files.mapValues { (_, bytes) -> JsonPrimitive(MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }) }).toString().toByteArray()
     files["manifest.json"] = manifest; files["signature"] = provider.sign(manifest)
     return ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { zip -> files.forEach { (name, bytes) -> zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry() } } }.toByteArray()

@@ -169,11 +169,17 @@ class WalletFirstPostgresTest {
         val f=fixture();earn(f);service.redeemAtCounter(f.staff,request(f),id())
         val wallet=WalletService(service,"https://example.com",WalletCipher(Base64.getEncoder().encodeToString(ByteArray(32){9})))
         val pass=wallet.materialize(f.member)
-        assertEquals(2,pass.snapshot.getValue("recentActivity").jsonArray.size)
+                val movements = pass.snapshot.getValue("recentActivity").jsonArray.map { it.jsonObject }
+        assertEquals(2,movements.size)
+        assertEquals("Centro", movements.single { it.str("kind") == "PURCHASE" }.str("branch"))
+        assertEquals("Norte", movements.single { it.str("kind") == "REDEMPTION" }.str("branch"))
         assertTrue(pass.recentActivity().contains("Compra: 20.00 USD"));assertTrue(pass.recentActivity().contains("Canje: Premio"))
         for(content in listOf(pass.appleJson("pass.test","TEAM","https://example.com"),pass.googleJson("123.abc","123.def","https://example.com"))) {
-            assertFalse(content.toString().contains("DEMO10001"));assertFalse(content.toString().contains("genera un código"));assertTrue(content.toString().contains("Canje: Premio"))
+                        assertFalse(content.toString().contains("DEMO10001"));assertFalse(content.toString().contains("genera un código"));assertTrue(content.toString().contains("Premio"))
         }
+        val details = pass.appleActivityFields()
+        assertTrue(details.any { it.str("label").startsWith("CANJE") && it.str("value") == "Premio\nSucursal: Norte" })
+        assertTrue(details.any { it.str("label").startsWith("COMPRA") && it.str("value") == "20.00 USD\nSucursal: Centro" })
     }
     @Test fun `new migration is repeatable and keeps legacy login compatible`() {
         val f=fixture();db.migrate();assertEquals(4,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})

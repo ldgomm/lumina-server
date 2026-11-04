@@ -121,15 +121,17 @@ fun LoyaltyService.useRestore(slug: String, input: RestoreUse): JsonObject {
 
 /** Public pass content excludes documents, receipt numbers and authentication material. */
 fun walletActivity(c: Connection, member: Member): List<JsonObject> = c.rows("""
-    SELECT kind,label,at FROM (
-      SELECT 'PURCHASE' AS kind, 'Compra: ' || (amount_minor::numeric/100)::numeric(20,2)::text || ' ' || currency AS label, created_at AS at, id
-      FROM purchases WHERE tenant_id=? AND member_id=?
+    SELECT kind,label,at,branch_name FROM (
+      SELECT 'PURCHASE' AS kind, 'Compra: ' || (p.amount_minor::numeric/100)::numeric(20,2)::text || ' ' || p.currency AS label, p.created_at AS at, p.id, b.name AS branch_name
+      FROM purchases p LEFT JOIN branches b ON b.tenant_id=p.tenant_id AND b.id=p.branch_id
+      WHERE p.tenant_id=? AND p.member_id=?
       UNION ALL
-      SELECT 'REDEMPTION' AS kind, 'Canje: ' || reward_name AS label, consumed_at AS at, id
-      FROM redemptions WHERE tenant_id=? AND member_id=? AND status='CONSUMED'
+      SELECT 'REDEMPTION' AS kind, 'Canje: ' || r.reward_name AS label, r.consumed_at AS at, r.id, b.name AS branch_name
+      FROM redemptions r LEFT JOIN branches b ON b.tenant_id=r.tenant_id AND b.id=r.confirmed_branch_id
+      WHERE r.tenant_id=? AND r.member_id=? AND r.status='CONSUMED'
     ) events ORDER BY at DESC,id DESC LIMIT 5
 """.trimIndent(), member.tenant, member.id, member.tenant, member.id) {
-    obj("kind" to it.getString(1), "label" to it.getString(2).take(150), "at" to it.instant("at"))
+    obj("kind" to it.getString(1), "label" to it.getString(2).take(150), "at" to it.instant("at"), "branch" to it.getString(4))
 }
 
 fun WalletPass.recentActivity(): String = snapshot["recentActivity"]?.jsonArray?.take(5)?.joinToString("\n") {

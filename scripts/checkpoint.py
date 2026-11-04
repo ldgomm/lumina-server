@@ -24,13 +24,13 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v008'
+VERSION = 'v009'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
 SOURCE_DIRS = {'src', 'gradle', 'scripts', 'docs'}
 SUITES = {
-    'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3},
+    'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4},
     'postgresTest': {'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 16, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8},
 }
 
@@ -378,7 +378,7 @@ def create_checkpoint(project, tested, evidence, run_id, validation):
                         oid = git(repo, 'hash-object', '-w', '--stdin', data=value['content']).stdout.decode().strip()
                         git(repo, 'update-index', '--add', '--cacheinfo', value['mode']+','+oid+','+relative, env=environment)
             tree = git(repo, 'write-tree', env=staged_env).stdout.decode().strip()
-            message = 'Loyalty '+VERSION+': PASS de '+str(TOTAL_TESTS)+' pruebas y Docker local\n\nEvidencia: '+run_id+'\nWallet Apple/Google: credenciales, dominio HTTPS y prueba en teléfonos pendientes.\n'
+            message = 'Loyalty '+VERSION+': PASS de '+str(TOTAL_TESTS)+' pruebas y Docker local\n\nEvidencia: '+run_id+'\nWallet: la configuración HTTPS y la validación visual en teléfonos se informan por separado.\n'
             command = ['commit-tree', tree]
             if parent:
                 command += ['-p', parent]
