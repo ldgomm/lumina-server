@@ -40,3 +40,13 @@
 .danger{background:#a12330;color:#fff}.danger-quiet{background:#fff1ef;color:#8f2029;border:1px solid #e7c1bf}
 .promotion-removal form>.row{margin-top:22px}
 @media(max-width:450px){.promotion-removal{padding:20px}.removal-impact{padding:12px;gap:10px}}
+
+/* loyalty-customer-activity */
+.customer-heading{display:flex;align-items:start;justify-content:space-between;gap:20px}.customer-heading p{margin:0 0 14px}
+.customer-filters{display:grid;grid-template-columns:1fr 1.5fr 1fr auto;gap:16px;align-items:end}.customer-filters>button{width:auto;margin:0;min-height:48px}
+.customer-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:24px 0 16px}.customer-metric{padding:18px;background:#eff5ee;border:1px solid #d6e2d5;border-radius:14px;min-width:0}.customer-metric>span{font-size:13px;color:#405448}.customer-metric strong{display:block;font-size:clamp(22px,2.8vw,32px);line-height:1.3;margin:10px 0;overflow-wrap:anywhere}.customer-metric small{color:#43564b;line-height:1.5;display:block}
+.customer-segments{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}.customer-segments button[aria-pressed=true]{background:#204e41;color:white}.customer-segments span{display:inline-block;padding:2px 7px;border-radius:6px;background:#0001;margin-left:4px;font-variant-numeric:tabular-nums}
+.customer-table caption{text-align:left;margin-bottom:14px}.customer-table td{vertical-align:top}.customer-table small{display:block;margin-top:7px;color:#526458}.customer-prizes{display:flex;flex-direction:column;align-items:flex-start;gap:7px}.customer-ready,.customer-near{display:inline-block;border-radius:7px;padding:5px 8px;font-size:13px;line-height:1.5}.customer-ready{color:#1d5635;background:#e7f4e9}.customer-near{color:#684812;background:#fff3d9}.customer-pagination{margin-top:22px}
+.customer-reward-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:18px 0}.customer-reward-list>div{border:1px solid #dce1d8;border-radius:12px;padding:16px}.customer-reward-list p{margin:5px 0 12px}
+@media(max-width:850px){.customer-filters{grid-template-columns:1fr 1fr}.customer-metrics{grid-template-columns:1fr 1fr}}
+@media(max-width:500px){.customer-filters,.customer-reward-list{grid-template-columns:1fr}.customer-metrics{gap:8px}.customer-metric{padding:12px}.customer-heading{display:block}.customer-heading>button{margin-bottom:12px}.customer-segments button{flex:1;min-width:125px}}

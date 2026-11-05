@@ -10,6 +10,13 @@ fun Route.engagementRoutes(service:LoyaltyService) {
     post("/api/staff/promotion-templates"){val s=io{service.staff(call.bearer())};val p=call.body<PromotionTemplate>();call.respond(io{service.createPromotion(s,p,call.key())})}
     get("/api/staff/wallet-design"){val s=io{service.staff(call.bearer())};call.respond(io{service.design(s)})}
     put("/api/staff/wallet-design"){val s=io{service.staff(call.bearer())};val p=call.body<WalletDesignChange>();call.respond(io{service.saveDesign(s,p)})}
+        get("/api/staff/customer-activity") {
+        val staff=io{service.staff(call.bearer())}
+        val params=call.request.queryParameters
+        fun number(name:String,default:Int):Int = params[name]?.let { it.toIntOrNull() ?: throw Problem(400,"INVALID_FILTER","Filtro numérico inválido: $name.") } ?: default
+        val query=CustomerActivityQuery(number("days",30),number("inactiveDays",30),params["segment"]?:"ALL",params["q"]?:"",number("offset",0))
+        call.respond(io{service.customerActivity(staff,query)})
+    }
     get("/api/staff/customer-insights"){val s=io{service.staff(call.bearer())};val offset=call.request.queryParameters["offset"]?.toIntOrNull()?:0;call.respond(io{service.customerInsights(s,offset)})}
     get("/api/staff/customer-insights/{id}"){val s=io{service.staff(call.bearer())};call.respond(io{service.customerDetail(s,call.parameters["id"]!!)})}
     put("/api/staff/customer-insights/{id}/preferences"){val s=io{service.staff(call.bearer())};val p=call.body<CustomerPreferencesChange>();call.respond(io{service.savePreferences(s,call.parameters["id"]!!,p)})}
