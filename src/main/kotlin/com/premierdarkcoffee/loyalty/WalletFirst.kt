@@ -90,7 +90,7 @@ fun LoyaltyService.redeemAtCounter(staff: Staff, input: CounterRedemption, key: 
 fun LoyaltyService.issueRestore(staff: Staff, input: RestoreIssue): JsonObject {
     staff.owner(); uuid(input.memberId)
     need(input.identityVerified, "IDENTITY_VERIFICATION_REQUIRED", "Verifica presencialmente la identidad del titular antes de recuperar su tarjeta.")
-    need(input.reason in setOf("DEVICE_CHANGE", "REMOVED_CARD"), "INVALID_REASON", "Selecciona el motivo de recuperación.")
+    need(input.reason in setOf("DEVICE_CHANGE", "REMOVED_CARD", "CONNECTION_REPAIR"), "INVALID_REASON", "Selecciona el motivo de recuperación.")
     return db.tx { c ->
         commercial.requireActive(c, staff.tenant)
         lockMember(c, staff.tenant, input.memberId)

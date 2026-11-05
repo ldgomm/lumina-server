@@ -424,6 +424,7 @@ class LocalWallet:
         self.report['phase'] = 'database_and_configuration'
         db = self.database_state()
         wallet = initialize(self.root, db['hasKey'])
+        previous_origin = self.state.get('origin') or wallet.get('PUBLIC_BASE_URL')
         mode = wallet.get('WALLET_TUNNEL_MODE', 'quick')
         if mode not in ('quick', 'named', 'external'):
             raise RuntimeError('WALLET_TUNNEL_MODE debe ser quick, named o external.')
@@ -451,12 +452,17 @@ class LocalWallet:
             if mode == 'named':
                 self.run('tunnel_start', 'up', '-d', '--no-deps', TUNNEL, timeout=300)
         else:
-            self.run('tunnel_start', 'up', '-d', '--no-deps', TUNNEL, timeout=300)
-            origin = self.quick_origin()
+            origin = self.start_quick_tunnel(renew, db['passes'])
         self.report['candidate_origin'] = origin
-        if self.state.get('origin') and self.state['origin'] != origin and db['passes'] and not renew:
+        if db['passes'] and previous_origin != origin and not renew:
             raise RuntimeError('La dirección del túnel cambió y existen pases. Usa un dominio estable o --renew-test-url para volver a guardar conscientemente esas tarjetas de prueba.')
         self.check_probe('public_https', origin)
+        if db['passes'] and previous_origin != origin:
+            self.state['pass_refresh_pending'] = {'previous_origin': previous_origin, 'origin': origin,
+                'issued_passes': db['passes'], 'action': 'SAVE_SAME_PASS_ON_PHONE', 'device_verified': False}
+            staging.private_write(self.state_path, json.dumps(self.state))
+        if self.state.get('pass_refresh_pending'):
+            self.report['pass_refresh'] = self.state['pass_refresh_pending']
         update_env(self.root / '.env.wallet', {'PUBLIC_BASE_URL': origin})
         wallet['PUBLIC_BASE_URL'] = origin
         self.write_overlay(wallet, origin)
@@ -487,6 +493,8 @@ class LocalWallet:
         print('Registro para el teléfono: ' + origin + '/join/demo-cafe-' + self.values['STAGING_INSTANCE_ID'][:8])
         print('Configuración privada: ' + str(self.root / '.env.wallet'))
         print('Guía: ' + str(guide))
+        if self.report.get('pass_refresh'):
+            print('TARJETA_PENDIENTE: actualiza la conexión de la misma tarjeta desde el panel del dueño y abre el QR temporal en el iPhone. La guía incluye los pasos. No borres la tarjeta ni te registres otra vez.')
         if sys.platform == 'darwin':
             webbrowser.open(guide.as_uri())
         return self.report
@@ -519,6 +527,11 @@ class LocalWallet:
                     self.report['tunnel'] = {'state': status, 'started_at': started, 'restarts': restarts}
                     code, output = self.capture('tunnel_runtime', self.command('logs', '--no-color',
                         '--since', started, '--tail=500', TUNNEL))
+                    if not code and quick_tunnel_retired(output):
+                        self.report['tunnel_issue'] = 'QUICK_TUNNEL_NOT_FOUND'
+                        self.state['active'] = False
+                        staging.private_write(self.state_path, json.dumps(self.state))
+                        raise QuickTunnelRetired('Cloudflare informa Unauthorized: Tunnel not found para el túnel actual.')
                     matches = re.findall(r'https://[a-z0-9-]+\.trycloudflare\.com', output) if not code else []
                     cached = self.state.get('candidate', {})
                     if not matches and cached.get('container') == container and cached.get('started_at') == started:
@@ -553,7 +566,9 @@ class LocalWallet:
                 signals.append('TUNNEL_DNS_FAILED')
             if re.search(r'(?i)unable to reach the origin service', logs):
                 signals.append('TUNNEL_ORIGIN_UNREACHABLE')
-            if 'Registered tunnel connection' in logs:
+            if quick_tunnel_retired(logs):
+                signals.append('QUICK_TUNNEL_NOT_FOUND')
+            elif 'Registered tunnel connection' in logs:
                 signals.append('TUNNEL_CONNECTION_REGISTERED')
             self.report['tunnel_log_signals'] = signals
 
@@ -562,13 +577,29 @@ class LocalWallet:
         history = self.report.setdefault('probes', {}).setdefault(phase, [])
         probe(url, self.nonce, diagnostics=history, maximum_seconds=maximum_seconds)
 
+    def start_quick_tunnel(self, renew, issued_passes):
+        self.run('tunnel_start', 'up', '-d', '--no-deps', TUNNEL, timeout=300)
+        try:
+            return self.quick_origin()
+        except QuickTunnelRetired:
+            self.report['tunnel_issue'] = 'QUICK_TUNNEL_NOT_FOUND'
+            if issued_passes and not renew:
+                raise RuntimeError('Cloudflare dio de baja el túnel temporal. Las tarjetas instaladas apuntan a esa dirección. Ejecuta --renew-test-url para recuperar HTTPS y después actualiza la conexión de la misma tarjeta desde el panel del dueño.') from None
+            print('Cloudflare dio de baja el túnel. Creando una nueva conexión temporal...', flush=True)
+            self.run('tunnel_recreate', 'up', '-d', '--no-deps', '--force-recreate', TUNNEL, timeout=300)
+            self.report['tunnel_recovery'] = {'reason': 'QUICK_TUNNEL_NOT_FOUND', 'recreate_attempts': 1}
+            # Exactly one recreation. DNS errors alone never rotate a URL or disable TLS checks.
+            return self.quick_origin()
+
 
 def write_guide(root, values, report):
     origin = report.get('origin', '')
     link = origin + '/join/demo-cafe-' + values['STAGING_INSTANCE_ID'][:8]
-    document = (SCRIPTS / 'wallet-guide.html').read_text()
+    template = 'wallet-recovery-guide.html' if report.get('pass_refresh') else 'wallet-guide.html'
+    document = (SCRIPTS / template).read_text()
     replacements = {'PROJECT': str(root), 'CLIENT_LINK': link, 'STATUS': report['status'],
-                    'ORIGIN': origin, 'LOCAL': 'http://localhost:' + values['LOYALTY_HTTP_PORT']}
+                    'ORIGIN': origin, 'LOCAL': 'http://localhost:' + values['LOYALTY_HTTP_PORT'],
+                    'REFRESH_HIDDEN': '' if report.get('pass_refresh') else 'hidden'}
     for key, value in replacements.items():
         document = document.replace('{{' + key + '}}', html.escape(value, quote=True))
     path = private_directory(root) / 'guide.html'
@@ -651,7 +682,7 @@ def main(argv=None):
             args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             args.output_dir.mkdir(exist_ok=True, parents=True)
-            name = 'loyalty_v011_wallet_' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+            name = 'loyalty_v011r1_wallet_' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
             destination = args.output_dir / (name + '.zip')
             with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr(name + '/RESULTADO.json', json.dumps(report, ensure_ascii=False, indent=2))
@@ -731,6 +762,16 @@ def connection_error(error):
     else:
         code = 'CONNECTION_FAILED'
     return {'code': code, 'detail': staging.clean(str(cause), [])[:600]}
+
+
+
+class QuickTunnelRetired(RuntimeError):
+    """Cloudflare explicitly discarded the current temporary tunnel identity."""
+
+def quick_tunnel_retired(logs):
+    failures = [m.start() for m in re.finditer(r'(?i)Unauthorized:\s*Tunnel not found', logs)]
+    connected = [m.start() for m in re.finditer(r'Registered tunnel connection', logs)]
+    return bool(failures) and max(failures) > max(connected, default=-1)
 
 if __name__ == '__main__':
     raise SystemExit(main())

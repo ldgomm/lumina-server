@@ -121,7 +121,7 @@ class PromotionLifecyclePostgresTest {
         assertEquals(1,service.customerDetail(f.owner,f.member.id).getValue("rewards").jsonArray.size);assertEquals(1,count("redemptions",f))
     }
     @Test fun `migration repeats and database prevents deleted program restoration`() {
-        val f=fixture();remove(f);db.migrate();assertEquals(6,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        val f=fixture();remove(f);db.migrate();assertEquals(7,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
         assertFails{db.tx{c->c.exec("UPDATE programs SET deleted_at=NULL WHERE tenant_id=? AND id=?",f.owner.tenant,f.program)}}
         assertFails{db.tx{c->c.exec("DELETE FROM program_deletions WHERE tenant_id=?",f.owner.tenant)}}
     }
@@ -143,6 +143,20 @@ class PromotionLifecyclePostgresTest {
         val payload=json.encodeToString(review(f));val key=id()
         repeat(2){assertEquals(HttpStatusCode.OK,client.delete(route){bearerAuth(f.token);contentType(ContentType.Application.Json);header("Idempotency-Key",key);setBody(payload)}.status)}
         assertEquals(1,count("program_deletions",f))
+    }
+    @Test fun `repairing a dead connection retains the same card and excludes the deleted promotion`() {
+        val f=fixture();val other=service.newProgram(f.owner,Program("Puntos vigentes",Kind.POINTS)).str("id");earn(f)
+        val before=wallet(f);remove(f)
+        assertEquals("IDENTITY_VERIFICATION_REQUIRED",assertFailsWith<Problem>{service.issueRestore(f.owner,RestoreIssue(f.member.id,"CONNECTION_REPAIR",false))}.code)
+        val link=service.issueRestore(f.owner,RestoreIssue(f.member.id,"CONNECTION_REPAIR",true)).str("path")
+        val token=link.substringAfter("#restore=");val restored=service.member(service.useRestore(f.slug,RestoreUse(token)).str("token"))
+        val next=WalletService(service,"https://new-connection.example.org",WalletCipher(Base64.getEncoder().encodeToString(ByteArray(32){5}))).materialize(restored)
+        assertEquals(f.member,restored);assertEquals(before.serial,next.serial);assertEquals(before.token,next.token)
+        assertEquals(before.snapshot["cardCode"],next.snapshot["cardCode"]);assertEquals(1,count("members",f));assertEquals(1,count("wallet_passes",f))
+        assertEquals(other,next.snapshot.getValue("balances").jsonArray.single().jsonObject.str("programId"));assertEquals(10,next.snapshot.getValue("balances").jsonArray.single().jsonObject.num("available"))
+        val pass=next.appleJson("pass.test","TEAM","https://new-connection.example.org")
+        assertTrue(pass.str("webServiceURL").startsWith("https://new-connection.example.org/"));assertFalse(pass.toString().contains("Promoción de prueba"))
+        assertFailsWith<Problem>{service.useRestore(f.slug,RestoreUse(token))}
     }
     @Test fun `concurrent identical deletion writes only one forfeiture and receipt`() {
         val f=fixture();earn(f);val r=review(f);val key=id();val results=race({remove(f,r,key)},{remove(f,r,key)},{remove(f,r,key)})

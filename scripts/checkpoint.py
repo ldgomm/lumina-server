@@ -24,14 +24,14 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v011'
+VERSION = 'v011r1'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
 SOURCE_DIRS = {'src', 'gradle', 'scripts', 'docs'}
 SUITES = {
     'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4, 'com.premierdarkcoffee.loyalty.EngagementDomainTest': 10, 'com.premierdarkcoffee.loyalty.EngagementGoogleTest': 1},
-    'postgresTest': {'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 16, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8, 'com.premierdarkcoffee.loyalty.EngagementPostgresTest': 17, 'com.premierdarkcoffee.loyalty.PromotionLifecyclePostgresTest': 16},
+    'postgresTest': {'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 16, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8, 'com.premierdarkcoffee.loyalty.EngagementPostgresTest': 17, 'com.premierdarkcoffee.loyalty.PromotionLifecyclePostgresTest': 17},
 }
 
 
@@ -421,7 +421,10 @@ def main(arguments=None, updates=None, origin=None):
     parser.add_argument('--output-dir', default=str(Path.home()/'Downloads'))
     parser.add_argument('--check-only', action='store_true')
     parser.add_argument('--https', action='store_true', help='Preparar el túnel y cargar Wallet después del checkpoint completo.')
+    parser.add_argument('--renew-test-url', action='store_true', help='Permitir recuperar la URL de pruebas; las tarjetas con la dirección anterior deben volver a guardarse conservando su identidad.')
     args = parser.parse_args(arguments)
+    if args.renew_test_url:
+        args.https = True
     os.umask(0o077)
     project = Path(args.project).expanduser().resolve()
     output = Path(args.output_dir).expanduser().resolve()
@@ -534,7 +537,7 @@ def main(arguments=None, updates=None, origin=None):
         for attempt in (1, 2):
             before = snapshot(project)
             prefix = 'attempt_'+str(attempt)+'_'
-            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=90, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
+            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=105, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
             if workflow:
                 report['status'] = 'WORKFLOW_TESTS_FAILED_NO_COMMIT'
                 break
@@ -586,9 +589,14 @@ def main(arguments=None, updates=None, origin=None):
             report['status'] = 'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING'
             if args.https:
                 https_path = folder/'wallet_https.json'
-                https_code = run('wallet_https_setup', [sys.executable,str(project/'scripts/wallet_local.py'),'start','--report',str(https_path)],900,env)
+                https_command = [sys.executable,str(project/'scripts/wallet_local.py'),'start','--report',str(https_path)]
+                if args.renew_test_url:
+                    https_command.append('--renew-test-url')
+                https_code = run('wallet_https_setup', https_command,900,env)
                 https = json.loads(https_path.read_text()) if https_path.exists() else {'status':'HTTPS_SETUP_FAILED'}
                 report['https'] = https
+                if https.get('pass_refresh'):
+                    report['pending'].append('EXISTING_PASS_CONNECTION_REFRESH')
                 if https_code or not https.get('tls_verified'):
                     report['status'] = 'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_HTTPS_SETUP_FAILED'
                 else:
@@ -652,6 +660,8 @@ def main(arguments=None, updates=None, origin=None):
             if report.get('https',{}).get('origin'):
                 print('HTTPS: '+report['https']['origin'])
                 print('Guía local: '+str(project/'.local-wallet/guide.html'))
+                if report['https'].get('pass_refresh'):
+                    print('La conexión cambió: abre la guía para actualizar la misma tarjeta en el iPhone. No la borres ni te registres otra vez.')
             print('Accesos privados: '+str(project/'.local-staging/access.html'))
             try:
                 import webbrowser
