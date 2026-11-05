@@ -651,7 +651,7 @@ def main(argv=None):
             args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             args.output_dir.mkdir(exist_ok=True, parents=True)
-            name = 'loyalty_v010r2_wallet_' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+            name = 'loyalty_v011_wallet_' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
             destination = args.output_dir / (name + '.zip')
             with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr(name + '/RESULTADO.json', json.dumps(report, ensure_ascii=False, indent=2))

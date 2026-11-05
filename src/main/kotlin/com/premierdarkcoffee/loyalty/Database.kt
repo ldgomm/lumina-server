@@ -38,6 +38,7 @@ class Database(val source: DataSource) : AutoCloseable {
         WalletMigration.apply(c)
         WalletFirstMigration.apply(c);
         EngagementMigration.apply(c)
+        PromotionLifecycleMigration.apply(c)
         
     }
     override fun close() { (source as? AutoCloseable)?.close() }

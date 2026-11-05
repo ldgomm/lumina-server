@@ -9,7 +9,7 @@ async function api(path,body,method='POST',key=null){
  const headers={};if(state.token)headers.Authorization=`Bearer ${state.token}`;
  if(body!==undefined)headers['Content-Type']='application/json';if(key)headers['Idempotency-Key']=key;
  const response=await fetch(path,{method:body===undefined&&method==='POST'?'GET':method,headers,body:body===undefined?undefined:JSON.stringify(body)});
- const data=await response.json();if(!response.ok)throw new Error(data.message||'No se pudo completar la operación.');return data;
+ const data=await response.json();if(!response.ok){const issue=new Error(data.message||'No se pudo completar la operación.');issue.code=data.code;issue.status=response.status;throw issue;}return data;
 }
 function form(id,handler){const f=document.getElementById(id);if(!f)return;f.addEventListener('submit',async e=>{e.preventDefault();const b=f.querySelector('button[type=submit],button:not([type])');if(b.disabled)return;b.disabled=true;try{await handler(Object.fromEntries(new FormData(f)),f)}catch(e){notice(e.message)}finally{b.disabled=false}})}
 function action(id,handler){document.getElementById(id)?.addEventListener('click',async()=>{try{await handler()}catch(e){notice(e.message)}})}

@@ -30,3 +30,13 @@
 #previewStamps{font-size:20px;letter-spacing:1px}
 @media(max-width:750px){.wallet-design-layout{grid-template-columns:1fr;gap:12px}.design-preview-wrap{position:static;grid-row:1;padding-top:0;max-width:400px;width:100%;margin:0 auto 16px}.design-preview-hero{margin:22px 0}.design-preview-balance{margin-bottom:24px}}
 @media(max-width:360px){.design-color-fields{grid-template-columns:1fr;gap:0}}
+
+/* loyalty-promotion-removal */
+.promotion-removal{width:min(620px,calc(100vw - 32px));max-height:88vh;overflow:auto;border:1px solid #dce1d8;border-radius:20px;padding:28px;color:#182b27;background:#fff;box-shadow:0 16px 60px #0004}
+.promotion-removal::backdrop{background:#10231db3}
+.promotion-removal h2{overflow-wrap:anywhere}
+.removal-impact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 20px;padding:18px;border:1px solid #edc3c3;border-radius:12px;background:#fff6f5}
+.removal-impact dt{font-size:14px}.removal-impact dd{margin:0;font-weight:700;text-align:right}
+.danger{background:#a12330;color:#fff}.danger-quiet{background:#fff1ef;color:#8f2029;border:1px solid #e7c1bf}
+.promotion-removal form>.row{margin-top:22px}
+@media(max-width:450px){.promotion-removal{padding:20px}.removal-impact{padding:12px;gap:10px}}

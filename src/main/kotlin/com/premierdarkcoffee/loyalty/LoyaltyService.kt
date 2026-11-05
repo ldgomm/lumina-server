@@ -36,7 +36,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         internal fun tenant(c: Connection, slug: String): JsonObject = c.one("SELECT * FROM tenants WHERE slug=?",slug) {
         obj("id" to it.getString("id"),"name" to it.getString("name"),"slug" to it.getString("slug"),"currency" to it.getString("currency"),"timezone" to it.getString("timezone"))
     } ?: throw Problem(404,"NOT_FOUND","Negocio no encontrado.")
-    fun publicTenant(slug: String) = db.tx { c -> tenant(c,slug).let { t -> obj("business" to t,"programs" to programs(c,t.getValue("id").jsonPrimitive.content),"rewards" to rewards(c,t.getValue("id").jsonPrimitive.content),"termsVersion" to "pilot-1", "pilot" to true) } }
+    fun publicTenant(slug: String) = db.tx { c -> tenant(c,slug).let { t -> obj("business" to t,"programs" to programs(c,t.getValue("id").jsonPrimitive.content,true),"rewards" to rewards(c,t.getValue("id").jsonPrimitive.content,true),"termsVersion" to "pilot-1", "pilot" to true) } }
         fun createTenant(input: NewTenant): JsonObject {
         input.firstBranch?.let { text(it.name); text(it.code, 40) }
 
@@ -105,7 +105,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         return db.tx { c ->
         commercial.requireActive(c, s.tenant);
          validateBranches(c,s.tenant,input.program)
-            val current = c.one("SELECT kind,current_version FROM programs WHERE tenant_id=? AND id=? FOR UPDATE",s.tenant,programId) { it.getString(1) to it.getInt(2) } ?: throw Problem(404,"NOT_FOUND","Programa no encontrado.")
+            val current = c.one("SELECT kind,current_version FROM programs WHERE tenant_id=? AND id=? AND deleted_at IS NULL FOR UPDATE",s.tenant,programId) { it.getString(1) to it.getInt(2) } ?: throw Problem(404,"NOT_FOUND","Programa no encontrado.")
             need(current.second == input.expectedVersion,"VERSION_CONFLICT","La promoción cambió; recarga antes de guardar.",409)
             need(current.first == input.program.kind.name,"UNIT_CHANGE_REQUIRES_NEW_PROGRAM","Crea otro programa para cambiar entre puntos, cashback o sellos; conserva el saldo anterior.",409)
             val previous = c.one("SELECT config::text FROM program_versions WHERE tenant_id=? AND program_id=? AND version=?",s.tenant,programId,current.second){json.decodeFromString<Program>(it.getString(1))}!!
@@ -113,7 +113,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             val version = current.second + 1
             c.exec("INSERT INTO program_versions(tenant_id,program_id,version,config) VALUES(?,?,?,?::jsonb)",s.tenant,programId,version,json.encodeToString(input.program))
             c.exec("UPDATE programs SET current_version=? WHERE tenant_id=? AND id=?",version,s.tenant,programId)
-            audit(c,s.tenant,s.id,"EDIT_PROGRAM",programId); obj("id" to programId,"version" to version)
+            queuePromotionCards(c,s.tenant); audit(c,s.tenant,s.id,"EDIT_PROGRAM",programId); obj("id" to programId,"version" to version)
         }
     }
     fun saveReward(s: Staff, input: Reward, rewardId: String? = null, expectedVersion: Int? = null): JsonObject { s.owner(); uuid(input.programId); text(input.name); need(input.cost in 1..1_000_000_000,"INVALID_COST","Costo inválido.")
@@ -121,7 +121,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         return db.tx { c ->
         commercial.requireActive(c, s.tenant);
         
-            need(c.one("SELECT id FROM programs WHERE tenant_id=? AND id=?",s.tenant,input.programId) { it.getString(1) } != null,"NOT_FOUND","Programa no encontrado.",404)
+            need(c.one("SELECT id FROM programs WHERE tenant_id=? AND id=? AND deleted_at IS NULL",s.tenant,input.programId) { it.getString(1) } != null,"NOT_FOUND","Programa no encontrado.",404)
             val target = rewardId?.let(::uuid) ?: id()
             val version = if (rewardId == null) 1 else {
                 val row = c.one("SELECT version,program_id FROM rewards WHERE tenant_id=? AND id=? FOR UPDATE",s.tenant,target) { it.getInt(1) to it.getString(2) } ?: throw Problem(404,"NOT_FOUND","Premio no encontrado.")
@@ -212,10 +212,11 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             c.exec("UPDATE purchases SET gross_minor=?,discount_minor=?,items=?::jsonb,redemption_id=? WHERE tenant_id=? AND id=?",calculation.gross,calculation.discount,json.encodeToString(input.items),redemption,s.tenant,purchase)
             // Lock the parent first, then read its immutable version in a new READ COMMITTED snapshot.
             // A joined locking query could miss a newly committed version after waiting on an editor.
-            val lockedPrograms = c.rows("SELECT id,current_version FROM programs WHERE tenant_id=? ORDER BY id FOR SHARE",s.tenant) { it.getString(1) to it.getInt(2) }
+            val lockedPrograms = c.rows("SELECT id,current_version FROM programs WHERE tenant_id=? AND deleted_at IS NULL ORDER BY id FOR SHARE",s.tenant) { it.getString(1) to it.getInt(2) }
             need(input.programIds==null || input.programIds.all{selected->lockedPrograms.any{it.first==selected}},"NOT_FOUND","Promoción no encontrada en este negocio.",404)
             val earned = lockedPrograms.mapNotNull { (program,version) ->
                 val config = c.one("SELECT config::text FROM program_versions WHERE tenant_id=? AND program_id=? AND version=?",s.tenant,program,version) { json.decodeFromString<Program>(it.getString(1)) }!!
+                if (input.programIds?.contains(program)==true) need(config.active,"PROMOTION_PAUSED","La promoción seleccionada está pausada. Actualiza las promociones de la compra.",409)
                 val amount = config.earnReceipt(input,program,calculation,at,tenant.second)
                 if (amount == 0L) null else {
                     ledger(c,s.tenant,input.memberId,program,amount,"EARN",purchase,version)
@@ -226,13 +227,13 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             obj("purchaseId" to purchase,"earned" to earned,"recordedAt" to at,"grossMinor" to calculation.gross,"discountMinor" to calculation.discount,"amountMinor" to calculation.net,"redemptionId" to redemption)
         } }
     }
-    private fun programs(c: Connection, tenant: String) = c.rows("SELECT p.id,p.current_version,v.config::text FROM programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? ORDER BY p.id",tenant) { obj("id" to it.getString(1),"version" to it.getInt(2),"config" to json.parseToJsonElement(it.getString(3))) }
-    private fun rewards(c: Connection, tenant: String) = c.rows("SELECT * FROM rewards WHERE tenant_id=? ORDER BY id",tenant) { obj("id" to it.getString("id"),"programId" to it.getString("program_id"),"name" to it.getString("name"),"cost" to it.getLong("cost"),"active" to it.getBoolean("active"),"version" to it.getInt("version"),"benefit" to it.getString("benefit")?.let{v->json.parseToJsonElement(v)}) }
+    private fun programs(c: Connection, tenant: String, visibleOnly: Boolean = false) = c.rows("SELECT p.id,p.current_version,v.config::text FROM programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? AND p.deleted_at IS NULL AND (NOT ? OR p.id IN (SELECT id FROM customer_programs WHERE tenant_id=?)) ORDER BY p.id",tenant,visibleOnly,tenant) { obj("id" to it.getString(1),"version" to it.getInt(2),"config" to json.parseToJsonElement(it.getString(3))) }
+    private fun rewards(c: Connection, tenant: String, visibleOnly: Boolean = false) = c.rows("SELECT r.* FROM rewards r JOIN programs p ON p.tenant_id=r.tenant_id AND p.id=r.program_id WHERE r.tenant_id=? AND p.deleted_at IS NULL AND (NOT ? OR (r.active AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=?))) ORDER BY r.id",tenant,visibleOnly,tenant) { obj("id" to it.getString("id"),"programId" to it.getString("program_id"),"name" to it.getString("name"),"cost" to it.getLong("cost"),"active" to it.getBoolean("active"),"version" to it.getInt("version"),"benefit" to it.getString("benefit")?.let{v->json.parseToJsonElement(v)}) }
     fun dashboard(s: Staff) = db.tx { c -> obj(
         "business" to c.one("SELECT * FROM tenants WHERE id=?",s.tenant) { obj("id" to s.tenant,"name" to it.getString("name"),"slug" to it.getString("slug"),"currency" to it.getString("currency"),"timezone" to it.getString("timezone")) },
         "role" to s.role, "branchId" to s.branch,
         "branches" to c.rows("SELECT * FROM branches WHERE tenant_id=? AND (?::text IS NULL OR id=?) ORDER BY name",s.tenant,s.branch,s.branch) { obj("id" to it.getString("id"),"name" to it.getString("name"),"code" to it.getString("code")) },
-        "programs" to programs(c,s.tenant),"rewards" to rewards(c,s.tenant),
+        "programs" to programs(c,s.tenant,s.role!="OWNER"),"rewards" to rewards(c,s.tenant,s.role!="OWNER"),
         "wallet" to obj("apple" to "PENDING_INTEGRATION","google" to "PENDING_INTEGRATION")) }
     fun lookup(s: Staff, input: Lookup): JsonObject {
         need((input.document == null) != (input.cardCode == null),"INVALID_LOOKUP","Usa documento o código de tarjeta.")
@@ -248,8 +249,8 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     fun card(member: Member) = db.tx { c -> lockMember(c,member.tenant,member.id); releaseExpired(c,member.tenant,member.id); memberView(c,member) }
     private fun memberView(c: Connection, member: Member): JsonObject = obj(
         "member" to c.one("SELECT id,name,card_code,revision FROM members WHERE tenant_id=? AND id=?",member.tenant,member.id) { obj("id" to it.getString(1),"name" to it.getString(2),"cardCode" to it.getString(3),"revision" to it.getLong(4)) },
-        "balances" to c.rows("SELECT b.program_id,b.available,p.kind,v.config->>'name' AS name FROM balances b JOIN programs p ON p.tenant_id=b.tenant_id AND p.id=b.program_id JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE b.tenant_id=? AND b.member_id=? ORDER BY b.program_id",member.tenant,member.id) { obj("programId" to it.getString(1),"available" to it.getLong(2),"kind" to it.getString(3),"name" to it.getString(4)) },
-        "rewards" to rewards(c,member.tenant),
+        "balances" to c.rows("SELECT b.program_id,b.available,p.kind,v.config->>'name' AS name FROM balances b JOIN programs p ON p.tenant_id=b.tenant_id AND p.id=b.program_id JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE b.tenant_id=? AND b.member_id=? AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=p.tenant_id) ORDER BY b.program_id",member.tenant,member.id) { obj("programId" to it.getString(1),"available" to it.getLong(2),"kind" to it.getString(3),"name" to it.getString(4)) },
+        "rewards" to rewards(c,member.tenant,true),
         "history" to c.rows("SELECT * FROM ledger WHERE tenant_id=? AND member_id=? ORDER BY created_at DESC,id DESC LIMIT 100",member.tenant,member.id) { obj("id" to it.getString("id"),"programId" to it.getString("program_id"),"delta" to it.getLong("delta"),"kind" to it.getString("kind"),"referenceId" to it.getString("reference_id"),"at" to it.instant("created_at")) },
         "redemptions" to c.rows("SELECT id,status,reward_name,expires_at FROM redemptions WHERE tenant_id=? AND member_id=? ORDER BY created_at DESC LIMIT 30",member.tenant,member.id) { obj("id" to it.getString(1),"status" to it.getString(2),"name" to it.getString(3),"expiresAt" to it.getTimestamp(4).toInstant()) }
     )
@@ -259,7 +260,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         
         lockMember(c,member.tenant,member.id); releaseExpired(c,member.tenant,member.id)
         val reward = c.one("SELECT * FROM rewards WHERE tenant_id=? AND id=? AND active=true FOR SHARE",member.tenant,uuid(input.rewardId)) { obj("program" to it.getString("program_id"),"name" to it.getString("name"),"cost" to it.getLong("cost"),"version" to it.getInt("version")) } ?: throw Problem(404,"NOT_FOUND","Premio no disponible.")
-        val program = reward.getValue("program").jsonPrimitive.content; val cost = reward.getValue("cost").jsonPrimitive.long
+        val program = reward.getValue("program").jsonPrimitive.content; requireActivePromotion(c,member.tenant,program); val cost = reward.getValue("cost").jsonPrimitive.long
         val redeemId = id(); val token = Security.token(); val expires = now().plusSeconds(300)
         c.exec("INSERT INTO redemptions(tenant_id,id,member_id,program_id,reward_id,reward_version,reward_name,cost,token_hash,status,expires_at) VALUES(?,?,?,?,?,?,?,?,?,'RESERVED',?)",member.tenant,redeemId,member.id,program,input.rewardId,reward.getValue("version").jsonPrimitive.int,reward.getValue("name").jsonPrimitive.content,cost,Security.hash(token),
             Timestamp.from(expires))
@@ -305,6 +306,8 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             need(hold.getValue("status").jsonPrimitive.content == "RESERVED","ALREADY_PROCESSED","Este canje ya fue procesado. No entregues otro premio.",409)
             need(now() < Instant.parse(hold.getValue("expiresAt").jsonPrimitive.content),"REDEMPTION_EXPIRED","El código venció. Solicita uno nuevo al cliente.",409)
             val redemption = hold.getValue("id").jsonPrimitive.content
+            val program=c.one("SELECT program_id FROM redemptions WHERE tenant_id=? AND id=?",s.tenant,redemption){it.getString(1)}!!
+            requireActivePromotion(c,s.tenant,program)
             c.exec("UPDATE redemptions SET status='CONSUMED',confirmed_branch_id=?,confirmed_actor_id=?,consumed_at=? WHERE tenant_id=? AND id=?",input.branchId,s.id,
                 Timestamp.from(now()),s.tenant,redemption)
             changed(c,s.tenant,member); audit(c,s.tenant,s.id,"CONSUME",redemption)

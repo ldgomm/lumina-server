@@ -25,7 +25,7 @@ Las plantillas permiten elegir categoría, número de compra premiada, porcentaj
 
 Desde **Editar promoción** se configuran fechas, días, horarios, sucursales, compra mínima y bonos. Siguen disponibles los programas de puntos y cashback. Los bonos coincidentes usan la prioridad configurada, sin multiplicarse entre sí. Todos los establecimientos del mismo negocio comparten el saldo de la tarjeta.
 
-Para cambiar de categoría, de unidad a comprobante, o cambiar la meta y el porcentaje de un premio, crea otra promoción o premio. El anterior conserva sus saldos; puedes pausar su acumulación y mantener el premio activo para honrar lo ganado. No se reasignan automáticamente los saldos ni se convierten entre promociones. Cambiar los horarios o el nombre crea una nueva versión para las compras futuras.
+Para cambiar de categoría, de unidad a comprobante, o cambiar la meta y el porcentaje de un premio, crea otra promoción o premio. No se reasignan automáticamente los saldos ni se convierten entre promociones. Cambiar los horarios o el nombre crea una nueva versión para las compras futuras. Desde v011, pausar oculta la promoción al cliente y bloquea tanto la acumulación como el canje, conservando los saldos para reactivarla. La eliminación definitiva y sus efectos se explican en [PROMOCIONES_V011.md](PROMOCIONES_V011.md).
 
 ## Registrar una compra y canjear
 

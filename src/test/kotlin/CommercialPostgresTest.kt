@@ -75,7 +75,7 @@ class CommercialPostgresTest {
     @Test fun `migration is repeatable and backfills existing tenants`() {
         val f = fixture(); db.migrate()
         assertTrue(billing.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
-                assertEquals(5, db.tx { c -> c.one("SELECT count(*) FROM comeback_migrations") { it.getInt(1) } })
+                assertEquals(6, db.tx { c -> c.one("SELECT count(*) FROM comeback_migrations") { it.getInt(1) } })
         db.tx { c ->
             val oldSchema = "upgrade_" + id().replace("-", "")
             c.exec("CREATE SCHEMA $oldSchema"); c.exec("SET LOCAL search_path TO $oldSchema")

@@ -35,6 +35,7 @@ fun LoyaltyService.prepareReceipt(c:Connection,s:Staff,p:Purchase):ReceiptCalcul
     val reward=c.one("SELECT * FROM rewards WHERE tenant_id=? AND id=? AND active FOR SHARE",s.tenant,uuid(p.rewardId)) {
         obj("id" to it.getString("id"),"programId" to it.getString("program_id"),"name" to it.getString("name"),"cost" to it.getLong("cost"),"version" to it.getInt("version"),"benefit" to it.getString("benefit")?.let{v->json.parseToJsonElement(v)})
     }?:throw Problem(404,"NOT_FOUND","Premio no disponible.")
+    requireActivePromotion(c,s.tenant,reward.getValue("programId").jsonPrimitive.content)
     need(reward.getValue("version").jsonPrimitive.int==p.expectedRewardVersion,"REWARD_CHANGED","El premio cambió. Revisa sus condiciones.",409)
     need(reward["benefit"]!=JsonNull,"SEPARATE_REDEMPTION","Este premio se entrega desde Canjear un premio.")
     val benefit=json.decodeFromString<Benefit>(reward.getValue("benefit").toString());benefit.validate()
@@ -104,7 +105,7 @@ fun LoyaltyService.createPromotion(s:Staff,input:PromotionTemplate,key:String):J
 fun LoyaltyService.design(s:Staff)=db.tx{c->s.owner();c.one("SELECT version,config::text FROM wallet_designs WHERE tenant_id=?",s.tenant){obj("version" to it.getInt(1),"design" to json.parseToJsonElement(it.getString(2)))}?:obj("version" to 0,"design" to json.parseToJsonElement(json.encodeToString(WalletDesign())))}
 fun LoyaltyService.saveDesign(s:Staff,input:WalletDesignChange):JsonObject {s.owner();input.design.validate();return db.tx{c->
     commercial.requireActive(c,s.tenant)
-    input.design.featuredProgramId?.let{pid->need(c.one("SELECT id FROM programs WHERE tenant_id=? AND id=?",s.tenant,pid){it.getString(1)}!=null,"NOT_FOUND","Promoción no encontrada.",404)}
+    input.design.featuredProgramId?.let{pid->need(c.one("SELECT id FROM programs WHERE tenant_id=? AND id=? AND deleted_at IS NULL",s.tenant,pid){it.getString(1)}!=null,"NOT_FOUND","Promoción no encontrada.",404)}
     c.rows("SELECT pg_advisory_xact_lock(hashtextextended(?,0))","design:${s.tenant}"){true}
     val version=c.one("SELECT version FROM wallet_designs WHERE tenant_id=?",s.tenant){it.getInt(1)}?:0
     need(version==input.expectedVersion,"VERSION_CONFLICT","El diseño cambió. Recarga antes de guardar.",409)

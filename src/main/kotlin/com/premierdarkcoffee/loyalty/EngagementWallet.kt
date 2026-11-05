@@ -21,7 +21,7 @@ fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=tr
         SELECT r.id,r.name,r.cost,r.program_id,p.kind,coalesce(b.available,0) AS available
         FROM rewards r JOIN programs p ON p.tenant_id=r.tenant_id AND p.id=r.program_id
         LEFT JOIN balances b ON b.tenant_id=r.tenant_id AND b.program_id=r.program_id AND b.member_id=?
-        WHERE r.tenant_id=? AND r.active ORDER BY r.program_id,r.cost,r.id LIMIT 20
+        WHERE r.tenant_id=? AND r.active AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=p.tenant_id) ORDER BY r.program_id,r.cost,r.id LIMIT 20
     """.trimIndent(),member.id,member.tenant){val available=it.getLong("available");val cost=it.getLong("cost");val remaining=maxOf(0,cost-available)
         val unit=when(it.getString("kind")){"STAMPS"->if(remaining==1L)"sello" else "sellos";"POINTS"->if(remaining==1L)"punto" else "puntos";else->"centavos de cashback"}
         val message=if(remaining==0L)"Ya puedes canjear: ${it.getString("name")}" else "Te ${if(remaining==1L)"falta" else "faltan"} $remaining $unit para ${it.getString("name")}"

@@ -73,6 +73,7 @@ fun LoyaltyService.redeemAtCounter(staff: Staff, input: CounterRedemption, key: 
         val redemption = id()
         val cost = reward.getValue("cost").jsonPrimitive.long
         val program = reward.getValue("programId").jsonPrimitive.content
+        requireActivePromotion(c,staff.tenant,program)
         val at = Timestamp.from(clock.instant())
         c.exec("INSERT INTO redemptions(tenant_id,id,member_id,program_id,reward_id,reward_version,reward_name,cost,token_hash,status,expires_at,confirmed_branch_id,confirmed_actor_id,consumed_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,'CONSUMED',?,?,?,?,?)",
             staff.tenant, redemption, input.memberId, program, input.rewardId, input.expectedRewardVersion, reward.getValue("name").jsonPrimitive.content, cost,
@@ -131,7 +132,7 @@ fun walletActivity(c: Connection, member: Member): List<JsonObject> = c.rows("""
       UNION ALL
       SELECT 'REDEMPTION' AS kind, 'Canje: ' || r.reward_name AS label, r.consumed_at AS at, r.id, b.name AS branch_name
       FROM redemptions r LEFT JOIN branches b ON b.tenant_id=r.tenant_id AND b.id=r.confirmed_branch_id
-      WHERE r.tenant_id=? AND r.member_id=? AND r.status='CONSUMED'
+      WHERE r.tenant_id=? AND r.member_id=? AND r.status='CONSUMED' AND r.program_id IN (SELECT id FROM customer_programs WHERE tenant_id=r.tenant_id)
     ) events ORDER BY at DESC,id DESC LIMIT 5
 """.trimIndent(), member.tenant, member.id, member.tenant, member.id) {
     obj("kind" to it.getString(1), "label" to it.getString(2).take(150), "at" to it.instant("at"), "branch" to it.getString(4))

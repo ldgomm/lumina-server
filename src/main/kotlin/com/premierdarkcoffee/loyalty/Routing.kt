@@ -143,6 +143,8 @@ fun Application.loyaltyRoutes(service: LoyaltyService, platformToken: String, pu
         delete("/api/staff/credentials/{id}") { val s = io { service.staff(call.bearer()) }; call.respond(io { service.revokeStaff(s,call.parameters["id"]!!) }) }
         post("/api/staff/programs") { val s = io { service.staff(call.bearer()) }; val input = call.body<Program>(); call.respond(HttpStatusCode.Created,io { service.newProgram(s,input) }) }
         put("/api/staff/programs/{id}") { val s = io { service.staff(call.bearer()) }; val input = call.body<ProgramChange>(); call.respond(io { service.editProgram(s,call.parameters["id"]!!,input) }) }
+        get("/api/staff/programs/{id}/deletion-preview") { val s=io { service.staff(call.bearer()) }; call.respond(io { service.previewPromotionRemoval(s,call.parameters["id"]!!) }) }
+        delete("/api/staff/programs/{id}") { val s=io { service.staff(call.bearer()) }; val input=call.body<DeletePromotion>(); call.respond(io { service.deletePromotion(s,call.parameters["id"]!!,input,call.key()) }) }
         post("/api/staff/rewards") { val s = io { service.staff(call.bearer()) }; val input = call.body<Reward>(); call.respond(HttpStatusCode.Created,io { service.saveReward(s,input) }) }
         put("/api/staff/rewards/{id}") { val s = io { service.staff(call.bearer()) }; val input = call.body<RewardChange>(); call.respond(io { service.saveReward(s,input.reward,call.parameters["id"]!!,input.expectedVersion) }) }
         post("/api/staff/members/lookup") { val s = io { service.staff(call.bearer()) }; val input = call.body<Lookup>(); call.respond(io { service.lookup(s,input) }) }
