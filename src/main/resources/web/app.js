@@ -8,10 +8,33 @@ function notice(message){const n=document.querySelector('#notice');n.textContent
 async function api(path,body,method='POST',key=null){
  const headers={};if(state.token)headers.Authorization=`Bearer ${state.token}`;
  if(body!==undefined)headers['Content-Type']='application/json';if(key)headers['Idempotency-Key']=key;
- const response=await fetch(path,{method:body===undefined&&method==='POST'?'GET':method,headers,body:body===undefined?undefined:JSON.stringify(body)});
- const data=await response.json();if(!response.ok){const issue=new Error(data.message||'No se pudo completar la operación.');issue.code=data.code;issue.status=response.status;throw issue;}return data;
+ let response;
+ try { response = await fetch(path, {method: body === undefined && method === 'POST' ? 'GET' : method, headers, body: body === undefined ? undefined : JSON.stringify(body)}); }
+ catch { throw new Error('No hay conexión con el servidor. Comprueba tu conexión y vuelve a intentarlo; se conservaron los datos del formulario.'); }
+ let data;
+ try { data = await response.json(); } catch { throw new Error('El servidor no respondió como se esperaba. Vuelve a intentarlo; no cambies el comprobante de una compra ya enviada.'); }
+ if (!response.ok) { const issue = new Error(data.message || 'No se pudo completar la operación.'); issue.code = data.code; issue.status = response.status; throw issue; }
+ return data;
 }
-function form(id,handler){const f=document.getElementById(id);if(!f)return;f.addEventListener('submit',async e=>{e.preventDefault();const b=f.querySelector('button[type=submit],button:not([type])');if(b.disabled)return;b.disabled=true;try{await handler(Object.fromEntries(new FormData(f)),f)}catch(e){notice(e.message)}finally{b.disabled=false}})}
+function form(id, handler) {
+    const f = document.getElementById(id); if (!f) return;
+    f.addEventListener('submit', async e => {
+        e.preventDefault();
+        const button = e.submitter || f.querySelector('button[type=submit],button:not([type])');
+        if (!button || button.disabled || f.getAttribute('aria-busy') === 'true') return;
+        if (document.querySelector('form[aria-busy="true"]')) { notice('Espera a que termine la operación anterior.'); return; }
+        const values = Object.fromEntries(new FormData(f));
+        const controls = [...(f.closest('.customer-counter') || f).querySelectorAll('input,select,textarea,button')].map(node => [node, node.disabled]);
+        const label = button.textContent;
+        let error = f.querySelector(':scope > .form-feedback');
+        if (!error) { error = document.createElement('p'); error.className = 'form-feedback'; error.setAttribute('role', 'alert'); error.tabIndex = -1; f.append(error); }
+        error.hidden = true; f.setAttribute('aria-busy', 'true');
+        controls.forEach(([node]) => node.disabled = true); button.textContent = 'Procesando…';
+        try { await handler(values, f); }
+        catch (issue) { if (f.isConnected) { error.textContent = issue.message || 'No se pudo completar la operación. Inténtalo de nuevo.'; error.hidden = false; error.focus(); } }
+        finally { f.removeAttribute('aria-busy'); controls.forEach(([node, disabled]) => node.disabled = disabled); button.textContent = label; }
+    });
+}
 function action(id,handler){document.getElementById(id)?.addEventListener('click',async()=>{try{await handler()}catch(e){notice(e.message)}})}
 // The key is reused after network errors; edits create a new operation, explicit success clears it.
 function operationKey(f,payload){const signature=JSON.stringify(payload);if(f.dataset.payload!==signature){f.dataset.payload=signature;f.dataset.key=crypto.randomUUID()}return f.dataset.key}
@@ -19,33 +42,69 @@ function options(items,selected){return items.map(x=>`<option value="${esc(x.id)
 function localDateTime(value){if(!value)return '';const parts=new Intl.DateTimeFormat('en-CA',{timeZone:state.data.business.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value));const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`}
 function utcDateTime(local){if(!local)return null;const naive=Date.parse(local+'Z');const offsets=new Set([-36,0,36].map(h=>{const sample=naive+h*3600000;return Date.parse(localDateTime(sample)+'Z')-sample}));const candidates=[...offsets].map(o=>naive-o).filter(t=>localDateTime(t)===local);if(candidates.length!==1)throw new Error('La hora elegida no existe o se repite por un cambio de horario. Elige otra hora.');return new Date(candidates[0]).toISOString()}
 function field(name,label,type='text',value='',extra=''){return `<label for="${name}">${label}</label><input id="${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}>`}
-exit.onclick=async()=>{if(state.slug){try{await api('/api/me/logout',{})}catch{}}state.token='';state.member=null;exit.hidden=true;state.slug?customerStart():welcome()};
+exit.onclick=async()=>{if(state.slug){try{await api('/api/me/logout',{})}catch{}}state.token='';state.member=null;state.data=null;state.tab='sales';exit.hidden=true;state.slug?customerStart():welcome()};;
 function welcome(){exit.textContent="Salir";app.innerHTML=`<div class="intro"><div class="eyebrow">Fidelización para tu negocio</div><h1>Dales un motivo<br>para volver.</h1><p>Premia cada visita. Reúne puntos, sellos y recompensas en una tarjeta que funciona en todas tus sucursales.</p></div><div class="grid"><section class="panel"><h2>Entrar a mi negocio</h2><p>Usa la credencial de administrador o de caja del piloto.</p><form id="staffLogin">${field('credential','Credencial de acceso','password','','required autocomplete="off"')}<button>Entrar</button></form></section><section class="card"><div class="eyebrow">Una tarjeta, más posibilidades</div><h2>Cada compra cuenta.</h2><p>Tus clientes se registran desde el QR del negocio y conservan su saldo al visitar otra sucursal.</p><p class="small">El cliente guarda su tarjeta en Wallet y la presenta en caja. No necesita contraseña. La activación en teléfonos requiere configurar Apple o Google.</p></section></div>`;
- form('staffLogin',async d=>{state.token=d.credential;await merchant()})}
-async function merchant(){state.data=await api('/api/staff/dashboard');exit.hidden=false;renderMerchant()}
+ form('staffLogin',async d=>{state.token=d.credential.trim();try{await merchant()}catch(issue){state.token='';throw issue}})}
+async function merchant() {
+    const dashboard = await api('/api/staff/dashboard');
+    if (!state.data || state.data.business.id !== dashboard.business.id) {
+        state.tab = dashboard.role === 'OWNER' ? 'overview' : 'sales'; state.member = null;
+    }
+    state.data = dashboard; exit.hidden = false; renderMerchant();
+}
 function renderMerchant(){const d=state.data;app.innerHTML=`<div class="eyebrow">${esc(d.business.name)}</div><h1>Todo listo para recibirlos.</h1><nav><button data-tab="sales">Caja</button>${d.role==='OWNER'?'<button data-tab="programs">Promociones</button><button data-tab="rewards">Premios</button><button data-tab="branches">Sucursales y acceso</button>':''}<button data-tab="qr">QR de registro</button></nav><div id="content"></div>`;document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===state.tab);b.onclick=()=>{state.tab=b.dataset.tab;renderMerchant()}});({sales:renderSales,programs:renderPrograms,rewards:renderRewards,branches:renderBranches,qr:renderJoinQR}[state.tab]||renderSales)()}
+function counterStep(step) {
+    document.querySelectorAll('[data-counter-step]').forEach(node => {
+        const current = Number(node.dataset.counterStep) === step;
+        node.classList.toggle('current', current); node.classList.toggle('complete', Number(node.dataset.counterStep) < step);
+        if (current) node.setAttribute('aria-current', 'step'); else node.removeAttribute('aria-current');
+    });
+}
+function counterReceipt(title, body) {
+    const found = document.querySelector('#found'); if (!found) return;
+    state.member = null; counterStep(3);
+    found.innerHTML = `<section class="panel counter-receipt" tabindex="-1"><span class="receipt-check" aria-hidden="true">✓</span><div class="eyebrow">Operación registrada</div><h2>${esc(title)}</h2>${body}<button type="button" id="nextCustomer">Atender al siguiente cliente</button></section>`;
+    action('nextCustomer', () => { renderSales(); document.querySelector('#value')?.focus(); });
+    found.firstElementChild.focus();
+}
 function renderSales() {
-    const d = state.data;
+    const d = state.data; state.member = null;
     const content = document.querySelector('#content');
-    content.innerHTML = `<section class="panel"><h2>Atender a un cliente</h2><p>Escanea la tarjeta de su Wallet o busca por cédula.</p><form id="lookup"><div class="row"><div><label for="kind">Buscar por</label><select id="kind" name="kind"><option value="cardCode">QR de Wallet</option><option value="document">Cédula</option></select></div><div>${field('value', 'Código de tarjeta o cédula', 'text', '', 'required autocomplete="off"')}</div></div><button>Buscar cliente</button><button type="button" class="quiet" id="scanWallet">Escanear con cámara</button></form><div id="scannerMount"></div></section><div id="found"></div><details class="panel"><summary>Confirmar un código de canje anterior</summary><p>Solo para reservas creadas antes de esta actualización. Los nuevos canjes se hacen al buscar la tarjeta.</p><form id="confirm">${field('token', 'Código de canje anterior', 'text', '', 'required autocomplete="off"')}<label for="legacyBranch">Sucursal</label><select id="legacyBranch" name="branchId" required>${options(d.branches)}</select><button>Confirmar entrega</button></form><div id="confirmation"></div></details>`;
+    content.innerHTML = `<ol class="counter-steps" aria-label="Pasos de caja"><li data-counter-step="1" class="current" aria-current="step"><span>1</span>Cliente</li><li data-counter-step="2"><span>2</span>Operación</li><li data-counter-step="3"><span>3</span>Recibo</li></ol><section class="panel lookup-panel"><h2>Atender a un cliente</h2><p>Escanea la tarjeta de su Wallet o busca por cédula.</p><form id="lookup"><div class="row"><div><label for="kind">Buscar por</label><select id="kind" name="kind"><option value="cardCode">QR de Wallet</option><option value="document">Cédula</option></select></div><div>${field('value', 'Código de tarjeta o cédula', 'text', '', 'required autocomplete="off"')}</div></div><button>Buscar cliente</button><button type="button" class="quiet" id="scanWallet">Escanear con cámara</button></form><div id="scannerMount"></div></section><div id="found"></div><details class="panel"><summary>Confirmar un código de canje anterior</summary><p>Solo para reservas creadas antes de esta actualización. Los nuevos canjes se hacen al buscar la tarjeta.</p><form id="confirm">${field('token', 'Código de canje anterior', 'text', '', 'required autocomplete="off"')}<label for="legacyBranch">Sucursal</label><select id="legacyBranch" name="branchId" required>${options(d.branches)}</select><button>Confirmar entrega</button></form><div id="confirmation"></div></details>`;
     action('scanWallet', () => window.startComebackScanner(document.querySelector('#scannerMount'), code => {
         const lookup = document.querySelector('#lookup');
         lookup.elements.kind.value = 'cardCode';
         lookup.elements.value.value = code;
         lookup.requestSubmit();
     }));
-    form('lookup', async data => {
+    form('lookup', async (data, lookupForm) => {
         window.stopComebackScanner?.();
-        document.querySelector('#found').replaceChildren();
+        state.member = null;
+        content.querySelector('#found').replaceChildren();
         const m = await api('/api/staff/members/lookup', {[data.kind]: data.value.trim()});
-        state.member = m;
+        if (!content.isConnected || !lookupForm.isConnected) return;
+        state.member = m; counterStep(2); content.querySelector('.lookup-panel').hidden = true;
         const availableRewards = m.rewards.filter(r => r.active && !r.benefit);
                 const found = document.querySelector('#found');
-        found.innerHTML = `<section class="panel"><h2>${esc(m.member.name)}</h2><p>${m.balances.map(b => `${esc(b.name)}: ${b.kind === 'CASHBACK' ? (b.available / 100).toFixed(2) + ' ' + esc(d.business.currency) : b.available + ' ' + esc(kinds[b.kind])}`).join(' · ') || 'Su primera compra empieza aquí.'}</p><div class="grid"><section><h3>Registrar compra</h3><form id="purchase"><label for="purchaseBranch">Sucursal</label><select id="purchaseBranch" name="branchId" required>${options(d.branches)}</select>${field('receipt', 'Número único del comprobante', 'text', '', 'required maxlength="100"')}${field('amount', 'Total pagado (' + esc(d.business.currency) + ')', 'number', '', 'required min="0.01" step="0.01" max="10000000"')}<button>Registrar compra</button></form></section><section><h3>Canjear un premio</h3><p>El cliente presenta su tarjeta y solicita el premio. No necesita abrir la web.</p><form id="counterChoose"><label for="rewardId">Premio</label><select id="rewardId" name="rewardId" required>${availableRewards.map(r => `<option value="${esc(r.id)}" ${(m.balances.find(b => b.programId === r.programId)?.available || 0) < r.cost ? 'disabled' : ''}>${esc(r.name)} · ${rewardCost(r, m.balances)}</option>`).join('')}</select><label for="counterBranch">Sucursal</label><select id="counterBranch" name="branchId" required>${options(d.branches)}</select><button ${availableRewards.some(r => (m.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost) ? '' : 'disabled'}>Revisar canje</button></form><div id="counterReview"></div></section></div>${d.role === 'OWNER' ? '<details><summary>Actualizar o recuperar esta tarjeta</summary><p>Verifica presencialmente que la cédula pertenezca al titular. El enlace conserva la misma tarjeta y sus saldos. También permite actualizar su conexión si cambió la dirección del servidor. No hace falta borrarla del teléfono.</p><form id="restoreIssue"><label for="restoreReason">Motivo</label><select id="restoreReason" name="reason"><option value="DEVICE_CHANGE">Cambio o pérdida de teléfono</option><option value="REMOVED_CARD">Borró su tarjeta</option><option value="CONNECTION_REPAIR">La tarjeta no actualiza: reparar conexión</option></select><label class="check"><input name="identityVerified" type="checkbox" required>Verifiqué la identidad del titular presencialmente.</label><button>Crear enlace temporal</button></form><div id="restoreResult"></div></details>' : ''}</section>`;;
+        found.innerHTML = `<section class="panel customer-counter"><div class="counter-customer-heading"><div><span class="eyebrow">Cliente en caja</span><h2>${esc(m.member.name)}</h2></div><button type="button" class="quiet" id="changeCustomer">Cambiar cliente</button></div><p>${m.balances.map(b => `${esc(b.name)}: ${b.kind === 'CASHBACK' ? (b.available / 100).toFixed(2) + ' ' + esc(d.business.currency) : b.available + ' ' + esc(kinds[b.kind])}`).join(' · ') || 'Su primera compra empieza aquí.'}</p><div class="counter-modes" role="group" aria-label="Qué deseas hacer"><button type="button" data-counter-mode="purchase" aria-pressed="true">Registrar compra</button><button type="button" data-counter-mode="redemption" aria-pressed="false">Canjear un premio</button></div><div class="counter-operation"><section id="counterPurchase"><h3>Registrar compra</h3><form id="purchase"><label for="purchaseBranch">Sucursal</label><select id="purchaseBranch" name="branchId" required>${options(d.branches)}</select>${field('receipt', 'Número único del comprobante', 'text', '', 'required maxlength="100"')}${field('amount', 'Total pagado (' + esc(d.business.currency) + ')', 'number', '', 'required min="0.01" step="0.01" max="10000000"')}<button>Registrar compra</button></form></section><section id="counterRedemption" hidden><h3>Canjear un premio</h3><p>El cliente presenta su tarjeta y solicita el premio. No necesita abrir la web.</p><form id="counterChoose"><label for="rewardId">Premio</label><select id="rewardId" name="rewardId" required>${availableRewards.map(r => `<option value="${esc(r.id)}" ${(m.balances.find(b => b.programId === r.programId)?.available || 0) < r.cost ? 'disabled' : ''}>${esc(r.name)} · ${rewardCost(r, m.balances)}</option>`).join('')}</select><label for="counterBranch">Sucursal</label><select id="counterBranch" name="branchId" required>${options(d.branches)}</select><button ${availableRewards.some(r => (m.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost) ? '' : 'disabled'}>Revisar canje</button></form><div id="counterReview"></div></section></div>${d.role === 'OWNER' ? '<details><summary>Actualizar o recuperar esta tarjeta</summary><p>Verifica presencialmente que la cédula pertenezca al titular. El enlace conserva la misma tarjeta y sus saldos. También permite actualizar su conexión si cambió la dirección del servidor. No hace falta borrarla del teléfono.</p><form id="restoreIssue"><label for="restoreReason">Motivo</label><select id="restoreReason" name="reason"><option value="DEVICE_CHANGE">Cambio o pérdida de teléfono</option><option value="REMOVED_CARD">Borró su tarjeta</option><option value="CONNECTION_REPAIR">La tarjeta no actualiza: reparar conexión</option></select><label class="check"><input name="identityVerified" type="checkbox" required>Verifiqué la identidad del titular presencialmente.</label><button>Crear enlace temporal</button></form><div id="restoreResult"></div></details>' : ''}</section>`;;
+        action('changeCustomer', () => {
+            if (content.querySelector('form[aria-busy="true"]')) { notice('Espera a que termine la operación.'); return; }
+            renderSales(); document.querySelector('#value')?.focus();
+        });
+        found.querySelectorAll('[data-counter-mode]').forEach(button => button.onclick = () => {
+            if (content.querySelector('form[aria-busy="true"]')) { notice('Espera a que termine la operación.'); return; }
+            const purchase = button.dataset.counterMode === 'purchase';
+            found.querySelector('#counterPurchase').hidden = !purchase; found.querySelector('#counterRedemption').hidden = purchase;
+            found.querySelectorAll('[data-counter-mode]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+        });
+        if (!availableRewards.some(r => (m.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost)) {
+            const help = document.createElement('p'); help.className = 'empty-reward'; help.textContent = 'No hay premios de entrega directa con saldo suficiente. Los descuentos en productos se revisan al registrar la compra.';
+            found.querySelector('#counterChoose').before(help);
+        }
         form('purchase', async (p, f) => {
             const payload = {memberId: m.member.id, branchId: p.branchId, receipt: p.receipt, amountMinor: Math.round(Number(p.amount) * 100), currency: d.business.currency};
             const r = await api('/api/staff/purchases', payload, 'POST', operationKey(f, payload));
-            found.innerHTML = `<section class="panel"><h2>${r.replayed ? 'Esta compra ya estaba registrada' : 'Compra registrada'}</h2><p>${r.earned.map(x => x.kind === 'CASHBACK' ? `${(x.amount / 100).toFixed(2)} ${esc(d.business.currency)} de cashback` : `${x.amount} ${esc(kinds[x.kind]).toLowerCase()}`).join(' · ') || 'La compra no cumple una promoción activa.'}</p><p>La actualización de Wallet se enviará automáticamente cuando esté habilitado.</p><p class="small">Comprobante: ${esc(r.purchaseId)}</p><p>Busca al cliente de nuevo para otra operación.</p></section>`;
+            counterReceipt(r.replayed ? 'Esta compra ya estaba registrada' : 'Compra registrada', `<p>${esc(m.member.name)} · ${(payload.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</p><p>${r.earned.map(x => x.kind === 'CASHBACK' ? `${(x.amount / 100).toFixed(2)} ${esc(d.business.currency)} de cashback` : `${x.amount} ${esc(kinds[x.kind]).toLowerCase()}`).join(' · ') || 'La compra no cumple una promoción activa.'}</p><p>La actualización de Wallet se enviará automáticamente cuando esté habilitado.</p><p class="small">Comprobante: ${esc(r.purchaseId)}</p>`);
             notice('Compra registrada una sola vez.');
         });
         form('counterChoose', async p => {
@@ -57,7 +116,7 @@ function renderSales() {
             form('counterConfirm', async (confirmation, f) => {
                 if (confirmation.identityVerified !== 'on' || confirmation.customerConfirmed !== 'on') throw new Error('Falta la confirmación del titular.');
                 const r = await api('/api/staff/counter-redemptions', payload, 'POST', operationKey(f, payload));
-                found.innerHTML = `<section class="panel"><h2>${r.replayed ? 'Canje ya confirmado: no entregues otro premio' : 'Canje confirmado'}</h2><p>${esc(r.name)} · ${esc(m.member.name)}</p><p>${r.replayed ? 'Este recibo corresponde a la entrega anterior. Comprueba si ya entregaste el premio.' : 'Ya puedes entregar el premio. El saldo se descontó una sola vez.'}</p><p class="small">Recibo único: ${esc(r.receipt)}</p><p>Busca al cliente de nuevo para otra operación.</p></section>`;
+                counterReceipt(r.replayed ? 'Canje ya confirmado: no entregues otro premio' : 'Canje confirmado', `<p>${esc(r.name)} · ${esc(m.member.name)}</p><p>${r.replayed ? 'Este recibo corresponde a la entrega anterior. Comprueba si ya entregaste el premio.' : 'Ya puedes entregar el premio. El saldo se descontó una sola vez.'}</p><p class="small">Recibo único: ${esc(r.receipt)}</p>`);
                 notice(r.replayed ? 'Recibo recuperado. No repitas la entrega.' : 'Canje confirmado.');
             });
         });

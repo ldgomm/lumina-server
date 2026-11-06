@@ -22,6 +22,8 @@ import io.ktor.server.routing.*
 
 fun commercialWeb(name: String, html: String): String = if (name == "index.html" && "/commercial.js" !in html) {
     html.replace(Regex("</head>", RegexOption.IGNORE_CASE), "<link rel=\"stylesheet\" href=\"/commercial.css\"><script src=\"/commercial.js\" defer></script></head>")
+} else if (name == "platform.html" && "/experience.js" !in html) {
+    html.replace(Regex("</head>", RegexOption.IGNORE_CASE), "<script src=\"/experience.js\" defer></script></head>")
 } else html
 
 fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {

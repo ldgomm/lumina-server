@@ -6,6 +6,7 @@ import io.ktor.server.routing.*
 
 fun Route.engagementRoutes(service:LoyaltyService) {
     get("/engagement.js"){call.web("engagement.js",ContentType.Application.JavaScript)}
+    get("/experience.js"){call.web("experience.js",ContentType.Application.JavaScript)}
     post("/api/staff/purchases/quote"){val s=io{service.staff(call.bearer())};val p=call.body<Purchase>();call.respond(io{service.receiptQuote(s,p)})}
     post("/api/staff/promotion-templates"){val s=io{service.staff(call.bearer())};val p=call.body<PromotionTemplate>();call.respond(io{service.createPromotion(s,p,call.key())})}
     get("/api/staff/wallet-design"){val s=io{service.staff(call.bearer())};call.respond(io{service.design(s)})}

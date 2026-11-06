@@ -1,0 +1,6 @@
+{
+  "name": "loyalty-ui-checks",
+  "private": true,
+  "scripts": {"test": "node experience.spec.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}

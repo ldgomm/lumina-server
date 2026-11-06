@@ -129,7 +129,7 @@ def gateway_config(nonce, upstream='loyalty-server:8080', resolver=True):
     # Match the original request target, not a normalized path. Encoded traversal never reaches Ktor.
     rules = [
         ('GET', r'/join/[a-z0-9][a-z0-9-]{1,60}'),
-        ('GET', r'/(?:app\.js|style\.css|wallet-ui\.js|scanner\.js|jsqr\.js|commercial\.js|commercial\.css|promotion-editor\.js|engagement\.js)'),
+        ('GET', r'/(?:app\.js|style\.css|wallet-ui\.js|scanner\.js|jsqr\.js|commercial\.js|commercial\.css|promotion-editor\.js|engagement\.js|experience\.js)'),
         ('GET', r'/api/public/[a-z0-9][a-z0-9-]{1,60}(?:/qr)?'),
         ('POST', r'/api/public/[a-z0-9][a-z0-9-]{1,60}/(?:join|restore)'),
         ('GET', r'/api/me(?:/qr|/wallet-status|/access)?'),
@@ -354,7 +354,7 @@ def probe(url, nonce, attempts=60, diagnostics=None, maximum_seconds=120):
 
 def verify_gateway(url, slug):
     checks = [('GET', '/join/' + slug, None, 200), ('GET', '/api/public/' + slug, None, 200),
-              ('GET', '/engagement.js', None, 200), ('GET', '/wallet/brand/' + slug + '/logo.png', None, 200),
+              ('GET', '/engagement.js', None, 200), ('GET', '/experience.js', None, 200), ('GET', '/wallet/brand/' + slug + '/logo.png', None, 200),
               ('GET', '/api/staff/customer-insights', None, 404), ('PUT', '/api/staff/wallet-design', {}, 404),
               ('POST', '/api/staff/customer-events', {}, 404), ('POST', '/api/staff/purchases/quote', {}, 404),
               ('GET', '/api/me/wallet-status', None, 401), ('GET', '/api/me/access', None, 401),

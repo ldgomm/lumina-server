@@ -24,7 +24,7 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v012'
+VERSION = 'v013'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
@@ -567,7 +567,7 @@ def main(arguments=None, updates=None, origin=None):
                 gateway_code = run(prefix+'gateway', [sys.executable,str(project/'scripts/wallet_local.py'),'gateway-check','--report',str(gateway_path)],600,env)
                 gateway = json.loads(gateway_path.read_text()) if gateway_path.exists() else {}
                 report['gateway'] = gateway
-                if gateway_code or gateway.get('status') != 'LOCAL_GATEWAY_PASS' or gateway.get('checks',0) < 22:
+                if gateway_code or gateway.get('status') != 'LOCAL_GATEWAY_PASS' or gateway.get('checks',0) < 23:
                     raise RuntimeError('El gateway público no pasó sus comprobaciones de rutas y autenticación.')
             except Exception as error:
                 if attempt == 1 and not same_snapshot(before, snapshot(project)):

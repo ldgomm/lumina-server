@@ -21,7 +21,7 @@ class EngagementWorkflowTests(unittest.TestCase):
         w=module('wallet_local');config=w.gateway_config('a'*32)
         rules=re.findall(r'"~\^(.+?)\$" 1;',config)
         allowed=lambda method,path:any(re.fullmatch(rule,method+' '+path) for rule in rules)
-        for path in ['/engagement.js','/wallet/brand/cafe-demo/logo.png','/wallet/brand/cafe-demo/logo.png?v=abc123','/wallet/brand/ab/logo.png','/wallet/brand/'+'a'*61+'/logo.png']:
+        for path in ['/experience.js','/engagement.js','/wallet/brand/cafe-demo/logo.png','/wallet/brand/cafe-demo/logo.png?v=abc123','/wallet/brand/ab/logo.png','/wallet/brand/'+'a'*61+'/logo.png']:
             self.assertTrue(allowed('GET',path),path)
         for path in ['/api/staff/wallet-design','/api/staff/customer-events','/api/staff/purchases/quote','/wallet/brand/../../.env/logo.png']:
             self.assertFalse(allowed('GET',path),path);self.assertFalse(allowed('POST',path),path)

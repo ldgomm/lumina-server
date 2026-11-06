@@ -211,6 +211,7 @@ class Runner:
         expect(b'counter-redemptions' in app_js and b'Crea tu contrase' not in app_js and b'loginPassword' not in app_js, 'El cliente conserva el flujo anterior.')
         expect(b'startComebackScanner' in self.api('/scanner.js'), 'Falta el lector QR.')
         expect(b'/engagement.js' in self.api('/'), 'Falta la interfaz nueva de promociones.')
+        expect(b'/experience.js' in self.api('/') and b'workspace-nav' in self.api('/experience.js'), 'Falta la nueva interfaz de Loyalty.')
         expect(b'promotion-templates' in self.api('/engagement.js'), 'Falta el archivo de promociones en el servidor local.')
         expect(b'fixContrast' in self.api('/engagement.js'), 'Falta el editor guiado de colores en el servidor local.')
         expect(b'loyalty-wallet-design-colors' in self.api('/style.css'), 'Faltan los estilos del editor de colores.')
