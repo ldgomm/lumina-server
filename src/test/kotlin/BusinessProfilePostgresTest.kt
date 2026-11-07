@@ -46,7 +46,7 @@ class BusinessProfilePostgresTest {
         db.migrate();val saved=service.businessProfile(tenant)
         assertEquals(1,saved.getValue("version").jsonPrimitive.int);assertEquals("NOT_VERIFIED",saved.str("rucVerification"));assertEquals(p,json.decodeFromJsonElement<BusinessProfile>(saved.getValue("profile")))
         assertEquals(1,service.platformBranches(tenant).getValue("branches").jsonArray.size);assertEquals(tenant,service.staff(t.str("ownerToken")).tenant)
-        assertEquals(8,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getInt(1)}})
+        assertEquals(9,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getInt(1)}})
     }
     @Test fun `invalid profile or branch creates no tenant or orphan profile`() {
         for(input in listOf(NewTenant("Inválido","invalid-"+id().take(12),profile=profile().copy(ruc="wrong")),NewTenant("Inválido","invalid-"+id().take(12),firstBranch=NewBranch(" ","MAIN"),profile=profile()))) {
@@ -57,19 +57,20 @@ class BusinessProfilePostgresTest {
     @Test fun `legacy business can operate and complete profile later without changing identity`() {
         val t=business(null);val owner=service.staff(t.str("ownerToken"));val member=service.member(enroll(t,"Ana Antigua").str("token"))
         val before=service.card(member);assertEquals(JsonNull,service.businessProfile(owner.tenant)["profile"])
-        val saved=service.saveBusinessProfile(owner.tenant,BusinessProfileChange(0,profile()),owner.id)
+        assertEquals(403,assertFailsWith<Problem>{service.saveBusinessProfile(owner.tenant,BusinessProfileChange(0,profile()),owner.id)}.status)
+        val saved=service.saveBusinessProfile(owner.tenant,BusinessProfileChange(0,profile(),"Ficha inicial revisada con el dueño"),"platform")
         assertEquals(1,saved.getValue("version").jsonPrimitive.int);assertEquals(before,service.card(member))
         assertEquals(owner,service.staff(t.str("ownerToken")))
     }
     @Test fun `stale profile update cannot overwrite newer contact data`() {
-        val t=business();val tenant=t.str("tenantId");val p=profile();service.saveBusinessProfile(tenant,BusinessProfileChange(1,p),"platform")
+        val t=business();val tenant=t.str("tenantId");val p=profile();service.saveBusinessProfile(tenant,BusinessProfileChange(1,p,"Corrección solicitada y verificada"),"platform")
         assertEquals("PROFILE_CHANGED",assertFailsWith<Problem>{service.saveBusinessProfile(tenant,BusinessProfileChange(1,p.copy(city="Otra ciudad")),"platform")}.code)
         assertEquals("Quito",service.businessProfile(tenant).getValue("profile").jsonObject.str("city"))
         assertEquals(1,db.tx{it.one("SELECT count(*) FROM audit_events WHERE tenant_id=? AND action='BUSINESS_PROFILE_UPDATED'",tenant){r->r.getInt(1)}})
     }
     @Test fun `simultaneous profile writes have one winner`() {
         val tenant=business().str("tenantId");val p=profile();val pool=Executors.newFixedThreadPool(2);val barrier=CyclicBarrier(2)
-        try{val results=(1..2).map{pool.submit<String>{barrier.await(10,TimeUnit.SECONDS);try{service.saveBusinessProfile(tenant,BusinessProfileChange(1,p),"platform");"OK"}catch(e:Problem){e.code}}}.map{it.get(30,TimeUnit.SECONDS)}
+        try{val results=(1..2).map{pool.submit<String>{barrier.await(10,TimeUnit.SECONDS);try{service.saveBusinessProfile(tenant,BusinessProfileChange(1,p,"Corrección solicitada y verificada"),"platform");"OK"}catch(e:Problem){e.code}}}.map{it.get(30,TimeUnit.SECONDS)}
             assertEquals(listOf("OK","PROFILE_CHANGED"),results.sorted());assertEquals(2,service.businessProfile(tenant).getValue("version").jsonPrimitive.int)
         }finally{pool.shutdownNow()}
     }
@@ -117,7 +118,7 @@ class BusinessProfilePostgresTest {
         assertEquals(HttpStatusCode.Forbidden,client.put(path){bearerAuth(cashier);contentType(ContentType.Application.Json);setBody(json.encodeToString(BusinessProfileChange(1,profile())))}.status)
         val own=client.get(path+"?tenant="+b.str("tenantId")){bearerAuth(a.str("ownerToken"))}
         assertEquals(a.str("tenantId"),json.parseToJsonElement(own.bodyAsText()).jsonObject.getValue("business").jsonObject.str("id"))
-        assertEquals(HttpStatusCode.OK,client.put(path){bearerAuth(a.str("ownerToken"));contentType(ContentType.Application.Json);setBody(json.encodeToString(BusinessProfileChange(1,profile())))}.status)
+        assertEquals(HttpStatusCode.OK,client.put(path){bearerAuth(a.str("ownerToken"));contentType(ContentType.Application.Json);setBody(json.encodeToString(BusinessProfileChange(1,json.decodeFromJsonElement<BusinessProfile>(service.businessProfile(owner.tenant).getValue("profile")).copy(contactName="Contacto nuevo"))))}.status)
         assertEquals(1,service.businessProfile(b.str("tenantId")).getValue("version").jsonPrimitive.int)
         assertEquals(HttpStatusCode.OK,client.get("/api/staff/member-suggestions?q=Ana"){bearerAuth(cashier)}.status)
         assertEquals(HttpStatusCode.Unauthorized,client.get("/api/staff/member-suggestions?q=Ana").status)

@@ -52,6 +52,7 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
                 route("/tenants/{tenant}") {
             get("/profile") { call.respond(io { service.businessProfile(call.parameters["tenant"]!!) }) }
             put("/profile") { val input=call.body<BusinessProfileChange>();call.respond(io { service.saveBusinessProfile(call.parameters["tenant"]!!,input,"platform") }) }
+            put("/profile-requests/{id}") { val input=call.body<ProfileCorrectionResolution>();call.respond(io { service.resolveProfileCorrection(call.parameters["tenant"]!!,call.parameters["id"]!!,input) }) }
             get("/branches") { call.respond(io { service.platformBranches(call.parameters["tenant"]!!) }) }
             post("/branches") { val input = call.body<NewBranch>(); call.respond(HttpStatusCode.Created, io { service.platformNewBranch(call.parameters["tenant"]!!, input, call.key()) }) }
             post("/credentials") {
@@ -79,6 +80,7 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
     get("/api/staff/account") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.ownerAccount(s, call.offset()) }) }
     get("/api/staff/business-profile") { val s=io { service.staff(call.bearer()).also { it.owner() } };call.respond(io { service.businessProfile(s.tenant) }) }
     put("/api/staff/business-profile") { val s=io { service.staff(call.bearer()).also { it.owner() } };val input=call.body<BusinessProfileChange>();call.respond(io { service.saveBusinessProfile(s.tenant,input,s.id) }) }
+    post("/api/staff/business-profile/requests") { val s=io { service.staff(call.bearer()).also { it.owner() } };val input=call.body<ProfileCorrectionRequest>();call.respond(HttpStatusCode.Created,io { service.requestProfileCorrection(s,input,call.key()) }) }
     get("/api/staff/member-suggestions") { val s=io { service.staff(call.bearer()) };call.respond(io { service.memberSuggestions(s,call.request.queryParameters["q"]?:"") }) }
     get("/api/staff/metrics") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.ownerMetrics(s, call.days()) }) }
     get("/api/staff/access") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.publicAccess(s.tenant) }) }

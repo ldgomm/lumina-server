@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v020r1 requiere 306 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v021 requiere 328 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -114,3 +114,19 @@ presentationVersion=20 renueva ambas Wallet sin cambiar identidades. Se exigen 1
 ## Corrección de la prueba de actualización v020r1
 
 La prueba de actualización en WalletPostgresTest debe esperar presentationVersion=20. Comprueba tanto la versión histórica 8 como la 17 usada hasta v019, conservando las comprobaciones de saldo, serial, token, QR, identificadores Apple/Google, registro del dispositivo y actualización idempotente. Esta revisión no cambia código de producción, migraciones ni configuración privada. Mantener las 306 pruebas Kotlin/HTTP/PostgreSQL, Python y Docker/gateway antes del auto commit; HTTPS y teléfonos se verifican por separado.
+
+## Gestión, cumpleaños e informes v021
+
+V001–V008 son inmutables. V009 añade solicitudes/correcciones de ficha y configuración/elecciones de cumpleaños. No cambia saldos, identidad de pases ni presentationVersion=20.
+
+El dueño puede editar contacto, web y redes HTTPS permitidas. Razón social, RUC, actividad, provincia, ciudad y dirección requieren administrador y motivo documentado en la API. Una solicitud no aprueba cambios automáticamente ni envía correo. Solo una pendiente por negocio, reintentos idempotentes, historial privado y resolución explícita. Los negocios suspendidos pueden solicitar correcciones. No confundir formato del RUC con certificación tributaria.
+
+El asistente de promociones es Beneficio → Reglas → Revisión. Ejemplos editables; no publicar hasta confirmar. promotion-setups crea puntos/cashback y premio en una transacción con idempotencia y sucursales verificadas; promotion-templates conserva los descuentos por categoría. Los premios directos requieren canje en caja, no descuentos automáticos. El editor avanzado sigue disponible.
+
+Los controles monetarios avanzan una unidad (+1/−1), admiten entrada manual de centavos y calculan en enteros. Los códigos internos se generan solo a petición y nunca reemplazan un código existente. No generar identidades de cliente ni factura tributaria desde este control.
+
+Cumpleaños admite título, mensaje y hasta ocho textos; aleatorio exige dos distintos. Elegir y persistir por negocio/cliente/año local una sola vez, reutilizando el mismo contenido en Apple y Google y durante reintentos/ediciones del día. Respetar consentimiento, estado activo, zona horaria y 29 de febrero. Pausar oculta el mensaje. El worker actualiza contenido; no prometer SMS, correo, WhatsApp ni alerta de marketing en pantalla bloqueada.
+
+Informes compartidos por dueño y administrador, aislados por negocio, 7/30/90/365 días. Usar SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY antes de leer: Database.tx ya abrió la transacción con SET LOCAL. Los períodos comienzan a medianoche local e incluyen hoy parcialmente; la comparación corresponde a días completos anteriores. Total pagado proviene de compras; premios solo CONSUMED por consumed_at. Agregar sucursales por separado para evitar multiplicar compras por canjes. Las categorías incluyen solo productos detallados. No sumar compradores diarios o por sucursal ni llamar retención a la repetición de compra. Los gráficos y CSV son lectura, no generan cargos, reservas o mensajes.
+
+Exigir 152 pruebas generales + 176 PostgreSQL (328), todas las Python (123), Docker y 31 comprobaciones del gateway antes del auto commit local. Mantener HTTPS y recepción en teléfonos como resultados separados. Pruebas de interfaz con fixtures ficticios: siete suites interceptadas, incluida owner-experience.spec.cjs; experience.spec.cjs sigue siendo una prueba opcional contra servidor aislado.

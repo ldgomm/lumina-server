@@ -216,6 +216,7 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
             c.one("SELECT t.*,p.config->>'ruc' AS ruc,p.config->>'legalName' AS legal_name,p.config->>'city' AS city, (SELECT count(*) FROM members WHERE tenant_id=t.id) AS clients FROM tenants t LEFT JOIN business_profiles p ON p.tenant_id=t.id WHERE t.id=?", tenant) { r ->
                 val p = plan(c, tenant)
                 obj("id" to tenant, "name" to r.getString("name"), "slug" to r.getString("slug"), "currency" to r.getString("currency"), "joinedAt" to r.instant("created_at"), "clients" to r.getLong("clients"), "state" to a.getValue("effectiveState"), "ruc" to r.getString("ruc"), "legalName" to r.getString("legal_name"), "city" to r.getString("city"),
+                    "pendingProfileRequests" to c.one("SELECT count(*) FROM business_profile_requests WHERE tenant_id=? AND status='PENDING'",tenant) { it.getInt(1) },
                     "nextChargeOn" to if (p?.first?.recurring == true) p.third.toString() else null,
                     "balanceMinor" to c.one("SELECT coalesce(sum(amount_minor-paid_minor),0) FROM billing_invoices WHERE tenant_id=? AND voided_at IS NULL", tenant) { it.getLong(1) })
             }!!
@@ -223,7 +224,8 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
     }
     fun ownerMetrics(s: Staff, days: Int): JsonObject { s.owner(); return metrics(s.tenant, days) }
     fun metrics(tenant: String, days: Int): JsonObject = db.tx { c ->
-        need(days in setOf(30, 90, 365), "INVALID_WINDOW", "Elige 30, 90 o 365 días.")
+        need(days in setOf(7, 30, 90, 365), "INVALID_WINDOW", "Elige 7, 30, 90 o 365 días.")
+        c.exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         val date = today(c, tenant)
         val zone = c.one("SELECT timezone FROM tenants WHERE id=?", tenant) { it.getString(1) }!!
         val start = Timestamp.from(date.minusDays(days.toLong() - 1).atStartOfDay(ZoneId.of(zone)).toInstant()); val end = stamp()
@@ -231,9 +233,33 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         val counts = c.one("SELECT count(*) AS total, count(*) FILTER(WHERE created_at>=? AND created_at<=?) AS fresh, count(*) FILTER(WHERE created_at>=? AND created_at<?) AS previous FROM members WHERE tenant_id=?", start, end, previous, start, tenant) { Triple(it.getLong(1), it.getLong(2), it.getLong(3)) }!!
         val purchases = c.one("SELECT count(*),coalesce(sum(amount_minor),0),count(DISTINCT member_id) FROM purchases WHERE tenant_id=? AND created_at>=? AND created_at<=?", tenant, start, end) { Triple(it.getLong(1), it.getLong(2), it.getLong(3)) }!!
         val repeat = c.one("SELECT count(*) FROM (SELECT member_id FROM purchases WHERE tenant_id=? AND created_at>=? AND created_at<=? GROUP BY member_id HAVING count(*)>=2) p", tenant, start, end) { it.getLong(1) }!!
+        val prior = c.one("SELECT count(*),coalesce(sum(amount_minor),0) FROM purchases WHERE tenant_id=? AND created_at>=? AND created_at<?",tenant,previous,start) { it.getLong(1) to it.getLong(2) }!!
         obj("days" to days, "from" to start.toInstant(), "through" to end.toInstant(), "fromDate" to date.minusDays(days.toLong() - 1).toString(), "throughDate" to date.toString(), "totalClients" to counts.first, "newClients" to counts.second, "previousNewClients" to counts.third,
             "growthPercent" to if (counts.third == 0L) null else (counts.second - counts.third) * 100.0 / counts.third,
             "purchases" to purchases.first, "salesMinor" to purchases.second, "activeClients" to purchases.third, "repeatClients" to repeat,
+            "previousPurchases" to prior.first, "previousSalesMinor" to prior.second,
+            "previousFromDate" to date.minusDays(days.toLong()*2-1).toString(), "previousThroughDate" to date.minusDays(days.toLong()).toString(),
+            "branches" to c.rows("""
+                SELECT b.id,b.name,coalesce(p.purchases,0),coalesce(p.sales,0),coalesce(p.clients,0),coalesce(r.claims,0)
+                FROM branches b LEFT JOIN (
+                    SELECT branch_id,count(*) AS purchases,sum(amount_minor) AS sales,count(DISTINCT member_id) AS clients
+                    FROM purchases WHERE tenant_id=? AND created_at>=? AND created_at<=? GROUP BY branch_id
+                ) p ON p.branch_id=b.id LEFT JOIN (
+                    SELECT confirmed_branch_id,count(*) AS claims FROM redemptions
+                    WHERE tenant_id=? AND status='CONSUMED' AND consumed_at>=? AND consumed_at<=? GROUP BY confirmed_branch_id
+                ) r ON r.confirmed_branch_id=b.id WHERE b.tenant_id=? ORDER BY coalesce(p.sales,0) DESC,b.name,b.id LIMIT 50
+            """.trimIndent(),tenant,start,end,tenant,start,end,tenant) { obj("id" to it.getString(1),"name" to it.getString(2),"purchases" to it.getLong(3),"salesMinor" to it.getLong(4),"clients" to it.getLong(5),"redemptions" to it.getLong(6)) },
+            "categories" to c.rows("""
+                SELECT min(item->>'group') AS category,sum((item->>'quantity')::bigint) AS units
+                FROM purchases p CROSS JOIN LATERAL jsonb_array_elements(p.items) item
+                WHERE p.tenant_id=? AND p.created_at>=? AND p.created_at<=? AND coalesce(item->>'group','')<>''
+                GROUP BY lower(item->>'group') ORDER BY units DESC,category LIMIT 8
+            """.trimIndent(),tenant,start,end) { obj("name" to it.getString(1),"units" to it.getLong(2)) },
+            "topRewards" to c.rows("""
+                SELECT reward_id,(array_agg(reward_name ORDER BY consumed_at DESC,id DESC))[1],count(*) AS claims
+                FROM redemptions WHERE tenant_id=? AND status='CONSUMED' AND consumed_at>=? AND consumed_at<=?
+                GROUP BY reward_id ORDER BY claims DESC,reward_id LIMIT 8
+            """.trimIndent(),tenant,start,end) { obj("id" to it.getString(1),"name" to it.getString(2),"claims" to it.getLong(3)) },
             "repeatRate" to if (purchases.third == 0L) 0.0 else repeat * 100.0 / purchases.third,
             "redemptions" to c.one("SELECT count(*) FROM redemptions WHERE tenant_id=? AND status='CONSUMED' AND consumed_at>=? AND consumed_at<=?", tenant, start, end) { it.getLong(1) },
             "daily" to c.rows("SELECT (created_at AT TIME ZONE ?)::date AS day,count(*) AS purchases,count(DISTINCT member_id) AS clients,sum(amount_minor) AS sales FROM purchases WHERE tenant_id=? AND created_at>=? AND created_at<=? GROUP BY day ORDER BY day", zone, tenant, start, end) { obj("day" to it.getDate(1).toString(), "purchases" to it.getLong(2), "clients" to it.getLong(3), "salesMinor" to it.getLong(4)) })

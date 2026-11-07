@@ -24,12 +24,21 @@ object BusinessProfileMigration {
 @Serializable data class BusinessProfile(
     val legalName: String, val ruc: String, val activity: String,
     val contactName: String, val email: String, val phone: String,
-    val province: String, val city: String, val address: String, val website: String = ""
+    val province: String, val city: String, val address: String, val website: String = "",
+    val socialLinks: Map<String, String> = emptyMap()
 ) {
     fun normalized(): BusinessProfile = copy(legalName=legalName.trim(), ruc=ruc.trim(), activity=activity.trim(),
         contactName=contactName.trim(), email=email.trim(), phone=phone.trim(), province=province.trim(),
-        city=city.trim(), address=address.trim(), website=website.trim())
+        city=city.trim(), address=address.trim(), website=website.trim(), socialLinks=socialLinks.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() })
     fun validate() {
+        val socialHosts = mapOf("instagram" to setOf("instagram.com"), "facebook" to setOf("facebook.com", "fb.com"),
+            "tiktok" to setOf("tiktok.com"), "youtube" to setOf("youtube.com", "youtu.be"), "whatsapp" to setOf("wa.me", "whatsapp.com"))
+        for ((network, link) in socialLinks) {
+            val uri = runCatching { URI(link) }.getOrNull(); val hosts = socialHosts[network].orEmpty()
+            need(link.length <= 250 && link.none { it.isISOControl() } && uri?.scheme == "https" && uri.userInfo == null && uri.port in setOf(-1,443) &&
+                hosts.any { uri.host?.lowercase(Locale.ROOT) == it || uri.host?.lowercase(Locale.ROOT)?.endsWith(".$it") == true },
+                "INVALID_SOCIAL_LINK", "Revisa el enlace de $network: usa la dirección https:// de esa red social, sin contraseñas.")
+        }
         fun required(value: String, max: Int, label: String) = need(value.isNotBlank() && value.length <= max && value.none { it.isISOControl() }, "INVALID_BUSINESS_PROFILE", "Revisa $label: es obligatorio y admite hasta $max caracteres.")
         required(legalName,200,"la razón social"); required(activity,100,"la actividad del negocio")
         required(contactName,120,"el nombre de contacto"); required(province,80,"la provincia")
@@ -44,7 +53,7 @@ object BusinessProfileMigration {
         }
     }
 }
-@Serializable data class BusinessProfileChange(val expectedVersion: Int, val profile: BusinessProfile)
+@Serializable data class BusinessProfileChange(val expectedVersion: Int, val profile: BusinessProfile, val reason: String = "")
 
 internal fun businessProfileView(c: Connection, tenant: String): JsonObject {
     val business = c.one("SELECT id,name,slug FROM tenants WHERE id=?", uuid(tenant)) { obj("id" to it.getString(1), "name" to it.getString(2), "slug" to it.getString(3)) }
@@ -52,7 +61,7 @@ internal fun businessProfileView(c: Connection, tenant: String): JsonObject {
     val row = c.one("SELECT version,config::text,updated_at FROM business_profiles WHERE tenant_id=?", tenant) {
         obj("version" to it.getInt(1), "profile" to json.parseToJsonElement(it.getString(2)), "updatedAt" to it.getTimestamp(3).toInstant())
     } ?: obj("version" to 0, "profile" to null, "updatedAt" to null)
-    return JsonObject(row + obj("business" to business, "rucVerification" to "NOT_VERIFIED"))
+    return JsonObject(row + obj("business" to business, "rucVerification" to "NOT_VERIFIED", "protectedFields" to protectedBusinessFields, "requests" to profileRequests(c,tenant)))
 }
 fun LoyaltyService.businessProfile(tenant: String): JsonObject = db.tx { businessProfileView(it,tenant) }
 fun LoyaltyService.saveBusinessProfile(tenant: String, input: BusinessProfileChange, actor: String): JsonObject {
@@ -62,6 +71,15 @@ fun LoyaltyService.saveBusinessProfile(tenant: String, input: BusinessProfileCha
         need(c.one("SELECT id FROM tenants WHERE id=? FOR UPDATE",tenant) { it.getString(1) } != null,"NOT_FOUND","Negocio no encontrado.",404)
         val version = c.one("SELECT version FROM business_profiles WHERE tenant_id=?",tenant) { it.getInt(1) } ?: 0
         need(version == input.expectedVersion,"PROFILE_CHANGED","Otra persona actualizó los datos. Recarga la ficha antes de guardar.",409)
+        val previous = c.one("SELECT config::text FROM business_profiles WHERE tenant_id=?",tenant) { json.decodeFromString<BusinessProfile>(it.getString(1)) }
+        val identityChanged = previous?.normalized()?.identity() != profile.identity()
+        need(actor == "platform" || !identityChanged, "PROFILE_ADMIN_REQUIRED", "Razón social, RUC, actividad y ubicación requieren revisión del administrador. Envía una solicitud desde Datos del negocio.", 403)
+        if (identityChanged) {
+            val reason = input.reason.trim()
+            need(reason.length in 10..500 && reason.none { it.isISOControl() }, "CORRECTION_REASON_REQUIRED", "Indica qué verificaste y el motivo de la corrección (10 a 500 caracteres).")
+            c.exec("INSERT INTO business_profile_corrections(tenant_id,version,actor_id,reason,before_config,after_config,created_at) VALUES(?,?,?,?,?::jsonb,?::jsonb,?)",
+                tenant,version+1,actor,reason,previous?.let { json.encodeToString(it) },json.encodeToString(profile),Timestamp.from(clock.instant()))
+        }
         c.exec("INSERT INTO business_profiles(tenant_id,version,config,updated_at) VALUES(?,?,?::jsonb,?) ON CONFLICT(tenant_id) DO UPDATE SET version=EXCLUDED.version,config=EXCLUDED.config,updated_at=EXCLUDED.updated_at",
             tenant,version+1,json.encodeToString(profile),Timestamp.from(clock.instant()))
         audit(c,tenant,actor,"BUSINESS_PROFILE_UPDATED",tenant)

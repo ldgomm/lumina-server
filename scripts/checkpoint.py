@@ -24,14 +24,14 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v020r1'
+VERSION = 'v021'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
 SOURCE_DIRS = {'src', 'gradle', 'scripts', 'docs'}
 SUITES = {
-    'test': {'com.premierdarkcoffee.loyalty.WalletArtworkTest': 9, 'com.premierdarkcoffee.loyalty.CustomerWorkspaceTest': 4, 'com.premierdarkcoffee.loyalty.BusinessProfileTest': 8, 'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4, 'com.premierdarkcoffee.loyalty.AppleWalletExperienceTest': 16, 'com.premierdarkcoffee.loyalty.GoogleWalletExperienceTest': 18, 'com.premierdarkcoffee.loyalty.EngagementDomainTest': 10, 'com.premierdarkcoffee.loyalty.EngagementGoogleTest': 4, 'com.premierdarkcoffee.loyalty.WalletDeliveryDiagnosticsTest': 3, 'com.premierdarkcoffee.loyalty.WalletRewardGuidanceTest': 6, 'com.premierdarkcoffee.loyalty.RewardBenefitPresentationTest': 8},
-    'postgresTest': {'com.premierdarkcoffee.loyalty.CustomerWorkspacePostgresTest': 11, 'com.premierdarkcoffee.loyalty.BusinessProfilePostgresTest': 12, 'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 19, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8, 'com.premierdarkcoffee.loyalty.EngagementPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PromotionLifecyclePostgresTest': 17, 'com.premierdarkcoffee.loyalty.CustomerActivityPostgresTest': 12},
+    'test': {'com.premierdarkcoffee.loyalty.OwnerExperienceTest': 6, 'com.premierdarkcoffee.loyalty.WalletArtworkTest': 9, 'com.premierdarkcoffee.loyalty.CustomerWorkspaceTest': 4, 'com.premierdarkcoffee.loyalty.BusinessProfileTest': 8, 'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4, 'com.premierdarkcoffee.loyalty.AppleWalletExperienceTest': 16, 'com.premierdarkcoffee.loyalty.GoogleWalletExperienceTest': 18, 'com.premierdarkcoffee.loyalty.EngagementDomainTest': 10, 'com.premierdarkcoffee.loyalty.EngagementGoogleTest': 4, 'com.premierdarkcoffee.loyalty.WalletDeliveryDiagnosticsTest': 3, 'com.premierdarkcoffee.loyalty.WalletRewardGuidanceTest': 6, 'com.premierdarkcoffee.loyalty.RewardBenefitPresentationTest': 8},
+    'postgresTest': {'com.premierdarkcoffee.loyalty.OwnerExperiencePostgresTest': 16, 'com.premierdarkcoffee.loyalty.CustomerWorkspacePostgresTest': 11, 'com.premierdarkcoffee.loyalty.BusinessProfilePostgresTest': 12, 'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 19, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8, 'com.premierdarkcoffee.loyalty.EngagementPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PromotionLifecyclePostgresTest': 17, 'com.premierdarkcoffee.loyalty.CustomerActivityPostgresTest': 12},
 }
 
 
@@ -499,7 +499,7 @@ def main(arguments=None, updates=None, origin=None):
         owned_lock = True
         snapshot(project)
         if updates and not (project/'src/main/kotlin/com/premierdarkcoffee/loyalty/WalletArtwork.kt').is_file():
-            raise RuntimeError('v020r1 requiere los cambios de v020. Ejecuta primero loyalty_promociones_y_wallet_v020.sh.')
+            raise RuntimeError('v021 requiere v020/v020r1 instalado. Comparte el ZIP anterior antes de continuar.')
         if updates:
             report['changes'] = apply_updates(project, updates, folder, dry_run=args.check_only)
         # No comparison with v001 byte hashes. Validate the actual saved working tree.
@@ -569,7 +569,7 @@ def main(arguments=None, updates=None, origin=None):
                 gateway_code = run(prefix+'gateway', [sys.executable,str(project/'scripts/wallet_local.py'),'gateway-check','--report',str(gateway_path)],600,env)
                 gateway = json.loads(gateway_path.read_text()) if gateway_path.exists() else {}
                 report['gateway'] = gateway
-                if gateway_code or gateway.get('status') != 'LOCAL_GATEWAY_PASS' or gateway.get('checks',0) < 26:
+                if gateway_code or gateway.get('status') != 'LOCAL_GATEWAY_PASS' or gateway.get('checks',0) < 31:
                     raise RuntimeError('El gateway público no pasó sus comprobaciones de rutas y autenticación.')
             except Exception as error:
                 if attempt == 1 and not same_snapshot(before, snapshot(project)):

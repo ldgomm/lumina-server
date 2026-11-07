@@ -354,7 +354,12 @@ def probe(url, nonce, attempts=60, diagnostics=None, maximum_seconds=120):
 
 
 def verify_gateway(url, slug):
-    checks = [('GET', '/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png', None, 200),
+    checks = [('GET', '/api/staff/birthday-settings', None, 404),
+              ('PUT', '/api/staff/birthday-settings', {}, 404),
+              ('POST', '/api/staff/business-profile/requests', {}, 404),
+              ('POST', '/api/staff/promotion-setups', {}, 404),
+              ('GET', '/api/staff/metrics?days=365', None, 404),
+              ('GET', '/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png', None, 200),
               ('GET', '/wallet/art/v20/GRADIENT/5/0b1f3a/9/5.png', None, 400),
               ('POST', '/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png', {}, 404),
               ('GET', '/join/' + slug, None, 200), ('GET', '/api/public/' + slug, None, 200),

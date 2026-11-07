@@ -3,9 +3,9 @@ const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const web=path.resolve(__dirname,'../../src/main/resources/web');
 const evidence=process.env.LOYALTY_UI_EVIDENCE;
-const profile={legalName:'Aurora Ejemplo S.A.',ruc:'1790012345001',activity:'Cafetería',contactName:'Ana Ejemplo',email:'ana@example.test',phone:'+593 99 123 4567',province:'Pichincha',city:'Quito',address:'Dirección ficticia 123',website:'https://example.test'};
+const profile={legalName:'Aurora Ejemplo S.A.',ruc:'1790012345001',activity:'Cafetería',contactName:'Ana Ejemplo',email:'ana@example.test',phone:'+593 99 123 4567',province:'Pichincha',city:'Quito',address:'Dirección ficticia 123',website:'https://example.test',socialLinks:{}};
 const businesses=[{id:'aurora',name:'Café Aurora',ruc:profile.ruc,city:'Quito',state:'ACTIVE',clients:124,balanceMinor:2500,currency:'USD',nextChargeOn:'2026-12-01'}, {id:'legacy',name:'Taller Brújula',ruc:null,city:null,state:'ACTIVE',clients:32,balanceMinor:0,currency:'USD',nextChargeOn:null}];
-const staff={role:'OWNER',business:{id:'aurora',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'branch',name:'Principal'}],programs:[],rewards:[]};
+const staff={role:'OWNER',business:{id:'aurora',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'branch',name:'Principal'}],programs:[],rewards:[]};;
 const account={business:{...staff.business,joinedAt:'2026-10-01',tenureDays:37},access:{effectiveState:'ACTIVE'},summary:{balanceMinor:2500,overdueMinor:0,nextDueOn:null,invoiceCount:0},today:'2026-11-07',membership:null,invoices:[],payments:[],paymentCount:0};
 const member={member:{id:'member',name:'Ana Ejemplo',cardCode:'FAKE-CARD-000001',revision:1},balances:[],rewards:[]};
 async function run(){
@@ -76,10 +76,10 @@ async function run(){
   const sent=calls.find(c=>c.path==='/api/platform/businesses').body;assert.deepEqual(sent.profile,profile);assert.deepEqual(sent.firstBranch,{name:'Principal',code:'PRINCIPAL'});
   await pendingCreate();await page.locator('#openCreatedBusiness').waitFor();assert.match(await page.locator('.business-created').textContent(),/FICTIONAL-ONE-TIME-CREDENTIAL/);
   checks.push('Three-step registration validates RUC, preserves previous steps, previews data and sends exactly one request');
-  await page.locator('#openCreatedBusiness').click();await page.locator('#businessProfileForm').waitFor();failProfile=true;await page.locator('#city').fill('Cuenca');await page.locator('#businessProfileForm>button').click();
-  await page.locator('#businessProfileForm>.form-feedback:not([hidden])').waitFor();assert.equal(await page.locator('#city').inputValue(),'Cuenca');assert.match(await page.locator('.form-feedback').textContent(),/Recarga/);assert.equal(await page.getByRole('button',{name:'Recargar datos guardados'}).isVisible(),true);
+  await page.locator('#openCreatedBusiness').click();await page.locator('#businessProfileForm').waitFor();failProfile=true;await page.locator('#city').fill('Cuenca');await page.locator('#correctionReason').fill('Cambio solicitado y verificado');await page.locator('#businessProfileForm>button').click();
+  await page.locator('#businessProfileForm>.form-feedback:not([hidden])').waitFor();assert.equal(await page.locator('#city').inputValue(),'Cuenca');assert.match(await page.locator('.form-feedback').textContent(),/Recarga/);assert.equal(await page.getByRole('button',{name:'Recargar ficha guardada'}).isVisible(),true);
   failProfile=false;await page.locator('#businessProfileForm>button').click();await page.waitForFunction(()=>document.querySelector('#profileSaved').textContent.includes('Datos guardados'));
-  checks.push('Version conflict leaves edits visible; successful save uses expected version');
+  checks.push('Version conflict leaves edits visible; successful save uses expected version');;
   await page.setViewportSize({width:390,height:844});await noOverflow();await shot('navy-profile-mobile');
   await page.locator('#backBusinesses').click();await page.locator('#newBusiness').click();await noOverflow();await shot('navy-registration-mobile');await page.locator('#closeRegistration').click();
   await page.goto('https://loyalty.test/');

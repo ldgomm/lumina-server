@@ -30,7 +30,13 @@ class WalletArtworkGatewayTests(unittest.TestCase):
             if path in ['/api/me/wallet-status','/api/me/access']:return 401,b''
             if path=='/api/public/demo/join':return 400,b''
             return 404,b''
-        with patch.object(w,'request',side_effect=respond):self.assertEqual(26,w.verify_gateway('http://local','demo'))
-        self.assertEqual(26,len(calls))
+        with patch.object(w,'request',side_effect=respond):self.assertEqual(31,w.verify_gateway('http://local','demo'))
+        self.assertEqual(31,len(calls))
         with patch.object(w,'request',return_value=(503,b'')):
             with self.assertRaises(RuntimeError):w.verify_gateway('http://local','demo')
+
+    def test_owner_experience_routes_never_enter_public_tunnel(self):
+        rules=re.findall(r'"~\^(.+?)\$" 1;',w.gateway_config('a'*32))
+        for path in ['/api/staff/birthday-settings','/api/staff/business-profile/requests','/api/staff/promotion-setups','/api/staff/metrics?days=365','/api/platform/tenants/example/profile-requests/example']:
+            for method in ['GET','POST','PUT','DELETE']:
+                self.assertFalse(any(re.fullmatch(rule,method+' '+path) for rule in rules),(method,path))

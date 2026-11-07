@@ -29,7 +29,8 @@ fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=tr
     }
     val announcements=mutableListOf<JsonObject>()
     if(canOperate && preferences.marketingConsent){
-        if(preferences.celebrates(at.atZone(zone).toLocalDate()))announcements+=obj("id" to "birthday-${at.atZone(zone).year}","title" to "¡Feliz cumpleaños!","body" to design.birthdayMessage)
+        val day = at.atZone(zone).toLocalDate()
+        if(preferences.celebrates(day))birthdayAnnouncement(c,member,design,day,at)?.let { announcements += it }
         announcements+=c.rows("SELECT id,title,body FROM customer_events WHERE tenant_id=? AND active AND starts_at<=? AND ends_at>? ORDER BY starts_at DESC,id LIMIT 4",member.tenant,Timestamp.from(at),Timestamp.from(at)){obj("id" to it.getString(1),"title" to it.getString(2),"body" to it.getString(3))}
     }
     val version=c.one("SELECT version FROM wallet_designs WHERE tenant_id=?",member.tenant){it.getInt(1)}?:0
