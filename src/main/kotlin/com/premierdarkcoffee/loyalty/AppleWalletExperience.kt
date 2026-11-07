@@ -42,11 +42,7 @@ private fun WalletPass.appleRewards(balances: List<JsonObject>): List<AppleRewar
 }
 
 private fun AppleReward.detail(currency: String, symbol: String, paused: Boolean): String {
-    val status = when {
-        paused -> "Canjes pausados. Tu saldo se conserva."
-        remaining == 0L -> "Saldo suficiente. Pide el canje en caja."
-        else -> "Te falta${if (remaining == 1L && kind != "CASHBACK") "" else "n"} ${appleAmount(remaining, kind, currency)}."
-    }
+    val status = walletRewardGuidance(available, goal, kind, currency, paused)
     val stamps = if (kind == "STAMPS" && goal <= 20) {
         "\n" + (1..goal.toInt()).chunked(10).joinToString("\n") { row ->
             row.joinToString(" ") { if (it.toLong() <= available) symbol else "○" }

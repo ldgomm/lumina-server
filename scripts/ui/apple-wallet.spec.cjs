@@ -53,6 +53,28 @@ async function run() {
         assert.equal(await page.locator('#previewStatus').textContent(), '0.01 USD');
         assert.equal(await page.locator('#previewStamps').textContent(), '');
         checks.push('Cashback preview uses exact currency and separate program');
+        await page.locator('[data-preview-provider=google]').click();
+        assert.equal(await page.locator('#designPreview').isVisible(), false);
+        assert.equal(await page.locator('#googleDesignPreview').isVisible(), true);
+        assert.equal(await page.locator('#googlePreviewMain').textContent(), '4.99');
+        assert.equal(await page.locator('#googlePreviewMainLabel').textContent(), 'USD');
+        assert.equal(await page.locator('#googlePreviewStatus').textContent(), '0.01 USD');
+        assert.match(await page.locator('#previewPlatformHint').textContent(), /lo decide Google/);
+        await page.locator('#featuredProgramId').selectOption('stamps');
+        assert.equal(await page.locator('#googlePreviewMain').textContent(), '12/13');
+        await page.locator('[data-wallet-example=ready]').click();
+        assert.equal(await page.locator('#googlePreviewMain').textContent(), '13');
+        assert.equal(await page.locator('#googlePreviewStatus').textContent(), 'En caja');
+        assert.match(await page.locator('#previewRewardDetail').textContent(), /le quedan 0 sellos/);
+        assert.equal(saved.length, 0);
+        await page.setViewportSize({width: 390, height: 844});
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        if (evidence) { fs.mkdirSync(evidence, {recursive: true}); await page.screenshot({path: path.join(evidence, 'google-preview-mobile.png'), fullPage: true}); }
+        await page.setViewportSize({width: 1440, height: 1100});
+        await page.locator('[data-preview-provider=apple]').click();
+        assert.equal(await page.locator('#previewWelcome').textContent(), '13 sellos');
+        checks.push('Google native slots, provider switching, redemption forecast and mobile layout without mutations');
+
         await page.locator('#featuredProgramId').selectOption('stamps');
         await page.locator('#background').fill('#ffffff');
         assert.equal(await page.locator('#foreground').inputValue(), '#000000');
@@ -92,7 +114,7 @@ async function run() {
         assert.ok(!Object.hasOwn(saved[0].design, 'example'));
         checks.push('Retina logo, escaped names, 390px layout and versioned design save');
         assert.deepEqual(errors, []);
-        console.log(JSON.stringify({status: 'APPLE_PREVIEW_UI_PASS', checks}, null, 2));
+        console.log(JSON.stringify({status: 'WALLET_PREVIEW_UI_PASS', checks}, null, 2));
     } finally { await browser.close(); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

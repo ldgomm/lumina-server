@@ -182,15 +182,18 @@ class WalletPostgresTest {
     }
     @Test fun `presentation upgrade refreshes installed card without changing its money or identity`() {
         val f=fixture();earn(f)
-        val initial=wallet.materialize(f.member,"apple");register(initial)
+        wallet.materialize(f.member,"apple")
+        val initial=wallet.materialize(f.member,"google");register(initial)
         val balances=service.card(f.member).getValue("balances")
         db.tx { c -> c.exec("UPDATE wallet_passes SET snapshot=jsonb_set(snapshot,'{presentationVersion}','8'::jsonb) WHERE serial=?",initial.serial) }
         time.value=time.value.plusSeconds(1)
         val upgraded=wallet.materialize(f.member)
         assertTrue(upgraded.tag>initial.tag)
-        assertEquals(15,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
+        assertEquals(16,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
         assertEquals(initial.serial,upgraded.serial);assertEquals(initial.token,upgraded.token)
         assertEquals(initial.appleType,upgraded.appleType)
+        assertEquals(initial.googleId,upgraded.googleId);assertEquals(initial.googleClass,upgraded.googleClass)
+        assertEquals(2,count("SELECT count(*) FROM wallet_delivery WHERE serial=?",upgraded.serial))
         assertEquals(initial.snapshot.getValue("cardCode"),upgraded.snapshot.getValue("cardCode"))
         assertEquals(balances,service.card(f.member).getValue("balances"))
         assertEquals(1,count("SELECT count(*) FROM wallet_passes WHERE tenant_id=?",f.staff.tenant))

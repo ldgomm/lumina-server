@@ -98,33 +98,34 @@
     async function designPage() {
         const root = document.querySelector('#content'); const data = await api('/api/staff/wallet-design');
         if (!root.isConnected || state.tab !== 'design') return;
-        const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress';
+        const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress', previewProvider = 'apple';
         root.innerHTML = `<section class="panel wallet-design-panel"><h2>Personaliza tu tarjeta</h2><p>Elige el fondo de tu negocio. Te ayudamos a que sus textos se lean bien.</p><div class="wallet-design-layout"><form id="walletDesign"><fieldset id="designFields">
             ${field('displayName', 'Nombre en la tarjeta', 'text', d.displayName, 'maxlength="80"')}
             <h3 class="design-colors-heading">Colores</h3>
             ${field('background', 'Color de fondo', 'color', d.background, 'aria-describedby="backgroundHelp"')}
             <p id="backgroundHelp" class="design-help">Puedes usar cualquier fondo. El texto y las etiquetas deben distinguirse sobre él.</p>
             <label class="check"><input id="autoContrast" type="checkbox" checked>Ajustar texto y etiquetas al cambiar el fondo</label>
-            <p class="design-help">Solo ajustamos los colores que no se leen. También puedes elegirlos manualmente abajo.</p>
+            <p class="design-help">El fondo se aplica a ambas Wallet. Apple usa estos colores de texto y etiquetas; Google elige los suyos. Puedes corregir los colores automáticamente o elegirlos abajo.</p>
             <div class="design-color-fields"><div>${field('foreground', 'Color del texto', 'color', d.foreground, 'aria-describedby="foregroundStatus"')}<p id="foregroundStatus" class="design-color-status"></p></div><div>${field('label', 'Color de las etiquetas', 'color', d.label, 'aria-describedby="labelStatus"')}<p id="labelStatus" class="design-color-status"></p></div></div>
             <div class="design-feedback" aria-live="polite" aria-atomic="true"><p id="contrastStatus"></p><p id="contrastAdjustment" class="design-help"></p></div>
             <button type="button" class="quiet" id="fixContrast">Corregir colores</button>
             <label>Logo PNG o JPG<input id="designLogo" type="file" accept="image/png,image/jpeg"></label><p id="logoStatus">${logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.'}</p><button type="button" class="quiet" id="removeLogo">Usar logo predeterminado</button>
-            ${select('featuredProgramId', 'Promoción destacada en Wallet', [['', 'Primera promoción activa'], ...state.data.programs.filter(p => p.config.active !== false).map(p => [p.id, p.config.name])], d.featuredProgramId || '')}<p class="design-help">Apple mostrará su saldo y el premio de menor costo. Los demás saldos y premios siguen disponibles en los detalles de la tarjeta.</p>
+            ${select('featuredProgramId', 'Promoción destacada en Wallet', [['', 'Primera promoción activa'], ...state.data.programs.filter(p => p.config.active !== false).map(p => [p.id, p.config.name])], d.featuredProgramId || '')}<p class="design-help">Apple y Google destacarán esta promoción y su premio de menor costo. Los demás saldos y premios siguen disponibles en los detalles de la tarjeta.</p>
             ${select('stampSymbol', 'Símbolo de los sellos', ['●', '★', '♥', '✂', '◆'].map(x => [x, x]), d.stampSymbol)}
             ${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
             ${field('usage', 'Cómo usar la tarjeta', 'text', d.usage, 'required maxlength="350"')}
             ${field('birthdayMessage', 'Felicitación de cumpleaños', 'text', d.birthdayMessage, 'required maxlength="250"')}
             </fieldset><p id="designSaveHint" class="design-help" aria-live="polite"></p><p id="designSaveError" class="design-error" role="alert" hidden></p><button id="saveDesign" type="submit" aria-describedby="designSaveHint">Guardar diseño</button></form>
-            <aside class="design-preview-wrap"><h3>Así se verá tu tarjeta</h3><p class="design-help">Simulación con tus promociones y saldos de ejemplo. Apple decide el tamaño y la distribución final.</p>
+            <aside class="design-preview-wrap"><h3>Vista previa de tus Wallet</h3><p class="design-help">Promociones reales, saldos ficticios. Cada Wallet decide la distribución final.</p><div class="wallet-preview-platforms" role="group" aria-label="Wallet de la vista previa"><button type="button" data-preview-provider="apple">Apple Wallet</button><button type="button" data-preview-provider="google">Google Wallet</button></div><p id="previewPlatformHint" class="design-help"></p>
             <div class="wallet-preview-modes" role="group" aria-label="Estado de ejemplo de la tarjeta"><button type="button" data-wallet-example="new">Nueva</button><button type="button" data-wallet-example="progress" class="active">Acumulando</button><button type="button" data-wallet-example="ready">Con premio</button></div>
             <div id="designPreview" class="design-preview"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><div class="wallet-preview-status"><span id="previewStatusLabel" class="design-preview-label"></span><strong id="previewStatus"></strong></div><span id="previewWelcome" class="design-preview-hero"></span><span id="previewProgram" class="design-preview-label"></span><div class="design-preview-bottom"><div><span class="design-preview-label">CLIENTE</span><span>Cliente de ejemplo</span></div><div id="previewPrizeWrap"><span id="previewPrizeLabel" class="design-preview-label"></span><span id="previewPrize"></span></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div>
-            <div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardDetail"></p><p id="previewStamps"></p></div><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
+            <div id="googleDesignPreview" class="google-design-preview" hidden><div class="google-preview-brand"><img id="googlePreviewLogo" alt="" hidden><strong id="googlePreviewName"></strong></div><p class="google-preview-member">Cliente de ejemplo</p><div class="google-preview-values"><div><span id="googlePreviewMainLabel"></span><strong id="googlePreviewMain"></strong></div><div><span id="googlePreviewStatusLabel"></span><strong id="googlePreviewStatus"></strong></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div><div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardDetail"></p><p id="previewStamps"></p></div><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
         const f = root.querySelector('#walletDesign'), fields = root.querySelector('#designFields');
         const background = f.elements.background, foreground = f.elements.foreground, labels = f.elements.label;
         const auto = root.querySelector('#autoContrast'), save = root.querySelector('#saveDesign'), fix = root.querySelector('#fixContrast');
         const status = root.querySelector('#contrastStatus'), adjustment = root.querySelector('#contrastAdjustment');
         const error = root.querySelector('#designSaveError'), preview = root.querySelector('#designPreview');
+        const googlePreview = root.querySelector('#googleDesignPreview');
         const specs = [{input: foreground, name: 'Texto', field: 'Color del texto', min: 4.5}, {input: labels, name: 'Etiquetas', field: 'Color de las etiquetas', min: 3}];
         const invalidColors = () => specs.filter(s => walletColorContrast(background.value, s.input.value) < s.min);
         const recommended = () => walletColorContrast(background.value, '#000000') >= walletColorContrast(background.value, '#ffffff') ? '#000000' : '#ffffff';
@@ -167,14 +168,30 @@
             root.querySelector('#previewPrizeLabel').textContent = remaining === 0 ? 'CANJEA EN CAJA' : 'PRÓXIMO PREMIO';
             const compactPrize = [...(reward?.name || '').trim().replace(/\s+/g, ' ')];
             root.querySelector('#previewPrize').textContent = compactPrize.length > 28 ? compactPrize.slice(0, 27).join('') + '…' : compactPrize.join('');
-            root.querySelector('#previewRewardName').textContent = reward?.name || 'Tu tarjeta, a tu medida';
-            root.querySelector('#previewRewardDetail').textContent = reward ? `Saldo de ejemplo: ${unit(amount)}. Canje: ${unit(reward.cost)}. ${remaining === 0 ? 'El cliente puede pedir el canje en caja.' : 'Todavía está acumulando para este premio.'}` : program ? 'Esta promoción aún no tiene un premio activo. Puedes crearlo en Premios.' : 'Al activar una promoción, aparecerá su saldo. Hasta entonces se muestra tu bienvenida.';
+            root.querySelector('#previewRewardName').textContent = reward ? `${remaining === 0 ? 'Premio disponible' : 'Próximo premio'} · ${reward.name}` : 'Tu tarjeta, a tu medida';
+            root.querySelector('#previewRewardDetail').textContent = reward ? `Saldo de ejemplo: ${unit(amount)}. Canje: ${unit(reward.cost)}. ${remaining === 0 ? `Si canjea este premio, le quedan ${unit(amount - reward.cost)}. Caja confirma el saldo vigente.` : `Te falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${unit(remaining)}.`}` : program ? 'Esta promoción aún no tiene un premio activo. Puedes crearlo en Premios.' : 'Al activar una promoción, aparecerá su saldo. Hasta entonces se muestra tu bienvenida.';
             root.querySelector('#previewStamps').textContent = reward && kind === 'STAMPS' && reward.cost <= 20 ? Array.from({length: reward.cost}, (_, i) => i < amount ? f.elements.stampSymbol.value : '○').join(' ') : '';
             root.querySelectorAll('[data-wallet-example]').forEach(button => {
                 const selected = button.dataset.walletExample === example;
                 button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected));
                 button.disabled = saving || loadingLogo || button.dataset.walletExample === 'ready' && !reward;
             });
+            preview.hidden = previewProvider !== 'apple'; googlePreview.hidden = previewProvider !== 'google';
+            root.querySelector('#previewPlatformHint').textContent = previewProvider === 'apple'
+                ? 'Apple: saldo en el frente; premios, consumos y sellos en los detalles.'
+                : 'Google: saldo y progreso en la tarjeta; premios, consumos y sellos en los detalles. El color del texto lo decide Google.';
+            root.querySelectorAll('[data-preview-provider]').forEach(button => {
+                button.setAttribute('aria-pressed', String(button.dataset.previewProvider === previewProvider));
+                button.disabled = saving || loadingLogo;
+            });
+            googlePreview.style.backgroundColor = background.value; googlePreview.style.color = recommended();
+            root.querySelector('#googlePreviewName').textContent = f.elements.displayName.value.trim() || state.data.business.name;
+            root.querySelector('#googlePreviewMainLabel').textContent = kind === 'CASHBACK' ? state.data.business.currency : kind === 'STAMPS' ? 'Sellos' : kind === 'POINTS' ? 'Puntos' : 'Tarjeta';
+            root.querySelector('#googlePreviewMain').textContent = !program ? 'Activa' : reward && kind === 'STAMPS' && remaining > 0 ? `${amount}/${reward.cost}` : kind === 'CASHBACK' ? (amount / 100).toFixed(2) : String(amount);
+            root.querySelector('#googlePreviewStatusLabel').textContent = !reward ? 'Estado' : remaining === 0 ? 'Premio' : remaining === 1 && kind !== 'CASHBACK' ? 'Falta' : 'Faltan';
+            root.querySelector('#googlePreviewStatus').textContent = !reward ? 'Activa' : remaining === 0 ? 'En caja' : unit(remaining);
+            const googleLogo = root.querySelector('#googlePreviewLogo'); googleLogo.hidden = !logo;
+            if (logo) googleLogo.src = 'data:image/png;base64,' + logo; else googleLogo.removeAttribute('src');
             const image = root.querySelector('#previewLogo'); image.hidden = !logo;
             if (logo) image.src = 'data:image/png;base64,' + logo; else image.removeAttribute('src');
             return !failed.length;
@@ -194,6 +211,7 @@
             update();
         }
         root.querySelectorAll('[data-wallet-example]').forEach(button => button.onclick = () => { example = button.dataset.walletExample; update(); });
+        root.querySelectorAll('[data-preview-provider]').forEach(button => button.onclick = () => { if (saving || loadingLogo) return; previewProvider = button.dataset.previewProvider; update(); });
         f.addEventListener('input', edited); f.addEventListener('change', edited);
         fix.onclick = () => { clearError(); correctColors(); f.dataset.palette = [background.value, foreground.value, labels.value].join('/'); update(); };
         root.querySelector('#removeLogo').onclick = () => {
@@ -234,7 +252,7 @@
             clearError(); saving = true; fields.disabled = true; f.setAttribute('aria-busy', 'true'); update();;
             try {
                 await api('/api/staff/wallet-design', payload, 'PUT');
-                notice('Diseño guardado. Se actualizará en Wallet.');
+                notice('Diseño guardado para Apple y Google. Las tarjetas se actualizarán cuando Wallet reciba el cambio.');
                 if (f.isConnected && state.tab === 'design') await designPage();
             } catch (issue) {
                 if (f.isConnected) { error.textContent = issue.message; error.hidden = false; }
