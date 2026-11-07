@@ -422,10 +422,12 @@ class LocalWallet:
 
     def start(self, renew=False):
         self.report['phase'] = 'database_and_configuration'
+        self.report['migration_requested'] = renew
         db = self.database_state()
         wallet = initialize(self.root, db['hasKey'])
         previous_origin = self.state.get('origin') or wallet.get('PUBLIC_BASE_URL')
         mode = wallet.get('WALLET_TUNNEL_MODE', 'quick')
+        self.report.update(mode=mode, previous_origin=previous_origin, temporary=mode == 'quick')
         if mode not in ('quick', 'named', 'external'):
             raise RuntimeError('WALLET_TUNNEL_MODE debe ser quick, named o external.')
         try:
@@ -439,8 +441,11 @@ class LocalWallet:
         if self.state.get('mode') and self.state['mode'] != mode and db['passes'] and not renew:
             raise RuntimeError('Cambiar el modo puede cambiar la URL de pases existentes. Para una migración consciente usa --renew-test-url y vuelve a guardar las tarjetas de prueba.')
         copy_material(self.root, wallet)
+        token_fingerprint = None
         if mode == 'named':
-            self.runner.secrets.append((self.folder / 'material/tunnel.token').read_text().strip())
+            tunnel_token = (self.folder / 'material/tunnel.token').read_text().strip()
+            self.runner.secrets.append(tunnel_token)
+            token_fingerprint = hashlib.sha256(tunnel_token.encode()).hexdigest()
         self.write_overlay(wallet, self.state.get('origin'))
         self.run('wallet_material', 'run', '--rm', '--no-deps', MATERIAL, timeout=120)
         self.run('gateway_start', 'up', '-d', '--no-deps', '--force-recreate', GATEWAY, timeout=300)
@@ -450,7 +455,8 @@ class LocalWallet:
         if mode in ('named', 'external'):
             origin = public_origin(wallet.get('PUBLIC_BASE_URL', ''))
             if mode == 'named':
-                self.run('tunnel_start', 'up', '-d', '--no-deps', TUNNEL, timeout=300)
+                recreate = ['--force-recreate'] if self.state.get('tunnel_token_sha256') != token_fingerprint else []
+                self.run('tunnel_start', 'up', '-d', '--no-deps', *recreate, TUNNEL, timeout=300)
         else:
             origin = self.start_quick_tunnel(renew, db['passes'])
         self.report['candidate_origin'] = origin
@@ -483,10 +489,14 @@ class LocalWallet:
         if status != 401:
             raise RuntimeError('El panel local no pasó la comprobación de origen del navegador.')
         self.state.update(origin=origin, mode=mode, nonce=self.nonce, active=True)
+        if token_fingerprint:
+            self.state['tunnel_token_sha256'] = token_fingerprint
         staging.private_write(self.state_path, json.dumps(self.state))
         self.report.update(status='HTTPS_PASS_WALLET_DEVICE_TEST_PENDING' if any(requested.values()) else 'HTTPS_PASS_WALLET_CREDENTIALS_PENDING',
                            origin=origin, temporary=mode == 'quick', public_checks=count, tls_verified=True,
                            google_remote_issuance='PENDING', apple_device_installation='PENDING')
+        if self.report.get('pass_refresh'):
+            self.report['status'] = 'HTTPS_PASS_WALLET_CONNECTION_REFRESH_PENDING'
         self.report['phase'] = 'complete'
         staging.write_access(self.root, dict(self.values, LOYALTY_CLIENT_ORIGIN=origin))
         guide = write_guide(self.root, self.values, self.report)
@@ -593,18 +603,28 @@ class LocalWallet:
 
 
 def write_guide(root, values, report):
+    import shlex
     origin = report.get('origin', '')
+    failed = report.get('status') == 'HTTPS_SETUP_FAILED'
+    retired = report.get('tunnel_issue') == 'QUICK_TUNNEL_NOT_FOUND' or 'QUICK_TUNNEL_NOT_FOUND' in report.get('tunnel_log_signals', [])
     link = origin + '/join/demo-cafe-' + values['STAGING_INSTANCE_ID'][:8]
-    template = 'wallet-recovery-guide.html' if report.get('pass_refresh') else 'wallet-guide.html'
-    document = (SCRIPTS / template).read_text()
+    template = 'wallet-failure-guide.html' if failed else ('wallet-recovery-guide-v015.html' if report.get('pass_refresh') else 'wallet-guide-v015.html')
+    command = 'python3 ' + shlex.quote(str(root / 'scripts/wallet_local.py')) + ' start'
     replacements = {'PROJECT': str(root), 'CLIENT_LINK': link, 'STATUS': report['status'],
                     'ORIGIN': origin, 'LOCAL': 'http://localhost:' + values['LOYALTY_HTTP_PORT'],
-                    'REFRESH_HIDDEN': '' if report.get('pass_refresh') else 'hidden'}
-    for key, value in replacements.items():
-        document = document.replace('{{' + key + '}}', html.escape(value, quote=True))
-    path = private_directory(root) / 'guide.html'
-    staging.private_write(path, document)
-    return path
+                    'REFRESH_HIDDEN': '' if report.get('pass_refresh') else 'hidden',
+                    'RETIRED_HIDDEN': '' if retired else 'hidden', 'OTHER_HIDDEN': 'hidden' if retired else '',
+                    'ERROR': report.get('error', ''), 'RETRY_COMMAND': command + (' --renew-test-url' if report.get('migration_requested') else ''),
+                    'RENEW_COMMAND': command + ' --renew-test-url',
+                    'STABLE_COMMAND': command + ' --configure-stable-https --renew-test-url',
+                    'CONNECTION_KIND': 'Temporal: puede caducar aunque Docker siga ejecutándose.' if report.get('temporary') else 'Dominio configurado: conserva esta dirección y mantén el servidor disponible.'}
+    folder = private_directory(root)
+    for source, name in [(template, 'guide.html'), ('wallet-stable-guide.html', 'https-estable.html')]:
+        document = (SCRIPTS / source).read_text()
+        for key, value in replacements.items():
+            document = document.replace('{{' + key + '}}', html.escape(value, quote=True))
+        staging.private_write(folder / name, document)
+    return folder / 'guide.html'
 
 
 def configure(root):
@@ -636,6 +656,7 @@ def main(argv=None):
     parser.add_argument('--project', type=Path, default=SCRIPTS.parent)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--configure', action='store_true')
+    parser.add_argument('--configure-stable-https', action='store_true')
     parser.add_argument('--renew-test-url', action='store_true')
     parser.add_argument('--origin-script', type=Path)
     parser.add_argument('--output-dir', type=Path, default=Path.home() / 'Downloads')
@@ -648,8 +669,12 @@ def main(argv=None):
     try:
         lock.mkdir(); owned = True
         runner = LocalWallet(root, args.report)
+        if (args.configure or args.configure_stable_https) and args.action != 'start':
+            raise RuntimeError('Los asistentes solo se usan con la acción start.')
         if args.configure:
             configure(root)
+        if args.configure_stable_https:
+            configure_stable_https(root, args.renew_test_url)
         if args.action == 'start':
             report = runner.start(args.renew_test_url)
         elif args.action == 'gateway-check':
@@ -675,6 +700,18 @@ def main(argv=None):
                     report['diagnostics_error'] = staging.clean(str(error), runner.runner.secrets)
             report['transport_events'] = list(TRANSPORT_EVENTS)
             report['command_checks'] = runner.runner.report.get('checks', {})
+            if report.get('status') == 'HTTPS_SETUP_FAILED':
+                try:
+                    guide = write_guide(root, runner.values, report)
+                    print('Guía de recuperación: ' + str(guide))
+                    if sys.platform == 'darwin':
+                        webbrowser.open(guide.as_uri())
+                except Exception as error:
+                    report['guide_error'] = staging.clean(str(error), runner.runner.secrets)
+            try:
+                staging.private_write(runner.folder / 'last-result.json', json.dumps(report, ensure_ascii=False, indent=2))
+            except Exception as error:
+                report['local_result_error'] = staging.clean(str(error), runner.runner.secrets)
         if owned:
             lock.rmdir()
         if args.report:
@@ -682,7 +719,7 @@ def main(argv=None):
             args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             args.output_dir.mkdir(exist_ok=True, parents=True)
-            name = 'loyalty_v011r1_wallet_' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+            name = 'loyalty_v015_wallet_' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
             destination = args.output_dir / (name + '.zip')
             with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr(name + '/RESULTADO.json', json.dumps(report, ensure_ascii=False, indent=2))
@@ -772,6 +809,41 @@ def quick_tunnel_retired(logs):
     failures = [m.start() for m in re.finditer(r'(?i)Unauthorized:\s*Tunnel not found', logs)]
     connected = [m.start() for m in re.finditer(r'Registered tunnel connection', logs)]
     return bool(failures) and max(failures) > max(connected, default=-1)
+
+
+
+def configure_stable_https(root, renew=False):
+    """Configure a remotely managed tunnel without placing its token in arguments or Git."""
+    import getpass
+    if not sys.stdin.isatty():
+        raise RuntimeError('--configure-stable-https requiere una terminal interactiva.')
+    connection = LocalWallet(root)
+    db = connection.database_state()
+    wallet = initialize(root, db['hasKey'])
+    print('Primero crea en Cloudflare un túnel y una ruta pública HTTPS de tu dominio.')
+    print('Servicio de la ruta: HTTP, loyalty-wallet-gateway:8080. El asistente no crea DNS ni el túnel remoto.')
+    origin = public_origin(input('Dirección fija completa (https://...): ').strip())
+    host = urllib.parse.urlsplit(origin).hostname
+    if host == 'trycloudflare.com' or host.endswith('.trycloudflare.com'):
+        raise RuntimeError('Una dirección trycloudflare.com es temporal. Usa un subdominio de tu dominio.')
+    previous = connection.state.get('origin') or wallet.get('PUBLIC_BASE_URL')
+    if db['passes'] and (previous != origin or wallet.get('WALLET_TUNNEL_MODE', 'quick') != 'named') and not renew:
+        raise RuntimeError('Existen tarjetas instaladas. Repite con --renew-test-url para migrar su conexión y volver a guardar la misma tarjeta.')
+    token = getpass.getpass('Token del túnel (solo el valor, oculto; Enter conserva el configurado): ').strip()
+    if not token:
+        source = Path(wallet.get('CLOUDFLARE_TUNNEL_TOKEN_PATH') or '/nonexistent').expanduser()
+        if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size < 16000:
+            raise RuntimeError('Falta el token del túnel. No se modificó la conexión.')
+        token = source.read_text().strip()
+    if not re.fullmatch(r'[A-Za-z0-9_+/=-]{40,15999}', token):
+        raise RuntimeError('Pega únicamente el token de Cloudflare, sin el comando de instalación. No se modificó la conexión.')
+    destination = private_directory(root) / 'cloudflare-token.txt'
+    if destination.is_symlink():
+        raise RuntimeError('El archivo privado del túnel no puede ser un enlace.')
+    staging.private_write(destination, token + '\n')
+    update_env(root / '.env.wallet', {'WALLET_TUNNEL_MODE': 'named', 'PUBLIC_BASE_URL': origin,
+                                    'CLOUDFLARE_TUNNEL_TOKEN_PATH': str(destination)})
+    print('Dominio guardado. Ahora se verificará la conexión y las rutas; aún no se declara HTTPS_PASS.')
 
 if __name__ == '__main__':
     raise SystemExit(main())

@@ -63,12 +63,8 @@ fun WalletPass.appleJson(passType: String, team: String, origin: String): JsonOb
         "storeCard" to appleStoreFields())
 }
 
-fun WalletPass.googleJson(objectId: String, classId: String, origin: String): JsonObject = obj(
-    "id" to objectId, "classId" to classId, "state" to "ACTIVE", "accountName" to snapshot.getValue("name"), "accountId" to serial.take(8),
+fun WalletPass.googleJson(objectId: String, classId: String, origin: String): JsonObject = JsonObject(obj(
+    "id" to objectId, "classId" to classId, "state" to "ACTIVE", "accountId" to serial.take(8),
     "barcode" to obj("type" to "QR_CODE", "value" to snapshot.getValue("cardCode")),
     "hexBackgroundColor" to design().background,
-    "loyaltyPoints" to obj("label" to "Saldos disponibles", "balance" to obj("string" to summary().take(500))),
-    "textModulesData" to listOf(obj("id" to "status", "header" to "Estado", "body" to if (snapshot.getValue("canOperate").jsonPrimitive.boolean) "Válida en todas las sucursales del negocio" else "Operaciones pausadas. Tus saldos se conservan."),
-                obj("id" to "activity", "header" to "Últimos consumos y canjes", "body" to recentActivity().take(1000)),
-        obj("id" to "usage", "header" to "Cómo usar tu tarjeta", "body" to design().usage)) + (announcementFields()+progressFields()).take(7).map { obj("id" to it.getValue("key"),"header" to it.getValue("label"),"body" to it.getValue("value")) },
-    "linksModuleData" to obj("uris" to listOf(obj("id" to "account", "uri" to "$origin/join/${snapshot.getValue("slug").jsonPrimitive.content}", "description" to "Ayuda para recuperar tu tarjeta"))))
+    "linksModuleData" to obj("uris" to listOf(obj("id" to "account", "uri" to "$origin/join/${snapshot.getValue("slug").jsonPrimitive.content}", "description" to "Ayuda para recuperar tu tarjeta")))) + googleExperienceFields())

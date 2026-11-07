@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Loyalty · Dominio fijo</title>
+<style>body{font:18px/1.6 system-ui;background:#f3f5ee;color:#173e34;margin:0}main{max-width:820px;margin:auto;padding:32px 20px}h1{font-size:clamp(32px,5vw,44px);line-height:1.1}section{background:white;border:1px solid #dae2d7;border-radius:20px;padding:24px;margin:20px 0}a{color:#185c44}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf3e7;padding:18px;border-radius:12px;font-size:15px}code{overflow-wrap:anywhere}li{margin:14px 0}.note{background:#fff3cf;border-radius:12px;padding:18px}</style></head>
+<body><main><p>LOYALTY · DIRECCIÓN FIJA</p><h1>Una dirección que puedas conservar.</h1>
+<p>Necesitas un dominio tuyo con DNS activo en Cloudflare. El asistente conecta el servidor local con el túnel que configures; no compra un dominio ni crea su DNS.</p>
+<section><h2>1. Crea el túnel en Cloudflare</h2><ol>
+<li>Abre <a href="https://dash.cloudflare.com/">Cloudflare</a> y ve a <strong>Networking → Tunnels</strong>. Crea un túnel de tipo <strong>Cloudflared</strong>, por ejemplo <strong>loyalty-local</strong>.</li>
+<li>Copia solamente el token que comienza por <code>eyJ...</code> del comando de instalación. Para un túnel existente, puedes obtenerlo desde <strong>Add a replica</strong>. El instalador de Loyalty ejecutará el conector dentro de Docker.</li>
+<li>Añade una <strong>Published application route</strong>. Elige un subdominio propio, por ejemplo <code>wallet</code>, selecciona tu dominio y deja la ruta vacía.</li>
+<li>En el servicio de destino, elige <strong>HTTP</strong> y escribe <code>loyalty-wallet-gateway:8080</code>. Guarda la ruta.</li>
+</ol><p>Las rutas públicas de registro y Wallet deben llegar sin una pantalla de acceso de Cloudflare. El gateway mantiene fuera del túnel los paneles y las API de personal.</p></section>
+<section><h2>2. Conecta Loyalty desde el Mac</h2><p>Ejecuta este comando en Terminal:</p><pre>{{STABLE_COMMAND}}</pre>
+<p>Escribe la dirección HTTPS completa del subdominio y pega el token cuando se solicite. El token no se muestra al escribir, no va a Git ni al ZIP. Conserva tu clave y certificados de Wallet.</p>
+<p>El proceso verifica HTTPS, la identidad del gateway y sus rutas. Solo un resultado <code>HTTPS_PASS</code> confirma esas comprobaciones; no confirma todavía la actualización del teléfono.</p></section>
+<section><h2>3. Guarda la conexión en la misma tarjeta</h2><ol>
+<li>Cuando pase HTTPS, abre el panel del negocio como dueño y busca al cliente en <strong>Caja</strong>.</li>
+<li>En <strong>Actualizar o recuperar esta tarjeta</strong>, elige <strong>La tarjeta no actualiza: reparar conexión</strong>, verifica al titular y crea el enlace temporal.</li>
+<li>Desde el iPhone, abre ese enlace, pulsa <strong>Recuperar mi tarjeta</strong> y <strong>Añadir a Apple Wallet</strong>. Confirma el guardado de la misma tarjeta.</li>
+<li>Registra una compra de prueba y comprueba el nuevo saldo en Wallet. Conserva el serial y los saldos existentes.</li>
+</ol><p class="note">El dominio fijo evita perder la dirección por usar un enlace temporal. Mantén el Mac y Docker disponibles: no sustituye un servidor de producción encendido permanentemente.</p></section>
+<p><a href="guide.html">Volver al resultado de la conexión</a> · <a href="https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/">Guía oficial de Cloudflare</a></p></main></body></html>

@@ -37,4 +37,24 @@ class EngagementGoogleTest {
         assertTrue(responses.isEmpty())
     }
 
+    @Test fun `provider replaces removed promotion slots and modules on the same object`() {
+        val calls = mutableListOf<Triple<String, String, String?>>()
+        val provider = fakeGoogle(mutableListOf(WalletHttpResponse(200,"{\"access_token\":\"test\",\"expires_in\":3600}"), WalletHttpResponse(200,"{}"), WalletHttpResponse(200,"{}")), calls)
+        val current = pass().copy(snapshot = JsonObject(pass().snapshot + obj(
+            "balances" to listOf(obj("programId" to "a", "name" to "Visitas", "kind" to "STAMPS", "available" to 7)),
+            "rewardProgress" to listOf(obj("id" to "r", "programId" to "a", "kind" to "STAMPS", "goal" to 7, "name" to "Premio retirado")))))
+        provider.sync(current, origin)
+        val removed = current.copy(snapshot = JsonObject(current.snapshot + obj("balances" to emptyList<JsonObject>(), "rewardProgress" to emptyList<JsonObject>())))
+        provider.sync(removed, origin)
+        val requests = calls.filter { it.first == "PATCH" && it.second.contains("loyaltyObject/") }
+        assertEquals(2, requests.size); assertEquals(requests.first().second, requests.last().second)
+        assertTrue(requests.first().third!!.contains("Premio retirado"))
+        val latest = json.parseToJsonElement(requests.last().third!!).jsonObject
+        assertFalse(latest.toString().contains("Premio retirado"))
+        assertEquals("Activa", latest.getValue("secondaryLoyaltyPoints").jsonObject.getValue("balance").jsonObject.getValue("string").jsonPrimitive.content)
+        assertEquals(current.googleId, latest.getValue("id").jsonPrimitive.content)
+        assertEquals("public-card-code", latest.getValue("barcode").jsonObject.getValue("value").jsonPrimitive.content)
+        assertTrue(latest.containsKey("textModulesData"))
+    }
+
 }

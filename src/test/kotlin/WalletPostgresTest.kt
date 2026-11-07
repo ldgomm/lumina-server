@@ -188,7 +188,7 @@ class WalletPostgresTest {
         time.value=time.value.plusSeconds(1)
         val upgraded=wallet.materialize(f.member)
         assertTrue(upgraded.tag>initial.tag)
-        assertEquals(14,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
+        assertEquals(15,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
         assertEquals(initial.serial,upgraded.serial);assertEquals(initial.token,upgraded.token)
         assertEquals(initial.appleType,upgraded.appleType)
         assertEquals(initial.snapshot.getValue("cardCode"),upgraded.snapshot.getValue("cardCode"))

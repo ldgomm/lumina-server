@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Loyalty · Recuperar conexión</title>
+<style>body{font:18px/1.6 system-ui;background:#f3f5ee;color:#173e34;margin:0}main{max-width:800px;margin:auto;padding:32px 20px}h1{font-size:clamp(32px,5vw,44px);line-height:1.1}section{background:white;border:1px solid #dae2d7;border-radius:20px;padding:24px;margin:20px 0}a{color:#185c44}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf3e7;padding:18px;border-radius:12px;font-size:15px}code{overflow-wrap:anywhere}.error{background:#fff0e9;border:1px solid #e6b79b;border-radius:12px;padding:18px}li{margin:12px 0}.button{display:inline-block;background:#174d3c;color:white;padding:12px 20px;border-radius:10px;text-decoration:none}[hidden]{display:none}</style></head>
+<body><main><p>LOYALTY · CONEXIÓN NO VERIFICADA</p><h1>Wallet no puede recibir esta actualización.</h1>
+<p>Resultado de esta ejecución: <code>{{STATUS}}</code>. Esta guía reemplaza la del arranque anterior.</p>
+<p class="error">{{ERROR}}</p>
+<section {{RETIRED_HIDDEN}}><h2>Cloudflare retiró la dirección temporal</h2>
+<p>El contenedor puede seguir ejecutándose aunque su dirección ya no exista. La tarjeta instalada sigue intentando conectarse a esa dirección.</p>
+<p>Para continuar la prueba desde el Mac, ejecuta:</p><pre>{{RENEW_COMMAND}}</pre>
+<p>El comando puede crear una dirección temporal nueva. Si HTTPS pasa, se abrirá la guía para guardar la nueva conexión de <strong>la misma tarjeta</strong> desde el panel del dueño. No borres la tarjeta ni vuelvas a registrarte.</p></section>
+<section {{OTHER_HIDDEN}}><h2>Comprueba la causa antes de cambiar la dirección</h2>
+<p>Un fallo de DNS, TLS o red no demuestra que el túnel haya sido retirado. Revisa el código anterior y los diagnósticos del ZIP. Confirma que Docker y la conexión del Mac estén disponibles y reintenta:</p><pre>{{RETRY_COMMAND}}</pre>
+<p>La comprobación conserva la validación de TLS. No renueva automáticamente un túnel por un error de red.</p></section>
+<section><h2>Conserva la dirección de tus tarjetas</h2><p>Un dominio fijo evita depender de la caducidad de un enlace temporal. Necesitas un dominio que controles y un túnel configurado en Cloudflare. El Mac y Docker deben seguir disponibles mientras alojen el servidor.</p><p><a class="button" href="https-estable.html">Configurar un dominio fijo</a></p></section>
+<p><a href="{{LOCAL}}/">Abrir el panel local del negocio</a></p></main></body></html>

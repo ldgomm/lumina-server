@@ -24,13 +24,13 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v014'
+VERSION = 'v015'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
 SOURCE_DIRS = {'src', 'gradle', 'scripts', 'docs'}
 SUITES = {
-    'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4, 'com.premierdarkcoffee.loyalty.AppleWalletExperienceTest': 16, 'com.premierdarkcoffee.loyalty.EngagementDomainTest': 10, 'com.premierdarkcoffee.loyalty.EngagementGoogleTest': 1},
+    'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4, 'com.premierdarkcoffee.loyalty.AppleWalletExperienceTest': 16, 'com.premierdarkcoffee.loyalty.GoogleWalletExperienceTest': 18, 'com.premierdarkcoffee.loyalty.EngagementDomainTest': 10, 'com.premierdarkcoffee.loyalty.EngagementGoogleTest': 2},
     'postgresTest': {'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 17, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8, 'com.premierdarkcoffee.loyalty.EngagementPostgresTest': 17, 'com.premierdarkcoffee.loyalty.PromotionLifecyclePostgresTest': 17, 'com.premierdarkcoffee.loyalty.CustomerActivityPostgresTest': 12},
 }
 
@@ -600,7 +600,8 @@ def main(arguments=None, updates=None, origin=None):
                 if https_code or not https.get('tls_verified'):
                     report['status'] = 'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_HTTPS_SETUP_FAILED'
                 else:
-                    suffix = 'WALLET_CREDENTIALS_PENDING' if https.get('status') == 'HTTPS_PASS_WALLET_CREDENTIALS_PENDING' else 'WALLET_DEVICE_TEST_PENDING'
+                    suffix = ('WALLET_CONNECTION_REFRESH_PENDING' if https.get('pass_refresh') else
+                              'WALLET_CREDENTIALS_PENDING' if https.get('status') == 'HTTPS_PASS_WALLET_CREDENTIALS_PENDING' else 'WALLET_DEVICE_TEST_PENDING')
                     report['status'] = 'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_'+suffix
                     if all(https.get('requested',{}).get(name) for name in ('apple','google')):
                         report['pending'] = [p for p in report['pending'] if p != 'PUBLIC_HTTPS_AND_CREDENTIALS']
@@ -662,13 +663,17 @@ def main(arguments=None, updates=None, origin=None):
                 print('Guía local: '+str(project/'.local-wallet/guide.html'))
                 if report['https'].get('pass_refresh'):
                     print('La conexión cambió: abre la guía para actualizar la misma tarjeta en el iPhone. No la borres ni te registres otra vez.')
+            if report.get('https', {}).get('status') == 'HTTPS_SETUP_FAILED':
+                print('HTTPS no está funcionando. Guía de recuperación: ' + str(project/'.local-wallet/guide.html'))
             print('Accesos privados: '+str(project/'.local-staging/access.html'))
             try:
                 import webbrowser
-                webbrowser.open((project/'.local-staging/access.html').as_uri())
+                show_recovery = report.get('https', {}).get('pass_refresh') or report.get('https', {}).get('status') == 'HTTPS_SETUP_FAILED'
+                landing = project / ('.local-wallet/guide.html' if show_recovery else '.local-staging/access.html')
+                webbrowser.open(landing.as_uri())
             except Exception:
                 print('Puedes abrir los accesos con: python3 scripts/staging.py credentials --open')
-    return 0 if report['status'] in {'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING','PREFLIGHT_PASS_NO_COMMIT','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_CREDENTIALS_PENDING','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING'} else 1
+    return 0 if report['status'] in {'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING','PREFLIGHT_PASS_NO_COMMIT','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_CONNECTION_REFRESH_PENDING','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_CREDENTIALS_PENDING','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING'} else 1
 
 
 

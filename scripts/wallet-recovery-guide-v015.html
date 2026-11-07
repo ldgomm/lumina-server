@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loyalty · Actualizar conexión de Wallet</title>
+<style>
+body{font:18px/1.6 system-ui;background:#f3f5ee;color:#173e34;margin:0}
+main{max-width:780px;margin:auto;padding:32px 20px}h1{font-size:clamp(30px,5vw,44px);line-height:1.1}
+section{background:white;border:1px solid #dae2d7;border-radius:20px;padding:24px;margin:20px 0}
+a{color:#185c44;overflow-wrap:anywhere}code{overflow-wrap:anywhere}li{margin-bottom:16px}
+.button{display:inline-block;background:#174d3c;color:white;padding:12px 20px;border-radius:10px;text-decoration:none}
+.note{background:#fff3cf;border-radius:12px;padding:18px}
+</style>
+</head>
+<body><main>
+<p>LOYALTY · CONEXIÓN RECUPERADA</p>
+<h1>Actualiza la conexión de tu tarjeta.</h1>
+<p>El servidor ya usa una dirección verificada. Falta guardar la nueva conexión en el teléfono.</p>
+<section {{REFRESH_HIDDEN}} class="connection-repair">
+<h2>Conserva tu tarjeta actual</h2>
+<p class="note">Tu iPhone todavía conoce la dirección anterior. No borres la tarjeta ni vuelvas a registrarte: estos pasos actualizan la misma tarjeta y conservan sus otros saldos.</p>
+<ol>
+<li>En el Mac, <a href="{{LOCAL}}/">abre el panel del negocio</a> e ingresa como <strong>dueño</strong>. Tus accesos siguen en <code>{{PROJECT}}/.local-staging/access.html</code>.</li>
+<li>En <strong>Caja</strong>, busca al cliente por cédula o escanea su tarjeta.</li>
+<li>Abre <strong>Actualizar o recuperar esta tarjeta</strong>. Elige <strong>La tarjeta no actualiza: reparar conexión</strong>, verifica al titular y pulsa <strong>Crear enlace temporal</strong>.</li>
+<li>Escanea con la cámara del iPhone el QR temporal que aparece en el Mac. En Safari pulsa <strong>Recuperar mi tarjeta</strong>, luego <strong>Añadir a Apple Wallet</strong>, abre la tarjeta y confirma el guardado. En Android, usa el botón de Google Wallet cuando esté habilitado.</li>
+<li>Abre los detalles de la tarjeta en Wallet: la promoción eliminada debe desaparecer y los demás saldos deben mantenerse.</li>
+</ol>
+<p>El QR temporal vence en cinco minutos y se usa una vez. Si vence, genera otro. La verificación del teléfono permanece pendiente hasta comprobar este último paso.</p>
+<p><a class="button" href="{{LOCAL}}/">Abrir panel del negocio</a></p>
+</section>
+<section><h2>Estado de la conexión</h2>
+<p><code>{{STATUS}}</code></p><p>Dirección actual: <a href="{{CLIENT_LINK}}">{{ORIGIN}}</a></p>
+<p>{{CONNECTION_KIND}} Mantén el Mac y Docker funcionando durante esta prueba.</p>
+<p><a class="button" href="https-estable.html">Configurar un dominio fijo</a></p></section>
+</main></body>
+</html>
