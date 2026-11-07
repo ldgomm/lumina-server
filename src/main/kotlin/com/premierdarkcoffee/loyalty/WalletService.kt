@@ -183,7 +183,7 @@ class WalletService(
                 true
             } catch (e: Exception) {
                 if (e is SQLException) throw e
-                val reason = if (e is WalletDeliveryFailure) e.reason else "${provider}_DELIVERY_FAILED"
+                val reason = walletDeliveryDiagnosticCode(provider, (e as? WalletDeliveryFailure)?.reason)
                 c.exec("UPDATE wallet_delivery SET attempts=attempts+1,last_error=?,next_attempt_at=?::timestamptz + (LEAST(3600,30*power(2,LEAST(attempts,7))) * interval '1 second') WHERE serial=? AND provider=?", reason, stamp(), serial, provider)
                 false
             }
@@ -202,5 +202,8 @@ class WalletService(
     fun diagnostics() = db.tx { c -> obj("configuration" to status(),
         "passes" to c.one("SELECT count(*) FROM wallet_passes") { it.getLong(1) },
         "devices" to c.one("SELECT count(*) FROM wallet_apple_registrations") { it.getLong(1) },
-        "delivery" to c.rows("SELECT provider,count(*) AS total,count(*) FILTER(WHERE last_error IS NOT NULL) AS failed,max(attempts) AS attempts FROM wallet_delivery GROUP BY provider") { obj("provider" to it.getString(1), "total" to it.getLong(2), "withErrors" to it.getLong(3), "maxAttempts" to it.getInt(4)) }) }
+        "delivery" to c.rows("SELECT provider,count(*) AS total,count(*) FILTER(WHERE last_error IS NOT NULL) AS failed,max(attempts) AS attempts FROM wallet_delivery GROUP BY provider") { obj("provider" to it.getString(1), "total" to it.getLong(2), "withErrors" to it.getLong(3), "maxAttempts" to it.getInt(4)) },
+        "deliveryErrors" to c.rows("SELECT provider,last_error,count(*) AS total,max(attempts) AS attempts FROM wallet_delivery WHERE last_error IS NOT NULL GROUP BY provider,last_error ORDER BY provider,last_error LIMIT 30") {
+            obj("provider" to it.getString(1), "code" to walletDeliveryDiagnosticCode(it.getString(1), it.getString(2)), "total" to it.getLong(3), "maxAttempts" to it.getInt(4))
+        }) }
 }

@@ -57,4 +57,51 @@ class EngagementGoogleTest {
         assertTrue(latest.containsKey("textModulesData"))
     }
 
+    @Test fun `approved class design updates resubmit review without replacing either Wallet identity`() {
+        val requests = mutableListOf<Triple<String, String, String?>>()
+        val provider = ServiceAccountGoogleProvider("12345", account(), clock, WalletHttp { method, url, _, body ->
+            requests += Triple(method, url, body)
+            when {
+                url.contains("oauth2.googleapis.com") -> WalletHttpResponse(200, "{\"access_token\":\"test-token\",\"expires_in\":3600}")
+                url.contains("loyaltyClass/") -> {
+                    val patch = json.parseToJsonElement(requireNotNull(body)).jsonObject
+                    if (patch["reviewStatus"]?.jsonPrimitive?.content == "UNDER_REVIEW") WalletHttpResponse(200, "{\"reviewStatus\":\"approved\"}")
+                    else WalletHttpResponse(400, "{\"error\":{\"message\":\"reviewStatus must be underReview\"}}")
+                }
+                else -> WalletHttpResponse(200, "{}")
+            }
+        })
+        fun styled(version: Int, name: String) = pass().copy(snapshot = JsonObject(pass().snapshot + obj(
+            "designVersion" to version, "design" to json.parseToJsonElement(json.encodeToString(WalletDesign(displayName = name))))))
+        val current = styled(2, "Mi marca")
+        val appleBefore = current.appleJson(current.appleType!!, "ABCDEFGHIJ", origin)
+        provider.sync(current, origin)
+        provider.sync(current, origin)
+        provider.sync(styled(3, "Marca actualizada"), origin)
+        val classRequests = requests.filter { it.second.contains("loyaltyClass/") }
+        assertEquals(2, classRequests.size)
+        assertTrue(classRequests.all { it.first == "PATCH" && it.second.endsWith(current.googleClass!!) })
+        assertTrue(classRequests.all { json.parseToJsonElement(it.third!!).jsonObject["reviewStatus"] == JsonPrimitive("UNDER_REVIEW") })
+        assertTrue(requests.filter { it.second.contains("loyaltyObject/") }.all { it.second.endsWith(current.googleId!!) })
+        assertEquals(appleBefore, current.appleJson(current.appleType!!, "ABCDEFGHIJ", origin))
+        assertEquals(current.serial, appleBefore["serialNumber"]?.jsonPrimitive?.content)
+    }
+
+    @Test fun `failed class update remains retryable and is cached only after success`() {
+        var designCalls = 0
+        val provider = ServiceAccountGoogleProvider("12345", account(), clock, WalletHttp { _, url, _, _ ->
+            when {
+                url.contains("oauth2.googleapis.com") -> WalletHttpResponse(200, "{\"access_token\":\"test-token\",\"expires_in\":3600}")
+                url.contains("loyaltyClass/") -> WalletHttpResponse(if (++designCalls == 1) 503 else 200, "{}")
+                else -> WalletHttpResponse(200, "{}")
+            }
+        })
+        val design = json.parseToJsonElement(json.encodeToString(WalletDesign()))
+        val current = pass().copy(snapshot = JsonObject(pass().snapshot + obj("designVersion" to 1, "design" to design)))
+        assertEquals("GOOGLE_DESIGN_503", assertFailsWith<WalletDeliveryFailure> { provider.sync(current, origin) }.reason)
+        provider.sync(current, origin)
+        provider.sync(current, origin)
+        assertEquals(2, designCalls)
+    }
+
 }

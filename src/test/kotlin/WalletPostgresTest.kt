@@ -198,6 +198,41 @@ class WalletPostgresTest {
         assertNotNull(wallet.updates(device,apple.passType,initial.tag.toString()))
         assertEquals(upgraded.tag,wallet.materialize(f.member).tag)
     }
+    @Test fun `delivery diagnostics preserve both provider codes without private data`() {
+        val f = fixture()
+        val p = wallet.materialize(f.member, "apple")
+        wallet.materialize(f.member, "google")
+        val other = wallet.materialize(fixture().member, "google")
+        db.tx { c ->
+            c.exec("UPDATE wallet_delivery SET last_error=?,attempts=33 WHERE serial=? AND provider='GOOGLE'", "GOOGLE_DESIGN_400", p.serial)
+            c.exec("UPDATE wallet_delivery SET last_error=?,attempts=2 WHERE serial=? AND provider='APPLE'", "APPLE_HTTP_503", p.serial)
+            c.exec("UPDATE wallet_delivery SET last_error=? WHERE serial=? AND provider='GOOGLE'", "PRIVATE_SENTINEL Bearer secret-value", other.serial)
+        }
+        val diagnostics = wallet.diagnostics()
+        val errors = diagnostics.getValue("deliveryErrors").jsonArray.map { it.jsonObject }
+        assertTrue(errors.any { it.str("provider") == "GOOGLE" && it.str("code") == "GOOGLE_DESIGN_400" && it.getValue("maxAttempts").jsonPrimitive.int >= 33 })
+        assertTrue(errors.any { it.str("provider") == "APPLE" && it.str("code") == "APPLE_HTTP_503" })
+        assertTrue(errors.any { it.str("code") == "GOOGLE_DELIVERY_FAILED" })
+        for (privateValue in listOf("PRIVATE_SENTINEL", "secret-value", p.token, p.serial, f.member.id)) {
+            assertFalse(diagnostics.toString().contains(privateValue))
+        }
+        assertTrue(errors.size <= 30)
+    }
+
+    @Test fun `delivery diagnostics require platform administration`() = testApplication {
+        val f = fixture()
+        val platformToken = "platform-wallet-diagnostics-token-32-characters"
+        application { loyaltyRoutes(service, platformToken, origin) }
+        val route = "/api/platform/wallet/status"
+        assertEquals(HttpStatusCode.Unauthorized, client.get(route).status)
+        for (token in listOf(f.owner, f.token)) {
+            assertEquals(HttpStatusCode.Unauthorized, client.get(route) { bearerAuth(token) }.status)
+        }
+        val response = client.get(route) { bearerAuth(platformToken) }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(json.parseToJsonElement(response.bodyAsText()).jsonObject.containsKey("deliveryErrors"))
+    }
+
     private class TestApple:AppleWalletProvider {
         override val passType="pass.com.example.loyalty";override val team="ABCDEFGHIJ";var invalid:String?=null
         override fun sign(manifest:ByteArray)=byteArrayOf(1,2,3)

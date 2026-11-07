@@ -38,7 +38,8 @@ fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=tr
 fun WalletPass.googleBrand(origin:String):JsonObject {
     val design=design();val name=design.displayName.ifBlank{snapshot.getValue("businessName").jsonPrimitive.content}
     val logo=if(design.logoPng==null)"$origin/wallet/logo.png" else "$origin/wallet/brand/${snapshot.getValue("slug").jsonPrimitive.content}/logo.png?v=${Security.hash(design.logoPng).take(16)}"
-    return obj("programName" to name,"hexBackgroundColor" to design.background,"programLogo" to obj("sourceUri" to obj("uri" to logo),"contentDescription" to obj("defaultValue" to obj("language" to "es","value" to name))))
+    // Google requires resubmitting the review state when an approved class changes.
+    return obj("reviewStatus" to "UNDER_REVIEW","programName" to name,"hexBackgroundColor" to design.background,"programLogo" to obj("sourceUri" to obj("uri" to logo),"contentDescription" to obj("defaultValue" to obj("language" to "es","value" to name))))
 }
 fun WalletPass.progressFields():List<JsonObject> = snapshot["rewardProgress"]?.jsonArray.orEmpty().map { value ->
     val p=value.jsonObject;val goal=p.getValue("goal").jsonPrimitive.long;val amount=p.getValue("available").jsonPrimitive.long

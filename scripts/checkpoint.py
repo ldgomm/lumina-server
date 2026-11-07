@@ -24,14 +24,14 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v015'
+VERSION = 'v015r2'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
 SOURCE_DIRS = {'src', 'gradle', 'scripts', 'docs'}
 SUITES = {
-    'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4, 'com.premierdarkcoffee.loyalty.AppleWalletExperienceTest': 16, 'com.premierdarkcoffee.loyalty.GoogleWalletExperienceTest': 18, 'com.premierdarkcoffee.loyalty.EngagementDomainTest': 10, 'com.premierdarkcoffee.loyalty.EngagementGoogleTest': 2},
-    'postgresTest': {'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 17, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8, 'com.premierdarkcoffee.loyalty.EngagementPostgresTest': 17, 'com.premierdarkcoffee.loyalty.PromotionLifecyclePostgresTest': 17, 'com.premierdarkcoffee.loyalty.CustomerActivityPostgresTest': 12},
+    'test': {'com.premierdarkcoffee.loyalty.DomainTest': 13, 'com.premierdarkcoffee.loyalty.ServerTest': 1, 'com.premierdarkcoffee.loyalty.HttpContractTest': 2, 'com.premierdarkcoffee.loyalty.SqlFingerprintTest': 8, 'com.premierdarkcoffee.loyalty.CommercialDomainTest': 8, 'com.premierdarkcoffee.loyalty.WalletDomainTest': 14, 'com.premierdarkcoffee.loyalty.LocalStagingTest': 3, 'com.premierdarkcoffee.loyalty.LocalWalletTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstDomainTest': 3, 'com.premierdarkcoffee.loyalty.WalletPresentationTest': 4, 'com.premierdarkcoffee.loyalty.AppleWalletExperienceTest': 16, 'com.premierdarkcoffee.loyalty.GoogleWalletExperienceTest': 18, 'com.premierdarkcoffee.loyalty.EngagementDomainTest': 10, 'com.premierdarkcoffee.loyalty.EngagementGoogleTest': 4, 'com.premierdarkcoffee.loyalty.WalletDeliveryDiagnosticsTest': 3},
+    'postgresTest': {'com.premierdarkcoffee.loyalty.PostgresTest': 15, 'com.premierdarkcoffee.loyalty.CommercialPostgresTest': 24, 'com.premierdarkcoffee.loyalty.WalletPostgresTest': 19, 'com.premierdarkcoffee.loyalty.LocalStagingPostgresTest': 4, 'com.premierdarkcoffee.loyalty.WalletFirstPostgresTest': 19, 'com.premierdarkcoffee.loyalty.PlatformBranchesPostgresTest': 8, 'com.premierdarkcoffee.loyalty.EngagementPostgresTest': 17, 'com.premierdarkcoffee.loyalty.PromotionLifecyclePostgresTest': 17, 'com.premierdarkcoffee.loyalty.CustomerActivityPostgresTest': 12},
 }
 
 
