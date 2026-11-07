@@ -41,6 +41,67 @@
         f.elements.promoName.focus();
     };;
 
+    function enhanceCounterRewards() {
+        const counter = document.querySelector('.customer-counter'), member = state.member;
+        if (!counter || !member || counter.dataset.rewardsReady) return;
+        counter.dataset.rewardsReady = 'true';
+        const amount = (value, kind) => kind === 'CASHBACK'
+            ? Math.trunc(value / 100) + '.' + String(value % 100).padStart(2, '0') + ' ' + state.data.business.currency
+            : value + ' ' + (kind === 'STAMPS' ? (value === 1 ? 'sello' : 'sellos') : (value === 1 ? 'punto' : 'puntos'));
+        // Only the member response defines visible rewards; the owner dashboard can include paused programs.
+        const rewards = member.rewards.filter(r => r.active).map(r => {
+            const program = state.data.programs.find(p => p.id === r.programId);
+            const balance = member.balances.find(b => b.programId === r.programId);
+            const kind = balance?.kind || program?.config.kind;
+            const available = balance?.available ?? 0;
+            const exact = Number.isSafeInteger(available) && available >= 0 && Number.isSafeInteger(r.cost) && r.cost > 0 && ['POINTS', 'STAMPS', 'CASHBACK'].includes(kind);
+            return {reward: r, name: balance?.name || program?.config.name || 'Promoción', kind, available, exact, ready: exact && available >= r.cost};
+        }).sort((a, b) => Number(b.ready) - Number(a.ready));
+        if (!rewards.length) return;
+        const ready = rewards.filter(r => r.ready).length;
+        const section = document.createElement('section'); section.className = 'counter-rewards'; section.setAttribute('aria-labelledby', 'counterRewardsTitle');
+        section.innerHTML = `<div class="counter-rewards-heading"><div><span class="eyebrow">Su próxima recompensa</span><h3 id="counterRewardsTitle">${ready ? ready + (ready === 1 ? ' opción con saldo suficiente' : ' opciones con saldo suficiente') : 'Cada visita lo acerca a un premio'}</h3></div><div class="counter-reward-filters" role="group" aria-label="Filtrar premios"><button type="button" data-reward-filter="all" aria-pressed="true">Todos (${rewards.length})</button><button type="button" data-reward-filter="ready" aria-pressed="false">Con saldo (${ready})</button></div></div><button type="button" class="quiet counter-jump" id="jumpToPurchase">Ir a la compra ↓</button><p class="small">El saldo de cada promoción se usa por separado. Sus premios son alternativas: elegir uno reduce el saldo para los demás. Caja verifica las condiciones al confirmar.</p><div class="counter-reward-grid"></div><button type="button" class="quiet" id="moreCounterRewards" hidden>Mostrar todos los premios</button><p id="counterRewardSelection" role="status" aria-live="polite"></p>`;
+        counter.querySelector('.counter-modes').before(section);
+        let filter = 'all', expanded = false;
+        const draw = () => {
+            const filtered = rewards.filter(r => filter === 'all' || r.ready), visible = expanded ? filtered : filtered.slice(0, 2);
+            section.querySelector('.counter-reward-grid').innerHTML = visible.map(model => {
+                const {reward: r, name, available, kind, ready, exact} = model;
+                const remaining = Math.max(0, r.cost - available);
+                const status = !exact ? 'Consulta el saldo exacto en caja' : ready ? 'Saldo suficiente' : `Falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${amount(remaining, kind)}`;
+                return `<article class="counter-reward-card ${ready ? 'is-ready' : ''}"><p class="counter-reward-program">${esc(name)}</p><h4>${esc(r.name)}</h4><span class="counter-reward-status">${esc(status)}</span>${exact ? `<progress max="${r.cost}" value="${Math.min(available, r.cost)}" aria-label="${esc('Progreso para ' + r.name)}"></progress><p class="counter-reward-balance">Saldo: <strong>${esc(amount(available, kind))}</strong><br>Canje: ${esc(amount(r.cost, kind))}</p>` : ''}<p class="counter-reward-conditions">${esc(r.benefitText || (r.benefit ? 'El descuento se calcula al revisar los productos de la compra.' : 'Se entrega tras confirmar el canje en caja.'))}</p>${ready ? `<p class="small">Si eliges este premio, el saldo queda en ${esc(amount(available - r.cost, kind))}.</p><button type="button" data-select-counter-reward="${esc(r.id)}">${r.benefit ? 'Aplicar en una compra' : 'Preparar canje'}</button>` : ''}</article>`;
+            }).join('') || '<p class="empty-reward">Todavía no tiene saldo suficiente. En «Todos» puedes ver cuánto falta para cada premio.</p>';
+            const more = section.querySelector('#moreCounterRewards'); more.hidden = filtered.length <= 2; more.textContent = expanded ? 'Mostrar menos' : `Mostrar los ${filtered.length} premios`;
+            section.querySelectorAll('[data-reward-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.rewardFilter === filter)));
+            section.querySelectorAll('[data-select-counter-reward]').forEach(button => button.onclick = () => {
+                if (counter.querySelector('form[aria-busy="true"]')) return;
+                const model = rewards.find(r => r.reward.id === button.dataset.selectCounterReward);
+                if (!model?.ready) return;
+                const reward = model.reward;
+                counter.querySelector(`[data-counter-mode="${reward.benefit ? 'purchase' : 'redemption'}"]`).click();
+                if (reward.benefit && counter.querySelector('#purchase')) checkout(counter.querySelector('#purchase'), member);
+                const target = counter.querySelector(reward.benefit ? '#productPurchase' : '#counterChoose');
+                const choice = target?.elements[reward.benefit ? 'reward' : 'rewardId'];
+                if (!choice || ![...choice.options].some(o => o.value === reward.id && !o.disabled)) return;
+                choice.value = reward.id; choice.dispatchEvent(new Event('change', {bubbles: true}));
+                section.querySelector('#counterRewardSelection').textContent = `Seleccionado: ${reward.name}. ${reward.benefit ? 'Revisa los productos y el descuento antes de guardar.' : 'Revisa el canje y confirma con el titular.'} Aún no se ha descontado saldo.`;
+                target.scrollIntoView({behavior: 'smooth', block: 'start'}); choice.focus({preventScroll: true});
+            });
+        };
+        section.querySelectorAll('[data-reward-filter]').forEach(button => button.onclick = () => {
+            if (counter.querySelector('form[aria-busy="true"]')) return;
+            filter = button.dataset.rewardFilter; expanded = false; draw();
+        });
+        section.querySelector('#jumpToPurchase').onclick = () => {
+            if (counter.querySelector('form[aria-busy="true"]')) return;
+            counter.querySelector('[data-counter-mode="purchase"]').click();
+            const target = counter.querySelector('#counterPurchase'); target.scrollIntoView({behavior: 'smooth', block: 'start'});
+            target.querySelector('[name=receipt]')?.focus({preventScroll: true});
+        };
+        section.querySelector('#moreCounterRewards').onclick = () => { if (!counter.querySelector('form[aria-busy="true"]')) { expanded = !expanded; draw(); } };
+        draw();
+    }
+
     function enhancePurchase() {
         const f = document.querySelector('#purchase'); if (!f || f.dataset.productsReady) return;
         f.dataset.productsReady = 'true';
@@ -50,19 +111,25 @@
     }
     function checkout(old, member) {
         let rows = [{name: '', group: '', quantity: 1, unitMinor: 0}];
+        const previousBranch = old.elements.branchId?.value, previousReceipt = old.elements.receipt?.value;
         const panel = document.createElement('div'); old.replaceWith(panel);
         const rewards = member.rewards.filter(r => r.active && r.benefit && (member.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost);
         const categories = [...new Set(state.data.programs.map(p => p.config.productGroup).filter(Boolean))];
-        let common = {branchId: state.data.branches[0]?.id || '', receipt: '', reward: '', programs: state.data.programs.filter(p => p.config.active).map(p => p.id)};
+        let common = {branchId: previousBranch || state.data.branches[0]?.id || '', receipt: previousReceipt || '', reward: '', programs: state.data.programs.filter(p => p.config.active).map(p => p.id)};
         const readRows = f => [...f.querySelectorAll('[data-line]')].map(line => ({name: line.querySelector('[data-name]').value.trim(), group: line.querySelector('[data-group]').value.trim(), quantity: Number(line.querySelector('[data-quantity]').value), unitMinor: Math.round(Number(line.querySelector('[data-price]').value) * 100)}));
         const keep = f => { rows = readRows(f); common = {branchId: f.elements.branchId.value, receipt: f.elements.receipt.value, reward: f.elements.reward.value, programs: [...f.querySelectorAll('[name=program]:checked')].map(x => x.value)}; };
         const draw = () => {
-            panel.innerHTML = `<form id="productPurchase"><label for="checkoutBranch">Sucursal</label><select id="checkoutBranch" name="branchId" required>${options(state.data.branches, common.branchId)}</select>${field('receipt', 'Comprobante único', 'text', common.receipt, 'required maxlength="100"')}<datalist id="productGroups">${categories.map(g => `<option value="${esc(g)}">`).join('')}</datalist>${rows.map((r, i) => `<fieldset data-line><legend>Producto ${i + 1}</legend><label>Producto o servicio<input data-name required maxlength="100" value="${esc(r.name)}"></label><label>Categoría<input data-group required list="productGroups" maxlength="60" value="${esc(r.group)}"></label><div class="row"><label>Cantidad<input data-quantity type="number" min="1" max="100" required value="${r.quantity}"></label><label>Precio por unidad<input data-price type="number" min="0.01" max="10000000" step="0.01" required value="${r.unitMinor ? r.unitMinor / 100 : ''}"></label></div>${rows.length > 1 ? `<button type="button" class="quiet" data-remove="${i}">Quitar producto</button>` : ''}</fieldset>`).join('')}<button type="button" class="quiet" id="addProduct" ${rows.length >= 30 ? 'disabled' : ''}>Añadir producto</button><details><summary>Promociones que aplican</summary><p>Solo acumulan las que coincidan con los productos, fechas y sucursal.</p>${state.data.programs.filter(p => p.config.active).map(p => `<label class="check"><input type="checkbox" name="program" value="${esc(p.id)}" ${checked(common.programs.includes(p.id))}>${esc(p.config.name)}</label>`).join('')}</details>${select('reward', 'Premio para aplicar en esta compra', [['', 'Sin canje'], ...rewards.map(r => [r.id, r.name])], common.reward)}<div id="purchaseConsent"><label class="check"><input name="verified" type="checkbox">Verifiqué al titular.</label><label class="check"><input name="confirmed" type="checkbox">El cliente pidió este premio y acepta usar sus sellos.</label></div><div class="checkout-subtotal"><span>Subtotal</span><strong id="checkoutSubtotal"></strong><small>El descuento se calcula al revisar la compra.</small></div><button>Revisar total y descuento</button></form><div id="receiptReview"></div>`;
+            panel.innerHTML = `<form id="productPurchase"><label for="checkoutBranch">Sucursal</label><select id="checkoutBranch" name="branchId" required>${options(state.data.branches, common.branchId)}</select>${field('receipt', 'Comprobante único', 'text', common.receipt, 'required maxlength="100"')}<datalist id="productGroups">${categories.map(g => `<option value="${esc(g)}">`).join('')}</datalist>${rows.map((r, i) => `<fieldset data-line><legend>Producto ${i + 1}</legend><label>Producto o servicio<input data-name required maxlength="100" value="${esc(r.name)}"></label><label>Categoría<input data-group required list="productGroups" maxlength="60" value="${esc(r.group)}"></label><div class="row"><label>Cantidad<input data-quantity type="number" min="1" max="100" required value="${r.quantity}"></label><label>Precio por unidad<input data-price type="number" min="0.01" max="10000000" step="0.01" required value="${r.unitMinor ? r.unitMinor / 100 : ''}"></label></div>${rows.length > 1 ? `<button type="button" class="quiet" data-remove="${i}">Quitar producto</button>` : ''}</fieldset>`).join('')}<button type="button" class="quiet" id="addProduct" ${rows.length >= 30 ? 'disabled' : ''}>Añadir producto</button><details><summary>Promociones que aplican</summary><p>Solo acumulan las que coincidan con los productos, fechas y sucursal.</p>${state.data.programs.filter(p => p.config.active).map(p => `<label class="check"><input type="checkbox" name="program" value="${esc(p.id)}" ${checked(common.programs.includes(p.id))}>${esc(p.config.name)}</label>`).join('')}</details>${select('reward', 'Premio para aplicar en esta compra', [['', 'Sin canje'], ...rewards.map(r => [r.id, r.name])], common.reward)}<p id="purchaseRewardDetails" class="counter-selected-benefit" hidden></p><div id="purchaseConsent"><label class="check"><input name="verified" type="checkbox">Verifiqué al titular.</label><label class="check"><input name="confirmed" type="checkbox">El cliente pidió este premio y acepta usar el saldo de esta promoción.</label></div><div class="checkout-subtotal"><span>Subtotal</span><strong id="checkoutSubtotal"></strong><small>El descuento se calcula al revisar la compra.</small></div><button>Revisar total y descuento</button></form><div id="receiptReview"></div>`;
             const f = panel.querySelector('form'); let revision = 0;
-            const consent = () => { const enabled = Boolean(f.elements.reward.value); panel.querySelector('#purchaseConsent').hidden = !enabled; f.elements.verified.required = f.elements.confirmed.required = enabled; };
+            const consent = () => {
+                const reward = rewards.find(r => r.id === f.elements.reward.value), enabled = Boolean(reward);
+                panel.querySelector('#purchaseConsent').hidden = !enabled; f.elements.verified.required = f.elements.confirmed.required = enabled;
+                const detail = panel.querySelector('#purchaseRewardDetails'); detail.hidden = !enabled;
+                detail.textContent = reward?.benefitText || (enabled ? 'Revisa los productos elegibles antes de confirmar el descuento.' : '');
+            };
             const subtotal = () => { const total = readRows(f).reduce((sum, x) => sum + x.quantity * x.unitMinor, 0); panel.querySelector('#checkoutSubtotal').textContent = Number.isFinite(total) && total >= 0 ? money(total) : 'Revisa cantidades y precios'; };
             f.addEventListener('input', subtotal); subtotal();
-            consent(); f.elements.reward.onchange = consent;
+            consent(); f.elements.reward.onchange = () => { f.elements.verified.checked = f.elements.confirmed.checked = false; consent(); };
             f.addEventListener('input', () => { revision++; panel.querySelector('#receiptReview').replaceChildren(); });
             f.addEventListener('change', () => { revision++; panel.querySelector('#receiptReview').replaceChildren(); });
             panel.querySelector('#addProduct').onclick = () => { keep(f); rows.push({name: '', group: '', quantity: 1, unitMinor: 0}); draw(); };
@@ -119,7 +186,7 @@
             <aside class="design-preview-wrap"><h3>Vista previa de tus Wallet</h3><p class="design-help">Promociones reales, saldos ficticios. Cada Wallet decide la distribución final.</p><div class="wallet-preview-platforms" role="group" aria-label="Wallet de la vista previa"><button type="button" data-preview-provider="apple">Apple Wallet</button><button type="button" data-preview-provider="google">Google Wallet</button></div><p id="previewPlatformHint" class="design-help"></p>
             <div class="wallet-preview-modes" role="group" aria-label="Estado de ejemplo de la tarjeta"><button type="button" data-wallet-example="new">Nueva</button><button type="button" data-wallet-example="progress" class="active">Acumulando</button><button type="button" data-wallet-example="ready">Con premio</button></div>
             <div id="designPreview" class="design-preview"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><div class="wallet-preview-status"><span id="previewStatusLabel" class="design-preview-label"></span><strong id="previewStatus"></strong></div><span id="previewWelcome" class="design-preview-hero"></span><span id="previewProgram" class="design-preview-label"></span><div class="design-preview-bottom"><div><span class="design-preview-label">CLIENTE</span><span>Cliente de ejemplo</span></div><div id="previewPrizeWrap"><span id="previewPrizeLabel" class="design-preview-label"></span><span id="previewPrize"></span></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div>
-            <div id="googleDesignPreview" class="google-design-preview" hidden><div class="google-preview-brand"><img id="googlePreviewLogo" alt="" hidden><strong id="googlePreviewName"></strong></div><p class="google-preview-member">Cliente de ejemplo</p><div class="google-preview-values"><div><span id="googlePreviewMainLabel"></span><strong id="googlePreviewMain"></strong></div><div><span id="googlePreviewStatusLabel"></span><strong id="googlePreviewStatus"></strong></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div><div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardDetail"></p><p id="previewStamps"></p></div><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
+            <div id="googleDesignPreview" class="google-design-preview" hidden><div class="google-preview-brand"><img id="googlePreviewLogo" alt="" hidden><strong id="googlePreviewName"></strong></div><p class="google-preview-member">Cliente de ejemplo</p><div class="google-preview-values"><div><span id="googlePreviewMainLabel"></span><strong id="googlePreviewMain"></strong></div><div><span id="googlePreviewStatusLabel"></span><strong id="googlePreviewStatus"></strong></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div><div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardConditions" hidden></p><p id="previewRewardDetail"></p><p id="previewStamps"></p></div><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
         const f = root.querySelector('#walletDesign'), fields = root.querySelector('#designFields');
         const background = f.elements.background, foreground = f.elements.foreground, labels = f.elements.label;
         const auto = root.querySelector('#autoContrast'), save = root.querySelector('#saveDesign'), fix = root.querySelector('#fixContrast');
@@ -168,6 +235,7 @@
             root.querySelector('#previewPrizeLabel').textContent = remaining === 0 ? 'CANJEA EN CAJA' : 'PRÓXIMO PREMIO';
             const compactPrize = [...(reward?.name || '').trim().replace(/\s+/g, ' ')];
             root.querySelector('#previewPrize').textContent = compactPrize.length > 28 ? compactPrize.slice(0, 27).join('') + '…' : compactPrize.join('');
+            const conditions = root.querySelector('#previewRewardConditions'); conditions.hidden = !reward?.benefitText; conditions.textContent = reward?.benefitText || '';
             root.querySelector('#previewRewardName').textContent = reward ? `${remaining === 0 ? 'Premio disponible' : 'Próximo premio'} · ${reward.name}` : 'Tu tarjeta, a tu medida';
             root.querySelector('#previewRewardDetail').textContent = reward ? `Saldo de ejemplo: ${unit(amount)}. Canje: ${unit(reward.cost)}. ${remaining === 0 ? `Si canjea este premio, le quedan ${unit(amount - reward.cost)}. Caja confirma el saldo vigente.` : `Te falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${unit(remaining)}.`}` : program ? 'Esta promoción aún no tiene un premio activo. Puedes crearlo en Premios.' : 'Al activar una promoción, aparecerá su saldo. Hasta entonces se muestra tu bienvenida.';
             root.querySelector('#previewStamps').textContent = reward && kind === 'STAMPS' && reward.cost <= 20 ? Array.from({length: reward.cost}, (_, i) => i < amount ? f.elements.stampSymbol.value : '○').join(' ') : '';
@@ -336,7 +404,8 @@
     };
     function enhance() {
         enhancePurchase();
-        const editor = document.querySelector('#programV7');
+        enhanceCounterRewards();
+        const editor = document.querySelector('#programV7');;
         if (editor && editingProgram?.config.productGroup && !editor.dataset.categoryReady) {
             editor.dataset.categoryReady = 'true';
             const info = document.createElement('p');

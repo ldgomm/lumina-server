@@ -107,19 +107,25 @@ function renderSales() {
             counterReceipt(r.replayed ? 'Esta compra ya estaba registrada' : 'Compra registrada', `<p>${esc(m.member.name)} · ${(payload.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</p><p>${r.earned.map(x => x.kind === 'CASHBACK' ? `${(x.amount / 100).toFixed(2)} ${esc(d.business.currency)} de cashback` : `${x.amount} ${esc(kinds[x.kind]).toLowerCase()}`).join(' · ') || 'La compra no cumple una promoción activa.'}</p><p>La actualización de Wallet se enviará automáticamente cuando esté habilitado.</p><p class="small">Comprobante: ${esc(r.purchaseId)}</p>`);
             notice('Compra registrada una sola vez.');
         });
+        let counterRevision = 0;
+        const clearCounterReview = () => { counterRevision++; found.querySelector('#counterReview').replaceChildren(); };
+        found.querySelector('#counterChoose').addEventListener('input', clearCounterReview);
+        found.querySelector('#counterChoose').addEventListener('change', clearCounterReview);
         form('counterChoose', async p => {
+            const ticket = counterRevision;
             const reward = availableRewards.find(r => r.id === p.rewardId);
             if (!reward) throw new Error('Selecciona un premio disponible.');
             const payload = {memberId: m.member.id, branchId: p.branchId, rewardId: reward.id, expectedRevision: m.member.revision, expectedRewardVersion: reward.version, identityVerified: true, customerConfirmed: true};
             const review = document.querySelector('#counterReview');
             review.innerHTML = `<hr><h3>Confirmar ${esc(reward.name)}</h3><p>${esc(m.member.name)} · ${rewardCost(reward, m.balances)} · ${esc(d.branches.find(b => b.id === p.branchId)?.name)}</p><p>El saldo se descontará al confirmar. Entrega el premio solo después de ver el recibo.</p><form id="counterConfirm"><label class="check"><input type="checkbox" name="identityVerified" required>Verifiqué al titular de la tarjeta.</label><label class="check"><input type="checkbox" name="customerConfirmed" required>El cliente solicitó este premio y acepta el descuento.</label><button>Confirmar canje y descontar</button></form>`;
             form('counterConfirm', async (confirmation, f) => {
+                if (ticket !== counterRevision || !f.isConnected) throw new Error('El premio o la sucursal cambió. Revisa el canje otra vez.');
                 if (confirmation.identityVerified !== 'on' || confirmation.customerConfirmed !== 'on') throw new Error('Falta la confirmación del titular.');
                 const r = await api('/api/staff/counter-redemptions', payload, 'POST', operationKey(f, payload));
                 counterReceipt(r.replayed ? 'Canje ya confirmado: no entregues otro premio' : 'Canje confirmado', `<p>${esc(r.name)} · ${esc(m.member.name)}</p><p>${r.replayed ? 'Este recibo corresponde a la entrega anterior. Comprueba si ya entregaste el premio.' : 'Ya puedes entregar el premio. El saldo se descontó una sola vez.'}</p><p class="small">Recibo único: ${esc(r.receipt)}</p>`);
                 notice(r.replayed ? 'Recibo recuperado. No repitas la entrega.' : 'Canje confirmado.');
             });
-        });
+        });;
         form('restoreIssue', async p => {
             const r = await api('/api/staff/wallet/restore', {memberId: m.member.id, reason: p.reason, identityVerified: p.identityVerified === 'on'});
             const target = document.querySelector('#restoreResult');

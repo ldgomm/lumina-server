@@ -18,14 +18,14 @@ fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=tr
     val zone=c.one("SELECT timezone FROM tenants WHERE id=?",member.tenant){ZoneId.of(it.getString(1))}!!
     val preferences=c.one("SELECT birthday,marketing_consent FROM member_preferences WHERE tenant_id=? AND member_id=?",member.tenant,member.id){CustomerPreferences(it.getString(1),it.getBoolean(2))}?:CustomerPreferences()
     val progress=c.rows("""
-        SELECT r.id,r.name,r.cost,r.program_id,p.kind,coalesce(b.available,0) AS available
+        SELECT r.id,r.name,r.cost,r.program_id,r.benefit,p.kind,coalesce(b.available,0) AS available
         FROM rewards r JOIN programs p ON p.tenant_id=r.tenant_id AND p.id=r.program_id
         LEFT JOIN balances b ON b.tenant_id=r.tenant_id AND b.program_id=r.program_id AND b.member_id=?
         WHERE r.tenant_id=? AND r.active AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=p.tenant_id) ORDER BY r.program_id,r.cost,r.id LIMIT 20
     """.trimIndent(),member.id,member.tenant){val available=it.getLong("available");val cost=it.getLong("cost");val remaining=maxOf(0,cost-available)
         val unit=when(it.getString("kind")){"STAMPS"->if(remaining==1L)"sello" else "sellos";"POINTS"->if(remaining==1L)"punto" else "puntos";else->"centavos de cashback"}
         val message=if(remaining==0L)"Ya puedes canjear: ${it.getString("name")}" else "Te ${if(remaining==1L)"falta" else "faltan"} $remaining $unit para ${it.getString("name")}"
-        obj("id" to it.getString("id"),"name" to it.getString("name"),"programId" to it.getString("program_id"),"goal" to cost,"available" to available,"remaining" to remaining,"kind" to it.getString("kind"),"message" to message)
+        obj("id" to it.getString("id"),"name" to it.getString("name"),"programId" to it.getString("program_id"),"goal" to cost,"available" to available,"remaining" to remaining,"kind" to it.getString("kind"),"message" to message,"benefitText" to rewardBenefitDescription(it.getString("benefit")))
     }
     val announcements=mutableListOf<JsonObject>()
     if(canOperate && preferences.marketingConsent){

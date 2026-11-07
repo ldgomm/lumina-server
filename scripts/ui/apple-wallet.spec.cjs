@@ -9,7 +9,7 @@ const evidence = process.env.LOYALTY_UI_EVIDENCE;
 const initial = {displayName: 'Taller Aurora', background: '#204e41', foreground: '#ffffff', label: '#dbf38b', logoPng: null, featuredProgramId: 'stamps', stampSymbol: '★', welcome: 'Bienvenido al club', usage: 'Presenta tu tarjeta en caja.', birthdayMessage: '¡Feliz cumpleaños!'};
 const fixture = {role: 'OWNER', business: {id: 'test', name: 'Taller Aurora', currency: 'USD', timezone: 'America/Guayaquil'}, branches: [],
     programs: [{id: 'stamps', config: {active: true, kind: 'STAMPS', name: 'Visitas al taller'}}, {id: 'cash', config: {active: true, kind: 'CASHBACK', name: 'Saldo de compras'}}, {id: 'paused', config: {active: false, kind: 'STAMPS', name: 'Promoción pausada'}}],
-    rewards: [{id: 'r', programId: 'stamps', active: true, cost: 13, name: '35% en tu próximo servicio'}, {id: 'c', programId: 'cash', active: true, cost: 500, name: 'Descuento de 5 USD'}]};
+    rewards: [{id: 'r', programId: 'stamps', active: true, cost: 13, name: '35% en tu próximo servicio', benefitText: '35% de descuento en una unidad de «servicio», la de menor precio elegible.'}, {id: 'c', programId: 'cash', active: true, cost: 500, name: 'Descuento de 5 USD'}]};;
 async function run() {
     const browser = await chromium.launch({headless: true, ...(process.env.LOYALTY_UI_CHROMIUM ? {executablePath: process.env.LOYALTY_UI_CHROMIUM, args: ['--no-sandbox', '--disable-dev-shm-usage']} : {})});
     const errors = [], saved = [], checks = [];
@@ -39,6 +39,7 @@ async function run() {
         assert.equal(await page.locator('#previewStatus').textContent(), '1 sello');
         assert.equal((await page.locator('#previewStamps').textContent()).split('★').length - 1, 12);
         assert.equal(await page.locator('#featuredProgramId option[value=paused]').count(), 0);
+        assert.match(await page.locator('#previewRewardConditions').textContent(), /35%.*menor precio/);;
         checks.push('Arbitrary 13-stamp goal, remaining stamp, custom symbol and paused exclusion');
         await page.locator('[data-wallet-example=ready]').click();
         assert.equal(await page.locator('#previewWelcome').textContent(), '13 sellos');

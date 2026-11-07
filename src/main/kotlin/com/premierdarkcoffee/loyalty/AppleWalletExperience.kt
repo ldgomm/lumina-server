@@ -48,7 +48,8 @@ private fun AppleReward.detail(currency: String, symbol: String, paused: Boolean
             row.joinToString(" ") { if (it.toLong() <= available) symbol else "○" }
         }
     } else ""
-    return "${balance.getValue("name").jsonPrimitive.content}\n$status\n" +
+    val benefit = source["benefitText"]?.jsonPrimitive?.contentOrNull?.let { "$it\n" } ?: ""
+    return "${balance.getValue("name").jsonPrimitive.content}\n$benefit$status\n" +
         "Saldo: ${appleAmount(available, kind, currency)} · Canje: ${appleAmount(goal, kind, currency)}$stamps"
 }
 

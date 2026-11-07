@@ -34,7 +34,8 @@ private fun GoogleReward.detail(currency: String, symbol: String, paused: Boolea
     val grid = if (kind == "STAMPS" && goal <= 20) "\n" + (1..goal.toInt()).chunked(10).joinToString("\n") { row ->
         row.joinToString(" ") { if (it.toLong() <= available) symbol else "○" }
     } else ""
-    return "$name\n${balance.getValue("name").jsonPrimitive.content}\n$status\n" +
+    val benefit = source["benefitText"]?.jsonPrimitive?.contentOrNull?.let { "$it\n" } ?: ""
+    return "$name\n${balance.getValue("name").jsonPrimitive.content}\n$benefit$status\n" +
         "Saldo: ${googleAmount(available, kind, currency)} · Canje: ${googleAmount(goal, kind, currency)}$grid"
 }
 

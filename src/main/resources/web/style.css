@@ -124,3 +124,32 @@ body>header{min-height:76px;max-width:1440px;padding:18px 32px}.brand{display:in
 @media(max-width:420px){#walletMount{padding:22px}.google-design-preview{padding:20px}.google-preview-values strong{font-size:22px}.wallet-provider-picker button{font-size:12px}}
 @media(max-width:420px){body:not(.staff-mode)>header{padding:18px;gap:10px}body:not(.staff-mode)>header .brand{font-size:24px}body:not(.staff-mode)>header .pill{display:none}}
 #prepareWallet.wallet-save-secondary{background:transparent;color:#365344;font-size:12px;text-decoration:underline;margin-top:6px}
+
+/* Counter rewards v017: each promotion keeps its own balance and explicit confirmation. */
+.counter-rewards { margin: 24px 0; padding: 22px; border: 1px solid #d5dfd8; border-radius: 20px; background: #f5f7f2; }
+.counter-rewards-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.counter-rewards h3 { margin: 6px 0 0; font-size: 1.3rem; }
+.counter-reward-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.counter-reward-filters button { padding: 9px 12px; background: #fff; color: #284b3d; border: 1px solid #bacbbd; font-size: .85rem; white-space: nowrap; }
+.counter-reward-filters button[aria-pressed="true"] { background: #204e41; color: #fff; border-color: #204e41; }
+.counter-reward-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.counter-reward-card { display: flex; flex-direction: column; min-width: 0; padding: 20px; border: 1px solid #d5dfd8; border-radius: 16px; background: #fff; overflow-wrap: anywhere; }
+.counter-reward-card.is-ready { border-color: #61937a; box-shadow: inset 0 3px 0 #3c765a; }
+.counter-reward-card h4 { font-size: 1.12rem; line-height: 1.4; margin: 4px 0 10px; }
+.counter-reward-card .counter-reward-program { margin: 0; font-size: .78rem; color: #516657; }
+.counter-reward-status { align-self: flex-start; padding: 5px 10px; border-radius: 8px; background: #f0f3ed; font-size: .8rem; font-weight: 700; color: #354b3e; }
+.is-ready .counter-reward-status { background: #e2f0e3; color: #245536; }
+.counter-reward-card progress { width: 100%; height: 8px; margin: 16px 0 6px; border: 0; border-radius: 8px; overflow: hidden; accent-color: #447b5b; background: #edf1e9; }
+.counter-reward-card progress::-webkit-progress-bar { background: #edf1e9; border-radius: 8px; }
+.counter-reward-card progress::-webkit-progress-value { background: #447b5b; border-radius: 8px; }
+.counter-reward-card progress::-moz-progress-bar { background: #447b5b; border-radius: 8px; }
+.counter-reward-card .counter-reward-balance { margin: 6px 0 10px; color: #394f40; font-size: .88rem; line-height: 1.65; }
+.counter-reward-card .counter-reward-conditions { margin: 0 0 10px; font-size: .88rem; line-height: 1.55; }
+.counter-reward-card button { width: 100%; margin-top: auto; font-size: .9rem; }
+.counter-rewards #moreCounterRewards { margin-top: 16px; }
+#counterRewardSelection:empty { display: none; }
+#counterRewardSelection { margin-bottom: 0; font-size: .9rem; color: #204e41; }
+.counter-selected-benefit { padding: 14px; background: #eef4eb; border-left: 3px solid #447b5b; border-radius: 6px; font-size: .95rem; }
+@media (max-width: 760px) { .counter-rewards-heading { flex-direction: column; } .counter-reward-grid { grid-template-columns: 1fr; } .counter-rewards { padding: 15px; } .counter-reward-card { padding: 16px; } }
+
+.counter-rewards .counter-jump { margin-top: 14px; padding: 9px 12px; font-size: .85rem; }

@@ -46,6 +46,35 @@ class EngagementPostgresTest {
     private fun count(table:String,f:F)=db.tx{c->c.one("SELECT count(*) FROM $table WHERE tenant_id=?",f.owner.tenant){it.getLong(1)}!!}
     private fun wallet(f:F)=WalletService(service,"https://example.com",WalletCipher(Base64.getEncoder().encodeToString(ByteArray(32){5}))).materialize(f.member)
     private fun parallel(work:()->JsonObject):List<Any>{val executor=Executors.newFixedThreadPool(4);val barrier=CyclicBarrier(4);return try{(1..4).map{executor.submit<Any>{barrier.await();try{work()}catch(e:Problem){e}}}.map{it.get(40,TimeUnit.SECONDS)}}finally{executor.shutdownNow()}}
+    @Test fun `cashier and both Wallet expose identical conditions without changing money`() {
+        val f=fixture("servicio",6,3725)
+        service.purchase(f.owner,purchase(f,5,group="servicio"),id())
+        val cashier=service.staff(service.newStaff(f.owner,NewStaff("CASHIER",f.a)).str("token"))
+        val before=service.card(f.member);val ledger=count("ledger",f);val receipts=count("purchases",f)
+        val lookup=service.lookup(cashier,Lookup(cardCode=before.getValue("member").jsonObject.str("cardCode")))
+        val description=lookup.getValue("rewards").jsonArray.single().jsonObject.str("benefitText")
+        assertEquals(Benefit(3725,"servicio").description(),description)
+        val pass=wallet(f)
+        assertEquals(description,pass.snapshot.getValue("rewardProgress").jsonArray.single().jsonObject.str("benefitText"))
+        assertTrue(pass.appleExperienceFields().getValue("backFields").jsonArray.any{it.jsonObject.str("value").contains(description)})
+        assertTrue(pass.googleExperienceFields().getValue("textModulesData").jsonArray.any{it.jsonObject.str("body").contains(description)})
+        assertEquals(before.getValue("balances"),service.card(f.member).getValue("balances"))
+        assertEquals(ledger,count("ledger",f));assertEquals(receipts,count("purchases",f));assertEquals(0,count("redemptions",f))
+    }
+    @Test fun `paused promotion hides conditions from cashier and both Wallet without mixing tenants`() {
+        val f=fixture("ropa",2,1234,false);val other=fixture("ropa",2,9876,false)
+        service.purchase(f.owner,purchase(f,group="ropa"),id())
+        val first=wallet(f)
+        assertEquals(Benefit(1234,"ropa","BASKET").description(),first.snapshot.getValue("rewardProgress").jsonArray.single().jsonObject.str("benefitText"))
+        service.editProgram(f.owner,f.program,ProgramChange(1,Program("Promoción",Kind.STAMPS,active=false,productGroup="ropa",countUnits=false)))
+        val lookup=service.lookup(f.owner,Lookup(cardCode=service.card(f.member).getValue("member").jsonObject.str("cardCode")))
+        assertTrue(lookup.getValue("rewards").jsonArray.isEmpty())
+        val paused=wallet(f);assertTrue(paused.snapshot.getValue("rewardProgress").jsonArray.isEmpty())
+        assertEquals(first.serial,paused.serial);assertEquals(first.token,paused.token)
+        assertFalse(paused.appleExperienceFields().toString().contains("12,34%"));assertFalse(paused.googleExperienceFields().toString().contains("12,34%"))
+        assertEquals(Benefit(9876,"ropa","BASKET").description(),service.card(other.member).getValue("rewards").jsonArray.single().jsonObject.str("benefitText"))
+        assertEquals(1,db.tx{c->c.one("SELECT available FROM balances WHERE tenant_id=? AND member_id=? AND program_id=?",f.owner.tenant,f.member.id,f.program){it.getLong(1)}})
+    }
     @Test fun `five pizzas on one receipt count five and another category does not count`(){val f=fixture();service.purchase(f.owner,purchase(f,5),id());service.purchase(f.owner,purchase(f,4,group="bebida"),id());assertEquals(5,balance(f))}
     @Test fun `sixth pizza is free across branches and no new stamps are earned`(){val f=fixture();service.purchase(f.owner,purchase(f,5),id());val r=service.purchase(f.owner,redeem(f),id());assertEquals(0,r.num("amountMinor"));assertEquals(1000,r.num("discountMinor"));assertEquals(0,balance(f));assertEquals(1,count("redemptions",f))}
     @Test fun `fifth coffee gets fifty percent after four paid coffees`(){val f=fixture("café",5,5000);service.purchase(f.owner,purchase(f,4,price=300,group="café"),id());val p=redeem(f,"café",300);assertEquals(150,p.amountMinor);service.purchase(f.owner,p,id());assertEquals(0,balance(f))}
