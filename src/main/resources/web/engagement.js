@@ -331,62 +331,119 @@
         f.dataset.palette = [background.value, foreground.value, labels.value].join('/'); update();
     }
 
-    const customerFilters = {days: 30, inactiveDays: 30, segment: 'ALL', q: ''};
+    const customerFilters = {days: 30, inactiveDays: 30, segment: 'ALL', q: '', sort: 'RECENT'};
     let customerRequest = 0, customerFilterTenant = null;;
     async function customersPage(offset = 0) {
-        if (customerFilterTenant !== state.data.business.id) {
-            Object.assign(customerFilters, {days: 30, inactiveDays: 30, segment: 'ALL', q: ''});
-            customerFilterTenant = state.data.business.id; offset = 0;
+        if (customerFilterTenant !== state.data.business.id + ':' + state.token) {
+            Object.assign(customerFilters, {days: 30, inactiveDays: 30, segment: 'ALL', q: '', sort: 'RECENT'});
+            customerFilterTenant = state.data.business.id + ':' + state.token; offset = 0;
         }
-        const root = document.querySelector('#content'), request = ++customerRequest;
+        const root = document.querySelector('#content'), request = ++customerRequest, session = state.token;
         root.innerHTML = '<section class="panel" role="status">Consultando tus clientes…</section>';
         const params = new URLSearchParams({...customerFilters, offset});
         let d;
         try { d = await api('/api/staff/customer-activity?' + params); }
         catch (e) {
-            if (!root.isConnected || state.tab !== 'customers' || request !== customerRequest) return;
+            if (!root.isConnected || state.tab !== 'customers' || request !== customerRequest || session !== state.token) return;
             root.innerHTML = `<section class="panel"><h2>No pudimos cargar los clientes</h2><p role="alert">${esc(e.message)}</p><button id="retryCustomers">Volver a intentar</button></section>`;
             action('retryCustomers', () => customersPage(offset)); return;
         }
-        if (!root.isConnected || state.tab !== 'customers' || request !== customerRequest) return;
+        if (!root.isConnected || state.tab !== 'customers' || request !== customerRequest || session !== state.token) return;
         if (offset > 0 && offset >= d.total) return customersPage(Math.max(0, Math.floor((d.total - 1) / 50) * 50));
         const s = d.summary;
         const segments = [['ALL', 'Todos', s.registeredCustomers], ['NEAR', 'A un sello', s.nearCustomers], ['READY', 'Con premio', s.readyCustomers], ['RETURNING', 'Han vuelto', s.returningCustomers], ['INACTIVE', 'Sin volver', s.inactiveCustomers], ['NEW', 'Sin compras', s.newCustomers]];
         const metric = (label, value, help) => `<div class="customer-metric"><span>${label}</span><strong>${value}</strong><small>${help}</small></div>`;
         root.innerHTML = `<section class="panel"><div class="customer-heading"><div><h2>Quién vuelve a tu negocio</h2><p>Todas tus sucursales, en un solo lugar.</p></div><button class="quiet" id="refreshCustomers">Actualizar</button></div>
-            <form id="customerFilters" class="customer-filters"><div>${select('days', 'Resumen del período', [['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días']], String(customerFilters.days))}</div><div>${field('q', 'Buscar cliente por nombre', 'search', customerFilters.q, 'maxlength="100" autocomplete="off"')}</div><div>${field('inactiveDays', 'Sin volver desde hace (días)', 'number', customerFilters.inactiveDays, 'required min="1" max="365" step="1"')}</div><button>Aplicar filtros</button></form>
+            <form id="customerFilters" class="customer-filters"><div>${select('days', 'Resumen del período', [['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días']], String(customerFilters.days))}</div><div>${field('q', 'Buscar cliente por nombre', 'search', customerFilters.q, 'maxlength="100" autocomplete="off"')}</div><div>${field('inactiveDays', 'Sin volver desde hace (días)', 'number', customerFilters.inactiveDays, 'required min="1" max="365" step="1"')}</div><div>${select('sort', 'Ordenar clientes', [['RECENT','Compra más reciente'],['SPENT','Mayor gasto'],['VISITS','Más compras'],['NAME','Nombre: A–Z'],['NEWEST','Registro más reciente']], customerFilters.sort)}</div><button>Aplicar filtros</button></form>
             <p class="small">${esc(date(d.from))} — ${esc(date(d.through))} · ${esc(d.timezone)}. Incluye el día actual.</p>
             <div class="customer-metrics">${metric('Compras registradas', s.periodPurchases, 'Comprobantes del período')}${metric('Gasto de clientes', money(s.periodSpentMinor), 'Total pagado después de descuentos')}${metric('Clientes que compraron', s.periodBuyers, `${s.periodReturningBuyers} ya tienen más de una compra`)}${metric('Premios reclamados', s.periodClaimedRewards, 'Canjes confirmados en el período')}</div>
             <p class="small">Descuentos en comprobantes: <strong>${money(s.periodDiscountMinor)}</strong>. El resumen abarca el negocio completo; la búsqueda y los grupos filtran la lista de abajo.</p>
         </section><section class="panel"><h2>Clientes y oportunidades de regreso</h2><p>La lista usa todo el historial. “Sin volver” cuenta días desde la última compra; “Sin compras” incluye a quienes aún no registran ninguna.</p><div class="customer-segments" role="group" aria-label="Filtrar clientes">${segments.map(([key, label, count]) => `<button type="button" class="quiet" data-segment="${key}" aria-pressed="${customerFilters.segment === key}">${label} <span>${count}</span></button>`).join('')}</div>
             <p class="small" id="customerPageCount" role="status">${d.total ? `${offset + 1}–${offset + d.customers.length} de ${d.total} clientes` : 'No hay clientes para estos filtros.'}</p>
-            <div class="commercial-table-wrap"><table class="commercial-table customer-table"><caption class="small">Historial acumulado y premios de promociones activas</caption><thead><tr><th>Cliente</th><th>Compras / gasto</th><th>Frecuencia media</th><th>Premios</th><th>Última compra</th></tr></thead><tbody>${d.customers.map(c => `<tr><td data-label="Cliente"><button class="quiet" data-customer="${esc(c.id)}">${esc(c.name)}</button><small>${c.returning ? 'Ha vuelto' : c.purchases ? 'Una compra registrada' : 'Aún no compra'}</small></td><td data-label="Compras / gasto">${c.purchases}<small>${money(c.spentMinor)}</small></td><td data-label="Frecuencia media">${c.averageDaysBetweenPurchases === null ? '—' : Number(c.averageDaysBetweenPurchases).toFixed(1) + ' días'}</td><td data-label="Premios"><div class="customer-prizes">${c.readyRewards ? `<span class="customer-ready">${c.readyRewards} premio${c.readyRewards === 1 ? '' : 's'} por canjear</span>` : ''}${c.nearRewards ? '<span class="customer-near">A un sello de un premio</span>' : ''}<small>${c.claimedRewards} reclamados</small></div></td><td data-label="Última compra">${esc(date(c.lastPurchase))}${c.daysSinceLastPurchase === null ? '' : `<small>Hace ${c.daysSinceLastPurchase} día${c.daysSinceLastPurchase === 1 ? '' : 's'}</small>`}</td></tr>`).join('') || '<tr><td colspan="5">Prueba otro grupo o borra la búsqueda por nombre.</td></tr>'}</tbody></table></div>
+            <div class="commercial-table-wrap"><table class="commercial-table customer-table"><caption class="small">Historial acumulado y premios de promociones activas</caption><thead><tr><th>Cliente</th><th>Compras / gasto</th><th>Frecuencia media</th><th>Premios</th><th>Última compra</th></tr></thead><tbody>${d.customers.map(c => `<tr><td data-label="Cliente"><button class="quiet" data-customer="${esc(c.id)}">${esc(c.name)}</button>${c.cardSuffix ? `<small>Tarjeta · ${esc(c.cardSuffix)}</small>` : ''}<small>${c.returning ? 'Ha vuelto' : c.purchases ? 'Una compra registrada' : 'Aún no compra'}</small></td><td data-label="Compras / gasto">${c.purchases}<small>${money(c.spentMinor)}</small></td><td data-label="Frecuencia media">${c.averageDaysBetweenPurchases === null ? '—' : Number(c.averageDaysBetweenPurchases).toFixed(1) + ' días'}</td><td data-label="Premios"><div class="customer-prizes">${c.readyRewards ? `<span class="customer-ready">${c.readyRewards} premio${c.readyRewards === 1 ? '' : 's'} por canjear</span>` : ''}${c.nearRewards ? '<span class="customer-near">A un sello de un premio</span>' : ''}<small>${c.claimedRewards} reclamados</small></div></td><td data-label="Última compra">${esc(date(c.lastPurchase))}${c.daysSinceLastPurchase === null ? '' : `<small>Hace ${c.daysSinceLastPurchase} día${c.daysSinceLastPurchase === 1 ? '' : 's'}</small>`}</td></tr>`).join('') || '<tr><td colspan="5">Prueba otro grupo o borra la búsqueda por nombre.</td></tr>'}</tbody></table></div>
             <div class="row customer-pagination"><button class="quiet" id="customersPrev" ${offset ? '' : 'disabled'}>Anterior</button><button class="quiet" id="customersNext" ${d.hasMore ? '' : 'disabled'}>Siguiente</button></div><p class="small">Los premios de una misma promoción son alternativas: el saldo se comprueba otra vez en caja. Las promociones pausadas o eliminadas no se incluyen.</p>
-        </section><div id="customerDetail"></div>`;
-        form('customerFilters', async v => { customerFilters.days = Number(v.days); customerFilters.inactiveDays = Number(v.inactiveDays); customerFilters.q = v.q.trim(); await customersPage(); });
+        </section>`;
+        form('customerFilters', async v => { customerFilters.days = Number(v.days); customerFilters.inactiveDays = Number(v.inactiveDays); customerFilters.q = v.q.trim(); customerFilters.sort = v.sort; await customersPage(); });
         action('refreshCustomers', () => customersPage(offset));
         action('customersPrev', () => customersPage(Math.max(0, offset - 50))); action('customersNext', () => customersPage(offset + 50));
         root.querySelectorAll('[data-segment]').forEach(b => b.onclick = safe(async () => { customerFilters.segment = b.dataset.segment; await customersPage(); }));
-        let detailRequest = 0;
-        root.querySelectorAll('[data-customer]').forEach(b => b.onclick = safe(async () => {
-            const chosen = ++detailRequest, target = root.querySelector('#customerDetail');
-            target.innerHTML = '<section class="panel" role="status">Consultando el historial…</section>';
-            let details;
-            try { details = await api('/api/staff/customer-insights/' + b.dataset.customer); }
-            catch (e) { if (chosen === detailRequest && target.isConnected) target.innerHTML = `<section class="panel" role="alert">${esc(e.message)}. Selecciona al cliente para volver a intentar.</section>`; return; }
-            if (!root.isConnected || !target.isConnected || state.tab !== 'customers' || chosen !== detailRequest) return;
-            const p = details.preferences;
-            const rewardText = r => {
-                if (!r.remaining) return 'Saldo suficiente para canjear';
-                if (r.kind === 'CASHBACK') return 'Faltan ' + money(r.remaining);
-                return `Falta${r.remaining === 1 ? '' : 'n'} ${r.remaining} ${r.kind === 'STAMPS' ? (r.remaining === 1 ? 'sello' : 'sellos') : (r.remaining === 1 ? 'punto' : 'puntos')}`;
-            };
-            target.innerHTML = `<section class="panel"><h2 tabindex="-1">${esc(b.textContent)}</h2><h3>Progreso de sus premios</h3><div class="customer-reward-list">${details.rewardProgress.map(r => `<div><strong>${esc(r.name)}</strong><p>${esc(r.program)}</p><span class="${r.remaining === 0 ? 'customer-ready' : 'customer-near'}">${esc(rewardText(r))}</span></div>`).join('') || '<p>No tiene saldo acumulado en promociones activas con premios.</p>'}</div><p class="small">Se muestran hasta 100 premios con saldo y los 100 movimientos más recientes de cada tipo. Canjea desde Caja, donde se verifican identidad, condiciones y saldo vigente.</p><h3>Compras recientes</h3>${details.purchases.map(x => `<div><strong>${esc(date(x.at))} · ${esc(x.branch)} · ${money(x.paidMinor)}</strong><p>${x.items.map(i => `${i.quantity} × ${esc(i.name)} (${esc(i.group)})`).join(' · ') || 'Compra anterior sin detalle de productos.'}${x.discountMinor ? ' · Descuento: ' + money(x.discountMinor) : ''}</p></div>`).join('') || '<p>Todavía no hay compras.</p>'}<h3>Premios reclamados</h3>${details.rewards.map(x => `<p>${esc(x.name)} · ${esc(date(x.at))}</p>`).join('') || '<p>Todavía no hay canjes.</p>'}<details><summary>Cumpleaños y preferencias</summary><form id="customerPreferences">${field('birthday', 'Mes y día de cumpleaños (MM-DD, opcional)', 'text', p.birthday || '', 'placeholder="11-04" pattern="[0-9]{2}-[0-9]{2}"')}<label class="check"><input name="marketingConsent" type="checkbox" ${checked(p.marketingConsent)}>El cliente quiere recibir felicitaciones y anuncios del negocio.</label><label class="check"><input name="confirmed" type="checkbox" required>El cliente autorizó estas preferencias.</label><button>Guardar preferencias</button></form></details></section>`;
-            target.querySelector('h2').focus({preventScroll: true});
-            target.scrollIntoView({behavior: 'smooth', block: 'start'});
-            form('customerPreferences', async v => { await api('/api/staff/customer-insights/' + b.dataset.customer + '/preferences', {preferences: {birthday: v.birthday || null, marketingConsent: v.marketingConsent === 'on'}, customerConfirmed: v.confirmed === 'on'}, 'PUT'); notice('Preferencias guardadas.'); });
-        }));
+        root.querySelectorAll('[data-customer]').forEach(b => b.onclick = () => window.openCustomerWorkspace(b.dataset.customer, b));
+        const search = root.querySelector('#q');
+        attachPredictiveSearch(search, {
+            load: async q => (await api('/api/staff/customer-suggestions?q=' + encodeURIComponent(q))).items,
+            label: row => row.name, description: row => 'Tarjeta · ' + row.cardSuffix,
+            choose: row => window.openCustomerWorkspace(row.id, search)
+        });
     }
+    let customerDrawer = null;
+    const customerBusy = () => Boolean(document.querySelector('form[aria-busy="true"]'));
+    function closeCustomerDrawer() {
+        if (customerBusy()) { const status = customerDrawer?.querySelector('#customerDrawerStatus'); if (status) status.textContent = 'Guardando preferencias. Espera a que termine para continuar.'; else notice('Espera a que termine la operación.'); return false; }
+        customerDrawer?.close(); return true;
+    }
+    window.openCustomerWorkspace = async function (memberId, trigger = document.activeElement) {
+        if (!closeCustomerDrawer()) return;
+        const session = state.token, tenant = state.data.business.id;
+        const dialog = document.createElement('dialog'); customerDrawer = dialog;
+        dialog.className = 'customer-drawer'; dialog.setAttribute('aria-labelledby', 'profileTitle');
+        dialog.innerHTML = '<header class="profile-header"><div><span class="eyebrow">MIS CLIENTES</span><h2 id="profileTitle" tabindex="-1">Ficha del cliente</h2></div><button type="button" class="quiet" id="closeCustomer" aria-label="Cerrar ficha del cliente">Cerrar ×</button></header><p id="customerDrawerStatus" class="small profile-status" role="status"></p><div class="profile-body" id="profileBody" role="status">Cargando la ficha…</div>';
+        document.body.append(dialog); dialog.showModal(); document.body.classList.add('customer-drawer-open');
+        dialog.querySelector('#closeCustomer').onclick = closeCustomerDrawer;
+        dialog.addEventListener('cancel', e => { e.preventDefault(); closeCustomerDrawer(); });
+        dialog.addEventListener('close', () => { dialog.remove(); if (customerDrawer === dialog) { customerDrawer = null; document.body.classList.remove('customer-drawer-open'); } if (trigger?.isConnected) trigger.focus({preventScroll: true}); }, {once: true});
+        const valid = () => dialog.open && dialog.isConnected && state.token === session && state.data?.business.id === tenant;
+        const body = dialog.querySelector('#profileBody');
+        let timelineRequest = 0, timelineKind = 'ALL', timelineBranch = '';
+        const rewardText = r => !r.remaining ? 'Saldo suficiente para canjear' : r.kind === 'CASHBACK' ? 'Faltan ' + money(r.remaining) : `Falta${r.remaining === 1 ? '' : 'n'} ${r.remaining} ${r.kind === 'STAMPS' ? (r.remaining === 1 ? 'sello' : 'sellos') : (r.remaining === 1 ? 'punto' : 'puntos')}`;
+        const request = offset => api('/api/staff/customer-workspace/' + encodeURIComponent(memberId) + '?' + new URLSearchParams({kind: timelineKind, branchId: timelineBranch, offset}));
+        const drawTimeline = timeline => {
+            const target = dialog.querySelector('#customerTimeline'); target.removeAttribute('aria-busy');
+            target.innerHTML = `<p class="small" role="status">${timeline.total ? `${timeline.offset + 1}–${timeline.offset + timeline.items.length} de ${timeline.total} movimientos` : 'No hay movimientos con estos filtros.'}</p><ol class="customer-timeline">${timeline.items.map(x => {
+                const purchase = x.kind === 'PURCHASE';
+                return `<li class="timeline-event"><span class="timeline-badge" aria-hidden="true">${purchase ? '↗' : '★'}</span><div><div class="timeline-title"><strong>${purchase ? 'Compra' : 'Premio reclamado'}</strong><b>${purchase ? esc(money(x.paidMinor)) : esc(x.name)}</b></div><p class="small">${esc(date(x.at))} · ${esc(x.branch || 'Sucursal no registrada')}</p>${purchase ? `<details><summary>Ver comprobante y productos</summary><p class="small">Comprobante: ${esc(x.receipt)}</p><ul>${(x.items || []).map(i => `<li>${esc(i.quantity)} × ${esc(i.name)}${i.group ? ` · ${esc(i.group)}` : ''}</li>`).join('') || '<li>Compra sin detalle de productos.</li>'}</ul><dl class="receipt-totals"><div><dt>Antes del descuento</dt><dd>${esc(money(x.grossMinor))}</dd></div><div><dt>Descuento</dt><dd>${esc(money(x.discountMinor))}</dd></div><div><dt>Total pagado</dt><dd>${esc(money(x.paidMinor))}</dd></div></dl>${x.redemptionId ? '<p class="small">Incluye un canje, que también figura en este historial.</p>' : ''}</details>` : `<p>Usó ${x.balanceKind === 'CASHBACK' ? esc(money(x.cost)) : esc(x.cost) + ' ' + (x.balanceKind === 'STAMPS' ? 'sellos' : 'puntos')} de su saldo.</p>`}</div></li>`;
+            }).join('')}</ol><div class="customer-pagination row"><button type="button" class="quiet" id="timelinePrev" ${timeline.offset ? '' : 'disabled'}>Movimientos anteriores</button><button type="button" class="quiet" id="timelineNext" ${timeline.hasMore ? '' : 'disabled'}>Movimientos siguientes</button></div>`;
+            target.querySelector('#timelinePrev').onclick = () => loadTimeline(Math.max(0, timeline.offset - 20));
+            target.querySelector('#timelineNext').onclick = () => loadTimeline(timeline.offset + 20);
+        };
+        const loadTimeline = async offset => {
+            const serial = ++timelineRequest, target = dialog.querySelector('#customerTimeline'); target.setAttribute('aria-busy', 'true');
+            target.innerHTML = '<p role="status">Cargando movimientos…</p>';
+            try { const d = await request(offset); if (valid() && serial === timelineRequest) drawTimeline(d.timeline); }
+            catch (e) { if (!valid() || serial !== timelineRequest) return; target.removeAttribute('aria-busy'); target.innerHTML = `<p role="alert">${esc(e.message)}</p><button type="button" id="retryTimeline">Reintentar movimientos</button>`; target.querySelector('button').onclick = () => loadTimeline(offset); }
+        };
+        const load = async () => {
+            body.innerHTML = '<p role="status">Cargando la ficha…</p>';
+            try {
+                const d = await request(0); if (!valid()) return;
+                dialog.querySelector('#profileTitle').textContent = d.member.name;
+                const s = d.summary, p = d.preferences;
+                const metric = (label, value) => `<div><span>${label}</span><strong>${esc(value)}</strong></div>`;
+                body.removeAttribute('role');
+                body.innerHTML = `<div class="profile-intro"><p>Cliente desde ${esc(date(d.member.joinedAt))}</p><button type="button" id="serveCustomer">Atender en Caja →</button></div><div class="profile-metrics">${metric('Compras', s.purchases)}${metric('Total pagado', money(s.spentMinor))}${metric('Premios reclamados', s.claimedRewards)}${metric('Frecuencia media', s.averageDaysBetweenPurchases === null ? 'Aún sin calcular' : Number(s.averageDaysBetweenPurchases).toFixed(1) + ' días')}</div><p class="small">Todo el historial · Última compra: ${esc(date(s.lastPurchase))}. Descuentos registrados: ${esc(money(s.discountMinor))}.</p><section class="profile-section"><h3>Sus próximos premios</h3><div class="customer-reward-list">${d.rewardProgress.map(r => `<div><strong>${esc(r.name)}</strong><p>${esc(r.program)}</p><span class="${r.remaining === 0 ? 'customer-ready' : 'customer-near'}">${esc(rewardText(r))}</span></div>`).join('') || '<p>Aún no tiene saldo en promociones activas con premios.</p>'}</div><p class="small">Hasta 100 premios activos con saldo. Los de una misma promoción son alternativas. Caja comprueba identidad, condiciones y saldo vigente.</p></section><section class="profile-section"><h3>Historial de movimientos</h3><div class="row timeline-filters"><div>${select('timelineKind', 'Tipo de movimiento', [['ALL', 'Todos'], ['PURCHASE', 'Compras'], ['REWARD', 'Canjes']])}</div><div>${select('timelineBranch', 'Sucursal', [['', 'Todas las sucursales'], ...state.data.branches.map(b => [b.id, b.name])])}</div></div><div id="customerTimeline" aria-live="polite"></div><p class="small">El historial conserva las operaciones confirmadas aunque su promoción haya terminado. Filtrar movimientos no cambia los totales de la ficha.</p></section><details class="profile-section"><summary>Cumpleaños y preferencias</summary><form id="customerPreferences">${field('birthday', 'Mes y día de cumpleaños (MM-DD, opcional)', 'text', p.birthday || '', 'placeholder="11-04" pattern="[0-9]{2}-[0-9]{2}"')}<label class="check"><input name="marketingConsent" type="checkbox" ${checked(p.marketingConsent)}>El cliente quiere recibir felicitaciones y anuncios del negocio.</label><label class="check"><input name="confirmed" type="checkbox" required>El cliente autorizó estas preferencias.</label><button>Guardar preferencias</button></form></details>`;
+                drawTimeline(d.timeline);
+                dialog.querySelector('#timelineKind').onchange = e => { timelineKind = e.target.value; loadTimeline(0); };
+                dialog.querySelector('#timelineBranch').onchange = e => { timelineBranch = e.target.value; loadTimeline(0); };
+                dialog.querySelector('#serveCustomer').onclick = () => {
+                    if (!valid() || !closeCustomerDrawer()) return;
+                    state.tab = 'sales'; renderMerchant();
+                    const lookup = document.querySelector('#lookup');
+                    lookup.elements.kind.value = 'cardCode'; lookup.elements.value.value = d.member.cardCode; lookup.requestSubmit();
+                };
+                form('customerPreferences', async v => {
+                    try { await api('/api/staff/customer-insights/' + encodeURIComponent(memberId) + '/preferences', {preferences: {birthday: v.birthday || null, marketingConsent: v.marketingConsent === 'on'}, customerConfirmed: v.confirmed === 'on'}, 'PUT'); }
+                    finally { if (valid()) dialog.querySelector('#customerDrawerStatus').textContent = ''; }
+                    if (valid()) { dialog.querySelector('#customerPreferences').elements.confirmed.checked = false; dialog.querySelector('#customerDrawerStatus').textContent = 'Preferencias guardadas.'; }
+                });
+            } catch (e) { if (!valid()) return; body.innerHTML = `<p role="alert">${esc(e.message)}</p><button type="button" id="retryProfile">Volver a intentar</button>`; body.querySelector('button').onclick = load; }
+        };
+        await load();
+    };
+    window.openCustomerSegment = function (segment) {
+        if (customerBusy()) { notice('Espera a que termine la operación.'); return; }
+        customerFilterTenant = state.data.business.id + ':' + state.token;
+        Object.assign(customerFilters, {days: 30, inactiveDays: 30, segment, q: '', sort: 'RECENT'});
+        state.tab = 'customers'; renderMerchant(); document.querySelector('#sectionTitle')?.focus();
+    };
     async function eventsPage() {
         const root = document.querySelector('#content'); const d = await api('/api/staff/customer-events'); if (!root.isConnected || state.tab !== 'events') return;
         root.innerHTML = `<section class="panel"><h2>Eventos y avisos para tus clientes</h2><p>Se mostrarán automáticamente en los detalles de Wallet durante las fechas elegidas, a quienes aceptaron anuncios. Las felicitaciones usan el día de cumpleaños y el texto de Mi tarjeta.</p><p class="small">Los avisos comerciales de esta versión actualizan el contenido de la tarjeta; no prometen una alerta en la pantalla bloqueada. Los avisos de progreso dependen de las notificaciones y actualizaciones que el cliente permita en Wallet.</p><form id="customerEvent">${field('title', 'Título', 'text', '', 'required maxlength="80"')}${field('body', 'Mensaje', 'text', '', 'required maxlength="500"')}${field('startsAt', 'Mostrar desde', 'datetime-local', '', 'required')}${field('endsAt', 'Mostrar hasta', 'datetime-local', '', 'required')}<p>Zona horaria: ${esc(state.data.business.timezone)}</p><button>Programar aviso</button></form></section><section class="panel"><h2>Avisos programados</h2>${d.events.map(e => `<div><h3>${esc(e.title)}</h3><p>${esc(e.body)}</p><p>${esc(date(e.startsAt))} — ${esc(date(e.endsAt))}</p>${e.active ? `<button class="quiet" data-cancel-event="${esc(e.id)}">Desactivar aviso</button>` : '<p>Desactivado</p>'}</div>`).join('') || '<p>No hay avisos todavía.</p>'}</section>`;

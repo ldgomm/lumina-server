@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v018 requiere 282 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v019r1 requiere 297 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -87,3 +87,16 @@ El registro nuevo del panel usa /api/platform/businesses y exige ficha fiscal/co
 La búsqueda predictiva es de lectura, requiere selección explícita y respeta el negocio del empleado. Limitar a ocho sugerencias, dos caracteres para datos remotos, no exponer cédulas, hashes o credenciales. Buscar cédula sigue siendo exacto. Ignorar respuestas antiguas, de otra sesión o de una pantalla cerrada. Buscar secciones usa solo el menú permitido del rol. No registrar compras o canjes al seleccionar una sugerencia.
 
 El registro tiene pasos de negocio, contacto y revisión. Conserva campos al volver y bloquea el envío duplicado mientras espera respuesta. Un conflicto de versión en la ficha conserva la edición y ofrece recargar los datos guardados explícitamente. Las pruebas navy-workspace.spec.cjs usan red interceptada y datos ficticios.
+
+## Ficha de clientes v019
+
+- v019 parte de v018. No añade migraciones ni cambia la presentación nativa de Wallet (`presentationVersion=17`). Apple y Google mantienen pruebas en paralelo.
+- `customer-workspace/{id}` y `customer-suggestions` son privados del dueño y limitados al negocio. La ficha usa una transacción REPEATABLE READ, READ ONLY: no libera reservas vencidas, modifica saldos ni encola mensajes.
+- Historial: 20 movimientos por página, compras y canjes CONSUMED hasta el instante de consulta; ordenar por fecha, tipo e id. Conservar snapshots de premios eliminados usando `programs`, pero mostrar progreso únicamente de promociones activas mediante `customer_programs`.
+- Los filtros de tipo/sucursal solo afectan movimientos. Las métricas de ficha son históricas; las métricas de lista mantienen su período. `sort` admite únicamente RECENT, SPENT, VISITS, NAME y NEWEST, con SQL fijo y parámetros enlazados.
+- El panel lateral conserva búsqueda/orden al cerrar, devuelve foco y descarta respuestas tardías. Las preferencias requieren autorización explícita del cliente; desmarcar la confirmación tras guardarlas. Caja solo hace lookup al elegir Atender; no autoriza compras ni canjes.
+- Prueba aislada `scripts/ui/customer-workspace.spec.cjs`: navegación con teclado, móvil, consentimiento, paginación, sesión y errores. El instalador exige 137 pruebas generales + 160 PostgreSQL, Python y Docker/gateway antes del auto commit local. HTTPS se informa después.
+
+## Corrección de la prueba de orden v019r1
+
+La prueba CustomerWorkspacePostgresTest fija created_at de todos sus miembros con fechas relativas al reloj simulado. El alta real usa now() de PostgreSQL: no mezclarlo con Clock.fixed para inferir el orden NEWEST. Comprobar el orden completo y métricas idénticas en los cinco modos. Esta revisión no cambia consultas de producción, datos de negocio, migraciones ni Wallet. Se mantienen las 297 pruebas obligatorias (137 generales + 160 PostgreSQL), Python y Docker/gateway antes del auto commit.

@@ -11,9 +11,11 @@ data class CustomerActivityQuery(
     val inactiveDays: Int = 30,
     val segment: String = "ALL",
     val search: String = "",
-    val offset: Int = 0
+    val offset: Int = 0,
+    val sort: String = "RECENT"
 ) {
     fun validate() {
+        customerSortOrder(sort)
         need(days in setOf(7, 30, 90), "INVALID_PERIOD", "Elige 7, 30 o 90 días.")
         need(inactiveDays in 1..365, "INVALID_INACTIVITY", "Elige entre 1 y 365 días sin compras.")
         need(segment in setOf("ALL", "RETURNING", "READY", "NEAR", "INACTIVE", "NEW"), "INVALID_SEGMENT", "Filtro de clientes inválido.")
@@ -68,7 +70,7 @@ fun LoyaltyService.customerActivity(s: Staff, query: CustomerActivityQuery = Cus
                 JOIN rewards r ON r.tenant_id=p.tenant_id AND r.program_id=p.id AND r.active
                 GROUP BY b.member_id
             ), population AS (
-                SELECT m.id,m.name,coalesce(s.purchases,0) AS purchases,coalesce(s.spent,0) AS spent,
+                SELECT m.id,m.name,m.created_at AS joined_at,right(m.card_code,6) AS card_suffix,coalesce(s.purchases,0) AS purchases,coalesce(s.spent,0) AS spent,
                        s.first_at,s.last_at,coalesce(c.claims,0) AS claims,
                        coalesce(s.period_purchases,0) AS period_purchases,
                        coalesce(s.period_spent,0) AS period_spent,coalesce(s.period_discount,0) AS period_discount,
@@ -79,7 +81,7 @@ fun LoyaltyService.customerActivity(s: Staff, query: CustomerActivityQuery = Cus
                 LEFT JOIN sales s ON s.member_id=m.id LEFT JOIN claims c ON c.member_id=m.id
                 LEFT JOIN rewards_now r ON r.member_id=m.id
             ), filtered AS (
-                SELECT * FROM population WHERE $predicate AND position(lower(?::text) in lower(name))>0
+                SELECT * FROM population WHERE $predicate AND position(?::text in translate(lower(name),'áéíóúüñ','aeiouun'))>0
             )
             SELECT
               (SELECT row_to_json(t)::text FROM (
@@ -99,12 +101,12 @@ fun LoyaltyService.customerActivity(s: Staff, query: CustomerActivityQuery = Cus
               ) t) AS summary,
               (SELECT count(*) FROM filtered) AS total,
               (SELECT coalesce(jsonb_agg(t),'[]'::jsonb)::text FROM (
-                SELECT id,name,purchases,spent AS "spentMinor",claims AS "claimedRewards",
+                SELECT id,name,card_suffix AS "cardSuffix",purchases,spent AS "spentMinor",claims AS "claimedRewards",
                     last_at AS "lastPurchase",first_at AS "firstPurchase",
                     ready AS "readyRewards",near AS "nearRewards",inactive
-                FROM filtered ORDER BY last_at DESC NULLS LAST,id LIMIT 50 OFFSET ?
+                FROM filtered ORDER BY ${customerSortOrder(query.sort)} LIMIT 50 OFFSET ?
               ) t) AS customers
-        """.trimIndent(), s.tenant, Timestamp.from(now), Timestamp.from(from), Timestamp.from(inactiveBefore), query.search.trim(), query.offset) { r ->
+        """.trimIndent(), s.tenant, Timestamp.from(now), Timestamp.from(from), Timestamp.from(inactiveBefore), normalizedSearch(query.search), query.offset) { r ->
             val customers = json.parseToJsonElement(r.getString("customers")).jsonArray.map { value ->
                 val row = value.jsonObject
                 val visits = row.getValue("purchases").jsonPrimitive.long
@@ -122,7 +124,7 @@ fun LoyaltyService.customerActivity(s: Staff, query: CustomerActivityQuery = Cus
                 "total" to total, "offset" to query.offset, "hasMore" to (query.offset.toLong()+customers.size<total))
         }!!
         JsonObject(result + obj("from" to from, "through" to now, "timezone" to zone.id,
-            "days" to query.days, "inactiveDays" to query.inactiveDays, "segment" to query.segment))
+            "days" to query.days, "inactiveDays" to query.inactiveDays, "segment" to query.segment, "sort" to query.sort))
     }
 }
 

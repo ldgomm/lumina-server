@@ -15,8 +15,15 @@ fun Route.engagementRoutes(service:LoyaltyService) {
         val staff=io{service.staff(call.bearer())}
         val params=call.request.queryParameters
         fun number(name:String,default:Int):Int = params[name]?.let { it.toIntOrNull() ?: throw Problem(400,"INVALID_FILTER","Filtro numérico inválido: $name.") } ?: default
-        val query=CustomerActivityQuery(number("days",30),number("inactiveDays",30),params["segment"]?:"ALL",params["q"]?:"",number("offset",0))
+        val query=CustomerActivityQuery(number("days",30),number("inactiveDays",30),params["segment"]?:"ALL",params["q"]?:"",number("offset",0),params["sort"]?:"RECENT")
         call.respond(io{service.customerActivity(staff,query)})
+    }
+    get("/api/staff/customer-suggestions") { val s=io { service.staff(call.bearer()) };call.respond(io { service.customerSuggestions(s,call.request.queryParameters["q"]?:"") }) }
+    get("/api/staff/customer-workspace/{id}") {
+        val s=io { service.staff(call.bearer()) };val params=call.request.queryParameters
+        val offset=params["offset"]?.let { it.toIntOrNull()?:throw Problem(400,"INVALID_PAGE","Página inválida.") }?:0
+        val query=CustomerTimelineQuery(params["kind"]?:"ALL",params["branchId"]?.takeIf { it.isNotBlank() },offset)
+        call.respond(io { service.customerWorkspace(s,call.parameters["id"]!!,query) })
     }
     get("/api/staff/customer-insights"){val s=io{service.staff(call.bearer())};val offset=call.request.queryParameters["offset"]?.toIntOrNull()?:0;call.respond(io{service.customerInsights(s,offset)})}
     get("/api/staff/customer-insights/{id}"){val s=io{service.staff(call.bearer())};call.respond(io{service.customerDetail(s,call.parameters["id"]!!)})}

@@ -1,0 +1,161 @@
+package com.premierdarkcoffee.loyalty
+
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.server.config.MapApplicationConfig
+import io.ktor.server.testing.*
+import kotlinx.serialization.json.*
+import org.junit.jupiter.api.*
+import org.junit.jupiter.api.Test
+import java.sql.DriverManager
+import java.time.*
+import kotlin.test.*
+
+@Tag("postgres") @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class CustomerWorkspacePostgresTest {
+    private val url=requireNotNull(System.getenv("TEST_DATABASE_URL"))
+    private val user=System.getenv("TEST_DATABASE_USER")?:"postgres"
+    private val password=System.getenv("TEST_DATABASE_PASSWORD")?:""
+    private val schema="workspace_"+id().replace("-","")
+    private lateinit var db:Database
+    private lateinit var service:LoyaltyService
+    private val at=Instant.parse("2026-11-05T05:30:00Z") // 00:30 Ecuador
+    private val pepper="customer-activity-test-pepper-long-enough"
+    @BeforeAll fun setup() {
+        DriverManager.getConnection(url,user,password).use { it.createStatement().use { s->s.execute("CREATE SCHEMA $schema") } }
+        db=Database(HikariDataSource(HikariConfig().apply {
+            jdbcUrl=url;username=user;this.password=this@CustomerWorkspacePostgresTest.password
+            maximumPoolSize=(System.getenv("TEST_DATABASE_POOL_SIZE")?:"10").toInt()
+            connectionInitSql="SET search_path TO ${this@CustomerWorkspacePostgresTest.schema}"
+        }))
+        db.migrate();service=atTime(at)
+    }
+    @AfterAll fun cleanup() {
+        if(::db.isInitialized)db.close()
+        DriverManager.getConnection(url,user,password).use { it.createStatement().use { s->s.execute("DROP SCHEMA $schema CASCADE") } }
+    }
+    private fun atTime(time:Instant)=LoyaltyService(db,pepper,Clock.fixed(time,ZoneOffset.UTC))
+    private fun JsonObject.str(k:String)=getValue(k).jsonPrimitive.content
+    private fun JsonObject.num(k:String)=getValue(k).jsonPrimitive.long
+    private fun JsonObject.rows()=getValue("customers").jsonArray.map{it.jsonObject}
+    private fun JsonObject.summary()=getValue("summary").jsonObject
+    private data class F(val owner:Staff,val token:String,val slug:String,val member:Member,val a:String,val b:String,val program:String,val reward:String)
+    private fun fixture(name:String="Ana"):F {
+        val slug="activity-"+id().take(12)
+        val t=service.createTenant(NewTenant("Negocio",slug));val token=t.str("ownerToken");val s=service.staff(token)
+        val a=service.newBranch(s,NewBranch("Centro","A")).str("id");val b=service.newBranch(s,NewBranch("Norte","B")).str("id")
+        val m=service.member(service.enrollWithoutPassword(slug,WalletEnrollment(name,"DEMO10001",true)).str("token"))
+        val p=service.createPromotion(s,PromotionTemplate("Sexta pizza","pizza",6,rewardName="Pizza gratis"),id())
+        return F(s,token,slug,m,a,b,p.str("programId"),p.str("rewardId"))
+    }
+    private fun member(f:F,name:String,doc:String)=service.member(service.enrollWithoutPassword(f.slug,WalletEnrollment(name,doc,true)).str("token"))
+    private fun buy(f:F,qty:Int=1,time:Instant=at,m:Member=f.member,branch:String=f.a):JsonObject {
+        return atTime(time).purchase(f.owner,Purchase(m.id,branch,id(),qty*100L,"USD",listOf(PurchaseItem("Pizza","pizza",qty,100))),id())
+    }
+    private fun activity(f:F,segment:String="ALL",days:Int=30,inactive:Int=30,q:String="",offset:Int=0)=service.customerActivity(f.owner,CustomerActivityQuery(days,inactive,segment,q,offset))
+    private fun remove(f:F) {
+        val p=service.previewPromotionRemoval(f.owner,f.program)
+        service.deletePromotion(f.owner,f.program,DeletePromotion(p.num("version").toInt(),p.str("impactHash"),"ELIMINAR",true),id())
+    }
+    private fun workspace(f:F,query:CustomerTimelineQuery=CustomerTimelineQuery())=service.customerWorkspace(f.owner,f.member.id,query)
+    private fun JsonObject.events()=getValue("timeline").jsonObject.getValue("items").jsonArray.map{it.jsonObject}
+    private fun claim(f:F) {
+        val revision=service.card(f.member).getValue("member").jsonObject.num("revision")
+        service.purchase(f.owner,Purchase(f.member.id,f.b,"RECEIPT-REWARD",0,"USD",listOf(PurchaseItem("Pizza","pizza",1,100)),rewardId=f.reward,expectedRevision=revision,expectedRewardVersion=1,identityVerified=true,customerConfirmed=true),id())
+    }
+    @Test fun `history preserves receipt products net total and confirmed reward snapshot`() {
+        val f=fixture();buy(f,5,at.minusSeconds(100));claim(f)
+        val d=workspace(f);assertEquals(3,d.events().size);assertEquals(500,d.summary().num("spentMinor"));assertEquals(100,d.summary().num("discountMinor"));assertEquals(1,d.summary().num("claimedRewards"))
+        val purchase=d.events().first{it.str("kind")=="PURCHASE"&&it.str("receipt")=="RECEIPT-REWARD"}
+        assertEquals(100,purchase.num("grossMinor"));assertEquals(0,purchase.num("paidMinor"));assertEquals(100,purchase.num("discountMinor"));assertEquals("Pizza",purchase.getValue("items").jsonArray.single().jsonObject.str("name"))
+        val reward=d.events().single{it.str("kind")=="REWARD"};assertEquals("Pizza gratis",reward.str("name"));assertEquals("Norte",reward.str("branch"));assertEquals(5,reward.num("cost"))
+    }
+    @Test fun `deleting promotion hides current progress but retains purchases and claims`() {
+        val f=fixture();buy(f,5,at.minusSeconds(100));claim(f);val before=workspace(f)
+        remove(f);val after=workspace(f)
+        assertEquals(before.events(),after.events());assertEquals(before.summary(),after.summary());assertTrue(after.getValue("rewardProgress").jsonArray.isEmpty())
+    }
+    @Test fun `paused promotion is absent from current progress`() {
+        val f=fixture();buy(f,4);assertTrue(workspace(f).getValue("rewardProgress").jsonArray.isNotEmpty())
+        service.editProgram(f.owner,f.program,ProgramChange(1,Program("Sexta pizza",Kind.STAMPS,active=false,productGroup="pizza",countUnits=true)))
+        assertTrue(workspace(f).getValue("rewardProgress").jsonArray.isEmpty());assertEquals(1,workspace(f).events().size)
+    }
+    @Test fun `filters affect movements but not all time metrics`() {
+        val f=fixture();buy(f,5,at.minusSeconds(100));claim(f);val full=workspace(f)
+        val only=workspace(f,CustomerTimelineQuery("REWARD",f.b));assertEquals(1,only.events().size);assertEquals(full.summary(),only.summary())
+        val branch=workspace(f,CustomerTimelineQuery(branchId=f.a));assertEquals(1,branch.events().size);assertEquals(f.a,branch.events().single().str("branchId"))
+        assertTrue(workspace(f,CustomerTimelineQuery("REWARD",f.a)).events().isEmpty())
+    }
+    @Test fun `pagination has stable ties no overlap and total on empty page`() {
+        val f=fixture();repeat(23){buy(f)}
+        val first=workspace(f);val second=workspace(f,CustomerTimelineQuery(offset=20));val empty=workspace(f,CustomerTimelineQuery(offset=40))
+        assertEquals(20,first.events().size);assertEquals(3,second.events().size);assertEquals(23,empty.getValue("timeline").jsonObject.num("total"));assertTrue(empty.events().isEmpty())
+        assertTrue(first.events().map{it.str("id")}.intersect(second.events().map{it.str("id")}.toSet()).isEmpty());assertEquals(first.events(),workspace(f).events())
+    }
+    @Test fun `opening profile cannot release expired holds or mutate wallet revision and ledger`() {
+        val f=fixture();val p=service.newProgram(f.owner,Program("Visitas",Kind.STAMPS)).str("id");val r=service.saveReward(f.owner,Reward(p,"Premio",1)).str("id");buy(f)
+        service.reserve(f.member,Reserve(r),id())
+        fun snapshot()=db.tx{c->listOf("members","balances","ledger","redemptions","wallet_passes","wallet_outbox").map{table->c.rows("SELECT row_to_json(t)::text FROM $table t WHERE tenant_id=? ORDER BY row_to_json(t)::text",f.owner.tenant){it.getString(1)}}}
+        val before=snapshot();repeat(3){atTime(at.plusSeconds(86400)).customerWorkspace(f.owner,f.member.id)};assertEquals(before,snapshot())
+        assertTrue(workspace(f,CustomerTimelineQuery("REWARD")).events().isEmpty())
+    }
+    @Test fun `future operations are excluded from summary and history`() {
+        val f=fixture();buy(f,5,at.minusSeconds(100));buy(f,1,at.plusSeconds(100))
+        val d=workspace(f);assertEquals(1,d.events().size);assertEquals(500,d.summary().num("spentMinor"));assertEquals(at.toString(),d.str("asOf"))
+    }
+    @Test fun `profiles suggestions and branch filter are isolated by business and role`() {
+        val a=fixture("Ana");val b=fixture("Privada");buy(b,5)
+        assertEquals(404,assertFailsWith<Problem>{service.customerWorkspace(a.owner,b.member.id)}.status)
+        assertEquals(404,assertFailsWith<Problem>{workspace(a,CustomerTimelineQuery(branchId=b.a))}.status)
+        assertTrue(service.customerSuggestions(a.owner,"Priv").getValue("items").jsonArray.isEmpty())
+        val cashier=service.staff(service.newStaff(a.owner,NewStaff("CASHIER",a.a)).str("token"))
+        assertEquals(403,assertFailsWith<Problem>{service.customerWorkspace(cashier,a.member.id)}.status)
+        assertEquals(403,assertFailsWith<Problem>{service.customerSuggestions(cashier,"Ana")}.status)
+    }
+    @Test fun `suggestions and list search ignore Spanish accents without treating wildcards as sql`() {
+        val f=fixture("Ángela Ñandú 100%_");repeat(10){member(f,"Ángela $it","DEMO${10002+it}")}
+        assertEquals(8,service.customerSuggestions(f.owner,"angela").getValue("items").jsonArray.size)
+        val match=service.customerSuggestions(f.owner,"nandu").getValue("items").jsonArray.single().jsonObject
+        assertEquals(setOf("id","name","cardSuffix"),match.keys);assertEquals(6,match.str("cardSuffix").length)
+        assertEquals(1,activity(f,q="nandu").num("total"));assertEquals(1,activity(f,q="%_").num("total"));assertTrue(service.customerSuggestions(f.owner,"x' OR true --").getValue("items").jsonArray.isEmpty())
+        assertTrue(service.customerSuggestions(f.owner,"a").getValue("items").jsonArray.isEmpty())
+    }
+    @Test fun `customer sorting uses money visits names and registration without changing totals`() {
+        val f = fixture("Zoe")
+        val a = member(f, "Ángela", "DEMO10002")
+        val b = member(f, "Bruno", "DEMO10003")
+        buy(f, 5, m = a, time = at.minusSeconds(100))
+        buy(f, m = b)
+        buy(f, m = b)
+        // Enrollment uses PostgreSQL now(), not the service's fixed test clock.
+        // Set every fixture registration explicitly so NEWEST is independent of the real date.
+        val joined = mapOf(a.id to at.minusSeconds(3 * 86400), b.id to at.minusSeconds(2 * 86400), f.member.id to at.minusSeconds(86400))
+        db.tx { c ->
+            joined.forEach { (memberId, time) ->
+                assertEquals(1, c.exec("UPDATE members SET created_at=? WHERE tenant_id=? AND id=?", java.sql.Timestamp.from(time), f.owner.tenant, memberId))
+            }
+        }
+        val expected = linkedMapOf(
+            "SPENT" to listOf(a.id, b.id, f.member.id),
+            "VISITS" to listOf(b.id, a.id, f.member.id),
+            "NAME" to listOf(a.id, b.id, f.member.id),
+            "NEWEST" to listOf(f.member.id, b.id, a.id),
+            "RECENT" to listOf(b.id, a.id, f.member.id)
+        )
+        val summary = service.customerActivity(f.owner).summary()
+        expected.forEach { (sort, ids) ->
+            val result = service.customerActivity(f.owner, CustomerActivityQuery(sort = sort))
+            assertEquals(ids, result.rows().map { it.str("id") }, "Order for $sort")
+            assertEquals(summary, result.summary(), "Totals must not change with $sort")
+        }
+    }
+    @Test fun `http rejects invalid filters and unauthenticated users`()=testApplication {
+        environment{config=MapApplicationConfig()};application{loyaltyRoutes(service,"p".repeat(40),"http://localhost")};val f=fixture();val path="/api/staff/customer-workspace/"+f.member.id
+        assertEquals(HttpStatusCode.Unauthorized,client.get(path).status)
+        for(q in listOf("offset=bad","offset=-1","offset=2147483648","kind=UNKNOWN","branchId=bad")) assertEquals(HttpStatusCode.BadRequest,client.get("$path?$q"){bearerAuth(f.token)}.status,q)
+        assertEquals(HttpStatusCode.BadRequest,client.get("/api/staff/customer-activity?sort=bad"){bearerAuth(f.token)}.status)
+        assertEquals(HttpStatusCode.OK,client.get(path){bearerAuth(f.token)}.status)
+    }
+}
