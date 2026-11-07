@@ -60,8 +60,34 @@
         const pending = load(); dialog.showModal(); await pending;
     }
 
+    function showProgramStatus(program, trigger) {
+        if (state.data.role !== 'OWNER' || document.querySelector('#programStatusDialog')) return;
+        const session = state.token, active = !program.config.active;
+        const dialog = document.createElement('dialog'); dialog.id = 'programStatusDialog'; dialog.className = 'promotion-removal';
+        dialog.setAttribute('aria-labelledby', 'programStatusTitle');
+        dialog.innerHTML = `<h2 id="programStatusTitle">${active ? 'Reactivar' : 'Pausar'} «${esc(program.config.name)}»</h2><p>${active ? 'Volverá a estar disponible según sus fechas, horarios y sucursales. Cada cliente conservará el saldo que ya tenía.' : 'Se ocultará del registro y de Apple y Google Wallet. No se podrá acumular ni canjear esta promoción mientras esté pausada.'}</p><p>Los saldos y el historial se conservan. Las tarjetas recibirán el cambio cuando Wallet pueda conectarse.</p><form id="programStatusForm"><div class="row"><button type="button" class="quiet" id="cancelProgramStatus">Cancelar</button><button type="submit">${active ? 'Reactivar promoción' : 'Pausar promoción'}</button></div><button type="button" class="quiet" id="reloadProgramStatus" hidden>Recargar promociones</button></form>`;
+        document.body.append(dialog);
+        const busy = () => dialog.querySelector('form')?.getAttribute('aria-busy') === 'true';
+        const close = () => { if (busy()) return; dialog.close(); };
+        dialog.addEventListener('cancel', e => { if (busy()) e.preventDefault(); });
+        dialog.addEventListener('close', () => { dialog.remove(); if (trigger?.isConnected) trigger.focus(); });
+        dialog.querySelector('#cancelProgramStatus').onclick = close;
+        dialog.querySelector('#reloadProgramStatus').onclick = async () => { if (busy() || state.token !== session) return; close(); try { await merchant(); } catch (e) { notice(e.message); } };
+        form('programStatusForm', async (_, f) => {
+            if (state.token !== session) throw new Error('La sesión cambió. Abre de nuevo la promoción.');
+            try {
+                await api('/api/staff/programs/' + program.id, {expectedVersion: program.version, program: {...program.config, active}}, 'PUT');
+            } catch (e) { if (e.status === 409 || e.status === 404) { dialog.querySelector('#reloadProgramStatus').hidden = false; throw new Error('La promoción cambió o esta acción ya se aplicó. Recarga para revisar su estado vigente.'); } throw e; }
+            if (state.token !== session) { dialog.close(); return; }
+            dialog.close();
+            try { await merchant(); notice(active ? 'Promoción reactivada. Sus saldos se conservan.' : 'Promoción pausada. El cambio se enviará a Apple y Google Wallet.'); }
+            catch { notice('Cambio guardado. Recarga el panel para ver el estado vigente.'); }
+        });
+        dialog.showModal(); dialog.querySelector('#cancelProgramStatus').focus();
+    }
+
     function programList() {
-        const root = document.querySelector('#content');
+        const root = document.querySelector('#content');;
         const programs = state.data.programs;
         let status = 'ALL';
         root.innerHTML = `<div class="promotion-toolbar"><p>${programs.length} promoción${programs.length === 1 ? '' : 'es'} en tu negocio.<br>Las pausadas se conservan aquí y se ocultan a tus clientes.</p><button type="button" id="newPromotion">+ Crear promoción</button></div><div class="promotion-controls"><div class="promotion-search"><label for="searchPromotions">Buscar una promoción</label><input type="search" id="searchPromotions" placeholder="Nombre o categoría" maxlength="120" autocomplete="off"></div><div class="promotion-status" role="group" aria-label="Estado de las promociones"><button type="button" data-promotion-status="ALL" aria-pressed="true">Todas</button><button type="button" data-promotion-status="ACTIVE" aria-pressed="false">Activas</button><button type="button" data-promotion-status="PAUSED" aria-pressed="false">Pausadas</button></div></div><div class="promotion-cards" id="promotionCards"></div><p id="promotionListCount" role="status" aria-live="polite"></p>`;
@@ -73,11 +99,12 @@
                 const rewards = state.data.rewards.filter(r => r.programId === p.id && r.active);
                 const cost = r => config.kind === 'CASHBACK' ? (r.cost / 100).toFixed(2) + ' ' + state.data.business.currency : r.cost + ' ' + kinds[config.kind].toLowerCase();
                 const rule = config.kind === 'POINTS' ? `${config.pointsPerUnit} puntos por cada ${(config.unitMinor / 100).toFixed(2)} ${state.data.business.currency}` : config.kind === 'CASHBACK' ? `${config.cashbackBps / 100}% de cashback promocional` : `${config.stampsPerPurchase} sello${config.stampsPerPurchase === 1 ? '' : 's'} por ${config.countUnits ? 'unidad pagada' : 'compra registrada'}${config.productGroup ? ' · ' + config.productGroup : ''}`;
-                return `<article class="panel promotion-item" data-promotion-card="${esc(p.id)}"><div class="promotion-card-top"><span class="eyebrow">${esc(kinds[config.kind])} · v${p.version}</span><span class="promotion-state ${config.active ? '' : 'paused'}">${config.active ? 'Activa' : 'Pausada'}</span></div><h2>${esc(config.name)}</h2><p>${esc(rule)}<br>${config.branchIds.length ? config.branchIds.length + ' sucursal(es) seleccionada(s)' : 'Todas las sucursales'} · Según fechas y condiciones</p><div class="promotion-benefits"><strong>${rewards.length ? 'Premios vinculados' : 'Sin premio activo'}</strong>${rewards.slice(0, 3).map(r => esc(r.name) + ' · ' + esc(cost(r))).join('<br>') || 'Puedes definir el beneficio desde Premios.'}${rewards.length > 3 ? '<br>Y ' + (rewards.length - 3) + ' más.' : ''}</div><div class="promotion-card-foot"><button type="button" class="quiet" data-program-edit="${esc(p.id)}">Editar promoción</button><button type="button" class="danger-quiet" data-program-delete="${esc(p.id)}" aria-label="Eliminar ${esc(config.name)}">Eliminar</button></div></article>`;
+                return `<article class="panel promotion-item" data-promotion-card="${esc(p.id)}"><div class="promotion-card-top"><span class="eyebrow">${esc(kinds[config.kind])} · v${p.version}</span><span class="promotion-state ${config.active ? '' : 'paused'}">${config.active ? 'Activa' : 'Pausada'}</span></div><h2>${esc(config.name)}</h2><p>${esc(rule)}<br>${config.branchIds.length ? config.branchIds.length + ' sucursal(es) seleccionada(s)' : 'Todas las sucursales'} · Según fechas y condiciones</p><div class="promotion-benefits"><strong>${rewards.length ? 'Premios vinculados' : 'Sin premio activo'}</strong>${rewards.slice(0, 3).map(r => esc(r.name) + ' · ' + esc(cost(r))).join('<br>') || 'Puedes definir el beneficio desde Premios.'}${rewards.length > 3 ? '<br>Y ' + (rewards.length - 3) + ' más.' : ''}</div><div class="promotion-card-foot"><button type="button" class="promotion-toggle" data-program-status="${esc(p.id)}">${config.active ? 'Pausar promoción' : 'Reactivar promoción'}</button><button type="button" class="quiet" data-program-edit="${esc(p.id)}">Editar promoción</button><button type="button" class="danger-quiet" data-program-delete="${esc(p.id)}" aria-label="Eliminar ${esc(config.name)}">Eliminar</button></div></article>`;
             }).join('') || `<section class="panel experience-empty promotion-empty"><strong>${programs.length ? 'No encontramos promociones con estos filtros.' : 'Dale forma al próximo regreso.'}</strong><p>${programs.length ? 'Prueba con otro nombre o cambia el estado.' : 'Elige qué acumula tu cliente y qué premio recibirá. Tú defines la cantidad, el porcentaje y las condiciones.'}</p><button type="button" class="quiet" id="emptyPromotionAction">${programs.length ? 'Quitar filtros' : 'Crear mi primera promoción'}</button></section>`;
             root.querySelector('#promotionListCount').textContent = `${shown.length} de ${programs.length} promociones`;
+            root.querySelectorAll('[data-program-status]').forEach(b => b.onclick = () => showProgramStatus(programs.find(p => p.id === b.dataset.programStatus), b));
             root.querySelectorAll('[data-program-edit]').forEach(b => b.onclick = () => renderPrograms(programs.find(p => p.id === b.dataset.programEdit)));
-            root.querySelectorAll('[data-program-delete]').forEach(b => b.onclick = () => showProgramRemoval(b.dataset.programDelete).catch(e => notice(e.message)));
+            root.querySelectorAll('[data-program-delete]').forEach(b => b.onclick = () => showProgramRemoval(b.dataset.programDelete).catch(e => notice(e.message)));;
             root.querySelector('#emptyPromotionAction')?.addEventListener('click', () => {
                 if (!programs.length) { renderPrograms(null, true); return; }
                 status = 'ALL'; root.querySelector('#searchPromotions').value = ''; sync(); draw();

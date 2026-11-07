@@ -97,8 +97,9 @@ fun WalletPass.appleExperienceFields(): JsonObject {
     val zone = ZoneId.of(snapshot["timezone"]?.jsonPrimitive?.content ?: "America/Guayaquil")
     val updated = updatedAt.atZone(zone).format(DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm", Locale.forLanguageTag("es-EC")))
     return obj(
-        "headerFields" to listOf(header),
-        "primaryFields" to listOf(primaryWithChange),
+        // A stamp illustration occupies the strip. Keep the exact balance as native text above it.
+        "headerFields" to if (artwork().total > 0) listOf(header, JsonObject(primaryWithChange + obj("label" to "SELLOS"))) else listOf(header),
+        "primaryFields" to if (artwork().total > 0) emptyList<JsonObject>() else listOf(primaryWithChange),
         "secondaryFields" to listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24))),
         "auxiliaryFields" to extras,
         "backFields" to (listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) +

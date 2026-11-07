@@ -79,7 +79,7 @@ fun Application.loyaltyRoutes(service: LoyaltyService, platformToken: String, pu
         call.response.header("X-Content-Type-Options","nosniff")
         call.response.header("Referrer-Policy","no-referrer")
         call.response.header("Cache-Control","no-store")
-        call.response.header("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        call.response.header("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
         val origin = call.request.header("Origin")
         if (call.request.httpMethod in setOf(HttpMethod.Post,HttpMethod.Put,HttpMethod.Delete)) {
             need(

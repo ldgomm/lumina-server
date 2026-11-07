@@ -26,13 +26,18 @@ async function run() {
                 return route.fulfill({json: {design: current, version}});
             }
             if (url.pathname.startsWith('/api/')) throw new Error('Unexpected API: ' + url.pathname);
+            if (url.pathname.startsWith('/wallet/art/')) {
+                const folder = process.env.LOYALTY_ARTWORK_EVIDENCE;
+                const file = folder && path.join(folder, url.pathname.slice(1) + '.' + (url.searchParams.get('layout') === 'apple' ? 'apple' : 'google') + '.png');
+                return file && fs.existsSync(file) ? route.fulfill({body: fs.readFileSync(file), contentType: 'image/png'}) : route.fulfill({status: 404});
+            }
             const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
             if (!/^[a-zA-Z0-9.-]+$/.test(name) || !fs.existsSync(path.join(web, name))) return route.fulfill({status: 404});
             let body = fs.readFileSync(path.join(web, name));
             if (name === 'index.html') body = body.toString().replace('</head>', '<script src="/engagement.js" defer></script><script src="/experience.js" defer></script></head>');
-            return route.fulfill({body, contentType: name.endsWith('.js') ? 'application/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html'});
+            return route.fulfill({body, headers: name === 'index.html' ? {'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"} : {}, contentType: name.endsWith('.js') ? 'application/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html'});
         });
-        await page.goto('http://loyalty.test/');
+        await page.goto('http://loyalty.test/');;
         await page.evaluate(data => { state.data = data; state.tab = 'design'; renderMerchant(); }, fixture);
         await page.locator('#walletDesign').waitFor();
         assert.equal(await page.locator('#previewWelcome').textContent(), '12 / 13');
@@ -95,8 +100,9 @@ async function run() {
         });
         await page.locator('#designLogo').setInputFiles({name: 'example-logo.png', mimeType: 'image/png', buffer: Buffer.from(data, 'base64')});
         await page.locator('#logoStatus').filter({hasText: 'mayor resolución'}).waitFor();
+        await page.waitForFunction(() => document.querySelector('#previewLogo').naturalWidth > 0 && document.querySelector('#googlePreviewLogo').naturalWidth > 0);
         await page.locator('#displayName').fill('<img src=x onerror=alert(1)>');
-        assert.equal(await page.locator('#previewName img').count(), 0);
+        assert.equal(await page.locator('#previewName img').count(), 0);;
         await page.locator('#displayName').fill('Taller Aurora');
         await page.locator('#background').fill('#204e41');
         await page.locator('#foreground').fill('#ffffff');

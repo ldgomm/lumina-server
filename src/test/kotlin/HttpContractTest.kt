@@ -18,6 +18,7 @@ class HttpContractTest {
         assertEquals(HttpStatusCode.Unauthorized,client.get("/api/me").status)
         val page=client.get("/");assertEquals(HttpStatusCode.OK,page.status)
         assertTrue(page.headers["Content-Security-Policy"]!!.contains("frame-ancestors 'none'"))
+        assertTrue(page.headers["Content-Security-Policy"]!!.contains("img-src 'self' blob: data:"))
     }
     @Test fun `malformed oversized and cross origin requests fail before database`() = testApplication {
         environment { config = MapApplicationConfig() }

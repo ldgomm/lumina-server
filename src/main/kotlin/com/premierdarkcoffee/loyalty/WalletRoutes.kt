@@ -35,6 +35,14 @@ fun Route.walletRoutes(service: LoyaltyService, platformToken: String) {
         get("/promotion-editor.js") { call.web("promotion-editor.js", ContentType.Application.JavaScript) }
     get("/wallet-ui.js") { call.web("wallet-ui.js", ContentType.Application.JavaScript) }
 
+    get("/wallet/art/v20/{style}/{symbol}/{background}/{filled}/{total}.png") {
+        fun number(name: String) = call.parameters[name]?.toIntOrNull() ?: throw Problem(400,"INVALID_ARTWORK","Diseño inválido.")
+        val art=WalletArtwork(call.parameters["style"]?:"",number("symbol"),call.parameters["background"]?:"",number("filled"),number("total"))
+        art.validate()
+        val layout=call.request.queryParameters["layout"]
+        need(layout==null || layout=="apple","INVALID_ARTWORK","Formato inválido.")
+        call.respondBytes(io { art.png(if(layout=="apple") 3 else null) },ContentType.Image.PNG)
+    }
     get("/wallet/logo.png") { call.respondBytes(walletLogo(660), ContentType.Image.PNG) }
     get("/api/me/wallet-status") { io { service.member(call.bearer()) }; call.respond(service.wallets.availability()) }
     get("/api/platform/wallet/status") {

@@ -18,7 +18,11 @@ class AppleWalletExperienceTest {
             "recentActivity" to activity, "design" to json.parseToJsonElement(json.encodeToString(design)),
             "announcements" to listOf(obj("id" to "event", "title" to "Evento", "body" to "Información del negocio"))),
         42, Instant.parse("2026-11-05T02:00:00Z"), "pass.example", null, null)
-    private fun WalletPass.front(group: String) = appleStoreFields().getValue(group).jsonArray.first().jsonObject
+    private fun WalletPass.front(group: String): JsonObject {
+        val fields=appleStoreFields()
+        return fields.getValue(group).jsonArray.firstOrNull()?.jsonObject
+            ?: fields.getValue("headerFields").jsonArray.map { it.jsonObject }.single { it["key"]==JsonPrimitive("balance") }
+    }
     private fun WalletPass.detail(key: String) = appleStoreFields().getValue("backFields").jsonArray.map { it.jsonObject }.single { it["key"] == JsonPrimitive(key) }
     private fun JsonObject.text(key: String = "value") = getValue(key).jsonPrimitive.content
 

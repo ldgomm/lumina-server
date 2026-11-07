@@ -67,4 +67,5 @@ fun WalletPass.googleJson(objectId: String, classId: String, origin: String): Js
     "id" to objectId, "classId" to classId, "state" to "ACTIVE", "accountId" to serial.take(8),
     "barcode" to obj("type" to "QR_CODE", "value" to snapshot.getValue("cardCode")),
     "hexBackgroundColor" to design().background,
+    "heroImage" to googleArtwork(origin),
     "linksModuleData" to obj("uris" to listOf(obj("id" to "account", "uri" to "$origin/join/${snapshot.getValue("slug").jsonPrimitive.content}", "description" to "Ayuda para recuperar tu tarjeta")))) + googleExperienceFields())

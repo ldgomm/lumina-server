@@ -53,10 +53,10 @@ class PromotionLifecyclePostgresTest {
     private fun race(vararg work:()->Any):List<Any> {val gate=CountDownLatch(1);val pool=Executors.newFixedThreadPool(work.size);try{val futures=work.map{task->pool.submit<Any>{gate.await();try{task()}catch(p:Problem){p}}};gate.countDown();return futures.map{it.get(25,TimeUnit.SECONDS)}}finally{pool.shutdownNow()}}
 
     @Test fun `pause hides customer balances rewards and signup then resume restores earned balance`() {
-        val f=fixture();earn(f);val first=wallet(f);change(f,false,1)
+        val f=fixture();earn(f);val first=wallet(f);assertEquals(JsonPrimitive(20),first.snapshot["presentationVersion"]);assertTrue(first.artwork().total>0);change(f,false,1)
         assertEquals(1,rawBalance(f));assertTrue(service.card(f.member).getValue("balances").jsonArray.isEmpty())
         val public=service.publicTenant(f.slug);assertTrue(public.getValue("programs").jsonArray.isEmpty());assertTrue(public.getValue("rewards").jsonArray.isEmpty())
-        val paused=wallet(f);assertEquals(first.serial,paused.serial);assertEquals(first.token,paused.token);assertTrue(paused.snapshot.getValue("balances").jsonArray.isEmpty());assertTrue(paused.snapshot.getValue("rewardProgress").jsonArray.isEmpty())
+        val paused=wallet(f);assertEquals(first.serial,paused.serial);assertEquals(first.token,paused.token);assertEquals(0,paused.artwork().total);assertNotEquals(first.googleArtwork("https://example.com"),paused.googleArtwork("https://example.com"));assertTrue(paused.snapshot.getValue("balances").jsonArray.isEmpty());assertTrue(paused.snapshot.getValue("rewardProgress").jsonArray.isEmpty())
         assertFalse(paused.appleJson("pass.test","TEAM","https://example.com").toString().contains("Promoción de prueba"));assertFalse(paused.googleJson("object","class","https://example.com").toString().contains("Premio"))
         assertEquals(1,service.dashboard(f.owner).getValue("programs").jsonArray.size)
         val cashier=service.staff(service.newStaff(f.owner,NewStaff("CASHIER",f.branch)).str("token"));assertTrue(service.dashboard(cashier).getValue("programs").jsonArray.isEmpty())

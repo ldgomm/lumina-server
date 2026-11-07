@@ -134,6 +134,7 @@ def gateway_config(nonce, upstream='loyalty-server:8080', resolver=True):
         ('POST', r'/api/public/[a-z0-9][a-z0-9-]{1,60}/(?:join|restore)'),
         ('GET', r'/api/me(?:/qr|/wallet-status|/access)?'),
         ('POST', r'/api/me/(?:logout|wallet/(?:apple|google)/link)'),
+        ('GET', r'/wallet/art/v20/(?:SOLID|GRADIENT)/[0-9]/[a-fA-F0-9]{6}/[0-9]{1,3}/[0-9]{1,3}\.png'),
         ('GET', r'/wallet/logo\.png'),
         ('GET', r'/wallet/brand/[a-z0-9][a-z0-9-]{1,60}/logo\.png'),
         ('GET', r'/wallet/apple/download/[A-Za-z0-9_-]{43}'),
@@ -353,7 +354,10 @@ def probe(url, nonce, attempts=60, diagnostics=None, maximum_seconds=120):
 
 
 def verify_gateway(url, slug):
-    checks = [('GET', '/join/' + slug, None, 200), ('GET', '/api/public/' + slug, None, 200),
+    checks = [('GET', '/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png', None, 200),
+              ('GET', '/wallet/art/v20/GRADIENT/5/0b1f3a/9/5.png', None, 400),
+              ('POST', '/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png', {}, 404),
+              ('GET', '/join/' + slug, None, 200), ('GET', '/api/public/' + slug, None, 200),
               ('GET', '/engagement.js', None, 200), ('GET', '/experience.js', None, 200), ('GET', '/wallet/brand/' + slug + '/logo.png', None, 200),
               ('GET', '/api/staff/customer-insights', None, 404), ('PUT', '/api/staff/wallet-design', {}, 404),
               ('POST', '/api/staff/customer-events', {}, 404), ('POST', '/api/staff/purchases/quote', {}, 404),

@@ -75,8 +75,10 @@ async function run(){
   await show('overview');await page.locator('[data-profile=ana]').click();await page.locator('#serveCustomer').waitFor();await page.locator('#closeCustomer').click();
   checks.push('Dashboard opportunities open the right group; recent customer opens their profile');
   await show();await page.locator('[data-customer=ana]').waitFor();await page.setViewportSize({width:390,height:844});await open();await overflow();await shot('customer-profile-mobile');await page.setViewportSize({width:320,height:780});await overflow();await page.locator('#closeCustomer').click();await overflow();
+  await open();await page.locator('#recoverCustomerWallet').click();await page.locator('#walletRecoveryPanel').waitFor({state:'visible'});assert.equal(await page.locator('#restoreReason').inputValue(),'CONNECTION_REPAIR');assert.equal(await page.locator('#restoreIssue input[name=identityVerified]').isChecked(),false);assert.equal(calls.filter(x=>x.path.endsWith('/wallet/restore')).length,0);checks.push('Visible profile action opens the correct customer recovery panel without authorizing recovery');
+  await show();await page.locator('[data-customer=ana]').waitFor();
   delayProfile=true;pendingProfile=null;await page.locator('[data-customer=ana]').click();await waitUntil(()=>pendingProfile);await page.evaluate(()=>{state.token='OTHER-SESSION';});await pendingProfile();delayProfile=false;await page.waitForTimeout(80);assert.equal(await page.locator('#serveCustomer').count(),0);await page.locator('#closeCustomer').click();
-  checks.push('320/390 px layouts fit; stale profile from a changed session is not displayed');
+  checks.push('320/390 px layouts fit; stale profile from a changed session is not displayed');;
   assert.deepEqual(errors,[]);console.log(JSON.stringify({status:'CUSTOMER_WORKSPACE_UI_PASS',checks},null,2));
  }finally{await browser.close();}
 }

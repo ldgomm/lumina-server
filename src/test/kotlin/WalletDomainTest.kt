@@ -52,7 +52,7 @@ class WalletDomainTest {
         val provider = object : AppleWalletProvider { override val passType="pass.com.example.loyalty";override val team="ABCDEFGHIJ";override fun sign(manifest:ByteArray):ByteArray { signed=manifest;return byteArrayOf(1,2,3) };override fun push(token:String)=true }
         val files=mutableMapOf<String,ByteArray>()
         ZipInputStream(ByteArrayInputStream(applePackage(pass(),provider,origin))).use { zip -> while(true){val e=zip.nextEntry?:break;files[e.name]=zip.readBytes()} }
-                assertEquals(setOf("pass.json","icon.png","icon@2x.png","icon@3x.png","logo.png","logo@2x.png","logo@3x.png","manifest.json","signature"),files.keys)
+                assertEquals(setOf("pass.json","icon.png","icon@2x.png","icon@3x.png","logo.png","logo@2x.png","logo@3x.png","strip.png","strip@2x.png","strip@3x.png","manifest.json","signature"),files.keys)
         assertContentEquals(signed,files.getValue("manifest.json"))
         val hashes=json.parseToJsonElement(signed.toString(Charsets.UTF_8)).jsonObject
         for((name,hash)in hashes)assertEquals(hash.jsonPrimitive.content,MessageDigest.getInstance("SHA-1").digest(files.getValue(name)).joinToString(""){"%02x".format(it)})

@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v019r1 requiere 297 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v020r1 requiere 306 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -100,3 +100,17 @@ El registro tiene pasos de negocio, contacto y revisión. Conserva campos al vol
 ## Corrección de la prueba de orden v019r1
 
 La prueba CustomerWorkspacePostgresTest fija created_at de todos sus miembros con fechas relativas al reloj simulado. El alta real usa now() de PostgreSQL: no mezclarlo con Clock.fixed para inferir el orden NEWEST. Comprobar el orden completo y métricas idénticas en los cinco modos. Esta revisión no cambia consultas de producción, datos de negocio, migraciones ni Wallet. Se mantienen las 297 pruebas obligatorias (137 generales + 160 PostgreSQL), Python y Docker/gateway antes del auto commit.
+
+## Promociones y arte de Wallet v020
+
+Pausar/reactivar desde la lista envía la configuración completa con expectedVersion; no reconstruir ni perder bonos, horarios o categorías. La confirmación explica que se oculta a clientes y se conservan saldos. Un conflicto exige recargar. Recuperación visible en Caja y ficha de cliente es exclusiva del dueño: requiere verificación de identidad y no confirma instalación. Retirar el QR temporal al vencer y no enviar compras/canjes al abrir la ayuda.
+
+Apple y Google reciben el mismo símbolo y acabado, con layouts nativos distintos: strip 375×123 en Apple (@1x/@2x/@3x), hero 1032×812 en Google. Símbolos vectoriales propios, sin dependencia de fuentes emoji del servidor. Hasta veinte sellos individuales; metas superiores usan barra porcentual calculada sin overflow. El saldo y el costo exactos siguen en campos nativos, también para lectores de pantalla. Nunca sumar promociones.
+
+El strip de sellos no tiene campos primarios superpuestos: el saldo nativo se conserva en la cabecera con su clave y changeMessage. Google siempre reemplaza heroImage, incluso al pausar/eliminar: fondo sin progreso evita conservar sellos antiguos. Los assets públicos codifican solamente parámetros acotados de dibujo, sin miembros, cédulas, QR, tokens ni consultas de base. No afirmar que se cambió la tipografía nativa ni que el fondo completo admite degradado.
+
+presentationVersion=20 renueva ambas Wallet sin cambiar identidades. Se exigen 146 pruebas generales + 160 PostgreSQL, todas las Python (122) y Docker/gateway (26 comprobaciones) antes del commit. Confirmar recepción en iPhone y Android por separado; HTTPS y compilación no sustituyen esa evidencia.
+
+## Corrección de la prueba de actualización v020r1
+
+La prueba de actualización en WalletPostgresTest debe esperar presentationVersion=20. Comprueba tanto la versión histórica 8 como la 17 usada hasta v019, conservando las comprobaciones de saldo, serial, token, QR, identificadores Apple/Google, registro del dispositivo y actualización idempotente. Esta revisión no cambia código de producción, migraciones ni configuración privada. Mantener las 306 pruebas Kotlin/HTTP/PostgreSQL, Python y Docker/gateway antes del auto commit; HTTPS y teléfonos se verifican por separado.
