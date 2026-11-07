@@ -38,6 +38,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     } ?: throw Problem(404,"NOT_FOUND","Negocio no encontrado.")
     fun publicTenant(slug: String) = db.tx { c -> tenant(c,slug).let { t -> obj("business" to t,"programs" to programs(c,t.getValue("id").jsonPrimitive.content,true),"rewards" to rewards(c,t.getValue("id").jsonPrimitive.content,true),"termsVersion" to "pilot-1", "pilot" to true) } }
         fun createTenant(input: NewTenant): JsonObject {
+        val profile = input.profile?.normalized()?.also { it.validate() }
         input.firstBranch?.let { text(it.name); text(it.code, 40) }
 
         text(input.name); need(input.slug.matches(Regex("[a-z0-9][a-z0-9-]{2,59}")),"INVALID_SLUG","URL del negocio inválida.")
@@ -47,6 +48,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         return db.tx { c ->
             val tenant = id(); val staffId = id(); val token = Security.token()
             c.exec("INSERT INTO tenants(id,name,slug,currency,timezone) VALUES(?,?,?,?,?)",tenant,input.name.trim(),input.slug,input.currency,input.timezone)
+            if (profile != null) c.exec("INSERT INTO business_profiles(tenant_id,version,config) VALUES(?,1,?::jsonb)",tenant,json.encodeToString(profile))
             c.exec("INSERT INTO staff_tokens(tenant_id,id,token_hash,role) VALUES(?,?,?,'OWNER')",tenant,staffId,Security.hash(token))
                         c.exec("INSERT INTO business_access(tenant_id) VALUES(?)", tenant)
             val firstBranchId = input.firstBranch?.let { branch ->

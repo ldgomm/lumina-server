@@ -121,7 +121,7 @@ class PromotionLifecyclePostgresTest {
         assertEquals(1,service.customerDetail(f.owner,f.member.id).getValue("rewards").jsonArray.size);assertEquals(1,count("redemptions",f))
     }
     @Test fun `migration repeats and database prevents deleted program restoration`() {
-        val f=fixture();remove(f);db.migrate();assertEquals(7,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        val f=fixture();remove(f);db.migrate();assertEquals(8,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
         assertFails{db.tx{c->c.exec("UPDATE programs SET deleted_at=NULL WHERE tenant_id=? AND id=?",f.owner.tenant,f.program)}}
         assertFails{db.tx{c->c.exec("DELETE FROM program_deletions WHERE tenant_id=?",f.owner.tenant)}}
     }

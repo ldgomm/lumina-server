@@ -1,6 +1,7 @@
 'use strict';
 (() => {
     const platform = location.pathname === '/platform';
+    if (platform) document.body.classList.add('platform-mode');;
     const names = {ACTIVE:'Activo',SUSPENDED:'Suspendido',CLOSED:'Dado de baja',PAID:'Pagado',PARTIAL:'Pago parcial',OPEN:'Pendiente',OVERDUE:'Vencido',VOID:'Anulado',INFO:'Información',WARNING:'Advertencia',URGENT:'Urgente',TRANSFER:'Transferencia',CASH:'Efectivo',CARD:'Tarjeta',OTHER:'Otro'};
     const money = (n,c='USD') => new Intl.NumberFormat('es',{style:'currency',currency:c}).format(Number(n || 0)/100);
     const badge = s => `<span class="commercial-badge ${esc(s)}">${esc(names[s] || s)}</span>`;
@@ -24,10 +25,76 @@
         if(businessName&&businessSlug){let edited=false;businessSlug.addEventListener('input',()=>{edited=true});businessName.addEventListener('input',()=>{if(!edited)businessSlug.value=businessName.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60)});}
 
     }
+    const profilePayload = v => ({legalName: v.legalName.trim(), ruc: v.ruc.trim(), activity: v.activity.trim(), contactName: v.contactName.trim(), email: v.email.trim(), phone: v.phone.trim(), province: v.province.trim(), city: v.city.trim(), address: v.address.trim(), website: (v.website || '').trim()});
+    function profileFields(p = {}, part = 'all') {
+        const identity = `<div class="business-field-grid"><div>${field('legalName', 'Razón social', 'text', p.legalName || '', 'required maxlength="200" autocomplete="organization"')}<small>Como aparece en el registro tributario.</small></div><div>${field('ruc', 'RUC de Ecuador', 'text', p.ruc || '', 'required inputmode="numeric" pattern="[0-9]{13}" minlength="13" maxlength="13" aria-describedby="rucHelp"')}<small id="rucHelp">13 dígitos. El estado tributario no se verifica automáticamente.</small></div><div class="full-width">${field('activity', 'Actividad del negocio', 'text', p.activity || '', 'required maxlength="100" placeholder="Ej.: cafetería, barbería, moda, servicios…"')}</div></div>`;
+        const contact = `<div class="business-field-grid"><div>${field('contactName', 'Persona de contacto', 'text', p.contactName || '', 'required maxlength="120" autocomplete="name"')}</div><div>${field('phone', 'Teléfono de contacto', 'tel', p.phone || '', 'required maxlength="30" autocomplete="tel" placeholder="+593 99 123 4567"')}</div><div class="full-width">${field('email', 'Correo del negocio', 'email', p.email || '', 'required maxlength="254" autocomplete="email" placeholder="contacto@negocio.com"')}</div><div>${field('province', 'Provincia', 'text', p.province || '', 'required maxlength="80" autocomplete="address-level1"')}</div><div>${field('city', 'Ciudad', 'text', p.city || '', 'required maxlength="80" autocomplete="address-level2"')}</div><div class="full-width">${field('address', 'Dirección del negocio', 'text', p.address || '', 'required maxlength="250" autocomplete="street-address" placeholder="Calle principal, número y referencia"')}</div><div class="full-width">${field('website', 'Página web (opcional)', 'url', p.website || '', 'maxlength="250" placeholder="https://negocio.com"')}</div></div>`;
+        return part === 'identity' ? identity : part === 'contact' ? contact : `<h3>Identidad del negocio</h3>${identity}<h3 class="profile-section-title">Contacto y ubicación</h3>${contact}`;
+    }
+    function openBusinessRegistration() {
+        document.querySelector('#commercialDialog')?.remove();
+        const d = document.createElement('dialog'); d.id = 'commercialDialog'; d.className = 'commercial-dialog business-registration';
+        d.innerHTML = `<div class="registration-heading"><div><span class="eyebrow">Nuevo negocio</span><h2>Todo listo desde el primer día.</h2></div><button type="button" class="quiet" id="closeRegistration" aria-label="Cerrar registro">Cerrar</button></div><ol class="registration-steps" aria-label="Pasos del registro"><li data-registration-step="0">1 <span>Negocio</span></li><li data-registration-step="1">2 <span>Contacto</span></li><li data-registration-step="2">3 <span>Revisión</span></li></ol><form id="businessRegistration" novalidate><fieldset data-registration-panel="0"><legend>¿Cómo se llama el negocio?</legend>${field('name', 'Nombre comercial', 'text', '', 'required maxlength="120" placeholder="El nombre que reconocerán tus clientes"')}${profileFields({}, 'identity')}</fieldset><fieldset data-registration-panel="1" hidden><legend>¿Cómo podemos contactar al negocio?</legend>${profileFields({}, 'contact')}</fieldset><fieldset data-registration-panel="2" hidden><legend>Primera sucursal y revisión</legend><div class="business-field-grid"><div>${field('firstBranchName', 'Nombre de la primera sucursal', 'text', 'Principal', 'required maxlength="120"')}</div><div>${field('firstBranchCode', 'Código interno', 'text', 'PRINCIPAL', 'required maxlength="40"')}</div></div><div class="registration-summary" id="registrationSummary"></div><p class="small">La tarjeta del negocio funcionará en todas sus sucursales. Podrás añadir más locales después.</p><details><summary>Enlace, moneda y zona horaria</summary>${field('slug', 'Enlace del registro de clientes', 'text', '', 'required pattern="[a-z0-9][a-z0-9-]{2,59}" minlength="3" maxlength="60"')}<p class="small">Se genera a partir del nombre comercial. Usa letras sin tildes, números y guiones.</p>${select('currency', 'Moneda', [['USD','USD · Dólar'],['EUR','EUR · Euro'],['COP','COP · Peso colombiano'],['PEN','PEN · Sol'],['MXN','MXN · Peso mexicano']], 'USD')}${field('timezone', 'Zona horaria', 'text', 'America/Guayaquil', 'required')}</details></fieldset><div class="registration-actions"><button type="button" class="quiet" id="registrationBack" hidden>Volver</button><button type="submit" id="registrationNext">Continuar →</button></div></form>`;
+        document.body.append(d); d.showModal();
+        const f=d.querySelector('form'); let step=0, slugEdited=false;
+        const busy=()=>f.getAttribute('aria-busy')==='true';
+        d.querySelector('#closeRegistration').onclick=()=>{if(!busy())d.close();}; d.addEventListener('cancel',e=>{if(busy())e.preventDefault();}); d.addEventListener('close',()=>d.remove());
+        f.elements.slug.addEventListener('input',()=>{slugEdited=true;});
+        f.elements.name.addEventListener('input',()=>{if(!slugEdited)f.elements.slug.value=f.elements.name.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60);});
+        const show=()=>{
+            d.querySelectorAll('[data-registration-panel]').forEach(p=>p.hidden=Number(p.dataset.registrationPanel)!==step);
+            d.querySelectorAll('[data-registration-step]').forEach(p=>{const current=Number(p.dataset.registrationStep)===step;p.classList.toggle('current',current);if(current)p.setAttribute('aria-current','step');else p.removeAttribute('aria-current');});
+            d.querySelector('#registrationBack').hidden=step===0;d.querySelector('#registrationNext').textContent=step===2?'Crear negocio':'Continuar →';
+            if(step===2){const v=Object.fromEntries(new FormData(f));d.querySelector('#registrationSummary').innerHTML=`<strong>${esc(v.name)}</strong><p>${esc(v.legalName)} · RUC ${esc(v.ruc)}</p><p>${esc(v.contactName)} · ${esc(v.email)}<br>${esc(v.phone)} · ${esc(v.city)}, ${esc(v.province)}</p><p>${esc(v.address)}</p>`;}
+            d.querySelector(`[data-registration-panel="${step}"] input`)?.focus();d.scrollTop=0;
+        };
+        const validate=all=>{
+            const fields=[...d.querySelectorAll(all?'fieldset input,fieldset select':`[data-registration-panel="${step}"] input,[data-registration-panel="${step}"] select`)];
+            for(const input of fields){input.setCustomValidity(input.required&&!input.value.trim()?'Completa este dato para continuar.':'');if(!input.checkValidity()){step=Number(input.closest('[data-registration-panel]').dataset.registrationPanel);show();const details=input.closest('details');if(details)details.open=true;input.reportValidity();return false;}}
+            return true;
+        };
+        f.addEventListener('submit',e=>{if(busy()){e.preventDefault();e.stopImmediatePropagation();return;}if(!validate(step===2)){e.preventDefault();e.stopImmediatePropagation();return;}if(step<2){e.preventDefault();e.stopImmediatePropagation();step++;show();}},true);
+        f.addEventListener('input',e=>{if(e.target.setCustomValidity)e.target.setCustomValidity('');});
+        d.querySelector('#registrationBack').onclick=()=>{if(!busy()){step--;show();}};
+        form('businessRegistration',async(v)=>{
+            const session=state.token;
+            const result=await api('/api/platform/businesses',{name:v.name.trim(),slug:v.slug,currency:v.currency,timezone:v.timezone,firstBranch:{name:v.firstBranchName.trim(),code:v.firstBranchCode.trim()},profile:profilePayload(v)});
+            if(session!==state.token||!d.isConnected)return;
+            d.close();await listBusinesses().catch(()=>{if(session===state.token)app.innerHTML='<section class="panel"><h2>Negocio creado</h2><p>Vuelve a abrir la lista para consultar sus datos.</p></section>';});
+            if(session!==state.token)return;
+            const panel=document.createElement('section');panel.className='panel business-created';panel.innerHTML=`<span class="eyebrow">Registro completado</span><h2>${esc(v.name)} ya está creado.</h2><p>Guarda esta credencial y entrégala al dueño por un medio privado. Solo se muestra ahora.</p><div class="code">${esc(result.ownerToken)}</div><p>Registro de clientes: <a href="${esc(result.enrollmentPath)}">${esc(result.enrollmentPath)}</a></p><button type="button" id="openCreatedBusiness">Ver datos del negocio</button>`;app.prepend(panel);
+            panel.querySelector('#openCreatedBusiness').onclick=handle(async()=>{selected=result.tenantId;pane='profile';offset=0;await loadAccount();});notice('Negocio y primera sucursal creados.');
+        });show();
+    }
+    async function renderBusinessProfile(root) {
+        const path=platform?`/api/platform/tenants/${selected}/profile`:'/api/staff/business-profile';
+        const session=state.token;root.innerHTML='<section class="panel" role="status">Cargando datos del negocio…</section>';
+        let data;
+        try { data=await api(path); } catch(issue) {
+            if(!root.isConnected||session!==state.token)return;
+            root.innerHTML=`<section class="panel"><h2>No pudimos cargar la ficha</h2><p role="alert">${esc(issue.message)}</p><button type="button" id="reloadBusinessProfile">Volver a intentar</button></section>`;
+            root.querySelector('#reloadBusinessProfile').onclick=()=>renderBusinessProfile(root);return;
+        }
+        if(!root.isConnected||session!==state.token)return;let version=data.version;
+        root.innerHTML=`<section class="panel business-profile"><div class="commercial-heading-row"><div><span class="eyebrow">Mi negocio</span><h2>${esc(data.business.name)}</h2><p>${data.profile?'Mantén al día los datos fiscales y de contacto.':'Completa la ficha de este negocio. Sus tarjetas y operaciones siguen disponibles.'}</p></div><span class="profile-status">${data.profile?'Ficha completa':'Datos por completar'}</span></div><form id="businessProfileForm">${profileFields(data.profile||{})}<p class="small">Estos datos son privados para el dueño y la administración de la plataforma. El RUC se registra sin certificar su situación tributaria.</p><button type="submit">Guardar datos del negocio</button><p id="profileSaved" role="status"></p></form></section>`;
+        form('businessProfileForm',async(v)=>{
+            let result;
+            try { result=await api(path,{expectedVersion:version,profile:profilePayload(v)},'PUT'); }
+            catch(issue) {
+                if(issue.code==='PROFILE_CHANGED'&&root.isConnected&&session===state.token&&!root.querySelector('.profile-conflict')){
+                    const recovery=document.createElement('div');recovery.className='profile-conflict';
+                    recovery.innerHTML='<p>Recargar reemplaza lo que escribiste por los datos guardados más recientes.</p><button type="button" class="quiet">Recargar datos guardados</button>';
+                    recovery.querySelector('button').onclick=()=>{if(!root.querySelector('form[aria-busy="true"]'))renderBusinessProfile(root);};root.querySelector('.business-profile').append(recovery);
+                }
+                throw issue;
+            }
+            if(!root.isConnected||session!==state.token)return;version=result.version;root.querySelector('.profile-conflict')?.remove();root.querySelector('.profile-status').textContent='Ficha completa';root.querySelector('#profileSaved').textContent='Datos guardados. La ficha del negocio está actualizada.';
+        });
+    }
     function login() {
 
         exit.hidden=true;
-        app.innerHTML=`<section class="narrow"><div class="eyebrow">Administración de plataforma</div><h1>Cada negocio,<br>bien acompañado.</h1><p>Administra membresías, pagos y permanencia. Consulta cómo crece tu comunidad.</p><section class="panel"><h2>Entrar a la plataforma</h2><form id="platformLogin">${field('platformToken','Credencial de plataforma','password','','required autocomplete="off"')}<button type="submit">Entrar</button></form><p class="commercial-note">Usa PLATFORM_ADMIN_TOKEN de tu configuración local. La credencial del negocio abre su propio portal.</p></section><a href="/">Ir al acceso de negocios</a></section>`;
+        app.innerHTML=`<section class="narrow"><div class="eyebrow">Administración de plataforma</div><h1>Cada negocio,<br>bien acompañado.</h1><p>Administra membresías, pagos y permanencia. Consulta cómo crece tu comunidad.</p><section class="panel"><h2>Entrar a la plataforma</h2><form id="platformLogin">${field('platformToken','Credencial de plataforma','password','','required autocomplete="off"')}<button type="submit">Entrar</button></form><p class="commercial-note">Usa tu credencial de administración. Si administras una tienda, entra desde el acceso de negocios.</p></section><a href="/">Ir al acceso de negocios</a></section>`;
         form('platformLogin',async v=>{state.token=v.platformToken.trim();try{await listBusinesses()}catch(e){state.token='';throw e}});
     }
     async function listBusinesses(query='',page=0) {
@@ -35,13 +102,15 @@
         const data=await api(`/api/platform/tenants?q=${encodeURIComponent(query)}&offset=${page}`);
                 if(ticket!==requestVersion)return;
         exit.hidden=false;selected=null;
-        app.innerHTML=`<div class="commercial-head"><div><div class="eyebrow">Tu plataforma</div><h1>Negocios que vuelven a crecer.</h1><p>Membresías, cuentas y relaciones de largo plazo.</p></div><div class="row"><button id="newBusiness">Añadir negocio</button><button class="quiet" id="addExistingLocation">Añadir local a un negocio</button></div></div><div class="commercial-stats">${stat('En esta página',data.items.length)}${stat('Activos',data.items.filter(x=>x.state==='ACTIVE').length)}${stat('Suspendidos',data.items.filter(x=>x.state==='SUSPENDED').length)}${stat('Clientes de esta página',data.items.reduce((a,b)=>a+b.clients,0))}</div><section class="panel"><form id="businessSearch" class="commercial-search"><div>${field('query','Buscar por nombre o identificador','search',query,'maxlength="100"')}</div><button type="submit">Buscar</button></form>${table(['Negocio','Estado','Clientes','Saldo emitido','Próximo cargo',''],data.items.map(b=>`<tr><td class="commercial-identity">${esc(b.name)}<small>${esc(b.slug)} · Desde ${date(b.joinedAt)}</small></td><td>${badge(b.state)}</td><td>${b.clients}</td><td>${money(b.balanceMinor,b.currency)}</td><td>${date(b.nextChargeOn)}</td><td><button class="quiet" data-business="${esc(b.id)}">Administrar</button></td></tr>`),'Añade tu primer negocio para empezar.')}<div class="commercial-pager"><button class="quiet" id="listPrev" ${page===0?'disabled':''}>Anterior</button><span>Página ${Math.floor(page/50)+1}</span><button class="quiet" id="listNext" ${data.nextOffset===null?'disabled':''}>Siguiente</button></div><p class="commercial-note">Los saldos corresponden a cargos emitidos. Los cargos programados se actualizan en segundo plano y al abrir cada cuenta. Cada negocio conserva su propia moneda.</p></section>`;
+        app.innerHTML=`<div class="commercial-head"><div><div class="eyebrow">Tu plataforma</div><h1>Tus negocios, en orden.</h1><p>Busca un negocio, revisa su cuenta o registra uno nuevo.</p></div><div class="row"><button id="newBusiness">Añadir negocio</button><button class="quiet" id="addExistingLocation">Añadir local a un negocio</button></div></div><div class="commercial-stats">${stat('En esta página',data.items.length)}${stat('Activos',data.items.filter(x=>x.state==='ACTIVE').length)}${stat('Suspendidos',data.items.filter(x=>x.state==='SUSPENDED').length)}${stat('Clientes de esta página',data.items.reduce((a,b)=>a+b.clients,0))}</div><section class="panel"><form id="businessSearch" class="commercial-search"><div>${field('query','Buscar negocio por nombre o RUC','search',query,'maxlength="100" placeholder="Escribe para ver sugerencias…"')}</div><button type="submit">Buscar</button></form>${table(['Negocio','Estado','Clientes','Saldo emitido','Próximo cargo',''],data.items.map(b=>`<tr><td class="commercial-identity">${esc(b.name)}<small>${b.ruc ? 'RUC ' + esc(b.ruc) : 'Ficha por completar'}${b.city ? ' · ' + esc(b.city) : ''}</small></td><td>${badge(b.state)}</td><td>${b.clients}</td><td>${money(b.balanceMinor,b.currency)}</td><td>${date(b.nextChargeOn)}</td><td><button class="quiet" data-business="${esc(b.id)}">Administrar</button></td></tr>`),'Añade tu primer negocio para empezar.')}<div class="commercial-pager"><button class="quiet" id="listPrev" ${page===0?'disabled':''}>Anterior</button><span>Página ${Math.floor(page/50)+1}</span><button class="quiet" id="listNext" ${data.nextOffset===null?'disabled':''}>Siguiente</button></div><p class="commercial-note">Los saldos corresponden a cargos emitidos. Los cargos programados se actualizan en segundo plano y al abrir cada cuenta. Cada negocio conserva su propia moneda.</p></section>`;
+        attachPredictiveSearch(document.querySelector('#query'),{
+            load:async q=>(await api('/api/platform/tenant-suggestions?q='+encodeURIComponent(q))).items,
+            label:row=>row.name,description:row=>[row.ruc?'RUC '+row.ruc:'Ficha por completar',row.city].filter(Boolean).join(' · '),
+            choose:async row=>{selected=row.id;pane='account';offset=0;await loadAccount();}
+        });
         form('businessSearch',v=>listBusinesses(v.query,0));action('listPrev',()=>listBusinesses(query,Math.max(0,page-50)));action('listNext',()=>listBusinesses(query,data.nextOffset));
         document.querySelectorAll('[data-business]').forEach(b=>b.onclick=handle(async()=>{selected=b.dataset.business;pane='account';offset=0;await loadAccount()}));
-        action('newBusiness',()=>dialog('Añadir negocio',`${field('name','Nombre','text','','required maxlength="120"')}${field('slug','Enlace del negocio','text','','required pattern="[a-z0-9-]+" minlength="3" maxlength="60"')}${select('currency','Moneda',[['USD','USD · Dólar'],['EUR','EUR · Euro']], 'USD')}${field('timezone','Zona horaria','text','America/Guayaquil','required')}${field('firstBranchName','Primera sucursal','text','Principal','required maxlength="120"')}${field('firstBranchCode','Código de la sucursal','text','PRINCIPAL','required maxlength="40"')}<p>Este negocio tendrá su propia tarjeta. Sus sucursales compartirán el saldo y los premios.</p>`,async(v)=>{
-            const r=await api('/api/platform/tenants',{name:v.name,slug:v.slug,currency:v.currency,timezone:v.timezone,firstBranch:{name:v.firstBranchName,code:v.firstBranchCode}});await listBusinesses();
-            const panel=document.createElement('section');panel.className='panel';panel.innerHTML=`<h2>Negocio creado</h2><p>Entrega esta credencial al dueño por un medio privado. Se muestra una sola vez.</p><div class="code">${esc(r.ownerToken)}</div><p>Registro de clientes: <a href="${esc(r.enrollmentPath)}">${esc(r.enrollmentPath)}</a></p>`;app.prepend(panel);
-        },'Crear negocio'));
+        action('newBusiness',openBusinessRegistration);
         action('addExistingLocation',()=>{
             if(!data.items.length){notice('Busca primero el negocio al que pertenece este local.');return;}
             dialog('Relacionar un nuevo local',`${select('tenantId','Negocio que comparte la tarjeta',data.items.map(b=>[b.id,b.name]))}${field('name','Nombre del nuevo local','text','','required maxlength="120"')}${field('code','Código del local','text','','required maxlength="40"')}<p>El local se añade como sucursal del negocio seleccionado. Los clientes conservan su tarjeta y saldo. La lista corresponde a tu búsqueda actual.</p>`,async(v,f)=>{
@@ -76,7 +145,7 @@
             action('backBusinesses',()=>listBusinesses());
                 }
         const root=document.querySelector(platform?'#commercialRoot':'#content');if(!root)return null;
-        root.innerHTML=`<nav aria-label="Administración de cuenta">${[['account','Estado de cuenta'],...(platform?[['branches','Sucursales y accesos'],['membership','Membresía'],['access','Estado del negocio']]:[]),['notices','Avisos'],['metrics','Informes']].map(([key,label])=>`<button data-commercial-pane="${key}" class="${pane===key?'active':''}">${label}</button>`).join('')}</nav><div id="commercialPane"></div>`;
+        root.innerHTML=`<nav aria-label="Administración de cuenta">${[['account','Estado de cuenta'],['profile','Datos del negocio'],...(platform?[['branches','Sucursales y accesos'],['membership','Membresía'],['access','Estado del negocio']]:[]),['notices','Avisos'],['metrics','Informes']].map(([key,label])=>`<button data-commercial-pane="${key}" class="${pane===key?'active':''}">${label}</button>`).join('')}</nav><div id="commercialPane"></div>`;
         root.querySelectorAll('[data-commercial-pane]').forEach(b=>b.onclick=handle(async()=>{pane=b.dataset.commercialPane;renderAccount()}));
         return document.querySelector('#commercialPane');
 ;
@@ -84,6 +153,7 @@
         function renderAccount() {
         const root=shell();if(!root)return;
         if(pane==='account'){renderStatement(root);}
+        else if(pane==='profile'){renderBusinessProfile(root).catch(e=>notice(e.message));}
         else if(pane==='branches'){renderLocations(root).catch(e=>notice(e.message));}
         else if(pane==='membership'){renderMembership(root);}
         else if(pane==='access'){renderAccess(root);}
@@ -138,15 +208,16 @@
         ++requestVersion;
         baseMerchant();const nav=app.querySelector('nav');
         if(state.data.role==='OWNER'){
-            for(const [tab,label] of [['account','Mi cuenta'],['reports','Informes']]){
+            for(const [tab,label] of [['business','Mi negocio'],['account','Mi cuenta'],['reports','Informes']]){
                 const b=document.createElement('button');b.textContent=label;b.dataset.tab=tab;b.classList.toggle('active',state.tab===tab);
                 b.onclick=()=>{state.tab=tab;renderMerchant()};nav.append(b);
             }
+            if(state.tab==='business'){renderBusinessProfile(document.querySelector('#content')).catch(e=>notice(e.message));return;}
             if(['account','reports'].includes(state.tab)){pane=state.tab==='reports'?'metrics':'account';offset=0;document.querySelector('#content').innerHTML='<p role="status">Cargando cuenta…</p>';loadAccount().catch(e=>notice(e.message));return;}
         }
         const content=document.querySelector('#content');
         api('/api/staff/access').then(a=>{if(!content.isConnected||a.canOperate)return;const n=document.createElement('div');n.className='commercial-alert';n.textContent='Las nuevas operaciones están pausadas. Los datos y saldos se conservan. El dueño puede consultar Mi cuenta.';content.prepend(n);content.querySelectorAll('form button').forEach(b=>b.disabled=true)}).catch(e=>notice(e.message));
-    };
+    };;
     const baseCustomer=customerCard;
     customerCard=async function(){await baseCustomer();const a=await api('/api/me/access');if(!a.canOperate&&state.token){const n=document.createElement('div');n.className='commercial-alert';n.textContent='Este negocio tiene pausadas las nuevas operaciones. Tu saldo e historial se conservan.';app.prepend(n);app.querySelectorAll('[data-reserve]').forEach(b=>b.disabled=true)}};
     const baseExit=exit.onclick;exit.onclick=async()=>{++requestVersion;document.querySelector('#commercialDialog')?.remove();selected=null;accountData=null;if(platform){state.token='';login()}else await baseExit()};

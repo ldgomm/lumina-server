@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v017 requiere 262 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v018 requiere 282 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -77,3 +77,13 @@ Caja muestra opciones según el saldo de la promoción correspondiente; saldo su
 Seleccionar un premio solo prepara el formulario existente. Los descuentos Benefit requieren productos y cotización; los premios de entrega directa usan counter-redemptions. Conservar comprobante, sucursal, productos, validación de revisión y clave de idempotencia durante reintentos. Cambiar premio en la compra borra la cotización y el consentimiento. Cambiar premio o sucursal del canje directo invalida su revisión y exige una nueva confirmación.
 
 RewardBenefitPresentation describe la regla real con porcentajes decimales exactos: ITEM afecta una unidad de menor precio elegible; BASKET afecta el total de su categoría, no el comprobante completo. Caja, vista previa y detalles nativos Apple/Google usan el mismo benefitText. No inventar descuentos para premios sin Benefit ni hacer visibles promociones retiradas. presentationVersion=17 actualiza ambas Wallet conservando identidades. La nueva prueba counter-rewards.spec.cjs intercepta todas las solicitudes y usa datos ficticios.
+
+## Interfaz Navy y ficha del negocio v018
+
+Navy (#0B1F3A) es el color principal de la aplicación. Respetar los colores propios de las vistas previas y tarjetas Apple/Google. No cambiar presentationVersion ni identidades de pases por cambios exclusivos del panel.
+
+El registro nuevo del panel usa /api/platform/businesses y exige ficha fiscal/contacto y primera sucursal; se guardan atómicamente. Mantener /api/platform/tenants compatible con integraciones y negocios anteriores. V008 añade business_profiles con versión optimista; no inventar RUC para registros anteriores. Un RUC válido aquí significa formato de 13 dígitos, no consulta o certificación del SRI. Una entidad puede tener varias marcas: no exigir RUC único entre negocios. Los perfiles son privados para dueño/plataforma; no mostrarlos a cajeros, clientes o proveedores Wallet.
+
+La búsqueda predictiva es de lectura, requiere selección explícita y respeta el negocio del empleado. Limitar a ocho sugerencias, dos caracteres para datos remotos, no exponer cédulas, hashes o credenciales. Buscar cédula sigue siendo exacto. Ignorar respuestas antiguas, de otra sesión o de una pantalla cerrada. Buscar secciones usa solo el menú permitido del rol. No registrar compras o canjes al seleccionar una sugerencia.
+
+El registro tiene pasos de negocio, contacto y revisión. Conserva campos al volver y bloquea el envío duplicado mientras espera respuesta. Un conflicto de versión en la ficha conserva la edición y ofrece recargar los datos guardados explícitamente. Las pruebas navy-workspace.spec.cjs usan red interceptada y datos ficticios.

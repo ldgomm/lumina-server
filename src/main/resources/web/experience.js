@@ -11,9 +11,10 @@
         events: ['Eventos y cumpleaños', 'Mantén la conversación.', 'Organiza mensajes y eventos para tus clientes.', 'calendar'],
         qr: ['QR de registro', 'La primera visita cuenta.', 'Un registro, una tarjeta y todas tus sucursales.', 'scan'],
         branches: ['Sucursales y acceso', 'Un negocio. Todo conectado.', 'Tus locales comparten la tarjeta; cada cajero tiene su propio acceso.', 'store'],
+        business: ['Mi negocio', 'La información de tu negocio.', 'Datos fiscales, contacto y ubicación, siempre a mano.', 'store'],
         account: ['Mi cuenta', 'Tu cuenta, siempre clara.', 'Consulta membresía, cargos, pagos y avisos.', 'card'],
         reports: ['Informes', 'Entiende cómo crece tu negocio.', 'Datos de las operaciones que has registrado en Loyalty.', 'chart']
-    };
+    };;
     const shapes = {
         home: '<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>',
         scan: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M5 12h14"/>',
@@ -53,7 +54,7 @@
             button.innerHTML = icon(pages[tab][3]) + `<span>${pages[tab][0]}</span>`;
         }
         nav.replaceChildren();
-        const groups = [['Día a día', ['overview', 'sales', 'customers']], ['Fidelización', ['programs', 'rewards', 'design', 'events', 'qr']], ['Administración', ['branches', 'account', 'reports']]];
+        const groups = [['Día a día', ['overview', 'sales', 'customers']], ['Fidelización', ['programs', 'rewards', 'design', 'events', 'qr']], ['Administración', ['business', 'branches', 'account', 'reports']]];
         for (const [label, keys] of groups) {
             const items = keys.map(key => buttons.find(b => b.dataset.tab === key)).filter(Boolean);
             if (!items.length) continue;
@@ -62,8 +63,13 @@
             group.append(title, ...items); nav.append(group);
         }
         const shell = document.createElement('div'); shell.className = 'workspace';
-        shell.innerHTML = `<aside class="workspace-sidebar" id="workspaceSidebar"><div class="workspace-business"><span class="business-avatar">${esc(state.data.business.name.slice(0, 1).toUpperCase())}</span><div><strong>${esc(state.data.business.name)}</strong><small>${state.data.role === 'OWNER' ? 'Administración del negocio' : 'Acceso de caja'}</small></div></div><div id="navigationMount"></div><div class="sidebar-note">Una tarjeta.<br>Todas tus sucursales.</div></aside><section class="workspace-main"><div class="workspace-topline"><span>${esc(state.data.business.name)} <span aria-hidden="true">/</span> ${current[0]}</span><button type="button" class="quiet menu-toggle" id="workspaceMenu" aria-controls="workspaceSidebar" aria-expanded="false">Menú</button></div><div class="workspace-heading"><div><h1 id="sectionTitle" tabindex="-1">${current[1]}</h1><p>${current[2]}</p></div>${state.tab !== 'sales' ? `<button type="button" id="quickCounter">${icon('scan')} Abrir caja</button>` : ''}</div><div id="workspaceContent"></div></section>`;
+        shell.innerHTML = `<aside class="workspace-sidebar" id="workspaceSidebar"><div class="workspace-business"><span class="business-avatar">${esc(state.data.business.name.slice(0, 1).toUpperCase())}</span><div><strong>${esc(state.data.business.name)}</strong><small>${state.data.role === 'OWNER' ? 'Administración del negocio' : 'Acceso de caja'}</small></div></div><div id="navigationMount"></div><div class="sidebar-note">Una tarjeta.<br>Todas tus sucursales.</div></aside><section class="workspace-main"><div class="workspace-topline"><span>${esc(state.data.business.name)} <span aria-hidden="true">/</span> ${current[0]}</span><button type="button" class="quiet menu-toggle" id="workspaceMenu" aria-controls="workspaceSidebar" aria-expanded="false">Menú</button></div><div class="workspace-search"><label for="workspaceSearch">Ir a una sección</label><input id="workspaceSearch" type="search" maxlength="80" placeholder="Busca caja, clientes, promociones…"></div><div class="workspace-heading"><div><h1 id="sectionTitle" tabindex="-1">${current[1]}</h1><p>${current[2]}</p></div>${state.tab !== 'sales' ? `<button type="button" id="quickCounter">${icon('scan')} Abrir caja</button>` : ''}</div><div id="workspaceContent"></div></section>`;
         shell.querySelector('#navigationMount').replaceWith(nav); shell.querySelector('#workspaceContent').replaceWith(content); app.replaceChildren(shell);
+        const permitted=buttons.filter(button=>pages[button.dataset.tab]);
+        attachPredictiveSearch(shell.querySelector('#workspaceSearch'),{
+            minimum:1,load:async q=>{const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();return permitted.map(b=>({tab:b.dataset.tab,title:pages[b.dataset.tab][0],detail:pages[b.dataset.tab][2]})).filter(x=>normalize(x.title+' '+x.detail).includes(normalize(q)));},
+            label:row=>row.title,description:row=>row.detail,choose:row=>go(row.tab)
+        });
         window.scrollTo(0, 0);
         document.title = current[0] + ' · ' + state.data.business.name + ' · Loyalty';
         const toggle = shell.querySelector('#workspaceMenu');
@@ -72,7 +78,7 @@
         nav.addEventListener('click', e => { if (busy()) { e.preventDefault(); e.stopImmediatePropagation(); notice('Espera a que termine la operación.'); } }, true);
         shell.querySelector('#quickCounter')?.addEventListener('click', () => go('sales'));
         if (state.tab === 'overview' && state.data.role === 'OWNER') overview(content);
-    };
+    };;
 
     async function overview(root) {
         root.innerHTML = '<section class="panel loading-panel" role="status">Preparando el resumen de tu negocio…</section>';

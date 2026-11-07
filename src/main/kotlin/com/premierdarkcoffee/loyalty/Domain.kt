@@ -73,7 +73,7 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
         return base.multiply(BigInteger.valueOf(multiplier.toLong())).longValueExact()
     }
 }
-@Serializable data class NewTenant(val name: String, val slug: String, val currency: String = "USD", val timezone: String = "America/Guayaquil", val firstBranch: NewBranch? = null)
+@Serializable data class NewTenant(val name: String, val slug: String, val currency: String = "USD", val timezone: String = "America/Guayaquil", val firstBranch: NewBranch? = null, val profile: BusinessProfile? = null)
 
 @Serializable data class NewBranch(val name: String, val code: String)
 @Serializable data class NewStaff(val role: String, val branchId: String? = null)

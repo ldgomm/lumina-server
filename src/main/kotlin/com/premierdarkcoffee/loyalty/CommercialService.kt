@@ -207,15 +207,15 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
     }
     fun businesses(query: String = "", offset: Int = 0): JsonObject = db.tx { c ->
         need(query.length <= 100 && offset in 0..1_000_000, "INVALID_PAGE", "Búsqueda inválida.")
-        val pattern = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        val ids = c.rows("SELECT id FROM tenants WHERE name ILIKE ? OR slug ILIKE ? ORDER BY created_at DESC,id LIMIT 51 OFFSET ?", pattern, pattern, offset) { it.getString(1) }
+        val q=normalizedSearch(query)
+        val ids = c.rows("SELECT t.id FROM tenants t LEFT JOIN business_profiles p ON p.tenant_id=t.id WHERE position(? in translate(lower(concat_ws(' ',t.name,t.slug,p.config->>'ruc',p.config->>'legalName')),'áéíóúüñ','aeiouun'))>0 ORDER BY t.created_at DESC,t.id LIMIT 51 OFFSET ?",q,offset) { it.getString(1) }
         obj("items" to ids.take(50).map { tenant ->
             val date = today(c, tenant)
             // Dashboard reads do not generate charges. Detail/worker performs the synchronization.
             val a = effective(c, tenant, lock(c, tenant, false), date)
-            c.one("SELECT t.*, (SELECT count(*) FROM members WHERE tenant_id=t.id) AS clients FROM tenants t WHERE id=?", tenant) { r ->
+            c.one("SELECT t.*,p.config->>'ruc' AS ruc,p.config->>'legalName' AS legal_name,p.config->>'city' AS city, (SELECT count(*) FROM members WHERE tenant_id=t.id) AS clients FROM tenants t LEFT JOIN business_profiles p ON p.tenant_id=t.id WHERE t.id=?", tenant) { r ->
                 val p = plan(c, tenant)
-                obj("id" to tenant, "name" to r.getString("name"), "slug" to r.getString("slug"), "currency" to r.getString("currency"), "joinedAt" to r.instant("created_at"), "clients" to r.getLong("clients"), "state" to a.getValue("effectiveState"),
+                obj("id" to tenant, "name" to r.getString("name"), "slug" to r.getString("slug"), "currency" to r.getString("currency"), "joinedAt" to r.instant("created_at"), "clients" to r.getLong("clients"), "state" to a.getValue("effectiveState"), "ruc" to r.getString("ruc"), "legalName" to r.getString("legal_name"), "city" to r.getString("city"),
                     "nextChargeOn" to if (p?.first?.recurring == true) p.third.toString() else null,
                     "balanceMinor" to c.one("SELECT coalesce(sum(amount_minor-paid_minor),0) FROM billing_invoices WHERE tenant_id=? AND voided_at IS NULL", tenant) { it.getLong(1) })
             }!!

@@ -43,7 +43,15 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
             )
         }
         get("/tenants") { call.respond(io { commercial.businesses(call.request.queryParameters["q"] ?: "", call.offset()) }) }
+        get("/tenant-suggestions") { call.respond(io { service.businessSuggestions(call.request.queryParameters["q"] ?: "") }) }
+        post("/businesses") {
+            val input=call.body<NewTenant>()
+            need(input.profile!=null && input.firstBranch!=null,"BUSINESS_PROFILE_REQUIRED","Completa los datos del negocio, el RUC y la primera sucursal.")
+            call.respond(HttpStatusCode.Created,io { service.createTenant(input) })
+        }
                 route("/tenants/{tenant}") {
+            get("/profile") { call.respond(io { service.businessProfile(call.parameters["tenant"]!!) }) }
+            put("/profile") { val input=call.body<BusinessProfileChange>();call.respond(io { service.saveBusinessProfile(call.parameters["tenant"]!!,input,"platform") }) }
             get("/branches") { call.respond(io { service.platformBranches(call.parameters["tenant"]!!) }) }
             post("/branches") { val input = call.body<NewBranch>(); call.respond(HttpStatusCode.Created, io { service.platformNewBranch(call.parameters["tenant"]!!, input, call.key()) }) }
             post("/credentials") {
@@ -69,6 +77,9 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
         }
     }
     get("/api/staff/account") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.ownerAccount(s, call.offset()) }) }
+    get("/api/staff/business-profile") { val s=io { service.staff(call.bearer()).also { it.owner() } };call.respond(io { service.businessProfile(s.tenant) }) }
+    put("/api/staff/business-profile") { val s=io { service.staff(call.bearer()).also { it.owner() } };val input=call.body<BusinessProfileChange>();call.respond(io { service.saveBusinessProfile(s.tenant,input,s.id) }) }
+    get("/api/staff/member-suggestions") { val s=io { service.staff(call.bearer()) };call.respond(io { service.memberSuggestions(s,call.request.queryParameters["q"]?:"") }) }
     get("/api/staff/metrics") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.ownerMetrics(s, call.days()) }) }
     get("/api/staff/access") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.publicAccess(s.tenant) }) }
     post("/api/staff/notices/{id}/read") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.acknowledge(s, call.parameters["id"]!!) }) }

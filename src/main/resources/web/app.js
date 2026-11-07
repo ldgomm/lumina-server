@@ -42,6 +42,56 @@ function options(items,selected){return items.map(x=>`<option value="${esc(x.id)
 function localDateTime(value){if(!value)return '';const parts=new Intl.DateTimeFormat('en-CA',{timeZone:state.data.business.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value));const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`}
 function utcDateTime(local){if(!local)return null;const naive=Date.parse(local+'Z');const offsets=new Set([-36,0,36].map(h=>{const sample=naive+h*3600000;return Date.parse(localDateTime(sample)+'Z')-sample}));const candidates=[...offsets].map(o=>naive-o).filter(t=>localDateTime(t)===local);if(candidates.length!==1)throw new Error('La hora elegida no existe o se repite por un cambio de horario. Elige otra hora.');return new Date(candidates[0]).toISOString()}
 function field(name,label,type='text',value='',extra=''){return `<label for="${name}">${label}</label><input id="${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}>`}
+// Read-only suggestions. A result is selected explicitly; no purchase or canje is submitted here.
+function attachPredictiveSearch(input, {load, choose, label, description = () => '', enabled = () => true, minimum = 2}) {
+    const wrap = document.createElement('div'); wrap.className = 'predictive-search'; input.before(wrap); wrap.append(input);
+    const popup = document.createElement('div'); popup.className = 'predictive-results'; popup.id = input.id + '-suggestions'; popup.setAttribute('role', 'listbox'); popup.hidden = true;
+    const status = document.createElement('p'); status.className = 'predictive-status'; status.id = input.id + '-search-status'; status.setAttribute('role', 'status');
+    wrap.append(popup, status); input.setAttribute('role', 'combobox'); input.setAttribute('aria-autocomplete', 'list'); input.setAttribute('aria-controls', popup.id); input.setAttribute('aria-expanded', 'false'); input.setAttribute('aria-describedby', [input.getAttribute('aria-describedby'), status.id].filter(Boolean).join(' ')); input.autocomplete = 'off';
+    let revision = 0, timer, rows = [], active = -1, composing = false;
+    const busy = () => Boolean(document.querySelector('form[aria-busy="true"]'));
+    const clear = () => { revision++; clearTimeout(timer); rows = []; active = -1; popup.replaceChildren(); popup.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); status.textContent = ''; };
+    const select = row => {
+        if (busy() || !input.isConnected) return;
+        clear(); Promise.resolve().then(() => choose(row)).catch(e => notice(e.message || 'No se pudo abrir el resultado.'));
+    };
+    const highlight = index => {
+        active = index; [...popup.children].forEach((node, i) => node.setAttribute('aria-selected', String(i === index)));
+        const node = popup.children[index]; if (node) { input.setAttribute('aria-activedescendant', node.id); node.scrollIntoView({block: 'nearest'}); }
+    };
+    const search = () => {
+        clear(); const q = input.value.trim(); if (composing || !enabled() || q.length < minimum || busy()) return;
+        const ticket = revision, token = state.token; status.textContent = 'Buscando…';
+        timer = setTimeout(async () => {
+            try {
+                const data = await load(q);
+                if (ticket !== revision || token !== state.token || !input.isConnected || !enabled() || busy()) return;
+                rows = data.slice(0, 8); popup.replaceChildren();
+                rows.forEach((row, index) => {
+                    const button = document.createElement('button'); button.type = 'button'; button.id = popup.id + '-' + index; button.tabIndex = -1; button.setAttribute('role', 'option'); button.setAttribute('aria-selected', 'false');
+                    const title = document.createElement('strong'); title.textContent = label(row); const detail = document.createElement('small'); detail.textContent = description(row); button.append(title, detail);
+                    button.addEventListener('pointerdown', e => e.preventDefault()); button.onclick = () => select(row); popup.append(button);
+                });
+                popup.hidden = !rows.length; input.setAttribute('aria-expanded', String(Boolean(rows.length)));
+                status.textContent = rows.length ? `${rows.length} sugerencias. Elige una o usa las flechas y Enter.` : 'Sin coincidencias. Prueba con otro nombre.';
+            } catch {
+                if (ticket === revision && token === state.token && input.isConnected) status.textContent = 'No se pudo buscar. Vuelve a escribir para reintentar.';
+            }
+        }, 280);
+    };
+    input.addEventListener('input', search); input.addEventListener('compositionstart', () => { composing = true; clear(); }); input.addEventListener('compositionend', () => { composing = false; search(); });
+    input.addEventListener('keydown', e => {
+        if (e.isComposing) return;
+        if (e.key === 'Escape') { clear(); return; }
+        if (!rows.length || popup.hidden) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); highlight((active + (e.key === 'ArrowDown' ? 1 : rows.length - 1) + rows.length) % rows.length); }
+        if (e.key === 'Enter' && active >= 0) { e.preventDefault(); select(rows[active]); }
+        if (e.key === 'Tab') clear();
+    });
+    wrap.addEventListener('focusout', () => setTimeout(() => { if (!wrap.contains(document.activeElement)) clear(); }, 0));
+    input.form?.addEventListener('submit', clear);
+    return {clear};
+}
 exit.onclick=async()=>{if(state.slug){try{await api('/api/me/logout',{})}catch{}}state.token='';state.member=null;state.data=null;state.tab='sales';exit.hidden=true;state.slug?customerStart():welcome()};;
 function welcome(){exit.textContent="Salir";app.innerHTML=`<div class="intro"><div class="eyebrow">Fidelización para tu negocio</div><h1>Dales un motivo<br>para volver.</h1><p>Premia cada visita. Reúne puntos, sellos y recompensas en una tarjeta que funciona en todas tus sucursales.</p></div><div class="grid"><section class="panel"><h2>Entrar a mi negocio</h2><p>Usa la credencial de administrador o de caja del piloto.</p><form id="staffLogin">${field('credential','Credencial de acceso','password','','required autocomplete="off"')}<button>Entrar</button></form></section><section class="card"><div class="eyebrow">Una tarjeta, más posibilidades</div><h2>Cada compra cuenta.</h2><p>Tus clientes se registran desde el QR del negocio y conservan su saldo al visitar otra sucursal.</p><p class="small">El cliente guarda su tarjeta en Wallet y la presenta en caja. No necesita contraseña. La activación en teléfonos requiere configurar Apple o Google.</p></section></div>`;
  form('staffLogin',async d=>{state.token=d.credential.trim();try{await merchant()}catch(issue){state.token='';throw issue}})}
@@ -70,7 +120,15 @@ function counterReceipt(title, body) {
 function renderSales() {
     const d = state.data; state.member = null;
     const content = document.querySelector('#content');
-    content.innerHTML = `<ol class="counter-steps" aria-label="Pasos de caja"><li data-counter-step="1" class="current" aria-current="step"><span>1</span>Cliente</li><li data-counter-step="2"><span>2</span>Operación</li><li data-counter-step="3"><span>3</span>Recibo</li></ol><section class="panel lookup-panel"><h2>Atender a un cliente</h2><p>Escanea la tarjeta de su Wallet o busca por cédula.</p><form id="lookup"><div class="row"><div><label for="kind">Buscar por</label><select id="kind" name="kind"><option value="cardCode">QR de Wallet</option><option value="document">Cédula</option></select></div><div>${field('value', 'Código de tarjeta o cédula', 'text', '', 'required autocomplete="off"')}</div></div><button>Buscar cliente</button><button type="button" class="quiet" id="scanWallet">Escanear con cámara</button></form><div id="scannerMount"></div></section><div id="found"></div><details class="panel"><summary>Confirmar un código de canje anterior</summary><p>Solo para reservas creadas antes de esta actualización. Los nuevos canjes se hacen al buscar la tarjeta.</p><form id="confirm">${field('token', 'Código de canje anterior', 'text', '', 'required autocomplete="off"')}<label for="legacyBranch">Sucursal</label><select id="legacyBranch" name="branchId" required>${options(d.branches)}</select><button>Confirmar entrega</button></form><div id="confirmation"></div></details>`;
+    content.innerHTML = `<ol class="counter-steps" aria-label="Pasos de caja"><li data-counter-step="1" class="current" aria-current="step"><span>1</span>Cliente</li><li data-counter-step="2"><span>2</span>Operación</li><li data-counter-step="3"><span>3</span>Recibo</li></ol><section class="panel lookup-panel"><h2>Atender a un cliente</h2><p>Escanea su tarjeta o busca por cédula o nombre.</p><form id="lookup"><div class="row"><div><label for="kind">Buscar por</label><select id="kind" name="kind"><option value="cardCode">QR de Wallet</option><option value="document">Cédula</option><option value="name">Nombre · sugerencias</option></select></div><div>${field('value', 'Código de tarjeta o cédula', 'text', '', 'required autocomplete="off"')}</div></div><button>Buscar cliente</button><button type="button" class="quiet" id="scanWallet">Escanear con cámara</button></form><div id="scannerMount"></div></section><div id="found"></div><details class="panel"><summary>Confirmar un código de canje anterior</summary><p>Solo para reservas creadas antes de esta actualización. Los nuevos canjes se hacen al buscar la tarjeta.</p><form id="confirm">${field('token', 'Código de canje anterior', 'text', '', 'required autocomplete="off"')}<label for="legacyBranch">Sucursal</label><select id="legacyBranch" name="branchId" required>${options(d.branches)}</select><button>Confirmar entrega</button></form><div id="confirmation"></div></details>`;
+    const lookupInput = content.querySelector('#value'), lookupKind = content.querySelector('#kind');
+    const suggestions = attachPredictiveSearch(lookupInput, {
+        enabled: () => lookupKind.value === 'name',
+        load: async q => (await api('/api/staff/member-suggestions?q=' + encodeURIComponent(q))).items,
+        label: row => row.name, description: row => 'Tarjeta terminada en ' + row.cardCode.slice(-6),
+        choose: row => { lookupKind.value = 'cardCode'; lookupInput.value = row.cardCode; content.querySelector('#lookup').requestSubmit(); }
+    });
+    lookupKind.addEventListener('change', () => { suggestions.clear(); lookupInput.value = ''; content.querySelector('label[for=value]').textContent = lookupKind.value === 'name' ? 'Nombre del cliente' : lookupKind.value === 'document' ? 'Cédula completa' : 'Código de la tarjeta'; lookupInput.placeholder = lookupKind.value === 'name' ? 'Escribe al menos 2 letras' : lookupKind.value === 'document' ? 'Cédula completa' : 'Escanea o pega el código de Wallet'; lookupInput.focus(); });
     action('scanWallet', () => window.startComebackScanner(document.querySelector('#scannerMount'), code => {
         const lookup = document.querySelector('#lookup');
         lookup.elements.kind.value = 'cardCode';
@@ -78,6 +136,7 @@ function renderSales() {
         lookup.requestSubmit();
     }));
     form('lookup', async (data, lookupForm) => {
+        if (data.kind === 'name') throw new Error('Elige al cliente de las sugerencias. También puedes buscar su cédula completa o escanear Wallet.');
         window.stopComebackScanner?.();
         state.member = null;
         content.querySelector('#found').replaceChildren();
