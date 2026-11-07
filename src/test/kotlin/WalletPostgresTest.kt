@@ -180,6 +180,24 @@ class WalletPostgresTest {
             assertTrue(latest.getValue("serialNumbers").jsonArray.map{it.jsonPrimitive.content}.containsAll(passes.map{it.serial}))
         }finally{pool.shutdownNow()}
     }
+    @Test fun `presentation upgrade refreshes installed card without changing its money or identity`() {
+        val f=fixture();earn(f)
+        val initial=wallet.materialize(f.member,"apple");register(initial)
+        val balances=service.card(f.member).getValue("balances")
+        db.tx { c -> c.exec("UPDATE wallet_passes SET snapshot=jsonb_set(snapshot,'{presentationVersion}','8'::jsonb) WHERE serial=?",initial.serial) }
+        time.value=time.value.plusSeconds(1)
+        val upgraded=wallet.materialize(f.member)
+        assertTrue(upgraded.tag>initial.tag)
+        assertEquals(14,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
+        assertEquals(initial.serial,upgraded.serial);assertEquals(initial.token,upgraded.token)
+        assertEquals(initial.appleType,upgraded.appleType)
+        assertEquals(initial.snapshot.getValue("cardCode"),upgraded.snapshot.getValue("cardCode"))
+        assertEquals(balances,service.card(f.member).getValue("balances"))
+        assertEquals(1,count("SELECT count(*) FROM wallet_passes WHERE tenant_id=?",f.staff.tenant))
+        assertEquals(1,count("SELECT count(*) FROM wallet_apple_registrations WHERE serial=?",upgraded.serial))
+        assertNotNull(wallet.updates(device,apple.passType,initial.tag.toString()))
+        assertEquals(upgraded.tag,wallet.materialize(f.member).tag)
+    }
     private class TestApple:AppleWalletProvider {
         override val passType="pass.com.example.loyalty";override val team="ABCDEFGHIJ";var invalid:String?=null
         override fun sign(manifest:ByteArray)=byteArrayOf(1,2,3)

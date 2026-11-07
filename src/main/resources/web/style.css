@@ -68,3 +68,21 @@ body>header{min-height:76px;max-width:1440px;padding:18px 32px}.brand{display:in
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;scroll-behavior:auto!important}}
 @media(min-width:761px){#productPurchase [data-line]{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}#productPurchase [data-line]>.row{grid-column:1/-1}}
 @media(max-width:760px){.commercial-table caption{display:block;width:100%}}
+
+
+/* Apple Wallet experience v014: examples never change customer balances. */
+.wallet-preview-modes{display:flex;gap:6px;margin:18px 0 14px}
+.wallet-preview-modes button{flex:1;padding:9px 6px;font-size:11px;min-height:38px;background:#eef1ea;color:#34453e;border:1px solid #dce2d7;border-radius:10px}
+.wallet-preview-modes button.active{background:#244c40;color:white;border-color:#244c40}
+.wallet-preview-modes button:disabled{opacity:.5;cursor:not-allowed}
+.design-preview{position:relative}
+.wallet-preview-status{text-align:right;margin-top:14px;min-height:35px;font-size:14px}
+.wallet-preview-status .design-preview-label{font-size:9px;margin-bottom:2px}
+.wallet-design-panel .design-preview-hero{margin:20px 0 5px;font-size:clamp(30px,3vw,44px);font-weight:400;letter-spacing:-1.5px}
+.wallet-design-panel .design-preview-bottom{margin-top:30px;min-height:58px}
+.wallet-preview-code{display:flex;justify-content:center;margin:26px auto 0;width:100px;padding:18px 8px;border-radius:10px;background:white;color:#24352c;border:6px double #24352c;font-size:11px;font-weight:600;letter-spacing:.3px}
+.wallet-preview-detail{padding:18px 3px 0;font-size:13px}
+.wallet-preview-detail p{font-size:12px;margin:7px 0;line-height:1.65;color:#536157}
+#previewStamps{letter-spacing:2px;overflow-wrap:anywhere;line-height:1.9;color:#244c40}
+#previewProgram{font-weight:500;letter-spacing:0;text-transform:none;font-size:13px}
+@media(max-width:760px){.wallet-preview-modes button{font-size:11px}.wallet-design-panel .design-preview-hero{font-size:38px}}

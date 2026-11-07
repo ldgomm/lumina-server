@@ -98,7 +98,7 @@
     async function designPage() {
         const root = document.querySelector('#content'); const data = await api('/api/staff/wallet-design');
         if (!root.isConnected || state.tab !== 'design') return;
-        const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0;
+        const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress';
         root.innerHTML = `<section class="panel wallet-design-panel"><h2>Personaliza tu tarjeta</h2><p>Elige el fondo de tu negocio. Te ayudamos a que sus textos se lean bien.</p><div class="wallet-design-layout"><form id="walletDesign"><fieldset id="designFields">
             ${field('displayName', 'Nombre en la tarjeta', 'text', d.displayName, 'maxlength="80"')}
             <h3 class="design-colors-heading">Colores</h3>
@@ -110,13 +110,16 @@
             <div class="design-feedback" aria-live="polite" aria-atomic="true"><p id="contrastStatus"></p><p id="contrastAdjustment" class="design-help"></p></div>
             <button type="button" class="quiet" id="fixContrast">Corregir colores</button>
             <label>Logo PNG o JPG<input id="designLogo" type="file" accept="image/png,image/jpeg"></label><p id="logoStatus">${logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.'}</p><button type="button" class="quiet" id="removeLogo">Usar logo predeterminado</button>
-            ${select('featuredProgramId', 'Saldo destacado', [['', 'Mantener el orden actual'], ...state.data.programs.map(p => [p.id, p.config.name])], d.featuredProgramId || '')}
+            ${select('featuredProgramId', 'Promoción destacada en Wallet', [['', 'Primera promoción activa'], ...state.data.programs.filter(p => p.config.active !== false).map(p => [p.id, p.config.name])], d.featuredProgramId || '')}<p class="design-help">Apple mostrará su saldo y el premio de menor costo. Los demás saldos y premios siguen disponibles en los detalles de la tarjeta.</p>
             ${select('stampSymbol', 'Símbolo de los sellos', ['●', '★', '♥', '✂', '◆'].map(x => [x, x]), d.stampSymbol)}
             ${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
             ${field('usage', 'Cómo usar la tarjeta', 'text', d.usage, 'required maxlength="350"')}
             ${field('birthdayMessage', 'Felicitación de cumpleaños', 'text', d.birthdayMessage, 'required maxlength="250"')}
             </fieldset><p id="designSaveHint" class="design-help" aria-live="polite"></p><p id="designSaveError" class="design-error" role="alert" hidden></p><button id="saveDesign" type="submit" aria-describedby="designSaveHint">Guardar diseño</button></form>
-            <aside class="design-preview-wrap"><h3>Vista previa de colores</h3><p class="design-help">Datos de ejemplo. Apple y Google determinan la distribución final en Wallet.</p><div id="designPreview" class="design-preview"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><span id="previewWelcome" class="design-preview-hero"></span><span class="design-preview-label">SALDO DISPONIBLE</span><strong class="design-preview-balance">100 puntos</strong><div class="design-preview-bottom"><div><span class="design-preview-label">CLIENTE</span><span>Cliente de ejemplo</span></div><div><span class="design-preview-label">SELLOS</span><span id="previewStamps"></span></div></div></div><p class="design-help">Los cambios se enviarán a las tarjetas existentes al guardar.</p></aside></div></section>`;
+            <aside class="design-preview-wrap"><h3>Así se verá tu tarjeta</h3><p class="design-help">Simulación con tus promociones y saldos de ejemplo. Apple decide el tamaño y la distribución final.</p>
+            <div class="wallet-preview-modes" role="group" aria-label="Estado de ejemplo de la tarjeta"><button type="button" data-wallet-example="new">Nueva</button><button type="button" data-wallet-example="progress" class="active">Acumulando</button><button type="button" data-wallet-example="ready">Con premio</button></div>
+            <div id="designPreview" class="design-preview"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><div class="wallet-preview-status"><span id="previewStatusLabel" class="design-preview-label"></span><strong id="previewStatus"></strong></div><span id="previewWelcome" class="design-preview-hero"></span><span id="previewProgram" class="design-preview-label"></span><div class="design-preview-bottom"><div><span class="design-preview-label">CLIENTE</span><span>Cliente de ejemplo</span></div><div id="previewPrizeWrap"><span id="previewPrizeLabel" class="design-preview-label"></span><span id="previewPrize"></span></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div>
+            <div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardDetail"></p><p id="previewStamps"></p></div><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
         const f = root.querySelector('#walletDesign'), fields = root.querySelector('#designFields');
         const background = f.elements.background, foreground = f.elements.foreground, labels = f.elements.label;
         const auto = root.querySelector('#autoContrast'), save = root.querySelector('#saveDesign'), fix = root.querySelector('#fixContrast');
@@ -149,8 +152,29 @@
             preview.style.backgroundColor = background.value; preview.style.color = foreground.value;
             preview.style.setProperty('--preview-label', labels.value);
             root.querySelector('#previewName').textContent = f.elements.displayName.value.trim() || state.data.business.name;
-            root.querySelector('#previewWelcome').textContent = f.elements.welcome.value || 'Bienvenido';
-            root.querySelector('#previewStamps').textContent = f.elements.stampSymbol.value.repeat(3) + '○○';
+            const activePrograms = state.data.programs.filter(p => p.config.active !== false);
+            const program = activePrograms.find(p => p.id === f.elements.featuredProgramId.value) || activePrograms[0];
+            const reward = program && state.data.rewards.filter(r => r.active && r.programId === program.id && r.cost > 0).sort((a, b) => a.cost - b.cost || a.id.localeCompare(b.id))[0];
+            const kind = program?.config.kind;
+            const amount = !program || example === 'new' ? 0 : reward ? (example === 'ready' ? reward.cost : Math.max(0, reward.cost - 1)) : kind === 'CASHBACK' ? 500 : kind === 'STAMPS' ? 3 : 100;
+            const unit = n => kind === 'CASHBACK' ? money(n) : `${n} ${kind === 'STAMPS' ? (n === 1 ? 'sello' : 'sellos') : (n === 1 ? 'punto' : 'puntos')}`;
+            const remaining = reward ? Math.max(0, reward.cost - amount) : null;
+            root.querySelector('#previewWelcome').textContent = !program ? f.elements.welcome.value || 'Bienvenido' : reward && kind === 'STAMPS' && remaining > 0 ? `${amount} / ${reward.cost}` : unit(amount);
+            root.querySelector('#previewProgram').textContent = program?.config.name || 'Tu tarjeta';
+            root.querySelector('#previewStatusLabel').textContent = !reward ? 'MEMBRESÍA' : remaining === 0 ? 'PREMIO' : remaining === 1 && kind !== 'CASHBACK' ? 'TE FALTA' : 'TE FALTAN';
+            root.querySelector('#previewStatus').textContent = !reward ? 'Activa' : remaining === 0 ? 'Disponible' : unit(remaining);
+            root.querySelector('#previewPrizeWrap').hidden = !reward;
+            root.querySelector('#previewPrizeLabel').textContent = remaining === 0 ? 'CANJEA EN CAJA' : 'PRÓXIMO PREMIO';
+            const compactPrize = [...(reward?.name || '').trim().replace(/\s+/g, ' ')];
+            root.querySelector('#previewPrize').textContent = compactPrize.length > 28 ? compactPrize.slice(0, 27).join('') + '…' : compactPrize.join('');
+            root.querySelector('#previewRewardName').textContent = reward?.name || 'Tu tarjeta, a tu medida';
+            root.querySelector('#previewRewardDetail').textContent = reward ? `Saldo de ejemplo: ${unit(amount)}. Canje: ${unit(reward.cost)}. ${remaining === 0 ? 'El cliente puede pedir el canje en caja.' : 'Todavía está acumulando para este premio.'}` : program ? 'Esta promoción aún no tiene un premio activo. Puedes crearlo en Premios.' : 'Al activar una promoción, aparecerá su saldo. Hasta entonces se muestra tu bienvenida.';
+            root.querySelector('#previewStamps').textContent = reward && kind === 'STAMPS' && reward.cost <= 20 ? Array.from({length: reward.cost}, (_, i) => i < amount ? f.elements.stampSymbol.value : '○').join(' ') : '';
+            root.querySelectorAll('[data-wallet-example]').forEach(button => {
+                const selected = button.dataset.walletExample === example;
+                button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected));
+                button.disabled = saving || loadingLogo || button.dataset.walletExample === 'ready' && !reward;
+            });
             const image = root.querySelector('#previewLogo'); image.hidden = !logo;
             if (logo) image.src = 'data:image/png;base64,' + logo; else image.removeAttribute('src');
             return !failed.length;
@@ -169,6 +193,7 @@
             f.dataset.palette = [background.value, foreground.value, labels.value].join('/');
             update();
         }
+        root.querySelectorAll('[data-wallet-example]').forEach(button => button.onclick = () => { example = button.dataset.walletExample; update(); });
         f.addEventListener('input', edited); f.addEventListener('change', edited);
         fix.onclick = () => { clearError(); correctColors(); f.dataset.palette = [background.value, foreground.value, labels.value].join('/'); update(); };
         root.querySelector('#removeLogo').onclick = () => {
@@ -182,11 +207,18 @@
                 if (file.size > 5 * 1024 * 1024) throw new Error('Elige una imagen de menos de 5 MB.');
                 const bitmap = await createImageBitmap(file);
                 if (revision !== logoRevision || !f.isConnected) { bitmap.close(); return; }
-                const scale = Math.min(160 / bitmap.width, 36 / bitmap.height, 1);
-                const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale)); canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
-                const value = canvas.toDataURL('image/png').split(',')[1];
-                if (value.length > 26668) throw new Error('El logo tiene demasiado detalle. Usa una imagen más sencilla.');
-                logo = value; root.querySelector('#logoStatus').textContent = 'Logo preparado para guardar.';
+                let value = '';
+                try {
+                    for (const ratio of [3, 2, 1]) {
+                        const scale = Math.min(160 * ratio / bitmap.width, 36 * ratio / bitmap.height, 1);
+                        const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+                        const context = canvas.getContext('2d'); context.imageSmoothingQuality = 'high'; context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                        value = canvas.toDataURL('image/png').split(',')[1];
+                        if (atob(value).length <= 20000) break;
+                    }
+                } finally { bitmap.close(); }
+                if (atob(value).length > 20000) throw new Error('El logo tiene demasiado detalle. Usa una imagen más sencilla.');
+                logo = value; root.querySelector('#logoStatus').textContent = 'Logo preparado con la mayor resolución disponible.';
             } catch (issue) {
                 if (revision === logoRevision && f.isConnected) { error.textContent = issue.message; error.hidden = false; }
             } finally {
@@ -214,7 +246,7 @@
     }
 
     const customerFilters = {days: 30, inactiveDays: 30, segment: 'ALL', q: ''};
-    let customerRequest = 0, customerFilterTenant = null;
+    let customerRequest = 0, customerFilterTenant = null;;
     async function customersPage(offset = 0) {
         if (customerFilterTenant !== state.data.business.id) {
             Object.assign(customerFilters, {days: 30, inactiveDays: 30, segment: 'ALL', q: ''});
