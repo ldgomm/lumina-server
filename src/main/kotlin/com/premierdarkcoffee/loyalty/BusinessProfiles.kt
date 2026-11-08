@@ -25,12 +25,13 @@ object BusinessProfileMigration {
     val legalName: String, val ruc: String, val activity: String,
     val contactName: String, val email: String, val phone: String,
     val province: String, val city: String, val address: String, val website: String = "",
-    val socialLinks: Map<String, String> = emptyMap()
+    val socialLinks: Map<String, String> = emptyMap(), val category: String = ""
 ) {
     fun normalized(): BusinessProfile = copy(legalName=legalName.trim(), ruc=ruc.trim(), activity=activity.trim(),
         contactName=contactName.trim(), email=email.trim(), phone=phone.trim(), province=province.trim(),
-        city=city.trim(), address=address.trim(), website=website.trim(), socialLinks=socialLinks.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() })
-    fun validate() {
+        city=city.trim(), address=address.trim(), website=website.trim(), category=category.trim().uppercase(Locale.ROOT), socialLinks=socialLinks.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() })
+        fun validate() {
+        need(category.isEmpty() || BusinessCategories.known(category), "INVALID_BUSINESS_CATEGORY", "Selecciona una categoría de negocio del catálogo.")
         val socialHosts = mapOf("instagram" to setOf("instagram.com"), "facebook" to setOf("facebook.com", "fb.com"),
             "tiktok" to setOf("tiktok.com"), "youtube" to setOf("youtube.com", "youtu.be"), "whatsapp" to setOf("wa.me", "whatsapp.com"))
         for ((network, link) in socialLinks) {
@@ -61,19 +62,23 @@ internal fun businessProfileView(c: Connection, tenant: String): JsonObject {
     val row = c.one("SELECT version,config::text,updated_at FROM business_profiles WHERE tenant_id=?", tenant) {
         obj("version" to it.getInt(1), "profile" to json.parseToJsonElement(it.getString(2)), "updatedAt" to it.getTimestamp(3).toInstant())
     } ?: obj("version" to 0, "profile" to null, "updatedAt" to null)
-    return JsonObject(row + obj("business" to business, "rucVerification" to "NOT_VERIFIED", "protectedFields" to protectedBusinessFields, "requests" to profileRequests(c,tenant)))
+        val profile=row["profile"]?.takeIf{it!=JsonNull}?.let{json.decodeFromJsonElement<BusinessProfile>(it)}
+    return JsonObject(row + obj("business" to business, "rucVerification" to "NOT_VERIFIED", "protectedFields" to protectedBusinessFields,
+        "categoryContext" to BusinessCategories.context(profile), "categoryOptions" to BusinessCategories.options().getValue("categories"), "requests" to profileRequests(c,tenant)))
 }
 fun LoyaltyService.businessProfile(tenant: String): JsonObject = db.tx { businessProfileView(it,tenant) }
 fun LoyaltyService.saveBusinessProfile(tenant: String, input: BusinessProfileChange, actor: String): JsonObject {
     uuid(tenant); need(input.expectedVersion >= 0,"INVALID_VERSION","Versión de ficha inválida.")
-    val profile = input.profile.normalized(); profile.validate()
+        val normalized = input.profile.normalized(); normalized.validate()
     return db.tx { c ->
         need(c.one("SELECT id FROM tenants WHERE id=? FOR UPDATE",tenant) { it.getString(1) } != null,"NOT_FOUND","Negocio no encontrado.",404)
         val version = c.one("SELECT version FROM business_profiles WHERE tenant_id=?",tenant) { it.getInt(1) } ?: 0
         need(version == input.expectedVersion,"PROFILE_CHANGED","Otra persona actualizó los datos. Recarga la ficha antes de guardar.",409)
         val previous = c.one("SELECT config::text FROM business_profiles WHERE tenant_id=?",tenant) { json.decodeFromString<BusinessProfile>(it.getString(1)) }
+                // Older clients do not send category; preserve the administrator's selected category.
+        val profile=if(normalized.category.isEmpty()) normalized.copy(category=previous?.category.orEmpty()) else normalized
         val identityChanged = previous?.normalized()?.identity() != profile.identity()
-        need(actor == "platform" || !identityChanged, "PROFILE_ADMIN_REQUIRED", "Razón social, RUC, actividad y ubicación requieren revisión del administrador. Envía una solicitud desde Datos del negocio.", 403)
+        need(actor == "platform" || !identityChanged, "PROFILE_ADMIN_REQUIRED", "Razón social, RUC, categoría, actividad y ubicación requieren revisión del administrador. Envía una solicitud desde Datos del negocio.", 403)
         if (identityChanged) {
             val reason = input.reason.trim()
             need(reason.length in 10..500 && reason.none { it.isISOControl() }, "CORRECTION_REASON_REQUIRED", "Indica qué verificaste y el motivo de la corrección (10 a 500 caracteres).")

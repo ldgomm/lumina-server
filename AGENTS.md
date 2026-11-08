@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v025 requiere 374 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v026 requiere 388 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -182,3 +182,15 @@ Cada premio tiene una meta versionada, visible y editable desde Promociones y Pr
 saveReward permite modificar cost con expectedVersion, manteniendo inmutable el tipo de Benefit. Cambiar de descuento o categoría requiere otro premio. Cada guardado programa la revisión de pases del mismo negocio para Apple y Google, sin llamadas externas en la transacción. Se conservan identidades, saldos y movimientos; presentationVersion sigue en 24. Las cotizaciones/revisiones de caja obsoletas se rechazan; reservas ya creadas conservan su costo original hasta vencer y los comprobantes consumidos son inmutables.
 
 El gate exige 178 pruebas generales y 196 PostgreSQL (374 en total), incluidas dos nuevas de concurrencia, más Python, Docker y gateway. La suite reward-goals.spec.cjs usa exclusivamente datos ficticios e intercepta toda la red. HTTPS y validación en teléfonos se informan aparte.
+
+## Categorías y ejemplos por negocio v026
+
+BusinessProfile.category es un identificador explícito del catálogo business-categories.json, separado de activity. Nuevos registros desde el panel requieren elegir categoría. El servidor acepta ausencia para clientes anteriores y la conserva en ediciones antiguas. La categoría es un dato protegido: solo plataforma puede corregirla, con razón, versión y auditoría como el resto de identidad fiscal. No guardar secretos ni datos de clientes en el catálogo.
+
+42 categorías y 168 ejemplos editables. Una categoría elegida prevalece sobre actividad; GENERAL elegido no se reemplaza por inferencias. Sin categoría explícita, coincidencia exacta normalizada de actividad con nombre/alias, nunca nombre comercial, diseño o fragmentos ambiguos. Caso desconocido: GENERAL. Consultar sugerencias no modifica el perfil ni crea promociones. Mantener contexto por tenant; catálogo de alta solo plataforma; sugerencias solo dueño.
+
+El asistente ofrece únicamente ejemplos de la categoría resuelta, con productos correspondientes y todas las mecánicas disponibles desde cero. Elegir un ejemplo prepara un borrador, permite cambiar meta, porcentaje, conteo, nombre y premio y exige revisión final para crear. No sobrescribir ediciones sin elección explícita; conservar fechas/sucursales. Los puntos y cashback crean premios de entrega en caja, sin simular descuentos automáticos.
+
+Cambiar categoría no altera reglas existentes, ledger ni tarjetas. presentationVersion sigue en 24; promociones creadas por ejemplos usan la misma generación Apple y Google. V001–V009 inmutables. No renovar túneles, claves ni identidades.
+
+Gate obligatorio: 185 generales + 203 PostgreSQL (388), incluidas las de concurrencia, todas las Python, Docker y 43 comprobaciones de gateway antes del auto commit local. Doce suites UI interceptadas, incluyendo business-categories.spec.cjs. PostgreSQL embebido solo comprueba casos secuenciales; no sustituye PostgreSQL nativo. HTTPS y comprobación en teléfonos se informan aparte.

@@ -236,7 +236,8 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         "business" to c.one("SELECT * FROM tenants WHERE id=?",s.tenant) { obj("id" to s.tenant,"name" to it.getString("name"),"slug" to it.getString("slug"),"currency" to it.getString("currency"),"timezone" to it.getString("timezone")) },
         "role" to s.role, "branchId" to s.branch,
         "branches" to c.rows("SELECT * FROM branches WHERE tenant_id=? AND (?::text IS NULL OR id=?) ORDER BY name",s.tenant,s.branch,s.branch) { obj("id" to it.getString("id"),"name" to it.getString("name"),"code" to it.getString("code")) },
-        "programs" to programs(c,s.tenant,s.role!="OWNER"),"rewards" to rewards(c,s.tenant,s.role!="OWNER"),
+                "programs" to programs(c,s.tenant,s.role!="OWNER"),"rewards" to rewards(c,s.tenant,s.role!="OWNER"),
+        "promotionSuggestions" to if(s.role=="OWNER")promotionSuggestions(c,s.tenant) else null,
         "wallet" to obj("apple" to "PENDING_INTEGRATION","google" to "PENDING_INTEGRATION")) }
     fun lookup(s: Staff, input: Lookup): JsonObject {
         need((input.document == null) != (input.cardCode == null),"INVALID_LOOKUP","Usa documento o código de tarjeta.")

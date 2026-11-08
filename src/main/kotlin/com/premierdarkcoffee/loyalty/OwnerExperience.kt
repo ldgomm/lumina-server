@@ -18,8 +18,8 @@ object OwnerExperienceMigration {
     }
 }
 
-val protectedBusinessFields = listOf("legalName", "ruc", "activity", "province", "city", "address")
-fun BusinessProfile.identity() = listOf(legalName, ruc, activity, province, city, address)
+val protectedBusinessFields = listOf("legalName", "ruc", "activity", "province", "city", "address", "category")
+fun BusinessProfile.identity() = listOf(legalName, ruc, activity, province, city, address, category)
 
 @Serializable data class ProfileCorrectionRequest(val details: String)
 @Serializable data class ProfileCorrectionResolution(val status: String, val response: String)

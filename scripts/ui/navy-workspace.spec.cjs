@@ -3,9 +3,13 @@ const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const web=path.resolve(__dirname,'../../src/main/resources/web');
 const evidence=process.env.LOYALTY_UI_EVIDENCE;
-const profile={legalName:'Aurora Ejemplo S.A.',ruc:'1790012345001',activity:'Cafetería',contactName:'Ana Ejemplo',email:'ana@example.test',phone:'+593 99 123 4567',province:'Pichincha',city:'Quito',address:'Dirección ficticia 123',website:'https://example.test',socialLinks:{}};
+const catalog=JSON.parse(fs.readFileSync(path.resolve(web,'../business-categories.json'),'utf8'));
+const categoryOptions=catalog.map(({id,name,group})=>({id,name,group}));
+const cafe=catalog.find(c=>c.id==='CAFE');
+const promotionSuggestions={version:1,category:{id:cafe.id,name:cafe.name,source:'SELECTED'},productExamples:cafe.productExamples,examples:cafe.examples};
+const profile={legalName:'Aurora Ejemplo S.A.',ruc:'1790012345001',activity:'Cafetería',category:'CAFE',contactName:'Ana Ejemplo',email:'ana@example.test',phone:'+593 99 123 4567',province:'Pichincha',city:'Quito',address:'Dirección ficticia 123',website:'https://example.test',socialLinks:{}};;
 const businesses=[{id:'aurora',name:'Café Aurora',ruc:profile.ruc,city:'Quito',state:'ACTIVE',clients:124,balanceMinor:2500,currency:'USD',nextChargeOn:'2026-12-01'}, {id:'legacy',name:'Taller Brújula',ruc:null,city:null,state:'ACTIVE',clients:32,balanceMinor:0,currency:'USD',nextChargeOn:null}];
-const staff={role:'OWNER',business:{id:'aurora',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'branch',name:'Principal'}],programs:[],rewards:[]};;
+const staff={role:'OWNER',business:{id:'aurora',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'branch',name:'Principal'}],programs:[],rewards:[],promotionSuggestions};;;;
 const account={business:{...staff.business,joinedAt:'2026-10-01',tenureDays:37},access:{effectiveState:'ACTIVE'},summary:{balanceMinor:2500,overdueMinor:0,nextDueOn:null,invoiceCount:0},today:'2026-11-07',membership:null,invoices:[],payments:[],paymentCount:0};
 const member={member:{id:'member',name:'Ana Ejemplo',cardCode:'FAKE-CARD-000001',revision:1},balances:[],rewards:[]};
 async function run(){
@@ -25,13 +29,14 @@ async function run(){
      return route.fulfill({json:{items:q==='malicioso'?[{id:'fake',name:'<img src=x onerror="window.injected=true">',ruc:null}]:businesses.filter(b=>b.name.toLowerCase().includes(q.toLowerCase())||b.ruc?.includes(q))}});
     }
     if(u.pathname==='/api/platform/businesses'){pendingCreate=()=>route.fulfill({status:201,json:{tenantId:'aurora',ownerToken:'FICTIONAL-ONE-TIME-CREDENTIAL',enrollmentPath:'/join/aurora',firstBranchId:'branch'}});return;}
+        if(u.pathname==='/api/platform/business-categories')return route.fulfill({json:{version:1,categories:categoryOptions}});
     if(u.pathname.endsWith('/account'))return route.fulfill({json:account});
     if(u.pathname.endsWith('/profile')||u.pathname==='/api/staff/business-profile'){
      if(request.method()==='PUT'){
       if(failProfile)return route.fulfill({status:409,json:{code:'PROFILE_CHANGED',message:'Otra persona actualizó los datos. Recarga la ficha antes de guardar.'}});
       assert.equal(body.expectedVersion,profileVersion);profileVersion++;return route.fulfill({json:{business:staff.business,version:profileVersion,profile:body.profile,rucVerification:'NOT_VERIFIED'}});
      }
-     return route.fulfill({json:{business:staff.business,version:profileVersion,profile,rucVerification:'NOT_VERIFIED'}});
+     return route.fulfill({json:{business:staff.business,version:profileVersion,profile,categoryOptions,categoryContext:promotionSuggestions.category,rucVerification:'NOT_VERIFIED'}});
     }
     if(u.pathname==='/api/staff/access')return route.fulfill({json:{canOperate:true}});
     if(u.pathname==='/api/staff/member-suggestions')return route.fulfill({json:{items:[{name:'Ana Ejemplo',cardCode:'FAKE-CARD-000001'},{name:'Ana Ejemplo',cardCode:'FAKE-CARD-000002'}]}});
@@ -66,7 +71,7 @@ async function run(){
   await page.locator('#newBusiness').click();await page.locator('#registrationNext').click();assert.equal(await page.locator('[data-registration-panel="0"]').isVisible(),true);
   await page.locator('#name').fill('Café Aurora');await page.locator('#legalName').fill(profile.legalName);await page.locator('#ruc').fill('123');await page.locator('#activity').fill(profile.activity);await page.locator('#registrationNext').click();
   assert.equal(await page.locator('[data-registration-panel="0"]').isVisible(),true);assert.match(await page.locator('#rucHelp').textContent(),/13 dígitos/);
-  await page.locator('#ruc').fill(profile.ruc);await page.locator('#registrationNext').click();assert.equal(await page.locator('[data-registration-panel="1"]').isVisible(),true);
+  await page.locator('#ruc').fill(profile.ruc);await page.locator('#category').selectOption('CAFE');await page.locator('#registrationNext').click();;assert.equal(await page.locator('[data-registration-panel="1"]').isVisible(),true);
   for(const key of ['contactName','email','phone','province','city','address','website'])await page.locator('#'+key).fill(profile[key]);
   await page.locator('#registrationBack').click();assert.equal(await page.locator('#legalName').inputValue(),profile.legalName);await page.locator('#registrationNext').click();assert.equal(await page.locator('#email').inputValue(),profile.email);
   await page.locator('#registrationNext').click();assert.match(await page.locator('#registrationSummary').textContent(),/1790012345001/);assert.equal(await page.locator('#slug').inputValue(),'cafe-aurora');
@@ -97,7 +102,7 @@ async function run(){
   await page.setViewportSize({width:1440,height:1100});await showStaff('OWNER','overview');await page.locator('.overview-hero').waitFor();await shot('navy-owner-desktop');
   assert.equal(await page.locator('.workspace-sidebar').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(11, 31, 58)');await noOverflow();
   await page.goto('https://loyalty.test/platform');await page.locator('#platformToken').fill('FICTIONAL');await page.locator('#platformLogin button').click();await page.locator('#newBusiness').click();
-  await page.locator('#name').fill('Otra marca de ejemplo');for(const key of ['legalName','ruc','activity'])await page.locator('#'+key).fill(profile[key]);await page.locator('#registrationNext').click();
+  await page.locator('#name').fill('Otra marca de ejemplo');for(const key of ['legalName','ruc','activity'])await page.locator('#'+key).fill(profile[key]);await page.locator('#category').selectOption('CAFE');await page.locator('#registrationNext').click();;
   for(const key of ['contactName','email','phone','province','city','address'])await page.locator('#'+key).fill(profile[key]);await page.locator('#registrationNext').click();
   pendingCreate=null;delayList=true;await page.locator('#registrationNext').click();await waitUntil(()=>pendingCreate);await pendingCreate();await waitUntil(()=>pendingList);
   await page.locator('#exit').click();await page.locator('#platformLogin').waitFor();await pendingList();await page.waitForTimeout(80);

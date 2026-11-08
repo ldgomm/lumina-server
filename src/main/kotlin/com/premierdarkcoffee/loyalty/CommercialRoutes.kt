@@ -43,7 +43,8 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
             )
         }
         get("/tenants") { call.respond(io { commercial.businesses(call.request.queryParameters["q"] ?: "", call.offset()) }) }
-        get("/tenant-suggestions") { call.respond(io { service.businessSuggestions(call.request.queryParameters["q"] ?: "") }) }
+                get("/tenant-suggestions") { call.respond(io { service.businessSuggestions(call.request.queryParameters["q"] ?: "") }) }
+        get("/business-categories") { call.respond(BusinessCategories.options()) }
         post("/businesses") {
             val input=call.body<NewTenant>()
             need(input.profile!=null && input.firstBranch!=null,"BUSINESS_PROFILE_REQUIRED","Completa los datos del negocio, el RUC y la primera sucursal.")

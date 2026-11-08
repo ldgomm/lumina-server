@@ -2,8 +2,12 @@
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
-const profile={legalName:'Aurora Ejemplo S.A.',ruc:'1790012345001',activity:'Cafetería',contactName:'Ana Ejemplo',email:'ana@example.test',phone:'0991234567',province:'Pichincha',city:'Quito',address:'Dirección de ejemplo 123',website:'',socialLinks:{}};
-const staff={role:'OWNER',business:{id:'aurora',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'centro',name:'Centro'},{id:'norte',name:'Norte'}],programs:[],rewards:[]};
+const catalog=JSON.parse(fs.readFileSync(path.resolve(web,'../business-categories.json'),'utf8'));
+const categoryOptions=catalog.map(({id,name,group})=>({id,name,group}));
+const cafe=catalog.find(c=>c.id==='CAFE');
+const promotionSuggestions={version:1,category:{id:cafe.id,name:cafe.name,source:'SELECTED'},productExamples:cafe.productExamples,examples:cafe.examples};
+const profile={legalName:'Aurora Ejemplo S.A.',ruc:'1790012345001',activity:'Cafetería',category:'CAFE',contactName:'Ana Ejemplo',email:'ana@example.test',phone:'0991234567',province:'Pichincha',city:'Quito',address:'Dirección de ejemplo 123',website:'',socialLinks:{}};;
+const staff={role:'OWNER',business:{id:'aurora',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'centro',name:'Centro'},{id:'norte',name:'Norte'}],programs:[],rewards:[],promotionSuggestions};;
 const account={business:{...staff.business,joinedAt:'2026-10-01',tenureDays:37},access:{effectiveState:'ACTIVE'},summary:{balanceMinor:0,overdueMinor:0,nextDueOn:null,invoiceCount:0},today:'2026-11-07',membership:null,invoices:[],payments:[],paymentCount:0};
 const suggestions=[{title:'¡Feliz cumpleaños!',message:'Hoy celebramos contigo. Gracias por formar parte de nuestra comunidad.'},{title:'Un saludo en tu día',message:'Te deseamos un cumpleaños lleno de buenos momentos.'},{title:'De parte de todo el equipo',message:'Nos alegra tenerte cerca. ¡Feliz cumpleaños!'}];
 const birthday={version:0,settings:{enabled:true,mode:'FIXED',title:'¡Feliz cumpleaños!',message:'Un saludo de nuestra tienda.',templates:[]},suggestions};
@@ -24,7 +28,7 @@ async function run(){
     if(u.pathname==='/api/platform/tenants')return route.fulfill({json:{items:[{...staff.business,state:'ACTIVE',clients:124,balanceMinor:0,pendingProfileRequests:requests.filter(r=>r.status==='PENDING').length}],nextOffset:null}});
     if(u.pathname==='/api/staff/business-profile/requests'){requests=[{id:'request1',details:body.details,status:'PENDING',createdAt:'2026-11-07T15:00:00Z'}];return route.fulfill({status:201,json:{id:'request1',status:'PENDING'}});}
     if(u.pathname.endsWith('/profile-requests/request1')){Object.assign(requests[0],body);return route.fulfill({json:{saved:true}});}
-    if(u.pathname==='/api/staff/business-profile'||u.pathname.endsWith('/profile')){if(req.method()==='PUT')Object.assign(profile,body.profile);return route.fulfill({json:{business:staff.business,version:req.method()==='PUT'?2:1,profile,requests}});}
+    if(u.pathname==='/api/staff/business-profile'||u.pathname.endsWith('/profile')){if(req.method()==='PUT')Object.assign(profile,body.profile);return route.fulfill({json:{business:staff.business,version:req.method()==='PUT'?2:1,profile,categoryOptions,categoryContext:promotionSuggestions.category,requests}});}
     if(u.pathname==='/api/staff/customer-events')return route.fulfill({json:{events:[]}});
     if(u.pathname==='/api/staff/birthday-settings'){
      if(req.method()==='PUT'){if(birthdayConflict)return route.fulfill({status:409,json:{code:'VERSION_CONFLICT',message:'Otra persona cambió los cumpleaños.'}});birthday.version++;birthday.settings=body.settings;return route.fulfill({json:{version:birthday.version}});}
@@ -58,7 +62,7 @@ async function run(){
   await page.locator('#promotionNext').click();await wait(()=>pendingPromotion);assert.equal(await page.locator('#promotionBack').isDisabled(),true);
   const created=calls.find(x=>x.path.endsWith('promotion-setups'));assert.equal(created.body.rewardCost,525);assert.equal(created.body.program.cashbackBps,500);assert.ok(created.key);await pendingPromotion();await page.locator('#newPromotion').waitFor();
   checks.push('Guided promotion previews before one atomic creation; whole-unit buttons preserve cents and steps preserve input');
-  await page.locator('#newPromotion').click();await page.locator('#promotionNext').click();await page.getByText('Empezar con un ejemplo',{exact:true}).click();await page.locator('[data-template=ropa]').click();await page.locator('#nth').fill('4');await page.locator('#percent').fill('35');await page.locator('#promotionNext').click();
+  await page.locator('#newPromotion').click();await page.locator('[data-business-example="cafe-2"]').click();;await page.locator('#nth').fill('4');await page.locator('#percent').fill('35');await page.locator('#promotionNext').click();
   assert.match(await page.locator('#promotionReview').textContent(),/3 sellos/);assert.match(await page.locator('#promotionReview').textContent(),/35%/);assert.equal(calls.filter(x=>x.path.endsWith('promotion-templates')).length,0);
   checks.push('Examples are editable rules; changes are reflected in the review, with no implicit publication');
   await show('events');await page.locator('#birthdayForm').waitFor();await page.locator('#birthdayTitleOption').selectOption('1');assert.equal(await page.locator('#birthdayTitle').inputValue(),suggestions[1].title);

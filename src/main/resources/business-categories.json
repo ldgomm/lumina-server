@@ -1,0 +1,2333 @@
+[
+  {
+    "id": "CAFE",
+    "name": "Cafetería",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "cafeteria",
+      "cafe",
+      "coffee shop"
+    ],
+    "productExamples": [
+      "café",
+      "bebidas",
+      "pastelería"
+    ],
+    "examples": [
+      {
+        "id": "cafe-1",
+        "name": "Sexto café gratis",
+        "method": "STAMPS",
+        "group": "café",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Café gratis"
+      },
+      {
+        "id": "cafe-2",
+        "name": "Quinto café al 50%",
+        "method": "DISCOUNT",
+        "group": "café",
+        "nth": 5,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un café"
+      },
+      {
+        "id": "cafe-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Bebida a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "cafe-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Bebida a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "PIZZERIA",
+    "name": "Pizzería",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "pizzeria",
+      "pizzas"
+    ],
+    "productExamples": [
+      "pizza",
+      "bebidas",
+      "complementos"
+    ],
+    "examples": [
+      {
+        "id": "pizzeria-1",
+        "name": "Sexta pizza gratis",
+        "method": "STAMPS",
+        "group": "pizza",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Pizza gratis"
+      },
+      {
+        "id": "pizzeria-2",
+        "name": "Tercera pizza al 20%",
+        "method": "DISCOUNT",
+        "group": "pizza",
+        "nth": 3,
+        "percentBps": 2000,
+        "countUnits": true,
+        "rewardName": "20% en una pizza"
+      },
+      {
+        "id": "pizzeria-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Complemento para tu pizza",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "pizzeria-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Complemento para tu pizza",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "RESTAURANT",
+    "name": "Restaurante",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "restaurante",
+      "restaurantes"
+    ],
+    "productExamples": [
+      "platos",
+      "postres",
+      "bebidas"
+    ],
+    "examples": [
+      {
+        "id": "restaurant-1",
+        "name": "Sexto postre gratis",
+        "method": "STAMPS",
+        "group": "postres",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Postre gratis"
+      },
+      {
+        "id": "restaurant-2",
+        "name": "Cuarta compra de platos al 15%",
+        "method": "DISCOUNT",
+        "group": "platos",
+        "nth": 4,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en platos"
+      },
+      {
+        "id": "restaurant-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Postre a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "restaurant-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Postre a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "BAKERY",
+    "name": "Panadería",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "panaderia"
+    ],
+    "productExamples": [
+      "pan",
+      "bollería",
+      "bebidas"
+    ],
+    "examples": [
+      {
+        "id": "bakery-1",
+        "name": "Sexta pieza de bollería gratis",
+        "method": "STAMPS",
+        "group": "bollería",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Pieza de bollería gratis"
+      },
+      {
+        "id": "bakery-2",
+        "name": "Cuarta compra de pan al 15%",
+        "method": "DISCOUNT",
+        "group": "pan",
+        "nth": 4,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en pan"
+      },
+      {
+        "id": "bakery-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Pan de especialidad",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "bakery-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Pan de especialidad",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "PASTRY",
+    "name": "Pastelería",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "pasteleria",
+      "reposteria"
+    ],
+    "productExamples": [
+      "porciones",
+      "pasteles",
+      "galletas"
+    ],
+    "examples": [
+      {
+        "id": "pastry-1",
+        "name": "Sexta porción gratis",
+        "method": "STAMPS",
+        "group": "porciones",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Porción de pastel gratis"
+      },
+      {
+        "id": "pastry-2",
+        "name": "Tercera compra de galletas al 20%",
+        "method": "DISCOUNT",
+        "group": "galletas",
+        "nth": 3,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en galletas"
+      },
+      {
+        "id": "pastry-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Caja de galletas",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "pastry-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Caja de galletas",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "ICE_CREAM",
+    "name": "Heladería",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "heladeria",
+      "helados"
+    ],
+    "productExamples": [
+      "helados",
+      "toppings",
+      "bebidas"
+    ],
+    "examples": [
+      {
+        "id": "ice_cream-1",
+        "name": "Sexto helado gratis",
+        "method": "STAMPS",
+        "group": "helados",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Helado gratis"
+      },
+      {
+        "id": "ice_cream-2",
+        "name": "Cuarto helado al 50%",
+        "method": "DISCOUNT",
+        "group": "helados",
+        "nth": 4,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un helado"
+      },
+      {
+        "id": "ice_cream-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Topping a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "ice_cream-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Topping a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "BURGERS",
+    "name": "Hamburguesería",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "hamburgueseria",
+      "hamburguesas"
+    ],
+    "productExamples": [
+      "hamburguesas",
+      "acompañamientos",
+      "bebidas"
+    ],
+    "examples": [
+      {
+        "id": "burgers-1",
+        "name": "Sexta hamburguesa gratis",
+        "method": "STAMPS",
+        "group": "hamburguesas",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Hamburguesa gratis"
+      },
+      {
+        "id": "burgers-2",
+        "name": "Cuarta hamburguesa al 25%",
+        "method": "DISCOUNT",
+        "group": "hamburguesas",
+        "nth": 4,
+        "percentBps": 2500,
+        "countUnits": true,
+        "rewardName": "25% en una hamburguesa"
+      },
+      {
+        "id": "burgers-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Acompañamiento a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "burgers-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Acompañamiento a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "FAST_FOOD",
+    "name": "Comida rápida",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "comida rapida",
+      "snacks"
+    ],
+    "productExamples": [
+      "combos",
+      "acompañamientos",
+      "bebidas"
+    ],
+    "examples": [
+      {
+        "id": "fast_food-1",
+        "name": "Séptimo combo gratis",
+        "method": "STAMPS",
+        "group": "combos",
+        "nth": 7,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Combo gratis"
+      },
+      {
+        "id": "fast_food-2",
+        "name": "Tercer combo al 20%",
+        "method": "DISCOUNT",
+        "group": "combos",
+        "nth": 3,
+        "percentBps": 2000,
+        "countUnits": true,
+        "rewardName": "20% en un combo"
+      },
+      {
+        "id": "fast_food-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Acompañamiento a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "fast_food-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Acompañamiento a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "DRINKS",
+    "name": "Jugos y bebidas",
+    "group": "Comida y bebidas",
+    "aliases": [
+      "jugueria",
+      "jugos",
+      "bebidas"
+    ],
+    "productExamples": [
+      "jugos",
+      "batidos",
+      "bebidas"
+    ],
+    "examples": [
+      {
+        "id": "drinks-1",
+        "name": "Sexto jugo gratis",
+        "method": "STAMPS",
+        "group": "jugos",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Jugo gratis"
+      },
+      {
+        "id": "drinks-2",
+        "name": "Cuarto batido al 50%",
+        "method": "DISCOUNT",
+        "group": "batidos",
+        "nth": 4,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un batido"
+      },
+      {
+        "id": "drinks-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Bebida a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "drinks-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Bebida a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "BARBER",
+    "name": "Barbería",
+    "group": "Belleza y cuidado",
+    "aliases": [
+      "barberia",
+      "barbero"
+    ],
+    "productExamples": [
+      "corte",
+      "barba",
+      "productos de cuidado"
+    ],
+    "examples": [
+      {
+        "id": "barber-1",
+        "name": "Octavo corte gratis",
+        "method": "STAMPS",
+        "group": "corte",
+        "nth": 8,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Corte gratis"
+      },
+      {
+        "id": "barber-2",
+        "name": "Cuarto arreglo de barba al 25%",
+        "method": "DISCOUNT",
+        "group": "barba",
+        "nth": 4,
+        "percentBps": 2500,
+        "countUnits": true,
+        "rewardName": "25% en arreglo de barba"
+      },
+      {
+        "id": "barber-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Producto para el cuidado de barba",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "barber-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Producto para el cuidado de barba",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "HAIR",
+    "name": "Peluquería",
+    "group": "Belleza y cuidado",
+    "aliases": [
+      "peluqueria",
+      "salon de cabello"
+    ],
+    "productExamples": [
+      "corte de cabello",
+      "peinado",
+      "productos capilares"
+    ],
+    "examples": [
+      {
+        "id": "hair-1",
+        "name": "Octavo corte de cabello gratis",
+        "method": "STAMPS",
+        "group": "corte de cabello",
+        "nth": 8,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Corte de cabello gratis"
+      },
+      {
+        "id": "hair-2",
+        "name": "Cuarto peinado al 30%",
+        "method": "DISCOUNT",
+        "group": "peinado",
+        "nth": 4,
+        "percentBps": 3000,
+        "countUnits": true,
+        "rewardName": "30% en un peinado"
+      },
+      {
+        "id": "hair-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Producto capilar a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "hair-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Producto capilar a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "BEAUTY",
+    "name": "Salón de belleza",
+    "group": "Belleza y cuidado",
+    "aliases": [
+      "salon de belleza",
+      "centro de belleza"
+    ],
+    "productExamples": [
+      "peinados",
+      "maquillaje",
+      "productos de belleza"
+    ],
+    "examples": [
+      {
+        "id": "beauty-1",
+        "name": "Sexto peinado al 50%",
+        "method": "DISCOUNT",
+        "group": "peinados",
+        "nth": 6,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un peinado"
+      },
+      {
+        "id": "beauty-2",
+        "name": "Tercera compra de belleza al 20%",
+        "method": "DISCOUNT",
+        "group": "productos de belleza",
+        "nth": 3,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en productos de belleza"
+      },
+      {
+        "id": "beauty-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Producto de belleza a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "beauty-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Producto de belleza a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "NAILS",
+    "name": "Manicure y uñas",
+    "group": "Belleza y cuidado",
+    "aliases": [
+      "unas",
+      "manicure",
+      "manicura"
+    ],
+    "productExamples": [
+      "manicure",
+      "pedicure",
+      "esmaltes"
+    ],
+    "examples": [
+      {
+        "id": "nails-1",
+        "name": "Sexto manicure gratis",
+        "method": "STAMPS",
+        "group": "manicure",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Manicure gratis"
+      },
+      {
+        "id": "nails-2",
+        "name": "Cuarto pedicure al 30%",
+        "method": "DISCOUNT",
+        "group": "pedicure",
+        "nth": 4,
+        "percentBps": 3000,
+        "countUnits": true,
+        "rewardName": "30% en un pedicure"
+      },
+      {
+        "id": "nails-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Esmalte a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "nails-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Esmalte a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "SPA",
+    "name": "Spa y bienestar",
+    "group": "Belleza y cuidado",
+    "aliases": [
+      "spa",
+      "bienestar"
+    ],
+    "productExamples": [
+      "sesiones de bienestar",
+      "productos de cuidado",
+      "accesorios"
+    ],
+    "examples": [
+      {
+        "id": "spa-1",
+        "name": "Quinta sesión de bienestar al 25%",
+        "method": "DISCOUNT",
+        "group": "sesiones de bienestar",
+        "nth": 5,
+        "percentBps": 2500,
+        "countUnits": true,
+        "rewardName": "25% en una sesión de bienestar"
+      },
+      {
+        "id": "spa-2",
+        "name": "Tercera compra de cuidado al 20%",
+        "method": "DISCOUNT",
+        "group": "productos de cuidado",
+        "nth": 3,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en productos de cuidado"
+      },
+      {
+        "id": "spa-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Producto de cuidado a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "spa-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Producto de cuidado a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "COSMETICS",
+    "name": "Cosméticos y perfumería",
+    "group": "Moda y compras",
+    "aliases": [
+      "cosmeticos",
+      "perfumeria"
+    ],
+    "productExamples": [
+      "maquillaje",
+      "perfumes",
+      "cuidado personal"
+    ],
+    "examples": [
+      {
+        "id": "cosmetics-1",
+        "name": "Tercera compra de maquillaje al 15%",
+        "method": "DISCOUNT",
+        "group": "maquillaje",
+        "nth": 3,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en maquillaje"
+      },
+      {
+        "id": "cosmetics-2",
+        "name": "Quinta compra de cuidado al 25%",
+        "method": "DISCOUNT",
+        "group": "cuidado personal",
+        "nth": 5,
+        "percentBps": 2500,
+        "countUnits": false,
+        "rewardName": "25% en cuidado personal"
+      },
+      {
+        "id": "cosmetics-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Producto de cuidado personal",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "cosmetics-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Producto de cuidado personal",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "CLOTHING",
+    "name": "Ropa y boutique",
+    "group": "Moda y compras",
+    "aliases": [
+      "ropa",
+      "boutique",
+      "tienda de ropa",
+      "moda"
+    ],
+    "productExamples": [
+      "ropa",
+      "prendas",
+      "accesorios"
+    ],
+    "examples": [
+      {
+        "id": "clothing-1",
+        "name": "Segunda compra de ropa al 20%",
+        "method": "DISCOUNT",
+        "group": "ropa",
+        "nth": 2,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en ropa"
+      },
+      {
+        "id": "clothing-2",
+        "name": "Quinta prenda al 30%",
+        "method": "DISCOUNT",
+        "group": "prendas",
+        "nth": 5,
+        "percentBps": 3000,
+        "countUnits": true,
+        "rewardName": "30% en una prenda"
+      },
+      {
+        "id": "clothing-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "clothing-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "SHOES",
+    "name": "Calzado",
+    "group": "Moda y compras",
+    "aliases": [
+      "calzado",
+      "zapateria",
+      "zapatos"
+    ],
+    "productExamples": [
+      "calzado",
+      "medias",
+      "cuidado del calzado"
+    ],
+    "examples": [
+      {
+        "id": "shoes-1",
+        "name": "Segunda compra de calzado al 15%",
+        "method": "DISCOUNT",
+        "group": "calzado",
+        "nth": 2,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en calzado"
+      },
+      {
+        "id": "shoes-2",
+        "name": "Cuarto par al 25%",
+        "method": "DISCOUNT",
+        "group": "calzado",
+        "nth": 4,
+        "percentBps": 2500,
+        "countUnits": true,
+        "rewardName": "25% en un par de calzado"
+      },
+      {
+        "id": "shoes-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Kit de cuidado del calzado",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "shoes-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Kit de cuidado del calzado",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "ACCESSORIES",
+    "name": "Accesorios",
+    "group": "Moda y compras",
+    "aliases": [
+      "accesorios",
+      "bisuteria"
+    ],
+    "productExamples": [
+      "accesorios",
+      "bisutería",
+      "complementos"
+    ],
+    "examples": [
+      {
+        "id": "accessories-1",
+        "name": "Sexto accesorio al 50%",
+        "method": "DISCOUNT",
+        "group": "accesorios",
+        "nth": 6,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un accesorio"
+      },
+      {
+        "id": "accessories-2",
+        "name": "Tercera compra de bisutería al 20%",
+        "method": "DISCOUNT",
+        "group": "bisutería",
+        "nth": 3,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en bisutería"
+      },
+      {
+        "id": "accessories-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "accessories-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "JEWELRY",
+    "name": "Joyería y relojería",
+    "group": "Moda y compras",
+    "aliases": [
+      "joyeria",
+      "relojeria"
+    ],
+    "productExamples": [
+      "joyería",
+      "relojes",
+      "accesorios"
+    ],
+    "examples": [
+      {
+        "id": "jewelry-1",
+        "name": "Segunda compra de accesorios al 10%",
+        "method": "DISCOUNT",
+        "group": "accesorios",
+        "nth": 2,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en accesorios"
+      },
+      {
+        "id": "jewelry-2",
+        "name": "Cuarta compra de relojes al 15%",
+        "method": "DISCOUNT",
+        "group": "relojes",
+        "nth": 4,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en relojes"
+      },
+      {
+        "id": "jewelry-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio para reloj",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "jewelry-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio para reloj",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "OPTICS",
+    "name": "Óptica",
+    "group": "Moda y compras",
+    "aliases": [
+      "optica",
+      "opticas"
+    ],
+    "productExamples": [
+      "monturas",
+      "gafas de sol",
+      "accesorios ópticos"
+    ],
+    "examples": [
+      {
+        "id": "optics-1",
+        "name": "Segunda compra de gafas al 15%",
+        "method": "DISCOUNT",
+        "group": "gafas de sol",
+        "nth": 2,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en gafas de sol"
+      },
+      {
+        "id": "optics-2",
+        "name": "Tercera compra de monturas al 20%",
+        "method": "DISCOUNT",
+        "group": "monturas",
+        "nth": 3,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en monturas"
+      },
+      {
+        "id": "optics-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Kit de limpieza para lentes",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "optics-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Kit de limpieza para lentes",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "ELECTRONICS",
+    "name": "Electrónica y audio",
+    "group": "Tecnología",
+    "aliases": [
+      "electronica",
+      "audio"
+    ],
+    "productExamples": [
+      "electrónica",
+      "audio",
+      "accesorios electrónicos"
+    ],
+    "examples": [
+      {
+        "id": "electronics-1",
+        "name": "Tercera compra de accesorios al 15%",
+        "method": "DISCOUNT",
+        "group": "accesorios electrónicos",
+        "nth": 3,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en accesorios electrónicos"
+      },
+      {
+        "id": "electronics-2",
+        "name": "Segunda compra de audio al 10%",
+        "method": "DISCOUNT",
+        "group": "audio",
+        "nth": 2,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en audio"
+      },
+      {
+        "id": "electronics-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio electrónico a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "electronics-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio electrónico a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "PHONES",
+    "name": "Telefonía",
+    "group": "Tecnología",
+    "aliases": [
+      "telefonia",
+      "celulares",
+      "telefonos"
+    ],
+    "productExamples": [
+      "fundas",
+      "cargadores",
+      "accesorios de teléfono"
+    ],
+    "examples": [
+      {
+        "id": "phones-1",
+        "name": "Segunda funda al 20%",
+        "method": "DISCOUNT",
+        "group": "fundas",
+        "nth": 2,
+        "percentBps": 2000,
+        "countUnits": true,
+        "rewardName": "20% en una funda"
+      },
+      {
+        "id": "phones-2",
+        "name": "Tercera compra de accesorios al 15%",
+        "method": "DISCOUNT",
+        "group": "accesorios de teléfono",
+        "nth": 3,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en accesorios de teléfono"
+      },
+      {
+        "id": "phones-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Funda a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "phones-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Funda a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "COMPUTERS",
+    "name": "Computación",
+    "group": "Tecnología",
+    "aliases": [
+      "computacion",
+      "computadoras",
+      "informatica"
+    ],
+    "productExamples": [
+      "periféricos",
+      "accesorios de computación",
+      "equipos"
+    ],
+    "examples": [
+      {
+        "id": "computers-1",
+        "name": "Segunda compra de periféricos al 10%",
+        "method": "DISCOUNT",
+        "group": "periféricos",
+        "nth": 2,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en periféricos"
+      },
+      {
+        "id": "computers-2",
+        "name": "Cuarta compra de accesorios al 20%",
+        "method": "DISCOUNT",
+        "group": "accesorios de computación",
+        "nth": 4,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en accesorios de computación"
+      },
+      {
+        "id": "computers-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio de computación",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "computers-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio de computación",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "APPLIANCES",
+    "name": "Electrodomésticos",
+    "group": "Tecnología",
+    "aliases": [
+      "electrodomesticos"
+    ],
+    "productExamples": [
+      "electrodomésticos",
+      "pequeños electrodomésticos",
+      "accesorios del hogar"
+    ],
+    "examples": [
+      {
+        "id": "appliances-1",
+        "name": "Segunda compra de electrodomésticos al 5%",
+        "method": "DISCOUNT",
+        "group": "electrodomésticos",
+        "nth": 2,
+        "percentBps": 500,
+        "countUnits": false,
+        "rewardName": "5% en electrodomésticos"
+      },
+      {
+        "id": "appliances-2",
+        "name": "Tercer pequeño electrodoméstico al 10%",
+        "method": "DISCOUNT",
+        "group": "pequeños electrodomésticos",
+        "nth": 3,
+        "percentBps": 1000,
+        "countUnits": true,
+        "rewardName": "10% en un pequeño electrodoméstico"
+      },
+      {
+        "id": "appliances-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio del hogar",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "appliances-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio del hogar",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "HOME",
+    "name": "Hogar y decoración",
+    "group": "Moda y compras",
+    "aliases": [
+      "hogar",
+      "decoracion",
+      "muebles"
+    ],
+    "productExamples": [
+      "decoración",
+      "textiles",
+      "hogar"
+    ],
+    "examples": [
+      {
+        "id": "home-1",
+        "name": "Tercera compra de decoración al 15%",
+        "method": "DISCOUNT",
+        "group": "decoración",
+        "nth": 3,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en decoración"
+      },
+      {
+        "id": "home-2",
+        "name": "Quinto textil al 25%",
+        "method": "DISCOUNT",
+        "group": "textiles",
+        "nth": 5,
+        "percentBps": 2500,
+        "countUnits": true,
+        "rewardName": "25% en un textil"
+      },
+      {
+        "id": "home-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Detalle de decoración",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "home-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Detalle de decoración",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "PET_SHOP",
+    "name": "Tienda de mascotas",
+    "group": "Mascotas",
+    "aliases": [
+      "mascotas",
+      "pet shop",
+      "tienda de mascotas"
+    ],
+    "productExamples": [
+      "alimento para mascotas",
+      "juguetes para mascotas",
+      "accesorios de mascotas"
+    ],
+    "examples": [
+      {
+        "id": "pet_shop-1",
+        "name": "Sexto juguete de mascota al 50%",
+        "method": "DISCOUNT",
+        "group": "juguetes para mascotas",
+        "nth": 6,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un juguete para mascota"
+      },
+      {
+        "id": "pet_shop-2",
+        "name": "Cuarta compra de alimento al 10%",
+        "method": "DISCOUNT",
+        "group": "alimento para mascotas",
+        "nth": 4,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en alimento para mascotas"
+      },
+      {
+        "id": "pet_shop-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Juguete para mascota",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "pet_shop-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Juguete para mascota",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "PET_GROOMING",
+    "name": "Peluquería de mascotas",
+    "group": "Mascotas",
+    "aliases": [
+      "peluqueria de mascotas",
+      "peluqueria canina",
+      "grooming"
+    ],
+    "productExamples": [
+      "baño de mascota",
+      "corte de mascota",
+      "productos de aseo"
+    ],
+    "examples": [
+      {
+        "id": "pet_grooming-1",
+        "name": "Sexto baño de mascota gratis",
+        "method": "STAMPS",
+        "group": "baño de mascota",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Baño de mascota gratis"
+      },
+      {
+        "id": "pet_grooming-2",
+        "name": "Cuarto corte de mascota al 25%",
+        "method": "DISCOUNT",
+        "group": "corte de mascota",
+        "nth": 4,
+        "percentBps": 2500,
+        "countUnits": true,
+        "rewardName": "25% en corte de mascota"
+      },
+      {
+        "id": "pet_grooming-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio para mascota",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "pet_grooming-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio para mascota",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "GARAGE",
+    "name": "Taller mecánico",
+    "group": "Vehículos",
+    "aliases": [
+      "taller mecanico",
+      "mecanica",
+      "taller"
+    ],
+    "productExamples": [
+      "mantenimiento",
+      "repuestos",
+      "accesorios de auto"
+    ],
+    "examples": [
+      {
+        "id": "garage-1",
+        "name": "Tercer mantenimiento al 10%",
+        "method": "DISCOUNT",
+        "group": "mantenimiento",
+        "nth": 3,
+        "percentBps": 1000,
+        "countUnits": true,
+        "rewardName": "10% en un mantenimiento"
+      },
+      {
+        "id": "garage-2",
+        "name": "Cuarta compra de repuestos al 15%",
+        "method": "DISCOUNT",
+        "group": "repuestos",
+        "nth": 4,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en repuestos"
+      },
+      {
+        "id": "garage-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio para auto",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "garage-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio para auto",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "OIL",
+    "name": "Lubricadora y aceites",
+    "group": "Vehículos",
+    "aliases": [
+      "lubricadora",
+      "aceites",
+      "cambio de aceite"
+    ],
+    "productExamples": [
+      "cambio de aceite",
+      "filtros",
+      "lubricantes"
+    ],
+    "examples": [
+      {
+        "id": "oil-1",
+        "name": "Quinto cambio de aceite al 20%",
+        "method": "DISCOUNT",
+        "group": "cambio de aceite",
+        "nth": 5,
+        "percentBps": 2000,
+        "countUnits": true,
+        "rewardName": "20% en un cambio de aceite"
+      },
+      {
+        "id": "oil-2",
+        "name": "Tercera compra de filtros al 15%",
+        "method": "DISCOUNT",
+        "group": "filtros",
+        "nth": 3,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en filtros"
+      },
+      {
+        "id": "oil-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio para el cuidado del auto",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "oil-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio para el cuidado del auto",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "TIRES",
+    "name": "Llantas",
+    "group": "Vehículos",
+    "aliases": [
+      "llantas",
+      "neumaticos",
+      "llantera"
+    ],
+    "productExamples": [
+      "llantas",
+      "balanceo",
+      "accesorios de ruedas"
+    ],
+    "examples": [
+      {
+        "id": "tires-1",
+        "name": "Segunda compra de llantas al 5%",
+        "method": "DISCOUNT",
+        "group": "llantas",
+        "nth": 2,
+        "percentBps": 500,
+        "countUnits": false,
+        "rewardName": "5% en llantas"
+      },
+      {
+        "id": "tires-2",
+        "name": "Cuarto balanceo al 50%",
+        "method": "DISCOUNT",
+        "group": "balanceo",
+        "nth": 4,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un balanceo"
+      },
+      {
+        "id": "tires-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio para ruedas",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "tires-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio para ruedas",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "CAR_WASH",
+    "name": "Lavado de vehículos",
+    "group": "Vehículos",
+    "aliases": [
+      "lavado de autos",
+      "lavado de vehiculos",
+      "car wash",
+      "lavadora de autos"
+    ],
+    "productExamples": [
+      "lavado de auto",
+      "limpieza interior",
+      "productos de limpieza"
+    ],
+    "examples": [
+      {
+        "id": "car_wash-1",
+        "name": "Sexto lavado de auto gratis",
+        "method": "STAMPS",
+        "group": "lavado de auto",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Lavado de auto gratis"
+      },
+      {
+        "id": "car_wash-2",
+        "name": "Cuarta limpieza interior al 25%",
+        "method": "DISCOUNT",
+        "group": "limpieza interior",
+        "nth": 4,
+        "percentBps": 2500,
+        "countUnits": true,
+        "rewardName": "25% en limpieza interior"
+      },
+      {
+        "id": "car_wash-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Producto de limpieza para auto",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "car_wash-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Producto de limpieza para auto",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "FUEL",
+    "name": "Gasolinera",
+    "group": "Vehículos",
+    "aliases": [
+      "gasolinera",
+      "combustible",
+      "estacion de servicio"
+    ],
+    "productExamples": [
+      "tienda de estación",
+      "lubricantes",
+      "accesorios"
+    ],
+    "examples": [
+      {
+        "id": "fuel-1",
+        "name": "Tercera compra en tienda al 10%",
+        "method": "DISCOUNT",
+        "group": "tienda de estación",
+        "nth": 3,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en tienda de estación"
+      },
+      {
+        "id": "fuel-2",
+        "name": "Cuarta compra de lubricantes al 15%",
+        "method": "DISCOUNT",
+        "group": "lubricantes",
+        "nth": 4,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en lubricantes"
+      },
+      {
+        "id": "fuel-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Producto de la tienda de estación",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "fuel-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Producto de la tienda de estación",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "HARDWARE",
+    "name": "Ferretería",
+    "group": "Comercio diario",
+    "aliases": [
+      "ferreteria"
+    ],
+    "productExamples": [
+      "herramientas",
+      "pinturas",
+      "materiales"
+    ],
+    "examples": [
+      {
+        "id": "hardware-1",
+        "name": "Tercera compra de herramientas al 10%",
+        "method": "DISCOUNT",
+        "group": "herramientas",
+        "nth": 3,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en herramientas"
+      },
+      {
+        "id": "hardware-2",
+        "name": "Quinta compra de pinturas al 15%",
+        "method": "DISCOUNT",
+        "group": "pinturas",
+        "nth": 5,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en pinturas"
+      },
+      {
+        "id": "hardware-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio de ferretería",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "hardware-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio de ferretería",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "GROCERY",
+    "name": "Supermercado y minimarket",
+    "group": "Comercio diario",
+    "aliases": [
+      "supermercado",
+      "minimarket",
+      "abarrotes",
+      "tienda de abarrotes"
+    ],
+    "productExamples": [
+      "abarrotes",
+      "limpieza del hogar",
+      "productos seleccionados"
+    ],
+    "examples": [
+      {
+        "id": "grocery-1",
+        "name": "Quinta compra de abarrotes al 5%",
+        "method": "DISCOUNT",
+        "group": "abarrotes",
+        "nth": 5,
+        "percentBps": 500,
+        "countUnits": false,
+        "rewardName": "5% en abarrotes"
+      },
+      {
+        "id": "grocery-2",
+        "name": "Cuarta compra de limpieza al 10%",
+        "method": "DISCOUNT",
+        "group": "limpieza del hogar",
+        "nth": 4,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en limpieza del hogar"
+      },
+      {
+        "id": "grocery-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Producto seleccionado de la tienda",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "grocery-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Producto seleccionado de la tienda",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "STATIONERY",
+    "name": "Papelería",
+    "group": "Comercio diario",
+    "aliases": [
+      "papeleria",
+      "utiles escolares"
+    ],
+    "productExamples": [
+      "cuadernos",
+      "útiles escolares",
+      "papelería"
+    ],
+    "examples": [
+      {
+        "id": "stationery-1",
+        "name": "Sexto cuaderno al 50%",
+        "method": "DISCOUNT",
+        "group": "cuadernos",
+        "nth": 6,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un cuaderno"
+      },
+      {
+        "id": "stationery-2",
+        "name": "Tercera compra de útiles al 15%",
+        "method": "DISCOUNT",
+        "group": "útiles escolares",
+        "nth": 3,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en útiles escolares"
+      },
+      {
+        "id": "stationery-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Artículo de papelería",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "stationery-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Artículo de papelería",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "BOOKS",
+    "name": "Librería",
+    "group": "Comercio diario",
+    "aliases": [
+      "libreria",
+      "libros"
+    ],
+    "productExamples": [
+      "libros",
+      "lectura infantil",
+      "accesorios de lectura"
+    ],
+    "examples": [
+      {
+        "id": "books-1",
+        "name": "Quinto libro al 20%",
+        "method": "DISCOUNT",
+        "group": "libros",
+        "nth": 5,
+        "percentBps": 2000,
+        "countUnits": true,
+        "rewardName": "20% en un libro"
+      },
+      {
+        "id": "books-2",
+        "name": "Tercera compra de lectura infantil al 15%",
+        "method": "DISCOUNT",
+        "group": "lectura infantil",
+        "nth": 3,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en lectura infantil"
+      },
+      {
+        "id": "books-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio de lectura",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "books-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio de lectura",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "FLOWERS",
+    "name": "Floristería",
+    "group": "Comercio diario",
+    "aliases": [
+      "floristeria",
+      "flores",
+      "floreria"
+    ],
+    "productExamples": [
+      "ramos",
+      "arreglos florales",
+      "plantas"
+    ],
+    "examples": [
+      {
+        "id": "flowers-1",
+        "name": "Quinto ramo al 50%",
+        "method": "DISCOUNT",
+        "group": "ramos",
+        "nth": 5,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un ramo"
+      },
+      {
+        "id": "flowers-2",
+        "name": "Tercera compra de plantas al 20%",
+        "method": "DISCOUNT",
+        "group": "plantas",
+        "nth": 3,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en plantas"
+      },
+      {
+        "id": "flowers-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Detalle floral",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "flowers-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Detalle floral",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "GIFTS",
+    "name": "Regalos",
+    "group": "Comercio diario",
+    "aliases": [
+      "regalos",
+      "tienda de regalos"
+    ],
+    "productExamples": [
+      "regalos",
+      "envolturas",
+      "detalles"
+    ],
+    "examples": [
+      {
+        "id": "gifts-1",
+        "name": "Quinto regalo al 20%",
+        "method": "DISCOUNT",
+        "group": "regalos",
+        "nth": 5,
+        "percentBps": 2000,
+        "countUnits": true,
+        "rewardName": "20% en un regalo"
+      },
+      {
+        "id": "gifts-2",
+        "name": "Tercera compra de detalles al 15%",
+        "method": "DISCOUNT",
+        "group": "detalles",
+        "nth": 3,
+        "percentBps": 1500,
+        "countUnits": false,
+        "rewardName": "15% en detalles"
+      },
+      {
+        "id": "gifts-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Detalle a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "gifts-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Detalle a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "LAUNDRY",
+    "name": "Lavandería",
+    "group": "Servicios",
+    "aliases": [
+      "lavanderia",
+      "tintoreria"
+    ],
+    "productExamples": [
+      "lavado de prendas",
+      "planchado",
+      "lavado de edredones"
+    ],
+    "examples": [
+      {
+        "id": "laundry-1",
+        "name": "Sexto planchado gratis",
+        "method": "STAMPS",
+        "group": "planchado",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Planchado de una prenda gratis"
+      },
+      {
+        "id": "laundry-2",
+        "name": "Cuarto lavado de edredón al 25%",
+        "method": "DISCOUNT",
+        "group": "lavado de edredones",
+        "nth": 4,
+        "percentBps": 2500,
+        "countUnits": true,
+        "rewardName": "25% en lavado de un edredón"
+      },
+      {
+        "id": "laundry-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Servicio de planchado de una prenda",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "laundry-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Servicio de planchado de una prenda",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "FITNESS",
+    "name": "Gimnasio y entrenamiento",
+    "group": "Servicios",
+    "aliases": [
+      "gimnasio",
+      "fitness",
+      "entrenamiento"
+    ],
+    "productExamples": [
+      "clases",
+      "entrenamiento",
+      "accesorios deportivos"
+    ],
+    "examples": [
+      {
+        "id": "fitness-1",
+        "name": "Octava clase gratis",
+        "method": "STAMPS",
+        "group": "clases",
+        "nth": 8,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Clase gratis"
+      },
+      {
+        "id": "fitness-2",
+        "name": "Cuarta compra de accesorios al 20%",
+        "method": "DISCOUNT",
+        "group": "accesorios deportivos",
+        "nth": 4,
+        "percentBps": 2000,
+        "countUnits": false,
+        "rewardName": "20% en accesorios deportivos"
+      },
+      {
+        "id": "fitness-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Accesorio deportivo",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "fitness-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Accesorio deportivo",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "HOTEL",
+    "name": "Hotel y alojamiento",
+    "group": "Servicios",
+    "aliases": [
+      "hotel",
+      "hostal",
+      "alojamiento"
+    ],
+    "productExamples": [
+      "alojamiento",
+      "desayunos",
+      "servicios del hotel"
+    ],
+    "examples": [
+      {
+        "id": "hotel-1",
+        "name": "Cuarta compra de alojamiento al 10%",
+        "method": "DISCOUNT",
+        "group": "alojamiento",
+        "nth": 4,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en alojamiento"
+      },
+      {
+        "id": "hotel-2",
+        "name": "Sexto desayuno gratis",
+        "method": "STAMPS",
+        "group": "desayunos",
+        "nth": 6,
+        "percentBps": 10000,
+        "countUnits": true,
+        "rewardName": "Desayuno gratis"
+      },
+      {
+        "id": "hotel-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Servicio del hotel a elección",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "hotel-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Servicio del hotel a elección",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  },
+  {
+    "id": "GENERAL",
+    "name": "Otro tipo de negocio",
+    "group": "Otros",
+    "aliases": [
+      "otro",
+      "general",
+      "servicios",
+      "servicios profesionales"
+    ],
+    "productExamples": [
+      "productos",
+      "servicios",
+      "categoría a definir"
+    ],
+    "examples": [
+      {
+        "id": "general-1",
+        "name": "Sexto producto elegible al 50%",
+        "method": "DISCOUNT",
+        "group": "productos",
+        "nth": 6,
+        "percentBps": 5000,
+        "countUnits": true,
+        "rewardName": "50% en un producto elegible"
+      },
+      {
+        "id": "general-2",
+        "name": "Tercera compra de servicios al 10%",
+        "method": "DISCOUNT",
+        "group": "servicios",
+        "nth": 3,
+        "percentBps": 1000,
+        "countUnits": false,
+        "rewardName": "10% en servicios"
+      },
+      {
+        "id": "general-points",
+        "name": "Puntos por tus compras",
+        "method": "POINTS",
+        "rewardName": "Beneficio a definir por el negocio",
+        "unitMinor": 100,
+        "pointsPerUnit": 1,
+        "cost": 100,
+        "minimumSpendMinor": 100
+      },
+      {
+        "id": "general-cashback",
+        "name": "Saldo por volver",
+        "method": "CASHBACK",
+        "rewardName": "Beneficio a definir por el negocio",
+        "cashbackBps": 500,
+        "cost": 500,
+        "minimumSpendMinor": 100
+      }
+    ]
+  }
+]
