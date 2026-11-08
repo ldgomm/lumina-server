@@ -68,6 +68,7 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
 
             get("/account") { call.respond(io { commercial.account(call.parameters["tenant"]!!, offset = call.offset()) }) }
             get("/metrics") { call.respond(io { commercial.metrics(call.parameters["tenant"]!!, call.days()) }) }
+            get("/return-radar") { val query=call.radarQuery(); call.respond(io { service.returnRadar(call.parameters["tenant"]!!,query) }) }
             put("/access") { val input = call.body<AccessChange>(); call.respond(io { commercial.changeAccess(call.parameters["tenant"]!!, input) }) }
             put("/membership") { val input = call.body<MembershipChange>(); call.respond(io { commercial.configure(call.parameters["tenant"]!!, input) }) }
             post("/charges") { val input = call.body<NewCharge>(); call.respond(HttpStatusCode.Created, io { commercial.charge(call.parameters["tenant"]!!, input, call.key()) }) }

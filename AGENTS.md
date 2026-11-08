@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v022r1 requiere 336 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v023 requiere 356 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -150,3 +150,13 @@ El ZIP v022 del 7 de noviembre confirmó 160 pruebas generales y 175 PostgreSQL 
 Al cambiar presentationVersion en futuras entregas, buscar todas sus referencias en src/main y src/test, incluidas WalletPostgresTest y PromotionLifecyclePostgresTest; distinguir versiones históricas usadas como entrada de la versión actual esperada como resultado. No eliminar aserciones ni sustituirlas por valores tomados del mismo resultado comprobado.
 
 Mantener las 336 pruebas completas, 123 Python, Docker y 36 comprobaciones de gateway antes del commit local. Un resultado anterior con 335 aprobadas no permite saltar ninguna. HTTPS y validación en teléfonos siguen informándose por separado.
+
+## Radar de regreso y reglas Wallet v023
+
+presentationVersion=23 en Apple y Google, con identidades y saldos conservados. Actualizar las expectativas actuales de WalletPostgresTest y PromotionLifecyclePostgresTest; conservar las entradas históricas 8, 17, 20 y 22. Las reglas de acumulación provienen de la configuración vigente de customer_programs y se retiran al pausar/eliminar. Compartir texto exacto entre ambas Wallet y respetar el máximo de diez módulos Google. Antes de la primera compra se puede mostrar la regla de un premio visible, sin fabricar un saldo.
+
+El radar es privado de dueño/plataforma, aislado por negocio y de solo lectura. No liberar reservas ni encolar mensajes al consultarlo. Mediana observada inferior de hasta nueve días distintos en 365 días; exigir cuatro días y siete días de historial, umbral max(7,ceil(mediana*1.5)). La señal describe mayor intervalo, no abandono demostrado. Cercanía: 80% o un sello, sin mezclar programas. Primera compra pendiente significa cero compras registradas. Grupos superpuestos no se suman.
+
+Cohortes de seis meses por primera compra, segunda visita en otro día local como máximo 30 días después. Solo denominadores con 30 días posteriores completos; compras futuras excluidas. No llamar ROI o efecto de campaña a este porcentaje. V001–V009 inmutables.
+
+El instalador exige 169 generales + 187 PostgreSQL (356), todas las Python, Docker y 36 comprobaciones de gateway antes del auto commit local. Nueve suites UI interceptadas con datos ficticios, incluyendo return-radar.spec.cjs. Nunca tomar una ejecución con PostgreSQL embebido como validación de concurrencia de producción; el gate completo usa PostgreSQL real. HTTPS y teléfonos se comprueban aparte.

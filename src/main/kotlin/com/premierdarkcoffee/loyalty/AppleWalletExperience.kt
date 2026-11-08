@@ -104,6 +104,7 @@ fun WalletPass.appleExperienceFields(): JsonObject {
         "secondaryFields" to listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24))),
         "auxiliaryFields" to extras,
         "backFields" to (rewardDetails.filter { it["key"] == JsonPrimitive("reward_${target?.id}") } +
+            (if(paused) emptyList() else earningRule(first?.get("programId")?.jsonPrimitive?.contentOrNull)?.let { listOf(obj("key" to "earning", "label" to "Cómo acumular en tu promoción", "value" to it)) }.orEmpty()) +
             listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) +
             appleActivityFields() + rewardDetails.filter { it["key"] != JsonPrimitive("reward_${target?.id}") } +
             (if (paused) emptyList() else announcementFields()) + listOf(

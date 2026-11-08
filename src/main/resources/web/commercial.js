@@ -240,6 +240,8 @@
         root.querySelector('#reportMetric').onchange=plot;root.querySelector('#reportDay').oninput=plot;plot();
         const observer=new ResizeObserver(()=>{if(valid())plot();else observer.disconnect();});reportResize=observer;observer.observe(root.querySelector('#reportChart'));
         root.querySelector('#reportDays').onchange=e=>renderMetrics(root,Number(e.target.value));
+        const radarButton=document.createElement('button');radarButton.type='button';radarButton.id='openReturnRadar';radarButton.textContent='Ver Radar de regreso';root.querySelector('#exportReport').after(radarButton);
+        root.querySelector('#openReturnRadar').onclick=()=>{reportResize?.disconnect();window.renderReturnRadar(root,{path:reportPath+'/return-radar',valid,owner:!platform,back:()=>renderMetrics(root,days)});};;
         root.querySelector('#exportReport').onclick=()=>{
             const text='\uFEFFDía,Compras,Compradores,Total pagado,Moneda\r\n'+series.map(x=>[x.day,x.purchases,x.clients,(x.salesMinor/100).toFixed(2),c].join(',')).join('\r\n');
             const url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`loyalty-informe-${from}-${series.at(-1).day}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -263,5 +265,58 @@
     const baseCustomer=customerCard;
     customerCard=async function(){await baseCustomer();const a=await api('/api/me/access');if(!a.canOperate&&state.token){const n=document.createElement('div');n.className='commercial-alert';n.textContent='Este negocio tiene pausadas las nuevas operaciones. Tu saldo e historial se conservan.';app.prepend(n);app.querySelectorAll('[data-reserve]').forEach(b=>b.disabled=true)}};
     const baseExit=exit.onclick;exit.onclick=async()=>{++requestVersion;document.querySelector('#commercialDialog')?.remove();selected=null;accountData=null;if(platform){state.token='';login()}else await baseExit()};
-    if(platform)login();
+        if(platform)login();
 })();
+
+// Loyalty v023: private, explainable return radar. Reading never sends customer messages.
+(() => {
+    let viewSequence=0;
+    window.renderReturnRadar=function(root,options) {
+        const view=++viewSequence,session=state.token;
+        let ticket=0,segment='FOCUS',q='',offset=0,timer;
+        const valid=()=>view===viewSequence&&root.isConnected&&root.dataset.radarView===String(view)&&state.token===session&&options.valid();
+        root.dataset.radarView=String(view);
+        root.innerHTML=`<section class="radar-intro panel"><div><span class="eyebrow">RADAR DE REGRESO</span><h2>Convierte una señal<br>en una buena atención.</h2><p>Descubre quién tarda más de lo habitual en volver y quién tiene un premio cerca.</p></div><div class="radar-orbit" aria-hidden="true"><span></span><i></i><b>↗</b></div></section>
+            <div class="radar-toolbar">${options.back?'<button type="button" class="quiet" id="radarBack">← Volver al informe</button>':''}<button type="button" class="quiet" id="radarRefresh">Actualizar datos</button><span id="radarUpdated" class="small"></span></div>
+            <section class="panel"><h3>¿Por dónde empezamos?</h3><div class="radar-segments" id="radarSegments"></div><form id="radarSearch" class="radar-search"><div><label for="radarQuery">Buscar por nombre</label><input type="search" id="radarQuery" maxlength="100" autocomplete="off" placeholder="Escribe un nombre…"></div><button type="submit">Buscar</button></form><p class="small">Los grupos pueden coincidir: un cliente puede tardar en volver y tener un premio disponible.</p><div id="radarResults" aria-live="polite"></div><div class="radar-pagination"><button type="button" class="quiet" id="radarPrevious" disabled>Anterior</button><span id="radarCount"></span><button type="button" class="quiet" id="radarNext" disabled>Siguiente</button></div></section>
+            <section class="panel radar-cohorts"><span class="eyebrow">DE PRIMERA COMPRA A SEGUNDA VISITA</span><h3>¿Cuántos vuelven en 30 días?</h3><p>Agrupamos a los clientes por el mes de su primera compra. Una visita es un día con compras, aunque haya varios comprobantes o sucursales.</p><div id="radarCohorts"></div><p class="small">Solo se calcula el porcentaje cuando han transcurrido los 30 días completos posteriores a la primera compra. Las visitas del mismo día no son un regreso. No demuestra que una campaña causó la compra.</p></section>
+            <details class="panel radar-method"><summary>Cómo se calculan estas señales</summary><p>Tomamos hasta los últimos nueve días distintos con compras de cada cliente, dentro de los últimos 365 días, usando la hora del negocio. Con al menos cuatro días y siete días de historial, usamos la mediana de los intervalos: una ausencia excepcional pesa menos que en un promedio.</p><p>La señal aparece al pasar 1,5 veces ese intervalo habitual, redondeado hacia arriba, con un mínimo de siete días. Cuando falta historial mostramos «Ritmo por conocer». Es una señal de atención, no una predicción de abandono.</p><p>Un premio está cerca al alcanzar el 80% del saldo requerido, o faltar un sello. Se evalúa cada promoción por separado y solo las promociones activas. Tener saldo no confirma un canje; caja verifica las condiciones y el estado del negocio.</p><p>El radar consulta datos registrados en Loyalty. Abrirlo no envía mensajes, modifica saldos ni crea descuentos.</p></details>`;
+        const groups=[['FOCUS','Oportunidades',null],['LATE','Tardan en volver','late'],['READY','Con premio','ready'],['NEAR','Cerca de un premio','near'],['FIRST','Primera compra pendiente','first'],['ALL','Todos','total']];
+        function filters(summary={}) {
+            root.querySelector('#radarSegments').innerHTML=groups.map(([id,title,count])=>`<button type="button" data-radar-segment="${id}" aria-pressed="${segment===id}"><span>${title}</span>${count&&summary[count]!=null?`<strong>${esc(summary[count])}</strong>`:''}</button>`).join('');
+            root.querySelectorAll('[data-radar-segment]').forEach(b=>b.onclick=()=>{segment=b.dataset.radarSegment;offset=0;load();});
+        }
+        const cadence=row=>row.cadenceDays==null?'Ritmo por conocer':`Intervalo habitual: ${row.cadenceDays} día${row.cadenceDays===1?'':'s'}`;
+        const action=row=>row.late&&(row.readyRewards>0||row.nearRewards>0)?'Revisa su premio antes de atenderlo. Ya tiene un motivo para volver.':row.late?'Consulta su historial para preparar una atención personal.':row.readyRewards>0?'En su próxima visita, revisa el premio y sus condiciones en caja.':row.nearRewards>0?'Muéstrale cuánto le falta para su próximo premio.':row.purchases===0?'Ayúdale a registrar su primera compra cuando te visite.':'Sigue su progreso en la ficha del cliente.';
+        async function load() {
+            if(!valid())return;
+            clearTimeout(timer);const request=++ticket;
+            const list=root.querySelector('#radarResults');list.setAttribute('aria-busy','true');
+            list.innerHTML='<p role="status">Buscando oportunidades en tus datos…</p>';
+            root.querySelector('#radarPrevious').disabled=true;root.querySelector('#radarNext').disabled=true;
+            try {
+                const data=await api(options.path+'?'+new URLSearchParams({segment,q,offset}));
+                if(!valid()||request!==ticket)return;
+                filters(data.summary);
+                root.querySelector('#radarUpdated').textContent='Consultado: '+new Intl.DateTimeFormat('es-EC',{dateStyle:'short',timeStyle:'short',timeZone:data.timezone}).format(new Date(data.asOf));
+                list.innerHTML=data.items.length?`<div class="radar-cards">${data.items.map(row=>`<article class="radar-customer"><div class="radar-customer-head"><span class="customer-avatar" aria-hidden="true">${esc(row.name.slice(0,1))}</span><div><h4>${esc(row.name)}</h4><small>Tarjeta · ${esc(row.cardSuffix)}</small></div></div><div class="radar-tags">${row.late?'<span class="radar-late">Más tiempo de lo habitual</span>':''}${row.readyRewards>0?'<span>Premio por revisar</span>':''}${row.nearRewards>0?'<span>Muy cerca de un premio</span>':''}</div><div class="radar-cadence"><strong>${row.daysSinceLastPurchase==null?'Sin compras registradas':esc(row.daysSinceLastPurchase)+' días desde su última compra'}</strong><span>${esc(cadence(row))}</span>${row.cadenceDays!=null?`<small>${esc(row.sampleDays)} días de compra analizados · atención desde ${esc(row.attentionAfterDays)} días sin volver</small>`:'<small>Necesitamos más días de compra para reconocer su ritmo.</small>'}</div><p>${action(row)}</p>${options.owner?`<button type="button" class="quiet" data-radar-customer="${esc(row.id)}">Ver ficha y premios →</button>`:''}</article>`).join('')}</div>`:'<div class="experience-empty"><strong>'+ (q?'No encontramos ese nombre.':'No hay clientes en este grupo.') +'</strong><p>'+ (segment==='FOCUS'?'Prueba «Todos» o registra nuevas compras. Las oportunidades aparecerán con la actividad real.':'Cambia el filtro o la búsqueda para seguir explorando.') +'</p></div>';
+                list.querySelectorAll('[data-radar-customer]').forEach(b=>b.onclick=()=>{if(valid())window.openCustomerWorkspace(b.dataset.radarCustomer,b);});
+                root.querySelector('#radarCount').textContent=data.total?`${offset+1}–${offset+data.items.length} de ${data.total}`:'0 clientes';
+                root.querySelector('#radarPrevious').disabled=offset===0;root.querySelector('#radarNext').disabled=!data.hasMore;
+                root.querySelector('#radarCohorts').innerHTML=`<div class="radar-cohort-grid">${data.cohorts.map(row=>`<article><div><h4>${esc(new Intl.DateTimeFormat('es-EC',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(row.month+'T12:00:00Z')))}</h4><strong>${row.rate==null?'En observación':esc(row.rate)+'%'}</strong></div><div class="radar-bar" role="img" aria-label="${esc(row.returned)} de ${esc(row.eligible)} clientes volvieron"><span style="width:${Math.min(100,Math.max(0,Number(row.rate||0)))}%"></span></div><p>${esc(row.returned)} de ${esc(row.eligible)} volvieron en otro día</p><small>${esc(row.starters-row.eligible)} clientes con período aún incompleto</small></article>`).join('')}</div>`;
+            } catch(issue) {
+                if(!valid()||request!==ticket)return;
+                list.innerHTML=`<div role="alert"><p>${esc(issue.message)}</p><button type="button" id="radarRetry">Reintentar</button></div>`;
+                root.querySelector('#radarRetry').onclick=load;
+                root.querySelector('#radarCount').textContent='';
+            } finally {if(valid()&&request===ticket)list.removeAttribute('aria-busy');}
+        }
+        filters();root.querySelector('#radarRefresh').onclick=()=>{offset=0;load();};
+        root.querySelector('#radarBack')?.addEventListener('click',()=>{ticket++;delete root.dataset.radarView;options.back();});
+        root.querySelector('#radarSearch').onsubmit=e=>{e.preventDefault();q=root.querySelector('#radarQuery').value.trim();offset=0;load();};
+        root.querySelector('#radarQuery').oninput=e=>{q=e.target.value.trim();offset=0;clearTimeout(timer);++ticket;timer=setTimeout(load,250);};
+        root.querySelector('#radarPrevious').onclick=()=>{offset=Math.max(0,offset-20);load();};root.querySelector('#radarNext').onclick=()=>{offset+=20;load();};
+        load();
+    };
+})();
+;

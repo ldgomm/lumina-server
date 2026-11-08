@@ -5,7 +5,7 @@ import kotlinx.serialization.json.JsonObject
 /** Shared class layout: all private values are resolved from the customer's object. */
 fun googleWalletTemplate(): JsonObject {
     fun item(path:String)=obj("firstValue" to obj("fields" to listOf(obj("fieldPath" to path))))
-    val details=listOf("featured","balances_0","balances_1","activity_0","activity_1","rewards_0","news_0","status","usage")
+    val details=listOf("featured","earning","balances_0","balances_1","activity_0","activity_1","rewards_0","news_0","status","usage")
     return obj(
         "cardTemplateOverride" to obj("cardRowTemplateInfos" to listOf(
             obj("twoItems" to obj("startItem" to item("object.loyaltyPoints.balance"),"endItem" to item("object.secondaryLoyaltyPoints.balance"))),

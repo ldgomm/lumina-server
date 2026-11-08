@@ -1,0 +1,78 @@
+{
+  "version": "v023",
+  "date": "2026-11-08",
+  "baseline_reported_commit": "ac43bf62c0011fa07f8b70d777ad603b8314a431",
+  "general_tests": {
+    "passed": 169,
+    "failed": 0,
+    "skipped": 0
+  },
+  "integration_checks": {
+    "engine": "PGlite PostgreSQL embebido mediante JDBC; consultas y flujos secuenciales, no validación de concurrencia de PostgreSQL nativo",
+    "passed": 14,
+    "failed": 0,
+    "suites": {
+      "ReturnRadarPostgresTest": 11,
+      "PromotionLifecyclePostgresTest": 2,
+      "WalletPostgresTest": 1
+    }
+  },
+  "python_tests": {
+    "passed": 123,
+    "failed": 0
+  },
+  "ui_suites": [
+    {
+      "suite": "apple-wallet",
+      "code": 0
+    },
+    {
+      "suite": "wallet-save",
+      "code": 0
+    },
+    {
+      "suite": "counter-rewards",
+      "code": 0
+    },
+    {
+      "suite": "navy-workspace",
+      "code": 0
+    },
+    {
+      "suite": "customer-workspace",
+      "code": 0
+    },
+    {
+      "suite": "wallet-controls",
+      "code": 0
+    },
+    {
+      "suite": "owner-experience",
+      "code": 0
+    },
+    {
+      "suite": "wallet-design",
+      "code": 0
+    },
+    {
+      "suite": "return-radar",
+      "code": 0
+    }
+  ],
+  "ui_review": "Navy, 1440/390/320px, búsqueda, permisos, navegación, respuesta tardía, errores y datos ficticios; owner-experience y return-radar repetidos después de ajustar la inserción del botón.",
+  "installer": "Aplicación sobre v022r1; idempotencia; formato/imports; conflicto sin escrituras; revisión de nueve migraciones sin cambios; preflight del .sh y ZIP verificados durante empaquetado.",
+  "required_on_mac": {
+    "kotlin_and_http": 169,
+    "postgresql_native_including_concurrency": 187,
+    "total": 356,
+    "python": "Todas",
+    "docker_gateway": "Obligatorio antes del commit"
+  },
+  "not_verified_here": [
+    "Docker del usuario",
+    "Suite PostgreSQL nativo completa",
+    "HTTPS actual del usuario",
+    "Recepción física de la nueva versión en Apple y Google Wallet"
+  ],
+  "no_source_commit_created_here": true
+}

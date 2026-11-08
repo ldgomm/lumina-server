@@ -4,6 +4,7 @@
     const pages = {
         overview: ['Resumen', 'Tu negocio, de un vistazo.', 'Actividad registrada y accesos para el día a día.', 'home'],
         sales: ['Caja', 'Una buena visita empieza aquí.', 'Busca la tarjeta, registra la operación y sigue con el próximo cliente.', 'scan'],
+        radar: ['Radar de regreso', 'La próxima visita tiene una razón.', 'Ritmos de compra y oportunidades con una explicación clara.', 'spark'],
         customers: ['Mis clientes', 'Conoce a quienes vuelven.', 'Compras, frecuencia y premios de todas tus sucursales.', 'people'],
         programs: ['Promociones', 'Más motivos para volver.', 'Crea tus propias reglas y cambia cada promoción cuando lo necesites.', 'spark'],
         rewards: ['Premios', 'Un beneficio que vale la visita.', 'Define qué se entrega y el saldo necesario para canjearlo.', 'gift'],
@@ -44,6 +45,7 @@
         nav.className = 'workspace-nav'; nav.setAttribute('aria-label', 'Menú del negocio');
         if (state.data.role === 'OWNER') {
             const home = document.createElement('button'); home.dataset.tab = 'overview'; home.textContent = 'Resumen'; home.onclick = () => go('overview'); nav.prepend(home);
+            const radar=document.createElement('button');radar.dataset.tab='radar';radar.textContent='Radar de regreso';radar.onclick=()=>go('radar');nav.append(radar);;
         }
         const buttons = [...nav.querySelectorAll('button')];
         for (const button of buttons) {
@@ -54,7 +56,7 @@
             button.innerHTML = icon(pages[tab][3]) + `<span>${pages[tab][0]}</span>`;
         }
         nav.replaceChildren();
-        const groups = [['Día a día', ['overview', 'sales', 'customers']], ['Fidelización', ['programs', 'rewards', 'design', 'events', 'qr']], ['Administración', ['business', 'branches', 'account', 'reports']]];
+        const groups = [['Día a día', ['overview', 'sales', 'customers', 'radar']], ['Fidelización', ['programs', 'rewards', 'design', 'events', 'qr']], ['Administración', ['business', 'branches', 'account', 'reports']]];
         for (const [label, keys] of groups) {
             const items = keys.map(key => buttons.find(b => b.dataset.tab === key)).filter(Boolean);
             if (!items.length) continue;
@@ -78,6 +80,7 @@
         nav.addEventListener('click', e => { if (busy()) { e.preventDefault(); e.stopImmediatePropagation(); notice('Espera a que termine la operación.'); } }, true);
         shell.querySelector('#quickCounter')?.addEventListener('click', () => go('sales'));
         if (state.tab === 'overview' && state.data.role === 'OWNER') overview(content);
+        if (state.tab === 'radar' && state.data.role === 'OWNER') window.renderReturnRadar(content,{path:'/api/staff/return-radar',valid:()=>state.tab==='radar'&&state.data?.role==='OWNER',owner:true});;
     };;
 
     async function overview(root) {

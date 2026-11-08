@@ -34,7 +34,12 @@ fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=tr
         announcements+=c.rows("SELECT id,title,body FROM customer_events WHERE tenant_id=? AND active AND starts_at<=? AND ends_at>? ORDER BY starts_at DESC,id LIMIT 4",member.tenant,Timestamp.from(at),Timestamp.from(at)){obj("id" to it.getString(1),"title" to it.getString(2),"body" to it.getString(3))}
     }
     val version=c.one("SELECT version FROM wallet_designs WHERE tenant_id=?",member.tenant){it.getInt(1)}?:0
-    return obj("design" to json.parseToJsonElement(json.encodeToString(design)),"designVersion" to version,"rewardProgress" to progress,"announcements" to announcements)
+    val currency=c.one("SELECT currency FROM tenants WHERE id=?",member.tenant){it.getString(1)}!!
+    val earningRules=if(!canOperate)emptyList() else c.rows("SELECT p.id,v.config::text FROM customer_programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? ORDER BY p.id",member.tenant){
+        val program=json.decodeFromString<Program>(it.getString(2))
+        obj("programId" to it.getString(1),"text" to walletEarningRules(program,currency,zone))
+    }
+    return obj("design" to json.parseToJsonElement(json.encodeToString(design)),"designVersion" to version,"rewardProgress" to progress,"announcements" to announcements,"earningRules" to earningRules)
 }
 fun WalletPass.googleBrand(origin:String):JsonObject {
     val design=design();val name=design.displayName.ifBlank{snapshot.getValue("businessName").jsonPrimitive.content}

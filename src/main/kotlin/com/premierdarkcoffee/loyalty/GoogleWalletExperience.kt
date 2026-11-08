@@ -111,8 +111,10 @@ fun WalletPass.googleExperienceFields(): JsonObject {
     // v022 reallocates one rewards module to a compact headline on the front.
     val headline=obj("id" to "headline", "header" to when {paused->"Estado";target==null->"Tu promoción";target.remaining==0L->"Premio en caja";else->"Próximo premio"},
         "body" to googleShort(if(paused)"Operaciones pausadas" else target?.name ?: first?.getValue("name")?.jsonPrimitive?.content ?: design.welcome,44))
+    val earning=if(paused) null else earningRule(first?.get("programId")?.jsonPrimitive?.contentOrNull)
     val modules = listOf(headline,obj("id" to "featured", "header" to when { paused -> "Operaciones pausadas"; target == null -> "Tu promoción"; target.remaining == 0L -> "Tu premio disponible"; else -> "Tu próximo premio" }, "body" to featured)) +
-        googleModules("balances", "Saldos por promoción", balances.map { "${it.getValue("name").jsonPrimitive.content}\n${walletBalance(it, currency)}" }, 2) +
+        googleModules("balances", "Saldos por promoción", balances.map { "${it.getValue("name").jsonPrimitive.content}\n${walletBalance(it, currency)}" }, if(earning==null) 2 else 1) +
+        (earning?.let { listOf(obj("id" to "earning", "header" to "Cómo acumular", "body" to it)) }.orEmpty()) +
         googleModules("rewards", "Otros premios", rewards.filter { it != target }.map { it.detail(currency, design.stampSymbol, paused) }, 1) +
         googleModules("activity", "Últimos consumos y canjes", activity, 2) + listOf(
             obj("id" to "status", "header" to "Tu tarjeta", "body" to "Titular: ${snapshot.getValue("name").jsonPrimitive.content}\n" +
