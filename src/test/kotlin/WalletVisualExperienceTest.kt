@@ -63,8 +63,8 @@ class WalletVisualExperienceTest {
     @Test fun `google shared layout covers every possible module without embedding customer data`() {
         val p=pass();val template=googleWalletTemplate();val serialized=template.toString()
         for(secret in listOf("Ana de ejemplo","same-qr","private-token","member","Tu premio"))assertFalse(serialized.contains(secret))
-        assertEquals(2,template.getValue("cardTemplateOverride").jsonObject.getValue("cardRowTemplateInfos").jsonArray.size)
-        for(id in listOf("headline","featured","balances_0","balances_1","activity_0","activity_1","rewards_0","news_0","status","usage"))assertTrue(serialized.contains("object.textModulesData['$id']"))
+        assertEquals(3,template.getValue("cardTemplateOverride").jsonObject.getValue("cardRowTemplateInfos").jsonArray.size)
+        for(id in listOf("headline","journey","featured","balances_0","balances_1","activity_0","activity_1","rewards_0","news_0","status","usage"))assertTrue(serialized.contains("object.textModulesData['$id']"))
         assertTrue(p.modules().all{serialized.contains("object.textModulesData['${it.text("id")}']")})
         assertTrue(serialized.indexOf("activity_0")<serialized.indexOf("rewards_0"))
         assertTrue(serialized.contains("object.loyaltyPoints.balance"));assertTrue(serialized.contains("object.secondaryLoyaltyPoints.balance"))
@@ -94,7 +94,7 @@ class WalletVisualExperienceTest {
     @Test fun `native image versions preserve old links and reject unknown layouts without database access`() = testApplication {
         environment{config=MapApplicationConfig()}
         application{loyaltyRoutes(LoyaltyService(Database(PGSimpleDataSource()),"test-pepper"),"test-admin","https://example.com")}
-        for(version in listOf(20,22))for(suffix in listOf("","?layout=apple"))assertEquals(HttpStatusCode.OK,client.get("/wallet/art/v$version/GRADIENT/5/0b1f3a/99/100.png$suffix").status)
+        for(version in listOf(20,22,24))for(suffix in listOf("","?layout=apple"))assertEquals(HttpStatusCode.OK,client.get("/wallet/art/v$version/GRADIENT/5/0b1f3a/99/100.png$suffix").status)
         assertEquals(HttpStatusCode.NotFound,client.get("/wallet/art/v99/GRADIENT/5/0b1f3a/99/100.png").status)
         assertEquals(HttpStatusCode.BadRequest,client.get("/wallet/art/v22/GRADIENT/5/0b1f3a/101/100.png").status)
         assertEquals(HttpStatusCode.BadRequest,client.get("/wallet/art/v22/GRADIENT/5/0b1f3a/99/100.png?layout=web").status)

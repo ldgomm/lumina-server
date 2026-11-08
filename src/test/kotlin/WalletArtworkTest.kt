@@ -63,7 +63,7 @@ class WalletArtworkTest {
     @Test fun `image URLs change with progress but contain no customer or security identifiers`() {
         val p=pass();val native=p.googleJson("issuer.object","issuer.class","https://example.com")
         val uri=native.getValue("heroImage").jsonObject.getValue("sourceUri").jsonObject.getValue("uri").jsonPrimitive.content
-        assertEquals("https://example.com/wallet/art/v22/GRADIENT/6/204e41/4/5.png",uri)
+        assertEquals("https://example.com/wallet/art/v24/GRADIENT/6/204e41/4/5.png",uri)
         for(secret in listOf("member","PRIVATE-QR","serial","token"))assertFalse(uri.contains(secret))
         assertNotEquals(uri,pass(5).googleArtwork("https://example.com").getValue("sourceUri").jsonObject.getValue("uri").jsonPrimitive.content)
         assertEquals("PRIVATE-QR",native.getValue("barcode").jsonObject.getValue("value").jsonPrimitive.content)
@@ -87,7 +87,7 @@ class WalletArtworkTest {
         }
     }
     @Test fun `artwork rejects oversized and malformed public rendering requests`() {
-        for(art in listOf(WalletArtwork("CSS",1,"0b1f3a",1,5),WalletArtwork("SOLID",10,"0b1f3a",1,5),WalletArtwork("SOLID",1,"red",1,5),WalletArtwork("SOLID",1,"0b1f3a",6,5),WalletArtwork("SOLID",1,"0b1f3a",1,999),WalletArtwork("SOLID",1,"0b1f3a",-1,5))) {
+        for(art in listOf(WalletArtwork("CSS",1,"0b1f3a",1,5),WalletArtwork("SOLID",33,"0b1f3a",1,5),WalletArtwork("SOLID",1,"red",1,5),WalletArtwork("SOLID",1,"0b1f3a",6,5),WalletArtwork("SOLID",1,"0b1f3a",1,999),WalletArtwork("SOLID",1,"0b1f3a",-1,5))) {
             assertFailsWith<Problem> { art.png() }
         }
     }

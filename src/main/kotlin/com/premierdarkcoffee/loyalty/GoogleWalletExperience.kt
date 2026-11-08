@@ -69,7 +69,7 @@ fun WalletPass.googleExperienceFields(): JsonObject {
     val design = design()
     val currency = snapshot.getValue("currency").jsonPrimitive.content
     val paused = !snapshot.getValue("canOperate").jsonPrimitive.boolean
-    val balances = snapshot.getValue("balances").jsonArray.map { it.jsonObject }.sortedBy {
+    val balances = presentationBalances().sortedBy {
         if (it["programId"]?.jsonPrimitive?.contentOrNull == design.featuredProgramId) 0 else 1
     }
     val byId = balances.mapNotNull { balance -> balance["programId"]?.jsonPrimitive?.contentOrNull?.let { it to balance } }.toMap()
@@ -81,6 +81,7 @@ fun WalletPass.googleExperienceFields(): JsonObject {
     }.sortedWith(compareBy<GoogleReward> { balances.indexOf(it.balance) }.thenBy { it.goal }.thenBy { it.id })
     val first = balances.firstOrNull()
     val target = rewards.firstOrNull { it.balance == first }
+    val progress = journey()
     val kind = first?.getValue("kind")?.jsonPrimitive?.content
     val mainLabel = when (kind) { "STAMPS" -> "Sellos"; "POINTS" -> "Puntos"; "CASHBACK" -> currency; else -> "Tarjeta" }
     val mainValue = when {
@@ -112,15 +113,16 @@ fun WalletPass.googleExperienceFields(): JsonObject {
     val headline=obj("id" to "headline", "header" to when {paused->"Estado";target==null->"Tu promoción";target.remaining==0L->"Premio en caja";else->"Próximo premio"},
         "body" to googleShort(if(paused)"Operaciones pausadas" else target?.name ?: first?.getValue("name")?.jsonPrimitive?.content ?: design.welcome,44))
     val earning=if(paused) null else earningRule(first?.get("programId")?.jsonPrimitive?.contentOrNull)
-    val modules = listOf(headline,obj("id" to "featured", "header" to when { paused -> "Operaciones pausadas"; target == null -> "Tu promoción"; target.remaining == 0L -> "Tu premio disponible"; else -> "Tu próximo premio" }, "body" to featured)) +
+    val journeyModule = obj("id" to "journey", "header" to (progress?.label ?: "TU TARJETA"),
+        "body" to (progress?.summary ?: if (paused) "Operaciones pausadas" else "Acumula en tus promociones activas"))
+    val modules = listOf(headline,journeyModule,obj("id" to "featured", "header" to when { paused -> "Operaciones pausadas"; target == null -> "Tu promoción"; target.remaining == 0L -> "Tu premio disponible"; else -> "Tu próximo premio" }, "body" to featured)) +
         googleModules("balances", "Saldos por promoción", balances.map { "${it.getValue("name").jsonPrimitive.content}\n${walletBalance(it, currency)}" }, if(earning==null) 2 else 1) +
         (earning?.let { listOf(obj("id" to "earning", "header" to "Cómo acumular", "body" to it)) }.orEmpty()) +
         googleModules("rewards", "Otros premios", rewards.filter { it != target }.map { it.detail(currency, design.stampSymbol, paused) }, 1) +
         googleModules("activity", "Últimos consumos y canjes", activity, 2) + listOf(
             obj("id" to "status", "header" to "Tu tarjeta", "body" to "Titular: ${snapshot.getValue("name").jsonPrimitive.content}\n" +
                 (if (paused) "Operaciones pausadas. Tus saldos se conservan." else "Válida en todas las sucursales de este negocio.") +
-                "\nActualizada: ${updatedAt.atZone(zone).format(formatter)}\nHora del negocio. El saldo y las condiciones se confirman en caja."),
-            obj("id" to "usage", "header" to "Cómo usar tu tarjeta", "body" to design.usage)) +
+                "\nActualizada: ${updatedAt.atZone(zone).format(formatter)}\nHora del negocio. El saldo y las condiciones se confirman en caja.\n\n${design.usage}")) +
         (if (paused) emptyList() else googleModules("news", "Novedades del negocio", snapshot["announcements"]?.jsonArray.orEmpty().map {
             val notice = it.jsonObject; "${notice.getValue("title").jsonPrimitive.content}\n${notice.getValue("body").jsonPrimitive.content}"
         }, 1))

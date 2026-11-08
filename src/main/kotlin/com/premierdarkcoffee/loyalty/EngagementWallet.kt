@@ -37,7 +37,7 @@ fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=tr
     val currency=c.one("SELECT currency FROM tenants WHERE id=?",member.tenant){it.getString(1)}!!
     val earningRules=if(!canOperate)emptyList() else c.rows("SELECT p.id,v.config::text FROM customer_programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? ORDER BY p.id",member.tenant){
         val program=json.decodeFromString<Program>(it.getString(2))
-        obj("programId" to it.getString(1),"text" to walletEarningRules(program,currency,zone))
+        obj("programId" to it.getString(1),"programName" to program.name,"kind" to program.kind.name,"text" to walletEarningRules(program,currency,zone))
     }
     return obj("design" to json.parseToJsonElement(json.encodeToString(design)),"designVersion" to version,"rewardProgress" to progress,"announcements" to announcements,"earningRules" to earningRules)
 }

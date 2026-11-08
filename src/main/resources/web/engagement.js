@@ -186,17 +186,334 @@
     async function designPage() {
         const root = document.querySelector('#content'); const data = await api('/api/staff/wallet-design');
         if (!root.isConnected || state.tab !== 'design') return;
-        const presets = [
-            {id:'navy', name:'Navy', background:'#0b1f3a', foreground:'#ffffff', label:'#b8d8ff', symbol:'★'},
-            {id:'coffee', name:'Café', background:'#34241f', foreground:'#fff8ed', label:'#e8bc82', symbol:'☕'},
-            {id:'pizza', name:'Pizzería', background:'#702c28', foreground:'#fff9ed', label:'#f5d391', symbol:'🍕'},
-            {id:'barber', name:'Barbería', background:'#202936', foreground:'#ffffff', label:'#bdcedd', symbol:'✂'},
-            {id:'shop', name:'Boutique', background:'#f2e9da', foreground:'#202c40', label:'#425a76', symbol:'🛍'}
-        ];
+                const presets = [
+    {
+        "id": "navy",
+        "name": "Navy",
+        "group": "General",
+        "background": "#0b1f3a",
+        "foreground": "#ffffff",
+        "label": "#b8d8ff",
+        "symbol": "★",
+        "terms": "todos profesional"
+    },
+    {
+        "id": "coffee",
+        "name": "Café",
+        "group": "Comida y bebidas",
+        "background": "#34241f",
+        "foreground": "#fff8ed",
+        "label": "#e8bc82",
+        "symbol": "☕",
+        "terms": "cafeteria bebidas"
+    },
+    {
+        "id": "pizza",
+        "name": "Pizzería",
+        "group": "Comida y bebidas",
+        "background": "#702c28",
+        "foreground": "#fff9ed",
+        "label": "#f5d391",
+        "symbol": "🍕",
+        "terms": "pizza restaurante"
+    },
+    {
+        "id": "barber",
+        "name": "Barbería",
+        "group": "Belleza y bienestar",
+        "background": "#202936",
+        "foreground": "#ffffff",
+        "label": "#bdcedd",
+        "symbol": "✂",
+        "terms": "corte cabello"
+    },
+    {
+        "id": "shop",
+        "name": "Boutique",
+        "group": "Moda y compras",
+        "background": "#f2e9da",
+        "foreground": "#202c40",
+        "label": "#425a76",
+        "symbol": "🛍",
+        "terms": "ropa moda"
+    },
+    {
+        "id": "restaurant",
+        "name": "Restaurante",
+        "group": "Comida y bebidas",
+        "background": "#193f38",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🍴",
+        "terms": "comida almuerzo cena"
+    },
+    {
+        "id": "pet",
+        "name": "Veterinaria y mascotas",
+        "group": "Mascotas",
+        "background": "#23566a",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🐾",
+        "terms": "perro gato animales pet shop"
+    },
+    {
+        "id": "auto",
+        "name": "Taller automotriz",
+        "group": "Autos y servicios",
+        "background": "#283c50",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🔧",
+        "terms": "mecanica aceite mantenimiento"
+    },
+    {
+        "id": "burger",
+        "name": "Hamburguesería",
+        "group": "Comida y bebidas",
+        "background": "#792c20",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🍔",
+        "terms": "hamburguesa comida rapida"
+    },
+    {
+        "id": "bakery",
+        "name": "Panadería",
+        "group": "Comida y bebidas",
+        "background": "#614626",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🥐",
+        "terms": "pan croissant"
+    },
+    {
+        "id": "cake",
+        "name": "Pastelería",
+        "group": "Comida y bebidas",
+        "background": "#6c304c",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🎂",
+        "terms": "torta pastel reposteria"
+    },
+    {
+        "id": "icecream",
+        "name": "Heladería",
+        "group": "Comida y bebidas",
+        "background": "#e3f0e8",
+        "foreground": "#0b1f3a",
+        "label": "#0b1f3a",
+        "symbol": "🍦",
+        "terms": "helado postre yogurt"
+    },
+    {
+        "id": "grocery",
+        "name": "Supermercado",
+        "group": "Comida y bebidas",
+        "background": "#244c35",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🛒",
+        "terms": "mercado minimarket viveres tienda"
+    },
+    {
+        "id": "florist",
+        "name": "Florería",
+        "group": "Moda y compras",
+        "background": "#f1e3ec",
+        "foreground": "#0b1f3a",
+        "label": "#0b1f3a",
+        "symbol": "🌸",
+        "terms": "flor ramo flores"
+    },
+    {
+        "id": "gym",
+        "name": "Gimnasio",
+        "group": "Belleza y bienestar",
+        "background": "#153f43",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🏋",
+        "terms": "fitness deporte entrenamiento"
+    },
+    {
+        "id": "phone",
+        "name": "Telefonía",
+        "group": "Hogar y tecnología",
+        "background": "#183765",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "📱",
+        "terms": "celular telefono accesorios"
+    },
+    {
+        "id": "electronics",
+        "name": "Electrónica",
+        "group": "Hogar y tecnología",
+        "background": "#202b53",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "◆",
+        "terms": "electrodomesticos computadora tecnologia"
+    },
+    {
+        "id": "audio",
+        "name": "Música y audio",
+        "group": "Hogar y tecnología",
+        "background": "#41355f",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🎧",
+        "terms": "audifonos instrumentos sonido"
+    },
+    {
+        "id": "tires",
+        "name": "Llantas y lubricantes",
+        "group": "Autos y servicios",
+        "background": "#30353e",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🛞",
+        "terms": "neumaticos aceite"
+    },
+    {
+        "id": "laundry",
+        "name": "Lavandería",
+        "group": "Autos y servicios",
+        "background": "#e2edf5",
+        "foreground": "#0b1f3a",
+        "label": "#0b1f3a",
+        "symbol": "🧺",
+        "terms": "lavado ropa tintoreria"
+    },
+    {
+        "id": "books",
+        "name": "Librería y papelería",
+        "group": "Moda y compras",
+        "background": "#4b3930",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "📚",
+        "terms": "libro cuaderno utiles"
+    },
+    {
+        "id": "dental",
+        "name": "Clínica dental",
+        "group": "Belleza y bienestar",
+        "background": "#dfeeee",
+        "foreground": "#0b1f3a",
+        "label": "#0b1f3a",
+        "symbol": "🦷",
+        "terms": "dentista odontologia"
+    },
+    {
+        "id": "spa",
+        "name": "Spa y bienestar",
+        "group": "Belleza y bienestar",
+        "background": "#364b43",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🌿",
+        "terms": "masaje relajacion"
+    },
+    {
+        "id": "gifts",
+        "name": "Regalos",
+        "group": "Moda y compras",
+        "background": "#5e3057",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🎁",
+        "terms": "detalles juguetes"
+    },
+    {
+        "id": "home",
+        "name": "Hogar y muebles",
+        "group": "Hogar y tecnología",
+        "background": "#eae5de",
+        "foreground": "#0b1f3a",
+        "label": "#0b1f3a",
+        "symbol": "🏠",
+        "terms": "decoracion muebleria"
+    },
+    {
+        "id": "optics",
+        "name": "Óptica",
+        "group": "Belleza y bienestar",
+        "background": "#2f4352",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "👓",
+        "terms": "lentes gafas"
+    },
+    {
+        "id": "hotel",
+        "name": "Hotel y alojamiento",
+        "group": "Autos y servicios",
+        "background": "#1e3646",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🔑",
+        "terms": "hostal hospedaje turismo"
+    },
+    {
+        "id": "hardware",
+        "name": "Ferretería",
+        "group": "Hogar y tecnología",
+        "background": "#4c3d27",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "🔨",
+        "terms": "herramientas construccion"
+    },
+    {
+        "id": "fuel",
+        "name": "Estación de servicio",
+        "group": "Autos y servicios",
+        "background": "#273a3d",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "⛽",
+        "terms": "gasolinera combustible lavado auto"
+    },
+    {
+        "id": "shoes",
+        "name": "Calzado",
+        "group": "Moda y compras",
+        "background": "#3f3334",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "👟",
+        "terms": "zapatos zapatillas"
+    },
+    {
+        "id": "jewelry",
+        "name": "Joyería",
+        "group": "Moda y compras",
+        "background": "#182f35",
+        "foreground": "#ffffff",
+        "label": "#ffffff",
+        "symbol": "◆",
+        "terms": "relojes joyas accesorios"
+    },
+    {
+        "id": "salon",
+        "name": "Salón de belleza",
+        "group": "Belleza y bienestar",
+        "background": "#efdfe5",
+        "foreground": "#0b1f3a",
+        "label": "#0b1f3a",
+        "symbol": "♥",
+        "terms": "peluqueria estetica unas manicure"
+    }
+];
+        const stampOptions = [["●", "● Círculo"], ["★", "★ Estrella"], ["♥", "♥ Corazón"], ["✂", "✂ Barbería"], ["◆", "◆ Diamante"], ["☕", "☕ Café"], ["🍕", "🍕 Pizza"], ["🛍", "🛍 Compras"], ["👟", "👟 Calzado"], ["🔧", "🔧 Taller"], ["🍔", "🍔 Hamburguesa"], ["🥐", "🥐 Panadería"], ["🍦", "🍦 Helado"], ["🛒", "🛒 Supermercado"], ["🎂", "🎂 Pastel"], ["🐾", "🐾 Mascotas"], ["🌸", "🌸 Flores"], ["🏋", "🏋 Gimnasio"], ["📱", "📱 Telefonía"], ["🎧", "🎧 Audio"], ["🚗", "🚗 Auto"], ["🛞", "🛞 Llantas"], ["🧺", "🧺 Lavandería"], ["📚", "📚 Libros"], ["🦷", "🦷 Dental"], ["🌿", "🌿 Bienestar"], ["🎁", "🎁 Regalo"], ["🏠", "🏠 Hogar"], ["👓", "👓 Óptica"], ["🔑", "🔑 Hotel"], ["🔨", "🔨 Ferretería"], ["⛽", "⛽ Combustible"], ["🍴", "🍴 Restaurante"]];
+;
         const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress', previewProvider = 'apple';
-        root.innerHTML = `<section class="panel wallet-design-panel"><h2>Personaliza tu tarjeta</h2><p>Elige el fondo de tu negocio. Te ayudamos a que sus textos se lean bien.</p><div class="wallet-design-layout"><form id="walletDesign"><fieldset id="designFields">
+                root.innerHTML = `<section class="panel wallet-design-panel"><h2>Personaliza tu tarjeta</h2><p>Tu marca, una meta clara y el próximo premio. Personaliza ambas Wallet desde aquí.</p><div class="wallet-design-layout"><form id="walletDesign"><fieldset id="designFields">
             ${field('displayName', 'Nombre en la tarjeta', 'text', d.displayName, 'maxlength="80"')}
-            <h3 class="design-colors-heading">Empieza con un estilo</h3><p class="design-help">Aplica una combinación y ajústala a tu marca. Se guarda solo cuando pulses Guardar diseño.</p><div class="wallet-style-presets" role="group" aria-label="Estilos rápidos">${presets.map(p => `<button type="button" data-wallet-style="${p.id}"><span aria-hidden="true">${p.symbol}</span>${p.name}</button>`).join('')}</div><p id="presetStatus" class="design-help" aria-live="polite"></p><h3 class="design-colors-heading">Colores</h3>
+            <h3 class="design-colors-heading">Empieza con un estilo</h3><p class="design-help">Aplica una combinación y ajústala a tu marca. Se guarda solo cuando pulses Guardar diseño.</p><div class="wallet-style-search"><label for="walletStyleSearch">Busca tu tipo de negocio<input id="walletStyleSearch" type="search" placeholder="Ej. zapatos, mascotas, pasteles…" maxlength="60" autocomplete="off"></label><label for="walletStyleGroup">Categoría<select id="walletStyleGroup"><option value="">Todas las categorías</option>${[...new Set(presets.map(p => p.group))].map(group => `<option value="${group}">${group}</option>`).join('')}</select></label></div><p id="walletStyleResults" class="design-help" aria-live="polite"></p><div class="wallet-style-presets" role="group" aria-label="Estilos rápidos">${presets.map(p => `<button type="button" data-wallet-style="${p.id}" aria-pressed="false"><span class="wallet-style-swatch" style="--swatch:${p.background};--swatch-ink:${p.foreground}" aria-hidden="true"><img alt="" loading="lazy" width="54" height="38" src="/wallet/art/v24/SOLID/${stampOptions.findIndex(option => option[0] === p.symbol)}/${p.background.slice(1)}/1/1.png"></span><strong>${p.name}</strong><small>${p.group}</small></button>`).join('')}</div><button type="button" class="quiet" id="walletStylesMore" aria-expanded="false">Ver todos los estilos</button><p id="presetStatus" class="design-help" aria-live="polite"></p><h3 class="design-colors-heading">Colores</h3>
             ${field('background', 'Color de fondo', 'color', d.background, 'aria-describedby="backgroundHelp"')}
             <p id="backgroundHelp" class="design-help">Puedes usar cualquier fondo. El texto y las etiquetas deben distinguirse sobre él.</p>
             <label class="check"><input id="autoContrast" type="checkbox" checked>Ajustar texto y etiquetas al cambiar el fondo</label>
@@ -206,7 +523,7 @@
             <button type="button" class="quiet" id="fixContrast">Corregir colores</button>
             <label>Logo PNG o JPG<input id="designLogo" type="file" accept="image/png,image/jpeg"></label><p id="logoStatus">${logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.'}</p><button type="button" class="quiet" id="removeLogo">Usar logo predeterminado</button>
             ${select('featuredProgramId', 'Promoción destacada en Wallet', [['', 'Primera promoción activa'], ...state.data.programs.filter(p => p.config.active !== false).map(p => [p.id, p.config.name])], d.featuredProgramId || '')}<p class="design-help">Apple y Google destacarán esta promoción y su premio de menor costo. Los demás saldos y premios siguen disponibles en los detalles de la tarjeta.</p>
-            ${select('stampSymbol', 'Símbolo de tu negocio', [['●','● Círculo'],['★','★ Estrella'],['♥','♥ Corazón'],['✂','✂ Barbería'],['◆','◆ Diamante'],['☕','☕ Café'],['🍕','🍕 Pizza'],['🛍','🛍 Compras'],['👟','👟 Calzado'],['🔧','🔧 Taller']], d.stampSymbol)}
+            ${select('stampSymbol', 'Símbolo de tu negocio', stampOptions, d.stampSymbol)}
             ${select('artworkStyle', 'Acabado de la ilustración', [['GRADIENT','Degradado'],['SOLID','Color liso']], d.artworkStyle || 'GRADIENT')}
             <p class="design-help">Los sellos se completan uno a uno hasta 20. Puntos, cashback y metas mayores usan una barra de avance. El saldo exacto siempre aparece en texto. La tipografía de los campos la controla cada Wallet.</p>
             ${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
@@ -214,10 +531,28 @@
             <p class="design-help">Configura títulos, mensajes y felicitaciones automáticas desde Eventos y cumpleaños.</p>
             </fieldset><p id="designSaveHint" class="design-help" aria-live="polite"></p><p id="designSaveError" class="design-error" role="alert" hidden></p><button id="saveDesign" type="submit" aria-describedby="designSaveHint">Guardar diseño</button></form>
             <aside class="design-preview-wrap"><h3>Vista previa de tus Wallet</h3><p class="design-help">Promociones reales, saldos ficticios. Cada Wallet decide la distribución final.</p><div class="wallet-preview-platforms" role="group" aria-label="Wallet de la vista previa"><button type="button" data-preview-provider="apple">Apple Wallet</button><button type="button" data-preview-provider="google">Google Wallet</button></div><p id="previewPlatformHint" class="design-help"></p>
-            <div class="wallet-preview-modes" role="group" aria-label="Estado de ejemplo de la tarjeta"><button type="button" data-wallet-example="new">Nueva</button><button type="button" data-wallet-example="progress" class="active">Acumulando</button><button type="button" data-wallet-example="ready">Con premio</button><button type="button" data-wallet-example="paused">Pausada</button></div>
-            <div id="designPreview" class="design-preview"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><div class="apple-preview-fields"><div class="wallet-preview-status"><span id="previewStatusLabel" class="design-preview-label"></span><strong id="previewStatus"></strong></div><div class="wallet-preview-balance"><span id="previewWelcome" class="design-preview-hero"></span><span id="previewProgram" class="design-preview-label"></span></div></div><img id="appleStampArtwork" class="stamp-artwork apple-stamp-artwork" alt=""><div class="design-preview-bottom"><div><span class="design-preview-label">CLIENTE</span><span>Cliente de ejemplo</span></div><div id="previewPrizeWrap"><span id="previewPrizeLabel" class="design-preview-label"></span><span id="previewPrize"></span></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div>
-            <div id="googleDesignPreview" class="google-design-preview" hidden><div class="google-preview-brand"><img id="googlePreviewLogo" alt="" hidden><strong id="googlePreviewName"></strong></div><p class="google-preview-member">Cliente de ejemplo</p><div class="google-preview-values"><div><span id="googlePreviewMainLabel"></span><strong id="googlePreviewMain"></strong></div><div><span id="googlePreviewStatusLabel"></span><strong id="googlePreviewStatus"></strong></div></div><img id="googleStampArtwork" class="stamp-artwork google-stamp-artwork" alt=""><div class="google-preview-headline"><span id="googlePreviewRewardLabel"></span><strong id="googlePreviewReward"></strong></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div><div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardConditions" hidden></p><p id="previewRewardDetail"></p><p id="previewStamps"></p></div><details class="wallet-preview-more"><summary>Qué verá en los detalles</summary><ol><li>Premio destacado, condiciones y saldo disponible.</li><li>Saldos de cada promoción, sin mezclarlos.</li><li>Últimos consumos y canjes con fecha y sucursal.</li><li>Otros premios, novedades e instrucciones.</li></ol><p>Las promociones pausadas o eliminadas dejan de ofrecerse. Los movimientos ya realizados permanecen en el historial.</p></details><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
-        const f = root.querySelector('#walletDesign'), fields = root.querySelector('#designFields');
+            <div class="wallet-preview-modes" role="group" aria-label="Estado de ejemplo de la tarjeta"><button type="button" data-wallet-example="new">Nueva</button><button type="button" data-wallet-example="half">A mitad</button><button type="button" data-wallet-example="progress" class="active">Cerca del premio</button><button type="button" data-wallet-example="ready">Con premio</button><button type="button" data-wallet-example="paused">Pausada</button></div>
+            <div id="designPreview" class="design-preview"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><div class="apple-preview-fields"><div class="wallet-preview-status"><span id="previewStatusLabel" class="design-preview-label"></span><strong id="previewStatus"></strong></div><div class="wallet-preview-balance"><span id="previewWelcome" class="design-preview-hero"></span><span id="previewProgram" class="design-preview-label"></span></div></div><img id="appleStampArtwork" class="stamp-artwork apple-stamp-artwork" alt=""><div class="wallet-native-journey" id="appleJourney" hidden><span id="appleJourneyLabel"></span><strong id="appleJourneyValue"></strong></div><div class="design-preview-bottom"><div><span class="design-preview-label">CLIENTE</span><span>Cliente de ejemplo</span></div><div id="previewPrizeWrap"><span id="previewPrizeLabel" class="design-preview-label"></span><span id="previewPrize"></span></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div>
+            <div id="googleDesignPreview" class="google-design-preview" hidden><div class="google-preview-brand"><img id="googlePreviewLogo" alt="" hidden><strong id="googlePreviewName"></strong></div><p class="google-preview-member">Cliente de ejemplo</p><div class="google-preview-values"><div><span id="googlePreviewMainLabel"></span><strong id="googlePreviewMain"></strong></div><div><span id="googlePreviewStatusLabel"></span><strong id="googlePreviewStatus"></strong></div></div><div class="wallet-native-journey" id="googleJourney" hidden><span id="googleJourneyLabel"></span><strong id="googleJourneyValue"></strong></div><img id="googleStampArtwork" class="stamp-artwork google-stamp-artwork" alt=""><div class="google-preview-headline"><span id="googlePreviewRewardLabel"></span><strong id="googlePreviewReward"></strong></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div><div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardConditions" hidden></p><p id="previewRewardDetail"></p><p id="previewStamps"></p><div id="walletProgressLegend" class="wallet-progress-legend" hidden><span><i class="earned" aria-hidden="true"></i>Acumulado</span><span><i aria-hidden="true"></i>Pendiente</span><span id="walletProgressNext"></span></div></div><details class="wallet-preview-more"><summary>Qué verá en los detalles</summary><ol><li>Premio destacado, condiciones y saldo disponible.</li><li>Saldos de cada promoción, sin mezclarlos.</li><li>Últimos consumos y canjes con fecha y sucursal.</li><li>Otros premios, novedades e instrucciones.</li></ol><p>Las promociones pausadas o eliminadas dejan de ofrecerse. Los movimientos ya realizados permanecen en el historial.</p></details><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
+;
+                const f = root.querySelector('#walletDesign'), fields = root.querySelector('#designFields');
+        let showAllStyles = false;
+        const styleSearch = root.querySelector('#walletStyleSearch'), styleGroup = root.querySelector('#walletStyleGroup');
+        const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        function filterStyles() {
+            const terms = normalize(styleSearch.value.trim()).split(/\s+/).filter(Boolean);
+            const matching = presets.filter(p => (!styleGroup.value || p.group === styleGroup.value) && terms.every(term => normalize(p.name + ' ' + p.group + ' ' + p.terms).includes(term)));
+            const filtered = !!terms.length || !!styleGroup.value;
+            const visible = showAllStyles || filtered ? matching : matching.slice(0, 8);
+            root.querySelectorAll('[data-wallet-style]').forEach(button => { button.hidden = !visible.some(p => p.id === button.dataset.walletStyle); });
+            root.querySelector('#walletStyleResults').textContent = matching.length ? `${visible.length} de ${matching.length} estilos. Todos se pueden personalizar.` : 'No encontramos ese estilo. Prueba otra palabra o adapta Navy a tu marca.';
+            const more = root.querySelector('#walletStylesMore'); more.hidden = filtered || matching.length <= 8;
+            more.textContent = showAllStyles ? 'Ver menos estilos' : `Ver los ${presets.length} estilos`;
+            more.setAttribute('aria-expanded', String(showAllStyles));
+        }
+        styleSearch.addEventListener('input', filterStyles); styleGroup.addEventListener('change', filterStyles);
+        root.querySelector('#walletStylesMore').onclick = () => { showAllStyles = !showAllStyles; filterStyles(); };
+        filterStyles();;
         const background = f.elements.background, foreground = f.elements.foreground, labels = f.elements.label;
         const auto = root.querySelector('#autoContrast'), save = root.querySelector('#saveDesign'), fix = root.querySelector('#fixContrast');
         const status = root.querySelector('#contrastStatus'), adjustment = root.querySelector('#contrastAdjustment');
@@ -254,7 +589,7 @@
             const program = activePrograms.find(p => p.id === f.elements.featuredProgramId.value) || activePrograms[0];
             const reward = program && state.data.rewards.filter(r => r.active && r.programId === program.id && r.cost > 0).sort((a, b) => a.cost - b.cost || a.id.localeCompare(b.id))[0];
             const kind = program?.config.kind;
-            const amount = !program || example === 'new' ? 0 : reward ? (example === 'ready' ? reward.cost : Math.max(0, reward.cost - 1)) : kind === 'CASHBACK' ? 500 : kind === 'STAMPS' ? 3 : 100;
+            const amount = !program || example === 'new' ? 0 : reward ? (example === 'ready' ? reward.cost : example === 'half' ? Math.floor(reward.cost / 2) : Math.max(0, reward.cost - 1)) : kind === 'CASHBACK' ? 500 : kind === 'STAMPS' ? 3 : 100;;
             const unit = n => kind === 'CASHBACK' ? money(n) : `${n} ${kind === 'STAMPS' ? (n === 1 ? 'sello' : 'sellos') : (n === 1 ? 'punto' : 'puntos')}`;
             const remaining = reward ? Math.max(0, reward.cost - amount) : null;
             const paused = example === 'paused';
@@ -273,14 +608,27 @@
             const individual = kind === 'STAMPS' && artworkGoal <= 20;
             const artworkTotal = !artworkGoal ? 0 : individual ? artworkGoal : 100;
             const artworkFilled = !artworkGoal ? 0 : individual ? Math.min(amount, artworkGoal) : Math.floor(Math.min(amount, artworkGoal) * 100 / artworkGoal);
-            const symbol = ['●','★','♥','✂','◆','☕','🍕','🛍','👟','🔧'].indexOf(f.elements.stampSymbol.value);
-            const artworkPath = `/wallet/art/v22/${f.elements.artworkStyle.value}/${Math.max(0, symbol)}/${background.value.slice(1)}/${artworkFilled}/${artworkTotal}.png`;
+            const symbol = stampOptions.findIndex(option => option[0] === f.elements.stampSymbol.value);;
+            const artworkPath = `/wallet/art/v24/${f.elements.artworkStyle.value}/${Math.max(0, symbol)}/${background.value.slice(1)}/${artworkFilled}/${artworkTotal}.png`;;
             for (const [id, suffix] of [['appleStampArtwork', '?layout=apple'], ['googleStampArtwork', '']]) {
                 const art = root.querySelector('#' + id); art.hidden = !artworkGoal;
                 if (artworkGoal) { art.src = artworkPath + suffix; art.alt = `Ejemplo: ${unit(amount)} de ${unit(artworkGoal)}. Caja confirma el canje.`; }
                 else art.removeAttribute('src');
             }
-            preview.classList.toggle('with-stamp-artwork', !!artworkGoal);
+                        preview.classList.toggle('with-stamp-artwork', !!artworkGoal);
+            const summary = !reward ? '' : kind === 'CASHBACK' ? `${(amount / 100).toFixed(2)} de ${(reward.cost / 100).toFixed(2)} ${state.data.business.currency}` : `${amount} de ${reward.cost} ${kind === 'STAMPS' ? (reward.cost === 1 ? 'sello' : 'sellos') : (reward.cost === 1 ? 'punto' : 'puntos')}`;
+            const percentage = reward ? Math.floor(Math.min(amount, reward.cost) * 100 / reward.cost) : 0;
+            for (const provider of ['apple', 'google']) {
+                root.querySelector('#' + provider + 'Journey').hidden = !artworkGoal;
+                root.querySelector('#' + provider + 'JourneyLabel').textContent = remaining === 0 ? 'META ALCANZADA' : `PROGRESO · ${percentage}%`;
+                root.querySelector('#' + provider + 'JourneyValue').textContent = summary;
+            }
+            root.querySelector('#walletProgressLegend').hidden = !artworkGoal;
+            root.querySelector('#walletProgressNext').textContent = remaining === 0 ? 'Saldo suficiente. Confirma el canje en caja.' : `Te falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${unit(remaining)} para el premio.`;
+            root.querySelectorAll('[data-wallet-style]').forEach(button => {
+                const preset = presets.find(p => p.id === button.dataset.walletStyle);
+                button.setAttribute('aria-pressed', String(background.value === preset.background && foreground.value === preset.foreground && labels.value === preset.label && f.elements.stampSymbol.value === preset.symbol));
+            });;
             root.querySelector('#previewStamps').textContent = !paused && artworkGoal && individual ? `${Math.min(amount, artworkGoal)} de ${artworkGoal} sellos completados en este ejemplo.` : '';
             root.querySelectorAll('[data-wallet-example]').forEach(button => {
                 const selected = button.dataset.walletExample === example;

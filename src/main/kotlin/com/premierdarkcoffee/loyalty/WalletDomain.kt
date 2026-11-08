@@ -47,7 +47,7 @@ fun walletBalance(balance: JsonObject, currency: String): String {
 }
 
 fun WalletPass.summary(): String {
-    val balances = snapshot.getValue("balances").jsonArray
+    val balances = presentationBalances()
     return if (balances.isEmpty()) "Tu próxima compra empieza aquí" else balances.take(20).joinToString("\n") {
         val b = it.jsonObject; b.getValue("name").jsonPrimitive.content + ": " + walletBalance(b, snapshot.getValue("currency").jsonPrimitive.content)
     }

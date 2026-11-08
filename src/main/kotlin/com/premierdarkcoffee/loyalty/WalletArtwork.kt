@@ -10,7 +10,8 @@ import javax.imageio.ImageIO
 import kotlin.math.pow
 
 // These public assets encode only a bounded illustration, never a member, QR, token or purchase.
-val walletStampSymbols = listOf("●", "★", "♥", "✂", "◆", "☕", "🍕", "🛍", "👟", "🔧")
+val walletStampSymbols = listOf("●", "★", "♥", "✂", "◆", "☕", "🍕", "🛍", "👟", "🔧",
+    "🍔", "🥐", "🍦", "🛒", "🎂", "🐾", "🌸", "🏋", "📱", "🎧", "🚗", "🛞", "🧺", "📚", "🦷", "🌿", "🎁", "🏠", "👓", "🔑", "🔨", "⛽", "🍴")
 
 data class WalletArtwork(val style: String, val symbol: Int, val background: String, val filled: Int, val total: Int) {
     fun validate() {
@@ -18,11 +19,12 @@ data class WalletArtwork(val style: String, val symbol: Int, val background: Str
             background.matches(Regex("[a-fA-F0-9]{6}")) && (total in 0..20 || total == 100) && filled in 0..total,
             "INVALID_ARTWORK", "Diseño de sellos inválido.")
     }
-    fun path() = "/wallet/art/v22/$style/$symbol/${background.lowercase()}/$filled/$total.png"
+    fun path() = "/wallet/art/v24/$style/$symbol/${background.lowercase()}/$filled/$total.png"
 
-    fun png(appleScale: Int? = null, version: Int = 22): ByteArray {
-        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22))
-        return if(version == 20) legacyPng(appleScale) else modernPng(appleScale)
+    fun png(appleScale: Int? = null, version: Int = 24): ByteArray {
+        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22,24))
+        require(version == 24 || symbol in 0..9)
+        return when(version) { 20 -> legacyPng(appleScale); 22 -> modernPng(appleScale); else -> journeyPng(appleScale) }
     }
 
     private fun legacyPng(appleScale: Int? = null): ByteArray {
@@ -80,7 +82,7 @@ data class WalletArtwork(val style: String, val symbol: Int, val background: Str
     }
 }
 
-private fun drawWalletStamp(g: Graphics2D, symbol: Int) {
+internal fun drawWalletStamp(g: Graphics2D, symbol: Int) {
     g.stroke = BasicStroke(7f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
     fun line(x1: Int,y1: Int,x2: Int,y2: Int) = g.drawLine(x1,y1,x2,y2)
     fun polygon(vararg points: Int) { g.fillPolygon(points.toList().chunked(2).map { it[0] }.toIntArray(),points.toList().chunked(2).map { it[1] }.toIntArray(),points.size/2) }
@@ -94,13 +96,13 @@ private fun drawWalletStamp(g: Graphics2D, symbol: Int) {
         7 -> { g.drawRoundRect(15,29,70,63,7,7);g.drawArc(31,7,38,46,0,180);line(32,29,32,39);line(69,29,69,39) }
         8 -> { val p=Path2D.Double();p.moveTo(8.0,70.0);p.lineTo(20.0,20.0);p.lineTo(42.0,43.0);p.lineTo(64.0,52.0);p.curveTo(90.0,52.0,94.0,65.0,94.0,78.0);p.lineTo(8.0,78.0);p.closePath();g.draw(p);line(8,88,94,88);line(41,43,33,56);line(54,48,46,61) }
         9 -> { g.drawArc(50,5,40,40,15,285);line(56,38,14,80);line(66,48,24,90);line(14,80,24,90);line(86,16,72,27) }
-        else -> g.fillOval(20,20,60,60)
+        else -> if(symbol > 9) drawIndustryStamp(g,symbol) else g.fillOval(20,20,60,60)
     }
 }
 
 fun WalletPass.artwork(): WalletArtwork {
     val d=design()
-    val balances=snapshot.getValue("balances").jsonArray.map { it.jsonObject }.sortedBy { if(it["programId"]?.jsonPrimitive?.contentOrNull==d.featuredProgramId) 0 else 1 }
+    val balances=presentationBalances().sortedBy { if(it["programId"]?.jsonPrimitive?.contentOrNull==d.featuredProgramId) 0 else 1 }
     val first=balances.firstOrNull()
     val target=snapshot["rewardProgress"]?.jsonArray.orEmpty().map { it.jsonObject }.filter {
         first?.get("programId")!=null && it["programId"]==first["programId"] && it["kind"]==first["kind"] && (it["goal"]?.jsonPrimitive?.longOrNull?:0)>0
@@ -115,7 +117,7 @@ fun WalletPass.artwork(): WalletArtwork {
 
 fun WalletPass.googleArtwork(origin: String): JsonObject {
     val art=artwork()
-    val description=when { art.total==0 -> "Diseño del negocio"; art.total==100 -> "Progreso hacia el premio: ${art.filled}%. Consulta el saldo exacto y el premio en los campos de la tarjeta."; else -> "${art.filled} de ${art.total} sellos completados. Los sellos llenos indican progreso; caja confirma el canje." }
+    val description=journey()?.let { "${it.summary}. ${it.guidance} Los símbolos llenos indican avance y los contornos, lo pendiente." } ?: "Diseño del negocio, sin meta activa."
     return obj("sourceUri" to obj("uri" to origin+art.path()),"contentDescription" to obj("defaultValue" to obj("language" to "es","value" to description)))
 }
 

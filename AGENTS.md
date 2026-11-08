@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v023 requiere 356 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v024 requiere 367 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -160,3 +160,17 @@ El radar es privado de dueño/plataforma, aislado por negocio y de solo lectura.
 Cohortes de seis meses por primera compra, segunda visita en otro día local como máximo 30 días después. Solo denominadores con 30 días posteriores completos; compras futuras excluidas. No llamar ROI o efecto de campaña a este porcentaje. V001–V009 inmutables.
 
 El instalador exige 169 generales + 187 PostgreSQL (356), todas las Python, Docker y 36 comprobaciones de gateway antes del auto commit local. Nueve suites UI interceptadas con datos ficticios, incluyendo return-radar.spec.cjs. Nunca tomar una ejecución con PostgreSQL embebido como validación de concurrencia de producción; el gate completo usa PostgreSQL real. HTTPS y teléfonos se comprueban aparte.
+
+## Estilos por negocio y progreso explícito v024
+
+presentationVersion=24 para ambas Wallet. Preservar identidades, claves, saldos y registros. V001–V009 inmutables. Las pruebas de actualización esperan 24 y conservan las entradas históricas 8, 17, 20, 22 y 23. No renovar automáticamente el túnel.
+
+WalletJourney describe saldo, meta y pendiente en las unidades de la promoción destacada; porcentajes con BigInteger acotados a 100 y dinero exacto con BigDecimal. No transformar puntos o dinero en visitas, sumar promociones ni afirmar canje confirmado. Saldos excedentes permanecen exactos. Los campos de texto son nativos; no incrustarlos en PNG ni prometer cambio de fuente nativa.
+
+presentationBalances añade ceros solo a la vista de promociones activas identificadas en earningRules, con programName y kind de configuración vigente. Nunca inserta saldo, compra ni canje. Los saldos existentes prevalecen y no se duplican. Sin metadata, conservar compatibilidad; sin programa activo, sin progreso. Negocio suspendido no genera invitaciones ni representación inicial de promociones.
+
+Los 32 estilos y 33 símbolos son apariencia, no plantillas de reglas fijas. Buscador, categoría, estado simulado y despliegue del catálogo no se envían al servidor. Guardar diseño es explícito y versionado. Los símbolos 0–9 no cambian; 10–32 son nuevos. /wallet/art/v24 admite todos; v20/v22 solo 0–9 y conservan su render. Miniaturas y tarjetas usan el mismo dibujante, sin depender de emoji del host. Las rutas públicas aceptan solo GET y parámetros acotados, sin datos privados.
+
+Google usa tres filas de campos propios del objeto (saldo/restante, progreso y premio). Máximo diez módulos; integrar uso en estado y conservar historial, condiciones y novedades. Todos los módulos son alcanzables desde frente o detalles. Apple combina como máximo cuatro campos secundarios/auxiliares y conserva balance/changeMessage, con progreso exacto también en detalles.
+
+Exigir 178 pruebas generales + 189 PostgreSQL (367), todas las Python (124), Docker y 43 comprobaciones del gateway antes del auto commit local; no push. Diez suites UI interceptadas, incluyendo wallet-industries.spec.cjs. PostgreSQL embebido no valida concurrencia de producción: el gate Mac usa PostgreSQL real. HTTPS y recepción en los dos teléfonos son verificaciones separadas.

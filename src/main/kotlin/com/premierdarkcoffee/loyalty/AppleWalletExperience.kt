@@ -57,13 +57,14 @@ fun WalletPass.appleExperienceFields(): JsonObject {
     val design = design()
     val currency = snapshot.getValue("currency").jsonPrimitive.content
     val paused = !snapshot.getValue("canOperate").jsonPrimitive.boolean
-    val balances = snapshot.getValue("balances").jsonArray.map { it.jsonObject }.sortedBy {
+    val balances = presentationBalances().sortedBy {
         if (it["programId"]?.jsonPrimitive?.contentOrNull == design.featuredProgramId) 0 else 1
     }
     val first = balances.firstOrNull()
     val rewards = appleRewards(balances)
     // Costs and available units are comparable only within the same promotion.
     val target = rewards.firstOrNull { it.balance == first }
+    val progress = journey()
     val header = when {
         paused -> obj("key" to "card_state", "label" to "MEMBRESÍA", "value" to "Pausada")
         target == null -> obj("key" to "card_state", "label" to "MEMBRESÍA", "value" to "Activa")
@@ -101,9 +102,11 @@ fun WalletPass.appleExperienceFields(): JsonObject {
         // v022 also represents points and cashback; native fields retain their own units.
         "headerFields" to if (artwork().total > 0) listOf(header, JsonObject(primaryWithChange + obj("label" to when(first?.get("kind")?.jsonPrimitive?.content){"STAMPS"->"SELLOS";"POINTS"->"PUNTOS";else->"SALDO"}))) else listOf(header),
         "primaryFields" to if (artwork().total > 0) emptyList<JsonObject>() else listOf(primaryWithChange),
-        "secondaryFields" to listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24))),
+        "secondaryFields" to (listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24))) +
+            progress?.let { listOf(obj("key" to "journey", "label" to it.label, "value" to it.summary)) }.orEmpty()),
         "auxiliaryFields" to extras,
         "backFields" to (rewardDetails.filter { it["key"] == JsonPrimitive("reward_${target?.id}") } +
+            progress?.let { listOf(obj("key" to "journey_detail", "label" to "Tu avance hacia el premio", "value" to "${it.summary}\n${it.guidance}")) }.orEmpty() +
             (if(paused) emptyList() else earningRule(first?.get("programId")?.jsonPrimitive?.contentOrNull)?.let { listOf(obj("key" to "earning", "label" to "Cómo acumular en tu promoción", "value" to it)) }.orEmpty()) +
             listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) +
             appleActivityFields() + rewardDetails.filter { it["key"] != JsonPrimitive("reward_${target?.id}") } +

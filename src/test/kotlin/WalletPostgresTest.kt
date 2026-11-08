@@ -180,8 +180,34 @@ class WalletPostgresTest {
             assertTrue(latest.getValue("serialNumbers").jsonArray.map{it.jsonPrimitive.content}.containsAll(passes.map{it.serial}))
         }finally{pool.shutdownNow()}
     }
+        @Test fun `zero progress starts before purchase without creating ledger balance and keeps identity after earning`() {
+        val f=fixture()
+        service.saveReward(f.staff,Reward(f.program,"Premio de puntos",50))
+        val before=count("SELECT count(*) FROM balances WHERE tenant_id=? AND member_id=?",f.staff.tenant,f.member.id)
+        wallet.materialize(f.member,"apple");val first=wallet.materialize(f.member,"google")
+        assertEquals("0 de 50 puntos",first.journey()!!.summary)
+        assertEquals(0,first.artwork().filled);assertEquals(100,first.artwork().total)
+        assertEquals(before,count("SELECT count(*) FROM balances WHERE tenant_id=? AND member_id=?",f.staff.tenant,f.member.id))
+        assertTrue(first.snapshot.getValue("balances").jsonArray.isEmpty())
+        earn(f);val updated=wallet.materialize(f.member)
+        assertEquals(first.serial,updated.serial);assertEquals(first.token,updated.token);assertEquals(first.googleId,updated.googleId)
+        assertEquals(first.snapshot.getValue("cardCode"),updated.snapshot.getValue("cardCode"))
+        assertEquals("10 de 50 puntos",updated.journey()!!.summary)
+        assertEquals(1,updated.presentationBalances().size)
+    }
+    @Test fun `pausing unearned promotion removes its preview and reactivating restores zero safely`() {
+        val f=fixture();service.saveReward(f.staff,Reward(f.program,"Premio",50))
+        val first=wallet.materialize(f.member,"google");assertNotNull(first.journey())
+        service.editProgram(f.staff,f.program,ProgramChange(1,Program("Puntos",Kind.POINTS,active=false)))
+        val paused=wallet.materialize(f.member);assertNull(paused.journey());assertEquals(0,paused.artwork().total)
+        assertTrue(paused.presentationBalances().isEmpty());assertFalse(paused.googleExperienceFields().toString().contains("0 de 50"))
+        service.editProgram(f.staff,f.program,ProgramChange(2,Program("Puntos",Kind.POINTS,active=true)))
+        val restored=wallet.materialize(f.member);assertEquals("0 de 50 puntos",restored.journey()!!.summary)
+        assertEquals(first.serial,restored.serial);assertEquals(first.googleId,restored.googleId)
+        assertEquals(0,count("SELECT count(*) FROM balances WHERE tenant_id=? AND member_id=?",f.staff.tenant,f.member.id))
+    }
     @Test fun `presentation upgrade refreshes installed card without changing its money or identity`() {
-        for (previousVersion in listOf(8, 17, 20, 22)) {
+        for (previousVersion in listOf(8, 17, 20, 22, 23)) {
             val f=fixture();earn(f)
             wallet.materialize(f.member,"apple")
             val initial=wallet.materialize(f.member,"google");register(initial)
@@ -190,7 +216,7 @@ class WalletPostgresTest {
             time.value=time.value.plusSeconds(1)
             val upgraded=wallet.materialize(f.member)
             assertTrue(upgraded.tag>initial.tag)
-            assertEquals(23,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
+            assertEquals(24,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
             assertEquals(initial.serial,upgraded.serial);assertEquals(initial.token,upgraded.token)
             assertEquals(initial.appleType,upgraded.appleType)
             assertEquals(initial.googleId,upgraded.googleId);assertEquals(initial.googleClass,upgraded.googleClass)

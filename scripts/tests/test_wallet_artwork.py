@@ -26,14 +26,14 @@ class WalletArtworkGatewayTests(unittest.TestCase):
         def respond(url,method,body):
             calls.append((url,method))
             path=url.removeprefix('http://local')
-            if path in ['/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png?layout=apple']:return (200 if method=='GET' else 404),b''
-            if path in ['/wallet/art/v20/GRADIENT/5/0b1f3a/9/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/9/5.png']:return 400,b''
+            if path in ['/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png','/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png?layout=apple','/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png?layout=apple']:return (200 if method=='GET' else 404),b''
+            if path in ['/wallet/art/v24/GRADIENT/32/0b1f3a/9/5.png','/wallet/art/v20/GRADIENT/5/0b1f3a/9/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/9/5.png']:return 400,b''
             if path in ['/join/demo','/api/public/demo','/engagement.js','/experience.js','/wallet/brand/demo/logo.png']:return 200,b''
             if path in ['/api/me/wallet-status','/api/me/access']:return 401,b''
             if path=='/api/public/demo/join':return 400,b''
             return 404,b''
-        with patch.object(w,'request',side_effect=respond):self.assertEqual(36,w.verify_gateway('http://local','demo'))
-        self.assertEqual(36,len(calls))
+        with patch.object(w,'request',side_effect=respond):self.assertEqual(43,w.verify_gateway('http://local','demo'))
+        self.assertEqual(43,len(calls))
         with patch.object(w,'request',return_value=(503,b'')):
             with self.assertRaises(RuntimeError):w.verify_gateway('http://local','demo')
 
@@ -42,3 +42,13 @@ class WalletArtworkGatewayTests(unittest.TestCase):
         for path in ['/api/staff/birthday-settings','/api/staff/business-profile/requests','/api/staff/promotion-setups','/api/staff/metrics?days=365','/api/platform/tenants/example/profile-requests/example']:
             for method in ['GET','POST','PUT','DELETE']:
                 self.assertFalse(any(re.fullmatch(rule,method+' '+path) for rule in rules),(method,path))
+
+    def test_new_business_symbols_are_bounded_without_expanding_legacy_routes(self):
+        rules=re.findall(r'"~\^(.+?)\$" 1;',w.gateway_config('a'*32))
+        allowed=lambda path:any(re.fullmatch(rule,'GET '+path) for rule in rules)
+        for symbol in range(33):
+            self.assertTrue(allowed('/wallet/art/v24/GRADIENT/'+str(symbol)+'/0b1f3a/4/5.png'))
+        for symbol in ['33','999','-1','00','032','%32']:
+            self.assertFalse(allowed('/wallet/art/v24/GRADIENT/'+symbol+'/0b1f3a/4/5.png'))
+        for version in ['v20','v22']:
+            self.assertFalse(allowed('/wallet/art/'+version+'/GRADIENT/32/0b1f3a/4/5.png'))

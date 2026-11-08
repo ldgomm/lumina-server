@@ -135,6 +135,7 @@ def gateway_config(nonce, upstream='loyalty-server:8080', resolver=True):
         ('GET', r'/api/me(?:/qr|/wallet-status|/access)?'),
         ('POST', r'/api/me/(?:logout|wallet/(?:apple|google)/link)'),
         ('GET', r'/wallet/art/(?:v20|v22)/(?:SOLID|GRADIENT)/[0-9]/[a-fA-F0-9]{6}/[0-9]{1,3}/[0-9]{1,3}\.png'),
+        ('GET', r'/wallet/art/v24/(?:SOLID|GRADIENT)/(?:[0-9]|[12][0-9]|3[0-2])/[a-fA-F0-9]{6}/[0-9]{1,3}/[0-9]{1,3}\.png'),
         ('GET', r'/wallet/logo\.png'),
         ('GET', r'/wallet/brand/[a-z0-9][a-z0-9-]{1,60}/logo\.png'),
         ('GET', r'/wallet/apple/download/[A-Za-z0-9_-]{43}'),
@@ -354,7 +355,14 @@ def probe(url, nonce, attempts=60, diagnostics=None, maximum_seconds=120):
 
 
 def verify_gateway(url, slug):
-    checks = [('GET', '/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png', None, 200),
+    checks = [('GET', '/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png', None, 200),
+              ('GET', '/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png?layout=apple', None, 200),
+              ('GET', '/wallet/art/v24/GRADIENT/32/0b1f3a/9/5.png', None, 400),
+              ('POST', '/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png', {}, 404),
+              ('GET', '/wallet/art/v24/GRADIENT/33/0b1f3a/4/5.png', None, 404),
+              ('GET', '/wallet/art/v22/GRADIENT/32/0b1f3a/4/5.png', None, 404),
+              ('GET', '/api/staff/return-radar', None, 404),
+              ('GET', '/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png', None, 200),
               ('GET', '/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png?layout=apple', None, 200),
               ('GET', '/wallet/art/v22/GRADIENT/5/0b1f3a/9/5.png', None, 400),
               ('POST', '/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png', {}, 404),
