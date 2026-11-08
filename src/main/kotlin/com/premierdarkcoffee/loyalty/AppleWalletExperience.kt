@@ -98,12 +98,15 @@ fun WalletPass.appleExperienceFields(): JsonObject {
     val updated = updatedAt.atZone(zone).format(DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm", Locale.forLanguageTag("es-EC")))
     return obj(
         // A stamp illustration occupies the strip. Keep the exact balance as native text above it.
-        "headerFields" to if (artwork().total > 0) listOf(header, JsonObject(primaryWithChange + obj("label" to "SELLOS"))) else listOf(header),
+        // v022 also represents points and cashback; native fields retain their own units.
+        "headerFields" to if (artwork().total > 0) listOf(header, JsonObject(primaryWithChange + obj("label" to when(first?.get("kind")?.jsonPrimitive?.content){"STAMPS"->"SELLOS";"POINTS"->"PUNTOS";else->"SALDO"}))) else listOf(header),
         "primaryFields" to if (artwork().total > 0) emptyList<JsonObject>() else listOf(primaryWithChange),
         "secondaryFields" to listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24))),
         "auxiliaryFields" to extras,
-        "backFields" to (listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) +
-            rewardDetails + appleActivityFields() + (if (paused) emptyList() else announcementFields()) + listOf(
+        "backFields" to (rewardDetails.filter { it["key"] == JsonPrimitive("reward_${target?.id}") } +
+            listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) +
+            appleActivityFields() + rewardDetails.filter { it["key"] != JsonPrimitive("reward_${target?.id}") } +
+            (if (paused) emptyList() else announcementFields()) + listOf(
             obj("key" to "member_detail", "label" to "Titular", "value" to snapshot.getValue("name")),
             obj("key" to "validity", "label" to "Estado de la tarjeta", "value" to if (paused) "Operaciones pausadas. Tus saldos se conservan." else "Válida en todas las sucursales de este negocio."),
             obj("key" to "usage", "label" to "Cómo usar tu tarjeta", "value" to design.usage),

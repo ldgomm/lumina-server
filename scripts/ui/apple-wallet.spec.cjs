@@ -42,9 +42,9 @@ async function run() {
         await page.locator('#walletDesign').waitFor();
         assert.equal(await page.locator('#previewWelcome').textContent(), '12 / 13');
         assert.equal(await page.locator('#previewStatus').textContent(), '1 sello');
-        assert.equal((await page.locator('#previewStamps').textContent()).split('★').length - 1, 12);
+        assert.equal(await page.locator('#previewStamps').textContent(), '12 de 13 sellos completados en este ejemplo.');
         assert.equal(await page.locator('#featuredProgramId option[value=paused]').count(), 0);
-        assert.match(await page.locator('#previewRewardConditions').textContent(), /35%.*menor precio/);;
+        assert.match(await page.locator('#previewRewardConditions').textContent(), /35%.*menor precio/);;;;
         checks.push('Arbitrary 13-stamp goal, remaining stamp, custom symbol and paused exclusion');
         await page.locator('[data-wallet-example=ready]').click();
         assert.equal(await page.locator('#previewWelcome').textContent(), '13 sellos');

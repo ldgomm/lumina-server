@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v021 requiere 328 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v022r1 requiere 336 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -130,3 +130,23 @@ Cumpleaños admite título, mensaje y hasta ocho textos; aleatorio exige dos dis
 Informes compartidos por dueño y administrador, aislados por negocio, 7/30/90/365 días. Usar SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY antes de leer: Database.tx ya abrió la transacción con SET LOCAL. Los períodos comienzan a medianoche local e incluyen hoy parcialmente; la comparación corresponde a días completos anteriores. Total pagado proviene de compras; premios solo CONSUMED por consumed_at. Agregar sucursales por separado para evitar multiplicar compras por canjes. Las categorías incluyen solo productos detallados. No sumar compradores diarios o por sucursal ni llamar retención a la repetición de compra. Los gráficos y CSV son lectura, no generan cargos, reservas o mensajes.
 
 Exigir 152 pruebas generales + 176 PostgreSQL (328), todas las Python (123), Docker y 31 comprobaciones del gateway antes del auto commit local. Mantener HTTPS y recepción en teléfonos como resultados separados. Pruebas de interfaz con fixtures ficticios: siete suites interceptadas, incluida owner-experience.spec.cjs; experience.spec.cjs sigue siendo una prueba opcional contra servidor aislado.
+
+## Presentación nativa Apple y Google v022
+
+V001–V009 permanecen inmutables. presentationVersion=22 actualiza ambas Wallet conservando serial, token, QR, googleId/googleClass, saldo y registros. La prueba de actualización debe esperar 22 y cubrir versiones anteriores 8, 17 y 20; esta regla reemplaza la expectativa histórica de v020r1.
+
+Los nuevos dibujos públicos usan /wallet/art/v22 y conservan /v20 con su render original. Solo GET, versiones conocidas, parámetros acotados y sin datos personales. Apple mantiene 375×123 en sus tres escalas; Google 1032×812 según su guía vigente. No incrustar texto en imágenes ni presentar porcentajes como saldo contable. Hasta 20 sellos, casillas individuales; puntos, cashback y metas mayores, barra porcentual entera acotada, usando BigInteger para evitar desbordamientos. Sin premio elegible o negocio pausado, ilustración vacía.
+
+Google classTemplateInfo comparte solo referencias estáticas, dos filas: balances nativos y headline del objeto. Cada cliente mantiene sus valores en su propio objeto. Todos los módulos deben ser alcanzables desde el frente o los detalles; máximo diez, registros completos y aviso de excedentes. Mantener reviewStatus=UNDER_REVIEW y reintento de actualización de clase fallida. Apple conserva saldo como texto nativo y sitúa historial antes del resto de premios. No simular movimientos de Apple Pay.
+
+Estilos rápidos solo cambian apariencia y requieren Guardar diseño explícito; preservan nombre, logo, promoción, bienvenida e instrucciones. Ejemplos nueva/acumulando/premio/pausada no ejecutan operaciones. Mantener contraste corregible, accesibilidad y desplazamiento completo de la vista previa en pantallas pequeñas. wallet-design.spec.cjs usa ilustraciones producidas por Kotlin y datos ficticios.
+
+Exigir 160 generales + 176 PostgreSQL (336), 123 Python, Docker y 36 comprobaciones de gateway antes del auto commit local; no push. Ocho suites UI interceptadas. HTTPS y recepción Apple/Google en teléfonos siguen pendientes hasta comprobarlas en el entorno del usuario. Nunca renovar automáticamente un túnel con tarjetas instaladas.
+
+## Corrección de la prueba de pausa v022r1
+
+El ZIP v022 del 7 de noviembre confirmó 160 pruebas generales y 175 PostgreSQL aprobadas. PromotionLifecyclePostgresTest falló únicamente porque la prueba de pausa esperaba presentationVersion=20, mientras que el servidor devuelve 22. Corregir esa expectativa a 22 conservando todas sus comprobaciones de saldo, premios, alta pública, identidad de ambas Wallet, ocultación de promociones y reactivación. No cambiar producción, esquema ni la versión visual por esta corrección.
+
+Al cambiar presentationVersion en futuras entregas, buscar todas sus referencias en src/main y src/test, incluidas WalletPostgresTest y PromotionLifecyclePostgresTest; distinguir versiones históricas usadas como entrada de la versión actual esperada como resultado. No eliminar aserciones ni sustituirlas por valores tomados del mismo resultado comprobado.
+
+Mantener las 336 pruebas completas, 123 Python, Docker y 36 comprobaciones de gateway antes del commit local. Un resultado anterior con 335 aprobadas no permite saltar ninguna. HTTPS y validación en teléfonos siguen informándose por separado.

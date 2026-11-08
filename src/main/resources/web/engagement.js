@@ -186,10 +186,17 @@
     async function designPage() {
         const root = document.querySelector('#content'); const data = await api('/api/staff/wallet-design');
         if (!root.isConnected || state.tab !== 'design') return;
+        const presets = [
+            {id:'navy', name:'Navy', background:'#0b1f3a', foreground:'#ffffff', label:'#b8d8ff', symbol:'★'},
+            {id:'coffee', name:'Café', background:'#34241f', foreground:'#fff8ed', label:'#e8bc82', symbol:'☕'},
+            {id:'pizza', name:'Pizzería', background:'#702c28', foreground:'#fff9ed', label:'#f5d391', symbol:'🍕'},
+            {id:'barber', name:'Barbería', background:'#202936', foreground:'#ffffff', label:'#bdcedd', symbol:'✂'},
+            {id:'shop', name:'Boutique', background:'#f2e9da', foreground:'#202c40', label:'#425a76', symbol:'🛍'}
+        ];
         const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress', previewProvider = 'apple';
         root.innerHTML = `<section class="panel wallet-design-panel"><h2>Personaliza tu tarjeta</h2><p>Elige el fondo de tu negocio. Te ayudamos a que sus textos se lean bien.</p><div class="wallet-design-layout"><form id="walletDesign"><fieldset id="designFields">
             ${field('displayName', 'Nombre en la tarjeta', 'text', d.displayName, 'maxlength="80"')}
-            <h3 class="design-colors-heading">Colores</h3>
+            <h3 class="design-colors-heading">Empieza con un estilo</h3><p class="design-help">Aplica una combinación y ajústala a tu marca. Se guarda solo cuando pulses Guardar diseño.</p><div class="wallet-style-presets" role="group" aria-label="Estilos rápidos">${presets.map(p => `<button type="button" data-wallet-style="${p.id}"><span aria-hidden="true">${p.symbol}</span>${p.name}</button>`).join('')}</div><p id="presetStatus" class="design-help" aria-live="polite"></p><h3 class="design-colors-heading">Colores</h3>
             ${field('background', 'Color de fondo', 'color', d.background, 'aria-describedby="backgroundHelp"')}
             <p id="backgroundHelp" class="design-help">Puedes usar cualquier fondo. El texto y las etiquetas deben distinguirse sobre él.</p>
             <label class="check"><input id="autoContrast" type="checkbox" checked>Ajustar texto y etiquetas al cambiar el fondo</label>
@@ -199,17 +206,17 @@
             <button type="button" class="quiet" id="fixContrast">Corregir colores</button>
             <label>Logo PNG o JPG<input id="designLogo" type="file" accept="image/png,image/jpeg"></label><p id="logoStatus">${logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.'}</p><button type="button" class="quiet" id="removeLogo">Usar logo predeterminado</button>
             ${select('featuredProgramId', 'Promoción destacada en Wallet', [['', 'Primera promoción activa'], ...state.data.programs.filter(p => p.config.active !== false).map(p => [p.id, p.config.name])], d.featuredProgramId || '')}<p class="design-help">Apple y Google destacarán esta promoción y su premio de menor costo. Los demás saldos y premios siguen disponibles en los detalles de la tarjeta.</p>
-            ${select('stampSymbol', 'Símbolo de los sellos', [['●','● Círculo'],['★','★ Estrella'],['♥','♥ Corazón'],['✂','✂ Barbería'],['◆','◆ Diamante'],['☕','☕ Café'],['🍕','🍕 Pizza'],['🛍','🛍 Compras'],['👟','👟 Calzado'],['🔧','🔧 Taller']], d.stampSymbol)}
-            ${select('artworkStyle', 'Acabado de la franja de sellos', [['GRADIENT','Degradado'],['SOLID','Color liso']], d.artworkStyle || 'GRADIENT')}
-            <p class="design-help">Los símbolos llenos muestran los sellos acumulados. Hasta 20 sellos se dibujan uno a uno; con metas mayores se muestra una barra proporcional y el saldo exacto en texto. La tipografía de los campos la controla cada Wallet.</p>
+            ${select('stampSymbol', 'Símbolo de tu negocio', [['●','● Círculo'],['★','★ Estrella'],['♥','♥ Corazón'],['✂','✂ Barbería'],['◆','◆ Diamante'],['☕','☕ Café'],['🍕','🍕 Pizza'],['🛍','🛍 Compras'],['👟','👟 Calzado'],['🔧','🔧 Taller']], d.stampSymbol)}
+            ${select('artworkStyle', 'Acabado de la ilustración', [['GRADIENT','Degradado'],['SOLID','Color liso']], d.artworkStyle || 'GRADIENT')}
+            <p class="design-help">Los sellos se completan uno a uno hasta 20. Puntos, cashback y metas mayores usan una barra de avance. El saldo exacto siempre aparece en texto. La tipografía de los campos la controla cada Wallet.</p>
             ${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
             ${field('usage', 'Cómo usar la tarjeta', 'text', d.usage, 'required maxlength="350"')}
             <p class="design-help">Configura títulos, mensajes y felicitaciones automáticas desde Eventos y cumpleaños.</p>
             </fieldset><p id="designSaveHint" class="design-help" aria-live="polite"></p><p id="designSaveError" class="design-error" role="alert" hidden></p><button id="saveDesign" type="submit" aria-describedby="designSaveHint">Guardar diseño</button></form>
             <aside class="design-preview-wrap"><h3>Vista previa de tus Wallet</h3><p class="design-help">Promociones reales, saldos ficticios. Cada Wallet decide la distribución final.</p><div class="wallet-preview-platforms" role="group" aria-label="Wallet de la vista previa"><button type="button" data-preview-provider="apple">Apple Wallet</button><button type="button" data-preview-provider="google">Google Wallet</button></div><p id="previewPlatformHint" class="design-help"></p>
-            <div class="wallet-preview-modes" role="group" aria-label="Estado de ejemplo de la tarjeta"><button type="button" data-wallet-example="new">Nueva</button><button type="button" data-wallet-example="progress" class="active">Acumulando</button><button type="button" data-wallet-example="ready">Con premio</button></div>
+            <div class="wallet-preview-modes" role="group" aria-label="Estado de ejemplo de la tarjeta"><button type="button" data-wallet-example="new">Nueva</button><button type="button" data-wallet-example="progress" class="active">Acumulando</button><button type="button" data-wallet-example="ready">Con premio</button><button type="button" data-wallet-example="paused">Pausada</button></div>
             <div id="designPreview" class="design-preview"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><div class="apple-preview-fields"><div class="wallet-preview-status"><span id="previewStatusLabel" class="design-preview-label"></span><strong id="previewStatus"></strong></div><div class="wallet-preview-balance"><span id="previewWelcome" class="design-preview-hero"></span><span id="previewProgram" class="design-preview-label"></span></div></div><img id="appleStampArtwork" class="stamp-artwork apple-stamp-artwork" alt=""><div class="design-preview-bottom"><div><span class="design-preview-label">CLIENTE</span><span>Cliente de ejemplo</span></div><div id="previewPrizeWrap"><span id="previewPrizeLabel" class="design-preview-label"></span><span id="previewPrize"></span></div></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div>
-            <div id="googleDesignPreview" class="google-design-preview" hidden><div class="google-preview-brand"><img id="googlePreviewLogo" alt="" hidden><strong id="googlePreviewName"></strong></div><p class="google-preview-member">Cliente de ejemplo</p><div class="google-preview-values"><div><span id="googlePreviewMainLabel"></span><strong id="googlePreviewMain"></strong></div><div><span id="googlePreviewStatusLabel"></span><strong id="googlePreviewStatus"></strong></div></div><img id="googleStampArtwork" class="stamp-artwork google-stamp-artwork" alt=""><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div><div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardConditions" hidden></p><p id="previewRewardDetail"></p><p id="previewStamps"></p></div><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
+            <div id="googleDesignPreview" class="google-design-preview" hidden><div class="google-preview-brand"><img id="googlePreviewLogo" alt="" hidden><strong id="googlePreviewName"></strong></div><p class="google-preview-member">Cliente de ejemplo</p><div class="google-preview-values"><div><span id="googlePreviewMainLabel"></span><strong id="googlePreviewMain"></strong></div><div><span id="googlePreviewStatusLabel"></span><strong id="googlePreviewStatus"></strong></div></div><img id="googleStampArtwork" class="stamp-artwork google-stamp-artwork" alt=""><div class="google-preview-headline"><span id="googlePreviewRewardLabel"></span><strong id="googlePreviewReward"></strong></div><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div><div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardConditions" hidden></p><p id="previewRewardDetail"></p><p id="previewStamps"></p></div><details class="wallet-preview-more"><summary>Qué verá en los detalles</summary><ol><li>Premio destacado, condiciones y saldo disponible.</li><li>Saldos de cada promoción, sin mezclarlos.</li><li>Últimos consumos y canjes con fecha y sucursal.</li><li>Otros premios, novedades e instrucciones.</li></ol><p>Las promociones pausadas o eliminadas dejan de ofrecerse. Los movimientos ya realizados permanecen en el historial.</p></details><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
         const f = root.querySelector('#walletDesign'), fields = root.querySelector('#designFields');
         const background = f.elements.background, foreground = f.elements.foreground, labels = f.elements.label;
         const auto = root.querySelector('#autoContrast'), save = root.querySelector('#saveDesign'), fix = root.querySelector('#fixContrast');
@@ -250,29 +257,31 @@
             const amount = !program || example === 'new' ? 0 : reward ? (example === 'ready' ? reward.cost : Math.max(0, reward.cost - 1)) : kind === 'CASHBACK' ? 500 : kind === 'STAMPS' ? 3 : 100;
             const unit = n => kind === 'CASHBACK' ? money(n) : `${n} ${kind === 'STAMPS' ? (n === 1 ? 'sello' : 'sellos') : (n === 1 ? 'punto' : 'puntos')}`;
             const remaining = reward ? Math.max(0, reward.cost - amount) : null;
+            const paused = example === 'paused';
             root.querySelector('#previewWelcome').textContent = !program ? f.elements.welcome.value || 'Bienvenido' : reward && kind === 'STAMPS' && remaining > 0 ? `${amount} / ${reward.cost}` : unit(amount);
-            root.querySelector('#previewProgram').textContent = reward && kind === 'STAMPS' ? 'SELLOS' : program?.config.name || 'Tu tarjeta';
-            root.querySelector('#previewStatusLabel').textContent = !reward ? 'MEMBRESÍA' : remaining === 0 ? 'PREMIO' : remaining === 1 && kind !== 'CASHBACK' ? 'TE FALTA' : 'TE FALTAN';
-            root.querySelector('#previewStatus').textContent = !reward ? 'Activa' : remaining === 0 ? 'Disponible' : unit(remaining);
+            root.querySelector('#previewProgram').textContent = reward && !paused ? (kind === 'STAMPS' ? 'SELLOS' : kind === 'POINTS' ? 'PUNTOS' : 'SALDO') : program?.config.name || 'Tu tarjeta';
+            root.querySelector('#previewStatusLabel').textContent = paused || !reward ? 'MEMBRESÍA' : remaining === 0 ? 'PREMIO' : remaining === 1 && kind !== 'CASHBACK' ? 'TE FALTA' : 'TE FALTAN';
+            root.querySelector('#previewStatus').textContent = paused ? 'Pausada' : !reward ? 'Activa' : remaining === 0 ? 'Disponible' : unit(remaining);
             root.querySelector('#previewPrizeWrap').hidden = !reward;
-            root.querySelector('#previewPrizeLabel').textContent = remaining === 0 ? 'CANJEA EN CAJA' : 'PRÓXIMO PREMIO';
+            root.querySelector('#previewPrizeLabel').textContent = paused ? 'PREMIO PAUSADO' : remaining === 0 ? 'CANJEA EN CAJA' : 'PRÓXIMO PREMIO';
             const compactPrize = [...(reward?.name || '').trim().replace(/\s+/g, ' ')];
             root.querySelector('#previewPrize').textContent = compactPrize.length > 28 ? compactPrize.slice(0, 27).join('') + '…' : compactPrize.join('');
             const conditions = root.querySelector('#previewRewardConditions'); conditions.hidden = !reward?.benefitText; conditions.textContent = reward?.benefitText || '';
-            root.querySelector('#previewRewardName').textContent = reward ? `${remaining === 0 ? 'Premio disponible' : 'Próximo premio'} · ${reward.name}` : 'Tu tarjeta, a tu medida';
-            root.querySelector('#previewRewardDetail').textContent = reward ? `Saldo de ejemplo: ${unit(amount)}. Canje: ${unit(reward.cost)}. ${remaining === 0 ? `Si canjea este premio, le quedan ${unit(amount - reward.cost)}. Caja confirma el saldo vigente.` : `Te falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${unit(remaining)}.`}` : program ? 'Esta promoción aún no tiene un premio activo. Puedes crearlo en Premios.' : 'Al activar una promoción, aparecerá su saldo. Hasta entonces se muestra tu bienvenida.';
-            const stampGoal = reward && kind === 'STAMPS' ? reward.cost : 0;
-            const artworkTotal = stampGoal > 20 ? 100 : stampGoal;
-            const artworkFilled = stampGoal > 20 ? Math.floor(Math.min(amount, stampGoal) * 100 / stampGoal) : Math.min(amount, stampGoal);
+            root.querySelector('#previewRewardName').textContent = reward ? `${paused ? 'Premio pausado' : remaining === 0 ? 'Premio disponible' : 'Próximo premio'} · ${reward.name}` : 'Tu tarjeta, a tu medida';
+            root.querySelector('#previewRewardDetail').textContent = paused ? 'Operaciones pausadas. Tus saldos se conservan; los canjes vuelven a estar disponibles cuando se reactive el negocio.' : reward ? `Saldo de ejemplo: ${unit(amount)}. Canje: ${unit(reward.cost)}. ${remaining === 0 ? `Si canjea este premio, le quedan ${unit(amount - reward.cost)}. Caja confirma el saldo vigente.` : `Te falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${unit(remaining)}.`}` : program ? 'Esta promoción aún no tiene un premio activo. Puedes crearlo en Premios.' : 'Al activar una promoción, aparecerá su saldo. Hasta entonces se muestra tu bienvenida.';
+            const artworkGoal = !paused && reward ? reward.cost : 0;
+            const individual = kind === 'STAMPS' && artworkGoal <= 20;
+            const artworkTotal = !artworkGoal ? 0 : individual ? artworkGoal : 100;
+            const artworkFilled = !artworkGoal ? 0 : individual ? Math.min(amount, artworkGoal) : Math.floor(Math.min(amount, artworkGoal) * 100 / artworkGoal);
             const symbol = ['●','★','♥','✂','◆','☕','🍕','🛍','👟','🔧'].indexOf(f.elements.stampSymbol.value);
-            const artworkPath = `/wallet/art/v20/${f.elements.artworkStyle.value}/${Math.max(0, symbol)}/${background.value.slice(1)}/${artworkFilled}/${artworkTotal}.png`;
+            const artworkPath = `/wallet/art/v22/${f.elements.artworkStyle.value}/${Math.max(0, symbol)}/${background.value.slice(1)}/${artworkFilled}/${artworkTotal}.png`;
             for (const [id, suffix] of [['appleStampArtwork', '?layout=apple'], ['googleStampArtwork', '']]) {
-                const art = root.querySelector('#' + id); art.hidden = !stampGoal;
-                if (stampGoal) { art.src = artworkPath + suffix; art.alt = `${amount} de ${stampGoal} sellos de ejemplo. Caja confirma el canje.`; }
+                const art = root.querySelector('#' + id); art.hidden = !artworkGoal;
+                if (artworkGoal) { art.src = artworkPath + suffix; art.alt = `Ejemplo: ${unit(amount)} de ${unit(artworkGoal)}. Caja confirma el canje.`; }
                 else art.removeAttribute('src');
             }
-            preview.classList.toggle('with-stamp-artwork', !!stampGoal);
-            root.querySelector('#previewStamps').textContent = reward && kind === 'STAMPS' && reward.cost <= 20 ? Array.from({length: reward.cost}, (_, i) => i < amount ? f.elements.stampSymbol.value : '○').join(' ') : '';
+            preview.classList.toggle('with-stamp-artwork', !!artworkGoal);
+            root.querySelector('#previewStamps').textContent = !paused && artworkGoal && individual ? `${Math.min(amount, artworkGoal)} de ${artworkGoal} sellos completados en este ejemplo.` : '';
             root.querySelectorAll('[data-wallet-example]').forEach(button => {
                 const selected = button.dataset.walletExample === example;
                 button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected));
@@ -281,7 +290,7 @@
             preview.hidden = previewProvider !== 'apple'; googlePreview.hidden = previewProvider !== 'google';
             root.querySelector('#previewPlatformHint').textContent = previewProvider === 'apple'
                 ? 'Apple: saldo y sellos en el frente; premios y consumos en los detalles. La fuente y la distribución finales las decide Apple.'
-                : 'Google: saldo y sellos en la tarjeta; premios y consumos en los detalles. El color del texto lo decide Google.';
+                : 'Google: saldo, avance y nombre del premio en el frente. Consumos y condiciones en los detalles. El color del texto lo decide Google.';
             root.querySelectorAll('[data-preview-provider]').forEach(button => {
                 button.setAttribute('aria-pressed', String(button.dataset.previewProvider === previewProvider));
                 button.disabled = saving || loadingLogo;
@@ -289,9 +298,14 @@
             googlePreview.style.backgroundColor = background.value; googlePreview.style.color = recommended();
             root.querySelector('#googlePreviewName').textContent = f.elements.displayName.value.trim() || state.data.business.name;
             root.querySelector('#googlePreviewMainLabel').textContent = kind === 'CASHBACK' ? state.data.business.currency : kind === 'STAMPS' ? 'Sellos' : kind === 'POINTS' ? 'Puntos' : 'Tarjeta';
-            root.querySelector('#googlePreviewMain').textContent = !program ? 'Activa' : reward && kind === 'STAMPS' && remaining > 0 ? `${amount}/${reward.cost}` : kind === 'CASHBACK' ? (amount / 100).toFixed(2) : String(amount);
-            root.querySelector('#googlePreviewStatusLabel').textContent = !reward ? 'Estado' : remaining === 0 ? 'Premio' : remaining === 1 && kind !== 'CASHBACK' ? 'Falta' : 'Faltan';
-            root.querySelector('#googlePreviewStatus').textContent = !reward ? 'Activa' : remaining === 0 ? 'En caja' : unit(remaining);
+            root.querySelector('#googlePreviewMain').textContent = !program ? (paused ? 'Pausada' : 'Activa') : reward && kind === 'STAMPS' && remaining > 0 ? `${amount}/${reward.cost}` : kind === 'CASHBACK' ? (amount / 100).toFixed(2) : String(amount);
+            root.querySelector('#googlePreviewStatusLabel').textContent = paused || !reward ? 'Estado' : remaining === 0 ? 'Premio' : remaining === 1 && kind !== 'CASHBACK' ? 'Falta' : 'Faltan';
+            root.querySelector('#googlePreviewStatus').textContent = paused ? 'Pausada' : !reward ? 'Activa' : remaining === 0 ? 'En caja' : unit(remaining);
+            root.querySelector('#googlePreviewRewardLabel').textContent = paused ? 'Estado' : !reward ? 'Tu promoción' : remaining === 0 ? 'Premio en caja' : 'Próximo premio';
+            const headline = paused ? 'Operaciones pausadas' : reward?.name || program?.config.name || f.elements.welcome.value;
+            const characters = [...headline.trim().replace(/\s+/g, ' ')];
+            root.querySelector('#googlePreviewReward').textContent = characters.length > 44 ? characters.slice(0, 43).join('') + '…' : characters.join('');
+            root.querySelectorAll('[data-wallet-style]').forEach(button => { button.disabled = saving || loadingLogo; });
             const googleLogo = root.querySelector('#googlePreviewLogo'); googleLogo.hidden = !logo;
             if (logo) googleLogo.src = 'data:image/png;base64,' + logo; else googleLogo.removeAttribute('src');
             const image = root.querySelector('#previewLogo'); image.hidden = !logo;
@@ -314,6 +328,14 @@
         }
         root.querySelectorAll('[data-wallet-example]').forEach(button => button.onclick = () => { example = button.dataset.walletExample; update(); });
         root.querySelectorAll('[data-preview-provider]').forEach(button => button.onclick = () => { if (saving || loadingLogo) return; previewProvider = button.dataset.previewProvider; update(); });
+        root.querySelectorAll('[data-wallet-style]').forEach(button => button.onclick = () => {
+            if (saving || loadingLogo) return;
+            const preset = presets.find(p => p.id === button.dataset.walletStyle);
+            background.value = preset.background; foreground.value = preset.foreground; labels.value = preset.label;
+            f.elements.stampSymbol.value = preset.symbol; f.elements.artworkStyle.value = 'GRADIENT';
+            clearError(); correctColors(); update();
+            root.querySelector('#presetStatus').textContent = `${preset.name} aplicado a la vista previa. Puedes ajustar los colores antes de guardar.`;
+        });
         f.addEventListener('input', edited); f.addEventListener('change', edited);
         fix.onclick = () => { clearError(); correctColors(); f.dataset.palette = [background.value, foreground.value, labels.value].join('/'); update(); };
         root.querySelector('#removeLogo').onclick = () => {

@@ -44,9 +44,9 @@ class WalletArtworkTest {
             "rewardProgress" to (p.snapshot.getValue("rewardProgress").jsonArray + obj("id" to "b","programId" to "b","kind" to "STAMPS","goal" to 9,"name" to "Otro premio"))))
         assertEquals(2,p.copy(snapshot=s).artwork().filled);assertEquals(9,p.copy(snapshot=s).artwork().total)
     }
-    @Test fun `paused removed orphan and non stamp promotions have no graphic progress`() {
+    @Test fun `paused removed and orphan promotions have no graphic progress`() {
         assertEquals(0,pass(active=false).artwork().total)
-        assertEquals(0,pass(kind="CASHBACK").artwork().total)
+        assertEquals(100,pass(kind="CASHBACK").artwork().total)
         assertEquals(0,pass(goal=0).artwork().total)
         val p=pass();val removed=p.copy(snapshot=JsonObject(p.snapshot+obj("balances" to emptyList<JsonObject>())))
         assertEquals(0,removed.artwork().total)
@@ -63,7 +63,7 @@ class WalletArtworkTest {
     @Test fun `image URLs change with progress but contain no customer or security identifiers`() {
         val p=pass();val native=p.googleJson("issuer.object","issuer.class","https://example.com")
         val uri=native.getValue("heroImage").jsonObject.getValue("sourceUri").jsonObject.getValue("uri").jsonPrimitive.content
-        assertEquals("https://example.com/wallet/art/v20/GRADIENT/6/204e41/4/5.png",uri)
+        assertEquals("https://example.com/wallet/art/v22/GRADIENT/6/204e41/4/5.png",uri)
         for(secret in listOf("member","PRIVATE-QR","serial","token"))assertFalse(uri.contains(secret))
         assertNotEquals(uri,pass(5).googleArtwork("https://example.com").getValue("sourceUri").jsonObject.getValue("uri").jsonPrimitive.content)
         assertEquals("PRIVATE-QR",native.getValue("barcode").jsonObject.getValue("value").jsonPrimitive.content)

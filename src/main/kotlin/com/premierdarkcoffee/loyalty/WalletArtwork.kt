@@ -18,9 +18,14 @@ data class WalletArtwork(val style: String, val symbol: Int, val background: Str
             background.matches(Regex("[a-fA-F0-9]{6}")) && (total in 0..20 || total == 100) && filled in 0..total,
             "INVALID_ARTWORK", "Diseño de sellos inválido.")
     }
-    fun path() = "/wallet/art/v20/$style/$symbol/${background.lowercase()}/$filled/$total.png"
+    fun path() = "/wallet/art/v22/$style/$symbol/${background.lowercase()}/$filled/$total.png"
 
-    fun png(appleScale: Int? = null): ByteArray {
+    fun png(appleScale: Int? = null, version: Int = 22): ByteArray {
+        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22))
+        return if(version == 20) legacyPng(appleScale) else modernPng(appleScale)
+    }
+
+    private fun legacyPng(appleScale: Int? = null): ByteArray {
         validate(); require(appleScale == null || appleScale in 1..3)
         val width = appleScale?.let { 375 * it } ?: 1032
         val height = appleScale?.let { 123 * it } ?: 812
@@ -100,15 +105,75 @@ fun WalletPass.artwork(): WalletArtwork {
     val target=snapshot["rewardProgress"]?.jsonArray.orEmpty().map { it.jsonObject }.filter {
         first?.get("programId")!=null && it["programId"]==first["programId"] && it["kind"]==first["kind"] && (it["goal"]?.jsonPrimitive?.longOrNull?:0)>0
     }.sortedWith(compareBy<JsonObject> { it.getValue("goal").jsonPrimitive.long }.thenBy { it.getValue("id").jsonPrimitive.content }).firstOrNull()
-    val goal=if(snapshot["canOperate"]?.jsonPrimitive?.booleanOrNull==true && first?.get("kind")==JsonPrimitive("STAMPS")) target?.get("goal")?.jsonPrimitive?.longOrNull?:0 else 0
+    val goal=if(snapshot["canOperate"]?.jsonPrimitive?.booleanOrNull==true) target?.get("goal")?.jsonPrimitive?.longOrNull?:0 else 0
     val available=maxOf(0,first?.get("available")?.jsonPrimitive?.longOrNull?:0)
-    val total=if(goal>20) 100 else goal.toInt()
-    val filled=when { goal==0L -> 0; goal<=20 -> minOf(available,goal).toInt(); else -> (BigInteger.valueOf(minOf(available,goal))*BigInteger.valueOf(100)/BigInteger.valueOf(goal)).toInt() }
+    val individual=first?.get("kind")==JsonPrimitive("STAMPS") && goal<=20
+    val total=if(goal==0L) 0 else if(individual) goal.toInt() else 100
+    val filled=when { goal==0L -> 0; individual -> minOf(available,goal).toInt(); else -> (BigInteger.valueOf(minOf(available,goal))*BigInteger.valueOf(100)/BigInteger.valueOf(goal)).toInt() }
     return WalletArtwork(d.artworkStyle,walletStampSymbols.indexOf(d.stampSymbol).coerceAtLeast(0),d.background.drop(1),filled,total)
 }
 
 fun WalletPass.googleArtwork(origin: String): JsonObject {
     val art=artwork()
-    val description=when { art.total==0 -> "Diseño del negocio"; art.total==100 -> "Progreso de sellos: ${art.filled}%. Consulta el saldo y el premio en los campos de la tarjeta."; else -> "${art.filled} de ${art.total} sellos completados. Los sellos llenos indican progreso; caja confirma el canje." }
+    val description=when { art.total==0 -> "Diseño del negocio"; art.total==100 -> "Progreso hacia el premio: ${art.filled}%. Consulta el saldo exacto y el premio en los campos de la tarjeta."; else -> "${art.filled} de ${art.total} sellos completados. Los sellos llenos indican progreso; caja confirma el canje." }
     return obj("sourceUri" to obj("uri" to origin+art.path()),"contentDescription" to obj("defaultValue" to obj("language" to "es","value" to description)))
+}
+
+/** Native-sized artwork, with no names, balances, QR codes or embedded text. */
+private fun WalletArtwork.modernPng(appleScale: Int?): ByteArray {
+    val width = appleScale?.let { 375 * it } ?: 1032
+    val height = appleScale?.let { 123 * it } ?: 812
+    val image = BufferedImage(width,height,BufferedImage.TYPE_INT_RGB)
+    val g = image.createGraphics()
+    try {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON)
+        val base=Color.decode("#$background")
+        fun channel(c:Int):Double { val v=c/255.0;return if(v<=.04045)v/12.92 else ((v+.055)/1.055).pow(2.4) }
+        val light=channel(base.red)*.2126+channel(base.green)*.7152+channel(base.blue)*.0722>.179
+        val ink=if(light) Color(9,25,45) else Color.WHITE
+        fun tone(alpha:Int)=Color(ink.red,ink.green,ink.blue,alpha)
+        g.paint=if(style=="GRADIENT" && total>0) GradientPaint(0f,0f,base,width.toFloat(),height.toFloat(),if(light)base.brighter()else base.darker()) else base
+        g.fillRect(0,0,width,height)
+        if(total>0) {
+            // Fine arcs add depth without a patterned surface behind the native text.
+            g.color=tone(13);g.stroke=BasicStroke((width*.0015).toFloat())
+            if(style=="GRADIENT") for(i in 0..3)g.draw(Ellipse2D.Double(width*.62+i*width*.075,-height*.66,width*.8,height*1.4))
+            if(total==100) {
+                val badge=if(appleScale==null)height*.30 else height*.52
+                val x=width*.5;val y=if(appleScale==null)height*.38 else height*.36
+                val icon=g.create() as Graphics2D
+                try {icon.color=ink;icon.translate(x-badge/2,y-badge/2);icon.scale(badge/100,badge/100);drawWalletStamp(icon,symbol)}finally{icon.dispose()}
+                val margin=width*.10;val by=height*.75;val bh=height*.055
+                g.color=tone(35);g.fill(RoundRectangle2D.Double(margin,by,width-2*margin,bh,bh,bh))
+                if(filled>0){g.color=ink;g.fill(RoundRectangle2D.Double(margin,by,(width-2*margin)*filled/100,bh,bh,bh))}
+                g.color=tone(145);g.stroke=BasicStroke(maxOf(1f,(width*.0013).toFloat()))
+                for(i in 0..4){val px=margin+(width-2*margin)*i/4;g.drawLine(px.toInt(),(by+bh+height*.025).toInt(),px.toInt(),(by+bh+height*.055).toInt())}
+            } else {
+                val columns=if(appleScale!=null)minOf(total,10) else when{total<=4->minOf(total,2);total<=9->3;total<=12->4;else->5}
+                val rows=(total+columns-1)/columns
+                val cell=minOf(width*.86/columns,height*.72/rows)
+                val size=cell*.72
+                for(index in 0 until total){
+                    val row=index/columns;val count=minOf(columns,total-row*columns)
+                    val x=width/2.0+(index%columns-(count-1)/2.0)*cell
+                    val y=height/2.0+(row-(rows-1)/2.0)*cell
+                    val earned=index<filled;val next=index==filled
+                    val tile=RoundRectangle2D.Double(x-size/2,y-size/2,size,size,size*.28,size*.28)
+                    if(earned){g.color=Color(0,0,0,30);g.fill(RoundRectangle2D.Double(x-size/2,y-size/2+size*.045,size,size,size*.28,size*.28))}
+                    g.color=if(earned)ink else tone(if(next)30 else 10);g.fill(tile)
+                    g.color=tone(if(earned)255 else if(next)230 else 80)
+                    g.stroke=if(next) BasicStroke(maxOf(1f,(size*.025).toFloat()),BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND,10f,floatArrayOf((size*.07).toFloat(),(size*.055).toFloat()),0f) else BasicStroke(maxOf(1f,(size*.012).toFloat()))
+                    g.draw(tile)
+                    val icon=g.create() as Graphics2D
+                    try{
+                        icon.translate(x-size*.28,y-size*.28);icon.scale(size*.56/100,size*.56/100)
+                        icon.color=if(earned)(if(light)Color.WHITE else base.darker())else ink
+                        if(!earned)icon.composite=AlphaComposite.getInstance(AlphaComposite.SRC_OVER,if(next).65f else .25f)
+                        drawWalletStamp(icon,symbol)
+                    }finally{icon.dispose()}
+                }
+            }
+        }
+    }finally{g.dispose()}
+    return ByteArrayOutputStream().also{ImageIO.write(image,"png",it)}.toByteArray()
 }

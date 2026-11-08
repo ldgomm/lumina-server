@@ -14,6 +14,8 @@ class WalletArtworkGatewayTests(unittest.TestCase):
         allowed=lambda method,path:any(re.fullmatch(rule,method+' '+path) for rule in rules)
         path='/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png'
         self.assertTrue(allowed('GET',path));self.assertTrue(allowed('GET',path+'?layout=apple'))
+        self.assertTrue(allowed('GET',path.replace('/v20/','/v22/')))
+        self.assertFalse(allowed('GET',path.replace('/v20/','/v99/')))
         for bad in [path.replace('/5/0b','/999/0b'),path.replace('/4/5','/4/9999'),path.replace('0b1f3a','%2e%2e'),path+'/../../.env','/api/staff/wallet-design']:
             self.assertFalse(allowed('GET',bad),bad)
         for method in ['POST','PUT','DELETE']:
@@ -24,14 +26,14 @@ class WalletArtworkGatewayTests(unittest.TestCase):
         def respond(url,method,body):
             calls.append((url,method))
             path=url.removeprefix('http://local')
-            if path=='/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png':return (200 if method=='GET' else 404),b''
-            if path=='/wallet/art/v20/GRADIENT/5/0b1f3a/9/5.png':return 400,b''
+            if path in ['/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png?layout=apple']:return (200 if method=='GET' else 404),b''
+            if path in ['/wallet/art/v20/GRADIENT/5/0b1f3a/9/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/9/5.png']:return 400,b''
             if path in ['/join/demo','/api/public/demo','/engagement.js','/experience.js','/wallet/brand/demo/logo.png']:return 200,b''
             if path in ['/api/me/wallet-status','/api/me/access']:return 401,b''
             if path=='/api/public/demo/join':return 400,b''
             return 404,b''
-        with patch.object(w,'request',side_effect=respond):self.assertEqual(31,w.verify_gateway('http://local','demo'))
-        self.assertEqual(31,len(calls))
+        with patch.object(w,'request',side_effect=respond):self.assertEqual(36,w.verify_gateway('http://local','demo'))
+        self.assertEqual(36,len(calls))
         with patch.object(w,'request',return_value=(503,b'')):
             with self.assertRaises(RuntimeError):w.verify_gateway('http://local','demo')
 

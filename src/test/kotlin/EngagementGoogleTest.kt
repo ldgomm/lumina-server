@@ -34,6 +34,7 @@ class EngagementGoogleTest {
         provider.sync(styled(2,"Mi marca"),origin);provider.sync(styled(2,"Mi marca"),origin);provider.sync(styled(1,"Antes"),origin)
         val updates=calls.filter{it.first=="PATCH" && it.second.contains("loyaltyClass/")}
         assertEquals(1,updates.size);assertTrue(updates.single().third!!.contains("Mi marca"));assertTrue(updates.single().third!!.contains("/wallet/brand/test/logo.png?v="))
+        assertEquals(googleWalletTemplate(),json.parseToJsonElement(updates.single().third!!).jsonObject["classTemplateInfo"])
         assertTrue(responses.isEmpty())
     }
 
