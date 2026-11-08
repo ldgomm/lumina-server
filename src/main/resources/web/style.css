@@ -341,3 +341,13 @@ input[data-money]{appearance:textfield;-moz-appearance:textfield}input[data-mone
 @media(prefers-reduced-motion:reduce){.wallet-style-presets button{transition:none}}
 
 .wallet-style-swatch img{width:54px;height:38px;object-fit:cover;border-radius:9px;display:block}
+
+/* Loyalty v025 visible reward goals */
+.promotion-goals{margin:1rem 0;padding:1rem;border:1px solid #d6deeb;border-radius:16px;background:#f4f7fc;color:#0b1f3a}
+.promotion-goals h3{margin:0 0 .6rem;font-size:1rem}
+.promotion-goal{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 0;border-top:1px solid #d6deeb}
+.promotion-goal>div{min-width:0;overflow-wrap:anywhere}.promotion-goal span{display:block;margin-top:.3rem}.promotion-goal button{flex-shrink:0;font-size:.9rem}
+.reward-goal-dialog{box-sizing:border-box;width:min(620px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow-y:auto;border:0;border-radius:24px;padding:clamp(20px,4vw,32px);color:#0b1f3a}
+.reward-goal-dialog::backdrop{background:#0b1f3aa6}.reward-goal-dialog h2{margin-top:0}.reward-goal-dialog input{box-sizing:border-box;max-width:100%}
+.reward-goal-preview{padding:1rem;border-radius:12px;background:#edf3fb;font-weight:700}.reward-goal-warning{padding:1rem;border-radius:12px;background:#fff3d6;color:#5b3900}.reward-goal-dialog .row{flex-wrap:wrap}
+@media(max-width:600px){.promotion-goal{align-items:stretch;flex-direction:column;gap:.6rem}.promotion-goal button{width:100%}.reward-goal-dialog .row>button{flex:1 1 100%}}

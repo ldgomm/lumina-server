@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v024 requiere 367 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v025 requiere 374 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -174,3 +174,11 @@ Los 32 estilos y 33 símbolos son apariencia, no plantillas de reglas fijas. Bus
 Google usa tres filas de campos propios del objeto (saldo/restante, progreso y premio). Máximo diez módulos; integrar uso en estado y conservar historial, condiciones y novedades. Todos los módulos son alcanzables desde frente o detalles. Apple combina como máximo cuatro campos secundarios/auxiliares y conserva balance/changeMessage, con progreso exacto también en detalles.
 
 Exigir 178 pruebas generales + 189 PostgreSQL (367), todas las Python (124), Docker y 43 comprobaciones del gateway antes del auto commit local; no push. Diez suites UI interceptadas, incluyendo wallet-industries.spec.cjs. PostgreSQL embebido no valida concurrencia de producción: el gate Mac usa PostgreSQL real. HTTPS y recepción en los dos teléfonos son verificaciones separadas.
+
+## Metas editables de premios v025
+
+Cada premio tiene una meta versionada, visible y editable desde Promociones y Premios, incluso cuando ya existen clientes. Se permite aumentar o disminuir puntos, sellos y saldo requerido. El editor muestra antes/después y exige reconocimiento del impacto al aumentar; conserva borradores de acumulación, beneficio, categoría, disponibilidad y pertenencia al programa. Recargar tras un conflicto es explícito; no sobrescribir otra sesión ni repetir envíos concurrentes.
+
+saveReward permite modificar cost con expectedVersion, manteniendo inmutable el tipo de Benefit. Cambiar de descuento o categoría requiere otro premio. Cada guardado programa la revisión de pases del mismo negocio para Apple y Google, sin llamadas externas en la transacción. Se conservan identidades, saldos y movimientos; presentationVersion sigue en 24. Las cotizaciones/revisiones de caja obsoletas se rechazan; reservas ya creadas conservan su costo original hasta vencer y los comprobantes consumidos son inmutables.
+
+El gate exige 178 pruebas generales y 196 PostgreSQL (374 en total), incluidas dos nuevas de concurrencia, más Python, Docker y gateway. La suite reward-goals.spec.cjs usa exclusivamente datos ficticios e intercepta toda la red. HTTPS y validación en teléfonos se informan aparte.

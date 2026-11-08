@@ -86,6 +86,113 @@
         dialog.showModal(); dialog.querySelector('#cancelProgramStatus').focus();
     }
 
+        const goalLabel = kind => kind === 'CASHBACK' ? 'Saldo para canjear' : kind === 'STAMPS' ? 'Sellos para canjear' : 'Puntos para canjear';
+    const goalValue = (cost, kind) => kind === 'CASHBACK' ? (cost / 100).toFixed(2) + ' ' + state.data.business.currency : cost + ' ' + (kind === 'STAMPS' ? 'sellos' : 'puntos');
+    function rewardGoals(program) {
+        const rewards = state.data.rewards.filter(r => r.programId === program.id);
+        return `<section class="promotion-goals" data-reward-goals="${esc(program.id)}" aria-label="Metas y premios"><h3>Metas y premios</h3>${rewards.map(r => `<div class="promotion-goal"><div><strong>${esc(r.name)}</strong><span>${esc(goalLabel(program.config.kind))}: <b>${esc(goalValue(r.cost, program.config.kind))}</b>${r.active ? '' : ' · Premio pausado'}</span>${r.benefitText ? '<span class="small">' + esc(r.benefitText) + '</span>' : ''}</div><button type="button" class="quiet" data-edit-reward-goal="${esc(r.id)}" aria-label="Editar meta y premio: ${esc(r.name)}">Editar meta y premio</button></div>`).join('') || '<p>Esta promoción aún no tiene premios. Puedes crearlos en Premios.</p>'}</section>`;
+    }
+    function bindRewardGoals(root) {
+        root.querySelectorAll('[data-edit-reward-goal]').forEach(button => button.onclick = () => {
+            const reward = state.data.rewards.find(r => r.id === button.dataset.editRewardGoal);
+            if (reward) showRewardGoal(reward, button);
+        });
+    }
+    function refreshRewardGoals() {
+        document.querySelectorAll('[data-reward-goals]').forEach(section => {
+            const program = state.data.programs.find(p => p.id === section.dataset.rewardGoals);
+            if (program) section.outerHTML = rewardGoals(program);
+        });
+        bindRewardGoals(document);
+        document.querySelectorAll('[data-reward]').forEach(button => {
+            const reward = state.data.rewards.find(r => r.id === button.dataset.reward);
+            const program = state.data.programs.find(p => p.id === reward?.programId);
+            if (!reward || !program) return;
+            button.parentElement.querySelector('h3').textContent = reward.name;
+            button.parentElement.querySelector('p').textContent = goalValue(reward.cost, program.config.kind) + ' · ' + (reward.active ? 'Disponible' : 'Pausado') + ' · v' + reward.version;
+        });
+    }
+    function showRewardGoal(initial, trigger) {
+        if (state.data.role !== 'OWNER' || document.querySelector('#rewardGoalDialog') || document.querySelector('form[aria-busy="true"]')) return;
+        const session = state.token, tenant = state.data.business.id;
+        let reward = structuredClone(initial), busy = false, needsReload = false;
+        const dialog = document.createElement('dialog'); dialog.id = 'rewardGoalDialog'; dialog.className = 'reward-goal-dialog';
+        dialog.setAttribute('aria-labelledby', 'rewardGoalTitle'); document.body.append(dialog);
+        const sameSession = () => state.token === session && state.data?.business?.id === tenant && state.data?.role === 'OWNER';
+        dialog.addEventListener('cancel', e => { if (busy) e.preventDefault(); });
+        dialog.addEventListener('close', () => {
+            dialog.remove();
+            const target = trigger?.isConnected ? trigger : [...document.querySelectorAll('[data-edit-reward-goal],[data-reward]')].find(b => b.dataset.editRewardGoal === reward.id || b.dataset.reward === reward.id);
+            target?.focus();
+        });
+        const close = () => { if (!busy) dialog.close(); };
+        function render() {
+            const program = state.data.programs.find(p => p.id === reward.programId);
+            if (!program) { close(); return; }
+            const kind = program.config.kind, cash = kind === 'CASHBACK';
+            dialog.innerHTML = `<h2 id="rewardGoalTitle">Editar meta y premio</h2><p>${esc(program.config.name)}</p><form id="rewardGoalForm">${field('rewardGoalName', 'Nombre del premio', 'text', reward.name, 'required maxlength="120"')}${field('rewardGoalCost', goalLabel(kind) + (cash ? ' (' + esc(state.data.business.currency) + ')' : ''), 'number', cash ? reward.cost / 100 : reward.cost, cash ? 'required min="0.01" max="10000000" step="any" data-money aria-describedby="rewardGoalPreview"' : 'required min="1" max="1000000000" step="1" aria-describedby="rewardGoalPreview"')}<p id="rewardGoalPreview" class="reward-goal-preview" aria-live="polite"></p>${reward.benefitText ? '<p><strong>Beneficio:</strong> ' + esc(reward.benefitText) + '</p>' : ''}<p>La nueva meta aplica a los próximos canjes, también para clientes que ya acumularon. Sus saldos y el historial se conservan. Los canjes ya reservados mantienen su costo hasta vencer.</p><div id="rewardGoalWarning" class="reward-goal-warning" hidden><strong>Estás aumentando la meta.</strong><p>Un cliente que ya tenía saldo suficiente podría necesitar acumular más.</p><label class="check"><input id="rewardGoalAcknowledged" type="checkbox">Entiendo este cambio para los clientes actuales.</label></div><label class="check"><input id="rewardGoalActive" type="checkbox" ${reward.active ? 'checked' : ''}>Premio disponible para canjear</label>${program.config.active ? '' : '<p>La promoción está pausada: sus premios seguirán ocultos hasta reactivarla.</p>'}<p class="small">Se actualizará el progreso en Apple y Google Wallet cuando reciban la actualización.</p><p id="rewardGoalError" class="design-error" role="alert" hidden></p><p id="rewardGoalBusy" role="status" hidden>Guardando la meta…</p><div class="row"><button type="button" class="quiet" id="cancelRewardGoal">Cancelar</button><button type="submit" id="saveRewardGoal">Guardar meta y premio</button></div><button type="button" class="quiet" id="reloadRewardGoal" hidden>Recargar premio guardado</button></form>`;
+            const formNode = dialog.querySelector('form'), costInput = dialog.querySelector('#rewardGoalCost'), ack = dialog.querySelector('#rewardGoalAcknowledged');
+            const save = dialog.querySelector('#saveRewardGoal'), error = dialog.querySelector('#rewardGoalError');
+            configureMoneyInput(costInput, cash);
+            const readCost = () => {
+                const raw = costInput.value;
+                if (!(cash ? /^\d+(?:\.\d{1,2})?$/ : /^\d+$/).test(raw)) return null;
+                const value = cash ? Math.round(Number(raw) * 100) : Number(raw);
+                return Number.isSafeInteger(value) && value >= 1 && value <= 1000000000 ? value : null;
+            };
+            const update = () => {
+                const cost = readCost(), increased = cost !== null && cost > reward.cost;
+                costInput.setCustomValidity(cost === null ? (cash ? 'Ingresa un saldo positivo con hasta dos decimales.' : 'Ingresa una cantidad entera de al menos 1.') : '');
+                dialog.querySelector('#rewardGoalPreview').textContent = cost === null ? 'Escribe la nueva meta.' : 'Meta actual: ' + goalValue(reward.cost, kind) + ' → Nueva meta: ' + goalValue(cost, kind);
+                dialog.querySelector('#rewardGoalWarning').hidden = !increased; ack.required = increased;
+                save.disabled = busy || needsReload || cost === null || (increased && !ack.checked);
+            };
+            const lock = value => {
+                busy = value; formNode.setAttribute('aria-busy', String(value));
+                formNode.querySelectorAll('input,button').forEach(node => node.disabled = value);
+                dialog.querySelector('#rewardGoalBusy').hidden = !value; update();
+            };
+            costInput.addEventListener('input', () => { ack.checked = false; update(); });
+            formNode.addEventListener('input', update); formNode.addEventListener('change', update);
+            dialog.querySelector('#cancelRewardGoal').onclick = close;
+            dialog.querySelector('#reloadRewardGoal').onclick = async () => {
+                if (busy || !sameSession()) return;
+                lock(true); error.hidden = true;
+                try {
+                    const data = await api('/api/staff/dashboard');
+                    if (!dialog.isConnected || !sameSession()) { dialog.close(); return; }
+                    const current = data.rewards.find(r => r.id === reward.id);
+                    if (!current) throw new Error('El premio ya no está disponible. Cierra esta ventana y recarga las promociones.');
+                    state.data.rewards = data.rewards; state.data.programs = data.programs;
+                    reward = structuredClone(current); needsReload = false; busy = false; refreshRewardGoals(); render();
+                } catch (issue) { if (dialog.isConnected && sameSession()) { error.textContent = issue.message; error.hidden = false; } }
+                finally { if (dialog.contains(formNode)) lock(false); }
+            };
+            formNode.onsubmit = async event => {
+                event.preventDefault(); update();
+                if (save.disabled || !formNode.reportValidity()) return;
+                if (!sameSession()) { close(); return; }
+                const input = {programId: reward.programId, name: dialog.querySelector('#rewardGoalName').value.trim(), cost: readCost(), active: dialog.querySelector('#rewardGoalActive').checked, benefit: reward.benefit || null};
+                lock(true); error.hidden = true;
+                try {
+                    const saved = await api('/api/staff/rewards/' + reward.id, {expectedVersion: reward.version, reward: input}, 'PUT');
+                    if (!dialog.isConnected || !sameSession()) { dialog.close(); return; }
+                    state.data.rewards = state.data.rewards.map(r => r.id === reward.id ? {...r, ...input, version: saved.version} : r);
+                    refreshRewardGoals(); busy = false; dialog.close();
+                    notice('Meta guardada. Los saldos se conservan y Apple y Google Wallet recibirán la actualización.');
+                } catch (issue) {
+                    if (!dialog.isConnected || !sameSession()) { dialog.close(); return; }
+                    needsReload = issue.status === 409 || issue.status === 404;
+                    error.textContent = needsReload ? 'El premio cambió o ya no está disponible. Conservamos tu edición; recarga el premio guardado antes de volver a cambiarlo.' : issue.message;
+                    error.hidden = false; dialog.querySelector('#reloadRewardGoal').hidden = !needsReload;
+                } finally { if (dialog.isConnected) lock(false); }
+            };
+            update(); costInput.focus(); costInput.select();
+        }
+        render(); if (dialog.isConnected) { dialog.showModal(); dialog.querySelector('#rewardGoalCost').focus(); }
+    }
+    window.LoyaltyRewardGoals = {open: showRewardGoal};
+
     function programList() {
         const root = document.querySelector('#content');;
         const programs = state.data.programs;
@@ -99,9 +206,10 @@
                 const rewards = state.data.rewards.filter(r => r.programId === p.id && r.active);
                 const cost = r => config.kind === 'CASHBACK' ? (r.cost / 100).toFixed(2) + ' ' + state.data.business.currency : r.cost + ' ' + kinds[config.kind].toLowerCase();
                 const rule = config.kind === 'POINTS' ? `${config.pointsPerUnit} puntos por cada ${(config.unitMinor / 100).toFixed(2)} ${state.data.business.currency}` : config.kind === 'CASHBACK' ? `${config.cashbackBps / 100}% de cashback promocional` : `${config.stampsPerPurchase} sello${config.stampsPerPurchase === 1 ? '' : 's'} por ${config.countUnits ? 'unidad pagada' : 'compra registrada'}${config.productGroup ? ' · ' + config.productGroup : ''}`;
-                return `<article class="panel promotion-item" data-promotion-card="${esc(p.id)}"><div class="promotion-card-top"><span class="eyebrow">${esc(kinds[config.kind])} · v${p.version}</span><span class="promotion-state ${config.active ? '' : 'paused'}">${config.active ? 'Activa' : 'Pausada'}</span></div><h2>${esc(config.name)}</h2><p>${esc(rule)}<br>${config.branchIds.length ? config.branchIds.length + ' sucursal(es) seleccionada(s)' : 'Todas las sucursales'} · Según fechas y condiciones</p><div class="promotion-benefits"><strong>${rewards.length ? 'Premios vinculados' : 'Sin premio activo'}</strong>${rewards.slice(0, 3).map(r => esc(r.name) + ' · ' + esc(cost(r))).join('<br>') || 'Puedes definir el beneficio desde Premios.'}${rewards.length > 3 ? '<br>Y ' + (rewards.length - 3) + ' más.' : ''}</div><div class="promotion-card-foot"><button type="button" class="promotion-toggle" data-program-status="${esc(p.id)}">${config.active ? 'Pausar promoción' : 'Reactivar promoción'}</button><button type="button" class="quiet" data-program-edit="${esc(p.id)}">Editar promoción</button><button type="button" class="danger-quiet" data-program-delete="${esc(p.id)}" aria-label="Eliminar ${esc(config.name)}">Eliminar</button></div></article>`;
+                                return `<article class="panel promotion-item" data-promotion-card="${esc(p.id)}"><div class="promotion-card-top"><span class="eyebrow">${esc(kinds[config.kind])} · v${p.version}</span><span class="promotion-state ${config.active ? '' : 'paused'}">${config.active ? 'Activa' : 'Pausada'}</span></div><h2>${esc(config.name)}</h2><p>${esc(rule)}<br>${config.branchIds.length ? config.branchIds.length + ' sucursal(es) seleccionada(s)' : 'Todas las sucursales'} · Según fechas y condiciones</p>${rewardGoals(p)}<div class="promotion-card-foot"><button type="button" class="promotion-toggle" data-program-status="${esc(p.id)}">${config.active ? 'Pausar promoción' : 'Reactivar promoción'}</button><button type="button" class="quiet" data-program-edit="${esc(p.id)}">Editar promoción</button><button type="button" class="danger-quiet" data-program-delete="${esc(p.id)}" aria-label="Eliminar ${esc(config.name)}">Eliminar</button></div></article>`;;
             }).join('') || `<section class="panel experience-empty promotion-empty"><strong>${programs.length ? 'No encontramos promociones con estos filtros.' : 'Dale forma al próximo regreso.'}</strong><p>${programs.length ? 'Prueba con otro nombre o cambia el estado.' : 'Elige qué acumula tu cliente y qué premio recibirá. Tú defines la cantidad, el porcentaje y las condiciones.'}</p><button type="button" class="quiet" id="emptyPromotionAction">${programs.length ? 'Quitar filtros' : 'Crear mi primera promoción'}</button></section>`;
-            root.querySelector('#promotionListCount').textContent = `${shown.length} de ${programs.length} promociones`;
+                        root.querySelector('#promotionListCount').textContent = `${shown.length} de ${programs.length} promociones`;
+            bindRewardGoals(root);;
             root.querySelectorAll('[data-program-status]').forEach(b => b.onclick = () => showProgramStatus(programs.find(p => p.id === b.dataset.programStatus), b));
             root.querySelectorAll('[data-program-edit]').forEach(b => b.onclick = () => renderPrograms(programs.find(p => p.id === b.dataset.programEdit)));
             root.querySelectorAll('[data-program-delete]').forEach(b => b.onclick = () => showProgramRemoval(b.dataset.programDelete).catch(e => notice(e.message)));;
@@ -132,8 +240,9 @@
         const render = () => {
             const content = document.querySelector('#content'), currency = esc(state.data.business.currency), p = current;
             if (!content) return;
-            content.innerHTML = `<button type="button" class="quiet promotion-back" id="backToPromotions">← Volver a promociones</button><section class="panel promotion-editor-panel"><h2>${edit ? 'Editar promoción' : 'Crear promoción'}</h2><p>Define qué acumula el cliente. Después, en Premios, elige qué puede canjear y cuánto cuesta.</p>${edit ? '' : '<div class="row"><button type="button" class="quiet" data-preset="POINTS">Puntos por compra</button><button type="button" class="quiet" data-preset="STAMPS">Compras y premio gratis</button><button type="button" class="quiet" data-preset="CASHBACK">Cashback</button></div>'}<form id="programV7">${field('name', 'Nombre de la promoción', 'text', p.name, 'required maxlength="120"')}<label for="promotionKind">Qué acumula el cliente</label><select id="promotionKind" name="kind" ${edit ? 'disabled' : ''}>${Object.entries(kinds).map(([key, label]) => `<option value="${key}" ${p.kind === key ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select><div data-promotion-kind="POINTS" class="row"><div>${field('unitAmount', 'Por cada monto de compra (' + currency + ')', 'number', p.unitMinor / 100, 'required min="0.01" step="any" data-money')}</div><div>${field('pointsPerUnit', 'Puntos que acumula', 'number', p.pointsPerUnit, 'required min="1" max="1000000"')}</div></div><div data-promotion-kind="CASHBACK">${field('cashback', 'Porcentaje de cashback promocional', 'number', p.cashbackBps / 100, 'required min="0.01" max="100" step="0.01"')}</div><div data-promotion-kind="STAMPS">${field('stampsPerPurchase', 'Sellos por compra registrada', 'number', p.stampsPerPurchase, 'required min="1" max="100"')}<p class="small">Ejemplo: 1 sello por compra y un premio que cueste 9 sellos. Cada comprobante único cuenta una vez.</p></div>${field('minimumAmount', 'Compra mínima (' + currency + ')', 'number', p.minimumSpendMinor / 100, 'required min="0.01" step="any" data-money')}<p class="small">El cashback es saldo promocional para canjear. Todas las sucursales comparten la tarjeta del cliente.</p><details id="promotionAdvanced" ${advancedOpen ? 'open' : ''}><summary>Fechas, horarios, sucursales y bonos</summary><p>Zona horaria: ${esc(state.data.business.timezone)}.</p>${windowFields('main', p.window)}${branchFields('main', p.branchIds).replaceAll('name="mainbranch"', 'name="mainBranch"')}<h3>Bonos adicionales</h3><p class="small">Ejemplo: doble acumulación los viernes de 18:00 a 20:00. Si coinciden bonos, se aplica el de mayor prioridad; no se multiplican entre sí. Cada bono también debe estar dentro del horario general de la promoción.</p>${p.bonuses.map((b, i) => `<fieldset><legend>Bono ${i + 1}</legend><div class="row"><div>${field('bonus' + i + 'priority', 'Prioridad (distinta en cada bono)', 'number', b.priority, 'required')}</div><div>${field('bonus' + i + 'multiplier', 'Multiplica la acumulación por', 'number', b.multiplier, 'required min="1" max="10"')}</div></div>${windowFields('bonus' + i, b.window)}${branchFields('bonus' + i, b.branchIds)}<button type="button" class="quiet" data-remove-bonus="${i}">Quitar este bono</button></fieldset>`).join('')}<button type="button" id="addBonus" class="quiet" ${p.bonuses.length >= 30 ? 'disabled' : ''}>Añadir bono por horario o fecha</button></details><label class="check"><input name="active" type="checkbox" ${p.active ? 'checked' : ''}>Promoción activa</label><p class="small">Al pausar, dejará de aparecer en Wallet y en el registro. No permitirá acumular ni canjear hasta reactivarla; sus saldos se conservan.</p><button>${edit ? 'Guardar cambios' : 'Crear promoción'}</button></form></section>`;
-            const formNode = document.querySelector('#programV7');
+                        content.innerHTML = `<button type="button" class="quiet promotion-back" id="backToPromotions">← Volver a promociones</button>${edit ? rewardGoals(edit) : ''}<section class="panel promotion-editor-panel"><h2>${edit ? 'Editar promoción' : 'Crear promoción'}</h2><p>Define cuánto acumula el cliente en cada compra. Las metas de canje se editan en Metas y premios; cada cambio se guarda por separado.</p>${edit ? '' : '<div class="row"><button type="button" class="quiet" data-preset="POINTS">Puntos por compra</button><button type="button" class="quiet" data-preset="STAMPS">Compras y premio gratis</button><button type="button" class="quiet" data-preset="CASHBACK">Cashback</button></div>'}<form id="programV7">${field('name', 'Nombre de la promoción', 'text', p.name, 'required maxlength="120"')}<label for="promotionKind">Qué acumula el cliente</label><select id="promotionKind" name="kind" ${edit ? 'disabled' : ''}>${Object.entries(kinds).map(([key, label]) => `<option value="${key}" ${p.kind === key ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select><div data-promotion-kind="POINTS" class="row"><div>${field('unitAmount', 'Por cada monto de compra (' + currency + ')', 'number', p.unitMinor / 100, 'required min="0.01" step="any" data-money')}</div><div>${field('pointsPerUnit', 'Puntos que acumula', 'number', p.pointsPerUnit, 'required min="1" max="1000000"')}</div></div><div data-promotion-kind="CASHBACK">${field('cashback', 'Porcentaje de cashback promocional', 'number', p.cashbackBps / 100, 'required min="0.01" max="100" step="0.01"')}</div><div data-promotion-kind="STAMPS">${field('stampsPerPurchase', 'Sellos por compra registrada', 'number', p.stampsPerPurchase, 'required min="1" max="100"')}<p class="small">Ejemplo: 1 sello por compra y un premio que cueste 9 sellos. Cada comprobante único cuenta una vez.</p></div>${field('minimumAmount', 'Compra mínima (' + currency + ')', 'number', p.minimumSpendMinor / 100, 'required min="0.01" step="any" data-money')}<p class="small">El cashback es saldo promocional para canjear. Todas las sucursales comparten la tarjeta del cliente.</p><details id="promotionAdvanced" ${advancedOpen ? 'open' : ''}><summary>Fechas, horarios, sucursales y bonos</summary><p>Zona horaria: ${esc(state.data.business.timezone)}.</p>${windowFields('main', p.window)}${branchFields('main', p.branchIds).replaceAll('name="mainbranch"', 'name="mainBranch"')}<h3>Bonos adicionales</h3><p class="small">Ejemplo: doble acumulación los viernes de 18:00 a 20:00. Si coinciden bonos, se aplica el de mayor prioridad; no se multiplican entre sí. Cada bono también debe estar dentro del horario general de la promoción.</p>${p.bonuses.map((b, i) => `<fieldset><legend>Bono ${i + 1}</legend><div class="row"><div>${field('bonus' + i + 'priority', 'Prioridad (distinta en cada bono)', 'number', b.priority, 'required')}</div><div>${field('bonus' + i + 'multiplier', 'Multiplica la acumulación por', 'number', b.multiplier, 'required min="1" max="10"')}</div></div>${windowFields('bonus' + i, b.window)}${branchFields('bonus' + i, b.branchIds)}<button type="button" class="quiet" data-remove-bonus="${i}">Quitar este bono</button></fieldset>`).join('')}<button type="button" id="addBonus" class="quiet" ${p.bonuses.length >= 30 ? 'disabled' : ''}>Añadir bono por horario o fecha</button></details><label class="check"><input name="active" type="checkbox" ${p.active ? 'checked' : ''}>Promoción activa</label><p class="small">Al pausar, dejará de aparecer en Wallet y en el registro. No permitirá acumular ni canjear hasta reactivarla; sus saldos se conservan.</p><button>${edit ? 'Guardar cambios' : 'Crear promoción'}</button></form></section>`;;
+                        bindRewardGoals(content);
+            const formNode = document.querySelector('#programV7');;
             const kind = formNode.elements.kind;;
             const showKind = () => content.querySelectorAll('[data-promotion-kind]').forEach(section => { const hidden = section.dataset.promotionKind !== kind.value; section.hidden = hidden; section.querySelectorAll('input').forEach(input => input.disabled = hidden); });
             kind.onchange = showKind; showKind();

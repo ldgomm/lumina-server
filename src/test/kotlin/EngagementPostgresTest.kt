@@ -97,10 +97,10 @@ class EngagementPostgresTest {
         db.tx{c->c.exec("INSERT INTO idempotency(tenant_id,operation,key,request_hash,response) VALUES(?,?,?,?,?::jsonb)",f.owner.tenant,"purchase:${f.owner.id}",retry,Security.hash(oldPayload.toString()),saved.toString())}
         assertEquals("original-receipt",service.purchase(f.owner,legacy,retry).str("purchaseId"));assertEquals(1,count("purchases",f))
     }
-    @Test fun `promotion meaning and earned reward cannot be overwritten by editing`() {
+    @Test fun `promotion category and discount meaning cannot be overwritten by editing`() {
         val f=fixture();service.purchase(f.owner,purchase(f,5),id())
         assertFailsWith<Problem>{service.editProgram(f.owner,f.program,ProgramChange(1,Program("Otra",Kind.STAMPS,productGroup="pizza",countUnits=false)))}
-        assertFailsWith<Problem>{service.saveReward(f.owner,Reward(f.program,"Más caro",9,benefit=Benefit(group="pizza")),f.reward,1)}
+        assertFailsWith<Problem>{service.saveReward(f.owner,Reward(f.program,"Otro descuento",5,benefit=Benefit(5000,group="pizza")),f.reward,1)}
         service.saveReward(f.owner,Reward(f.program,"Pizza de regalo",5,benefit=Benefit(group="pizza")),f.reward,1)
         assertEquals(5,balance(f));assertEquals(2,service.card(f.member).getValue("rewards").jsonArray.first{it.jsonObject.str("id")==f.reward}.jsonObject.num("version"))
     }

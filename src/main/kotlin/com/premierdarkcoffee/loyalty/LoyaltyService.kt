@@ -130,13 +130,14 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
                 need(row.first == expectedVersion,"VERSION_CONFLICT","El premio cambió; recarga antes de guardar.",409)
                 need(row.second == input.programId,"IMMUTABLE_PROGRAM","Crea otro premio para cambiar de programa.",409)
                 val previous = c.one("SELECT cost,benefit::text FROM rewards WHERE tenant_id=? AND id=?",s.tenant,target){it.getLong(1) to it.getString(2)?.let{value->json.decodeFromString<Benefit>(value)}}!!
-                if(previous.second!=null || input.benefit!=null) need(previous.first==input.cost && previous.second==input.benefit,"BENEFIT_CHANGE_REQUIRES_NEW_REWARD","Crea otro premio para cambiar el descuento o su meta. Puedes cambiar el nombre o desactivarlo.",409)
+                                need(previous.second==input.benefit,"BENEFIT_CHANGE_REQUIRES_NEW_REWARD","Crea otro premio para cambiar el tipo de descuento. Puedes editar su meta, nombre o disponibilidad.",409)
                 row.first + 1
             }
             if (rewardId == null) c.exec("INSERT INTO rewards(tenant_id,id,program_id,name,cost,active,version) VALUES(?,?,?,?,?,?,?)",s.tenant,target,input.programId,input.name.trim(),input.cost,input.active,version)
             else c.exec("UPDATE rewards SET name=?,cost=?,active=?,version=? WHERE tenant_id=? AND id=?",input.name.trim(),input.cost,input.active,version,s.tenant,target)
             c.exec("UPDATE rewards SET benefit=?::jsonb WHERE tenant_id=? AND id=?",input.benefit?.let{json.encodeToString(it)},s.tenant,target)
             c.exec("INSERT INTO reward_versions(tenant_id,reward_id,version,config) VALUES(?,?,?,?::jsonb)",s.tenant,target,version,json.encodeToString(input))
+                        queuePromotionCards(c,s.tenant)
             audit(c,s.tenant,s.id,"SAVE_REWARD",target); obj("id" to target,"version" to version)
         }
     }
