@@ -30,7 +30,8 @@
     };
     const icon = name => `<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${shapes[name] || shapes.spark}</svg>`;
     const busy = () => Boolean(document.querySelector('form[aria-busy="true"]'));
-    const go = tab => { if (busy()) { notice('Espera a que termine la operación.'); return; } state.tab = tab; renderMerchant(); document.querySelector('#sectionTitle')?.focus(); };
+    const leaveDesign = action => window.loyaltyDesignLeave ? window.loyaltyDesignLeave(action) : action();
+    const go = tab => { if (busy()) { notice('Espera a que termine la operación.'); return; } leaveDesign(() => { state.tab = tab; renderMerchant(); document.querySelector('#sectionTitle')?.focus(); }); };
     const money = value => new Intl.NumberFormat('es-EC', {style: 'currency', currency: state.data.business.currency}).format(Number(value || 0) / 100);
     const date = value => value ? new Intl.DateTimeFormat('es-EC', {timeZone: state.data.business.timezone, dateStyle: 'medium'}).format(new Date(value)) : 'Sin compras';
 
@@ -77,7 +78,11 @@
         const toggle = shell.querySelector('#workspaceMenu');
         toggle.onclick = () => { const opened = toggle.getAttribute('aria-expanded') !== 'true'; toggle.setAttribute('aria-expanded', String(opened)); shell.dataset.menuOpen = String(opened); };
         shell.addEventListener('keydown', e => { if (e.key === 'Escape' && shell.dataset.menuOpen === 'true') { shell.dataset.menuOpen = 'false'; toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); } });
-        nav.addEventListener('click', e => { if (busy()) { e.preventDefault(); e.stopImmediatePropagation(); notice('Espera a que termine la operación.'); } }, true);
+        nav.addEventListener('click', e => {
+            if (busy()) { e.preventDefault(); e.stopImmediatePropagation(); notice('Espera a que termine la operación.'); return; }
+            const button = e.target.closest('button[data-tab]');
+            if (button && window.loyaltyDesignLeave) { e.preventDefault(); e.stopImmediatePropagation(); leaveDesign(() => { if (button.isConnected) button.click(); }); }
+        }, true);
         shell.querySelector('#quickCounter')?.addEventListener('click', () => go('sales'));
         if (state.tab === 'overview' && state.data.role === 'OWNER') overview(content);
         if (state.tab === 'radar' && state.data.role === 'OWNER') window.renderReturnRadar(content,{path:'/api/staff/return-radar',valid:()=>state.tab==='radar'&&state.data?.role==='OWNER',owner:true});;
@@ -112,7 +117,7 @@
         app.querySelector('#credential').setAttribute('placeholder', 'Tu credencial privada');
     };
     const oldExit = exit.onclick;
-    exit.onclick = async event => { if (busy()) { notice('Espera a que termine la operación antes de salir.'); return; } window.stopComebackScanner?.(); document.body.classList.remove('staff-mode'); app.classList.remove('welcome-view'); await oldExit(event); };
+    exit.onclick = async event => { if (busy()) { notice('Espera a que termine la operación antes de salir.'); return; } return leaveDesign(async () => { window.stopComebackScanner?.(); document.body.classList.remove('staff-mode'); app.classList.remove('welcome-view'); await oldExit(event); }); };
     const enter = merchant;
     merchant = async function () { await enter(); app.classList.remove('welcome-view'); };
     const brand = document.querySelector('.brand');

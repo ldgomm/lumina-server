@@ -22,7 +22,7 @@ const data={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency
   let body=fs.readFileSync(path.join(web,name));if(name==='index.html')body=body.toString().replace('</head>','<script src="/engagement.js" defer></script><script src="/experience.js" defer></script></head>');
   return route.fulfill({body,contentType:name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html'});
  });
- await page.goto('https://loyalty.test');await page.evaluate(d=>{state.data=d;state.token='fake';state.tab='design';renderMerchant();},data);await page.locator('#walletDesign').waitFor();await page.locator('#compositionMore').click();await page.locator('[data-wallet-example=half]').click();
+ await page.goto('https://loyalty.test');await page.evaluate(d=>{state.data=d;state.token='fake';state.tab='design';renderMerchant();},data);await page.locator('#walletDesign').waitFor();await page.locator('#studioShowAll').click();await page.locator('#studioPreviewControls summary').click();await page.locator('#compositionMore').click();await page.locator('[data-wallet-example=half]').click();
  for(const width of [1440,390,320]){
   await page.setViewportSize({width,height:1080});
   if(process.env.LOYALTY_UI_EVIDENCE){fs.mkdirSync(process.env.LOYALTY_UI_EVIDENCE,{recursive:true});await page.evaluate(()=>scrollTo(0,0));await page.waitForFunction(()=>[...document.querySelectorAll('[data-composition] img')].filter(i=>{const r=i.getBoundingClientRect();return r.width>0&&r.top<innerHeight&&r.bottom>0}).every(i=>i.complete&&i.naturalWidth>0));await page.screenshot({path:path.join(process.env.LOYALTY_UI_EVIDENCE,`${width}-studio.png`)});}
@@ -35,7 +35,7 @@ const data={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency
   }
  }
  await page.locator('#jumpToPreview').click();assert.equal(await page.locator('#studioPreview').evaluate(e=>e===document.activeElement),true);
- await page.locator('#jumpToDesign').click();assert.equal(await page.locator('#displayName').evaluate(e=>e===document.activeElement),true);
+ await page.locator('#jumpToDesign').click();assert.equal(await page.locator('#studioStep0Title').evaluate(e=>e===document.activeElement),true);
  assert.ok(calls.every(c=>c==='GET'));assert.deepEqual(errors,[]);console.log('WALLET_COMPOSITION_VISUAL_PASS');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

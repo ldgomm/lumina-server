@@ -40,7 +40,7 @@ async function run(){
   const rendered=async id=>{await page.locator(id).evaluate(async image=>{await image.decode();});};
   const shot=async(name,selector)=>{if(evidence){fs.mkdirSync(evidence,{recursive:true});await page.locator(selector).screenshot({path:path.join(evidence,name+'.png')});}};
   const fit=async()=>assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
-  await page.goto('https://loyalty.test/');await page.evaluate(data=>{state.data=data;state.tab='design';state.token='FICTION';renderMerchant();},staff);await page.locator('#walletDesign').waitFor();
+  await page.goto('https://loyalty.test/');await page.evaluate(data=>{state.data=data;state.tab='design';state.token='FICTION';renderMerchant();},staff);await page.locator('#walletDesign').waitFor();await page.locator('#studioShowAll').click();await page.locator('#studioPreviewControls summary').click();
   assert.equal(await page.locator('[data-wallet-style]').count(),32);assert.equal(await visible().count(),8);assert.equal(await page.locator('#stampSymbol option').count(),33);
   await page.locator('#walletStylesMore').click();assert.equal(await visible().count(),32);
   const ids=await page.locator('[data-wallet-style]').evaluateAll(buttons=>buttons.map(b=>b.dataset.walletStyle));
@@ -74,7 +74,7 @@ async function run(){
   await rendered('#appleStampArtwork');await shot('v024-desktop','.wallet-design-panel');await shot('v024-catalog','.wallet-style-presets');
   for(const width of [390,320]){await page.setViewportSize({width,height:844});await fit();await page.locator('#walletStyleSearch').fill('');if(width===390)await shot('v024-mobile','.design-preview-wrap');}
   assert.equal(calls.filter(x=>x.method!=='GET').length,0);
-  await page.locator('#saveDesign').click();await page.locator('#walletDesign').waitFor();
+  await page.locator('#saveDesign').click();await page.locator('#walletDesign').waitFor();await page.locator('#studioShowAll').click();await page.locator('#studioPreviewControls summary').click();
   const saved=calls.filter(x=>x.method==='PUT');assert.equal(saved.length,1);assert.equal(saved[0].payload.design.stampSymbol,'🐾');assert.equal(saved[0].payload.design.featuredProgramId,'stamps');assert.equal(saved[0].payload.expectedVersion,9);
   for(const field of ['example','walletStyleSearch','walletStyleGroup','showAllStyles'])assert.equal(Object.hasOwn(saved[0].payload.design,field),false);
   assert.deepEqual(errors,[]);checks.push('320px and 390px layouts; one explicit versioned save with no preview or search state in payload');

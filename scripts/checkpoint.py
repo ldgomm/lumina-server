@@ -24,7 +24,7 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v030'
+VERSION = 'v031'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
@@ -498,8 +498,8 @@ def main(arguments=None, updates=None, origin=None):
         lock.mkdir()
         owned_lock = True
         snapshot(project)
-        if updates and not (project/'scripts/ui/wallet-compositions.dom.cjs').is_file():
-            raise RuntimeError('v030 requiere v029 instalado. Comparte el ZIP anterior antes de continuar.')
+        if updates and not (project/'src/main/kotlin/com/premierdarkcoffee/loyalty/WalletStudioArtwork.kt').is_file():
+            raise RuntimeError('v031 requiere v030 instalado. Comparte el ZIP anterior antes de continuar.')
         if updates:
             report['changes'] = apply_updates(project, updates, folder, dry_run=args.check_only)
         # No comparison with v001 byte hashes. Validate the actual saved working tree.

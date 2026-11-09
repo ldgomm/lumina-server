@@ -35,7 +35,7 @@ async function run(){
   });
   const rendered=async id=>page.locator(id).evaluate(async image=>{await image.decode();});
   const shot=async(name,selector)=>{if(evidence){fs.mkdirSync(evidence,{recursive:true});await page.locator(selector).screenshot({path:path.join(evidence,name+'.png')});}};
-  await page.goto('https://loyalty.test/');await page.evaluate(data=>{state.data=data;state.tab='design';state.token='FICTION';renderMerchant();},staff);await page.locator('#walletDesign').waitFor();
+  await page.goto('https://loyalty.test/');await page.evaluate(data=>{state.data=data;state.tab='design';state.token='FICTION';renderMerchant();},staff);await page.locator('#walletDesign').waitFor();await page.locator('#studioShowAll').click();await page.locator('#studioPreviewControls summary').click();
   await page.locator('[data-wallet-example=half]').click();
   for(const style of ['GRADIENT','AURORA','SOLID']){
    await page.locator('#artworkStyle').selectOption(style);await rendered('#appleStampArtwork');
@@ -74,7 +74,7 @@ async function run(){
    }
   }
   assert.equal(calls.filter(c=>c.method!=='GET').length,0);
-  await page.locator('#artworkStyle').selectOption('AURORA');await page.locator('#saveDesign').click();await page.locator('#walletDesign').waitFor();
+  await page.locator('#artworkStyle').selectOption('AURORA');await page.locator('#saveDesign').click();await page.locator('#walletDesign').waitFor();await page.locator('#studioShowAll').click();await page.locator('#studioPreviewControls summary').click();
   const saved=calls.filter(c=>c.method==='PUT');assert.equal(saved.length,1);assert.equal(saved[0].payload.expectedVersion,9);assert.equal(saved[0].payload.design.artworkStyle,'AURORA');
   for(const key of ['appleLayout','previewProvider','example'])assert.equal(Object.hasOwn(saved[0].payload.design,key),false);
   assert.deepEqual(errors,[]);checks.push('320px/390px layouts and explicit versioned save; simulation never records operations');

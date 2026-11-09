@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v030 requiere 411 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v031 requiere 411 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -240,3 +240,15 @@ El estudio muestra novedades y la selección actual, permite desplegar las diez 
 El guardado usa una lista explícita de campos del diseño, preserva los campos existentes no editados y excluye estados del simulador, búsquedas y proveedor. Indicar cambios pendientes, deshabilitar guardado sin cambios y restaurar solo el borrador local. Conservar el borrador tras conflicto o fallo, bloquear envíos concurrentes y no sobrescribir cambios ajenos. Galería, navegación por teclado y controles de vista previa deben funcionar en 320 px, 390 px y escritorio.
 
 Gate obligatorio: 207 pruebas generales + 204 PostgreSQL (411), todas las Python (127), Docker y 76 controles de gateway antes de auto commit local, sin push. Las pruebas de interfaz usan datos ficticios y red interceptada; nunca credenciales reales. PostgreSQL, Docker, HTTPS y recepción física en ambos teléfonos son comprobaciones independientes. Una actualización pendiente de conexión requiere recuperar la misma tarjeta, no crear otra ni cambiar su identidad.
+
+## Editor guiado v031
+
+La mejora del panel se entrega para Apple y Google juntas. Tres pasos (Diseño, Marca, Promoción y textos), vista completa opcional y comparación simultánea con el mismo saldo ficticio. El simulador está contraído al entrar; su estado, la selección de plataforma, los filtros y el paso abierto nunca se guardan en WalletDesign.
+
+Conservar las diez composiciones y las 32 paletas, el esquema y las rutas de arte v30, y presentationVersion=30: esta entrega modifica el editor, no el formato nativo de los pases. Los controles de formato Apple son vistas previas, no una preferencia persistida. La vista web es aproximada; la distribución real depende de Wallet.
+
+Un borrador permanece en memoria. Proteger navegación lateral, búsqueda de secciones, Abrir caja, salida y recarga cuando haya cambios o tareas en curso. Cancelar conserva los valores y el foco; salir sin guardar descarta únicamente el borrador. Limpiar guardas y temporizadores al abandonar el editor o cambiar sesión. No almacenar datos, credenciales ni borradores en localStorage.
+
+Guardar es explícito, conserva el control de expectedVersion, bloquea cambios concurrentes de la UI y mantiene el paso y la simulación. La respuesta del servidor confirma la nueva versión y establece la nueva base de Restaurar guardado; un error conserva el borrador. Un error de contraste ofrece un acceso visible a la corrección y un campo inválido oculto abre su paso antes de recibir foco.
+
+Mantener 207 pruebas unitarias/HTTP y 204 de PostgreSQL, 127 Python y 76 comprobaciones del gateway. Las pruebas de scripts/ui/wallet-studio-flow.dom.cjs y wallet-studio-flow.spec.cjs verifican navegación, pérdida de borrador, guardado versionado, campos ocultos, comparación y anchos 320/390/1024/1440 con datos ficticios. La validación del teléfono sigue siendo independiente.
