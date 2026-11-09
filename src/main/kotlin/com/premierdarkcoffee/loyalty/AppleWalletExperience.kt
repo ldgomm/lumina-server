@@ -82,33 +82,28 @@ fun WalletPass.appleExperienceFields(): JsonObject {
     val extras = mutableListOf<JsonObject>()
     if (target != null) extras += obj("key" to "featured_reward", "label" to when {
         paused -> "PREMIO PAUSADO"
-        target.remaining == 0L -> "CANJEA EN CAJA"
+        // A stamp illustration occupies the strip. Keep the exact balance as native text above it.
+// v022 also represents points and cashback; native fields retain their own units.
+target.remaining == 0L -> "CANJEA EN CAJA"
         else -> "PRÓXIMO PREMIO"
     }, "value" to appleShort(target.name, 28))
-    extras += balances.drop(1).take(2 - extras.size).mapIndexed { index, balance ->
-        val kind = balance.getValue("kind").jsonPrimitive.content
-        val name = if (balances.count { it.getValue("kind").jsonPrimitive.content == kind } > 1) {
-            balance.getValue("name").jsonPrimitive.content
-        } else when (kind) { "POINTS" -> "Puntos"; "STAMPS" -> "Sellos"; else -> balance.getValue("name").jsonPrimitive.content }
-        obj("key" to "extra_balance_$index", "label" to appleShort(name, 24),
-            "value" to if (kind == "CASHBACK") JsonPrimitive(walletBalance(balance, currency)) else balance.getValue("available"))
-    }
     val rewardDetails = rewards.map { reward -> obj("key" to "reward_${reward.id}",
         "label" to reward.name, "value" to reward.detail(currency, design.stampSymbol, paused)) }
     val zone = ZoneId.of(snapshot["timezone"]?.jsonPrimitive?.content ?: "America/Guayaquil")
     val updated = updatedAt.atZone(zone).format(DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm", Locale.forLanguageTag("es-EC")))
     return obj(
-        // A stamp illustration occupies the strip. Keep the exact balance as native text above it.
-        // v022 also represents points and cashback; native fields retain their own units.
-        "headerFields" to if (artwork().total > 0) listOf(header, JsonObject(primaryWithChange + obj("label" to when(first?.get("kind")?.jsonPrimitive?.content){"STAMPS"->"SELLOS";"POINTS"->"PUNTOS";else->"SALDO"}))) else listOf(header),
+        // One header and two full-width-friendly fields avoid four competing columns.
+        "headerFields" to if (artwork().total > 0) listOf(JsonObject(primaryWithChange + obj("label" to when(first?.get("kind")?.jsonPrimitive?.content){"STAMPS"->"SELLOS";"POINTS"->"PUNTOS";else->"SALDO"}))) else listOf(header),
         "primaryFields" to if (artwork().total > 0) emptyList<JsonObject>() else listOf(primaryWithChange),
-        "secondaryFields" to (listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24))) +
-            progress?.let { listOf(obj("key" to "journey", "label" to it.label, "value" to it.summary)) }.orEmpty()),
+        "secondaryFields" to (progress?.let { listOf(obj("key" to "journey", "label" to when {
+            it.remaining == 0L -> "META ALCANZADA"
+            else -> "Falta${if(it.remaining==1L && it.kind!="CASHBACK") "" else "n"} ${appleAmount(it.remaining, it.kind, currency)}"
+        }, "value" to it.summary)) } ?: listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24)))),
         "auxiliaryFields" to extras,
         "backFields" to (rewardDetails.filter { it["key"] == JsonPrimitive("reward_${target?.id}") } +
             progress?.let { listOf(obj("key" to "journey_detail", "label" to "Tu avance hacia el premio", "value" to "${it.summary}\n${it.guidance}")) }.orEmpty() +
             (if(paused) emptyList() else earningRule(first?.get("programId")?.jsonPrimitive?.contentOrNull)?.let { listOf(obj("key" to "earning", "label" to "Cómo acumular en tu promoción", "value" to it)) }.orEmpty()) +
-            listOf(obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) +
+            listOf(JsonObject(header + obj("key" to "card_state_detail")), obj("key" to "balances", "label" to "Saldos disponibles", "value" to summary())) +
             appleActivityFields() + rewardDetails.filter { it["key"] != JsonPrimitive("reward_${target?.id}") } +
             (if (paused) emptyList() else announcementFields()) + listOf(
             obj("key" to "member_detail", "label" to "Titular", "value" to snapshot.getValue("name")),
@@ -116,5 +111,21 @@ fun WalletPass.appleExperienceFields(): JsonObject {
             obj("key" to "usage", "label" to "Cómo usar tu tarjeta", "value" to design.usage),
             obj("key" to "updated", "label" to "Última actualización", "value" to "$updated\nHora del negocio. El saldo y las condiciones se confirman en caja.")
         ))
+    )
+}
+
+/** iOS/watchOS 27 poster; storeCard remains the fallback for earlier systems. */
+fun WalletPass.applePosterFields(): JsonObject {
+    val fields = appleExperienceFields()
+    val header = fields.getValue("headerFields").jsonArray
+    val primary = fields.getValue("primaryFields").jsonArray
+    val secondary = fields.getValue("secondaryFields").jsonArray
+    val reward = fields.getValue("auxiliaryFields").jsonArray
+    val hasProgress = journey() != null
+    return obj(
+        "headerFields" to header,
+        "primaryFields" to if(hasProgress) secondary + reward else primary + reward,
+        "footerFields" to listOf(obj("key" to "poster_member", "label" to "Titular", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content,32))),
+        "backFields" to fields.getValue("backFields")
     )
 }

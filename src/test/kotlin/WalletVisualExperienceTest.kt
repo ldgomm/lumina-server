@@ -89,7 +89,8 @@ class WalletVisualExperienceTest {
         assertFalse(removed.modules().toString().contains("Tu premio"))
         assertEquals(p.serial,removed.serial);assertEquals(p.googleId,removed.googleId)
         val png=ImageIO.read(ByteArrayInputStream(p.artwork().png()))
-        assertEquals(png.getRGB(0,0),png.getRGB(png.width/2,png.height/2))
+        assertEquals(1032,png.width)
+        assertContentEquals(p.artwork().copy(filled=0,total=0).png(),p.artwork().png())
     }
     @Test fun `native image versions preserve old links and reject unknown layouts without database access`() = testApplication {
         environment{config=MapApplicationConfig()}
@@ -108,7 +109,7 @@ class WalletVisualExperienceTest {
                 assertTrue(bytes.size<250000)
                 val rendered=ImageIO.read(ByteArrayInputStream(bytes))
                 assertEquals(if(layout=="apple")1125 else 1032,rendered.width)
-                assertEquals(if(layout=="apple")369 else 812,rendered.height)
+                assertEquals(if(layout=="apple")432 else 812,rendered.height)
                 System.getenv("LOYALTY_ARTWORK_EVIDENCE")?.let { directory ->
                     val file=Path.of(directory,art.path().drop(1)+".$layout.png");Files.createDirectories(file.parent);Files.write(file,bytes)
                 }

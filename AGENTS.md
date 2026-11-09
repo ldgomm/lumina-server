@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v026 requiere 388 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v027 requiere 398 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -194,3 +194,17 @@ El asistente ofrece únicamente ejemplos de la categoría resuelta, con producto
 Cambiar categoría no altera reglas existentes, ledger ni tarjetas. presentationVersion sigue en 24; promociones creadas por ejemplos usan la misma generación Apple y Google. V001–V009 inmutables. No renovar túneles, claves ni identidades.
 
 Gate obligatorio: 185 generales + 203 PostgreSQL (388), incluidas las de concurrencia, todas las Python, Docker y 43 comprobaciones de gateway antes del auto commit local. Doce suites UI interceptadas, incluyendo business-categories.spec.cjs. PostgreSQL embebido solo comprueba casos secuenciales; no sustituye PostgreSQL nativo. HTTPS y comprobación en teléfonos se informan aparte.
+
+## Wallet Signature v027
+
+presentationVersion=27 renueva Apple y Google con las mismas identidades y saldos. La actualización cubre versiones históricas 8, 17, 20, 22, 23 y 24. No renovar túneles automáticamente. V001–V009 permanecen inmutables.
+
+Apple añade posterGeneric (iOS/watchOS 27+) con storeCard de respaldo en el mismo pass.json, según su documentación. artwork.png mide 358×448 en tres escalas; strip clásico 375×144 en tres escalas. Conservar QR, serial, token, clave y campos de saldo/changeMessage. Un encabezado y dos campos de avance/premio; titular y demás saldos completos siguen en detalles. El sistema elige el estilo; no prometer resultado exacto sin prueba física.
+
+Google mantiene loyaltyObject, hero 1032×812 y tres filas nativas, con premio antes de avance. Reemplazar ambos slots de saldo y hero incluso al retirar promociones. Máximo diez módulos alcanzables y reviewStatus UNDER_REVIEW. La clase contiene referencias, nunca saldo/nombre personal.
+
+/wallet/art/v27 añade AURORA a SOLID/GRADIENT, 33 símbolos y layout=poster acotado. Sin textos incrustados, datos personales, QR ni consultas a la base. v20/v22/v24 conservan renderer y restricciones anteriores. Una tarjeta sin objetivo mantiene solo identidad gráfica, sin anillo ni sellos de progreso. SOLID/GRADIENT de diseños guardados conservan elección; Signature es el nuevo render de GRADIENT.
+
+Vista previa con imágenes auténticas del servidor y composición orientativa, selector Apple póster/clásico y Google. No envía operaciones ni guarda opciones de simulación. Mantener campos protegidos, meta, logo y reglas; guardar acabado explícitamente y con versión. Datos ficticios en pruebas.
+
+Gate: 195 generales + 203 PostgreSQL (398), todas las Python (125), Docker y 50 comprobaciones de gateway antes del auto commit local. Trece suites UI interceptadas, incluida wallet-signature.spec.cjs. Pruebas de PostgreSQL real, HTTPS y recepción en ambos teléfonos se informan por separado.

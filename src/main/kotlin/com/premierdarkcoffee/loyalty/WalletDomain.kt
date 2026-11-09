@@ -60,7 +60,7 @@ fun WalletPass.appleJson(passType: String, team: String, origin: String): JsonOb
         "logoText" to design.displayName.ifBlank { snapshot.getValue("businessName").jsonPrimitive.content }, "backgroundColor" to walletRgb(design.background), "foregroundColor" to walletRgb(design.foreground), "labelColor" to walletRgb(design.label),
         "sharingProhibited" to true, "webServiceURL" to "$origin/wallet/apple", "authenticationToken" to token,
         "barcodes" to listOf(obj("format" to "PKBarcodeFormatQR", "message" to snapshot.getValue("cardCode"), "messageEncoding" to "iso-8859-1")),
-        "storeCard" to appleStoreFields())
+        "storeCard" to appleStoreFields(), "posterGeneric" to applePosterFields())
 }
 
 fun WalletPass.googleJson(objectId: String, classId: String, origin: String): JsonObject = JsonObject(obj(

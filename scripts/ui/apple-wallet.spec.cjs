@@ -28,7 +28,7 @@ async function run() {
             if (url.pathname.startsWith('/api/')) throw new Error('Unexpected API: ' + url.pathname);
             if (url.pathname.startsWith('/wallet/art/')) {
                 const folder = process.env.LOYALTY_ARTWORK_EVIDENCE;
-                const file = folder && path.join(folder, url.pathname.slice(1) + '.' + (url.searchParams.get('layout') === 'apple' ? 'apple' : 'google') + '.png');
+                const file = folder && path.join(folder, url.pathname.slice(1) + '.' + (url.searchParams.get('layout') || 'google') + '.png');
                 return file && fs.existsSync(file) ? route.fulfill({body: fs.readFileSync(file), contentType: 'image/png'}) : route.fulfill({status: 404});
             }
             const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);

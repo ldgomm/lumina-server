@@ -63,7 +63,7 @@ class WalletArtworkTest {
     @Test fun `image URLs change with progress but contain no customer or security identifiers`() {
         val p=pass();val native=p.googleJson("issuer.object","issuer.class","https://example.com")
         val uri=native.getValue("heroImage").jsonObject.getValue("sourceUri").jsonObject.getValue("uri").jsonPrimitive.content
-        assertEquals("https://example.com/wallet/art/v24/GRADIENT/6/204e41/4/5.png",uri)
+        assertEquals("https://example.com/wallet/art/v27/GRADIENT/6/204e41/4/5.png",uri)
         for(secret in listOf("member","PRIVATE-QR","serial","token"))assertFalse(uri.contains(secret))
         assertNotEquals(uri,pass(5).googleArtwork("https://example.com").getValue("sourceUri").jsonObject.getValue("uri").jsonPrimitive.content)
         assertEquals("PRIVATE-QR",native.getValue("barcode").jsonObject.getValue("value").jsonPrimitive.content)
@@ -75,7 +75,7 @@ class WalletArtworkTest {
             val art=WalletArtwork("GRADIENT",symbol,"0b1f3a",4,5)
             val google=art.png();hashes+=google.contentHashCode()
             val image=ImageIO.read(ByteArrayInputStream(google));assertEquals(1032,image.width);assertEquals(812,image.height)
-            for(scale in 1..3) { val apple=ImageIO.read(ByteArrayInputStream(art.png(scale)));assertEquals(375*scale,apple.width);assertEquals(123*scale,apple.height) }
+            for(scale in 1..3) { val apple=ImageIO.read(ByteArrayInputStream(art.png(scale)));assertEquals(375*scale,apple.width);assertEquals(144*scale,apple.height) }
         }
         assertEquals(walletStampSymbols.size,hashes.size)
         // Optional, local-only evidence used by the fully intercepted browser tests.

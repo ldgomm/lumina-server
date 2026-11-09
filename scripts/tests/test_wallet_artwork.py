@@ -26,14 +26,14 @@ class WalletArtworkGatewayTests(unittest.TestCase):
         def respond(url,method,body):
             calls.append((url,method))
             path=url.removeprefix('http://local')
-            if path in ['/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png','/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png?layout=apple','/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png?layout=apple']:return (200 if method=='GET' else 404),b''
-            if path in ['/wallet/art/v24/GRADIENT/32/0b1f3a/9/5.png','/wallet/art/v20/GRADIENT/5/0b1f3a/9/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/9/5.png']:return 400,b''
+            if path in ['/wallet/art/v27/AURORA/32/0b1f3a/4/5.png','/wallet/art/v27/GRADIENT/5/34241f/4/5.png?layout=poster','/wallet/art/v27/GRADIENT/5/34241f/4/5.png?layout=apple','/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png','/wallet/art/v24/GRADIENT/32/0b1f3a/4/5.png?layout=apple','/wallet/art/v20/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/4/5.png?layout=apple']:return (200 if method=='GET' else 404),b''
+            if path in ['/wallet/art/v27/AURORA/32/0b1f3a/9/5.png','/wallet/art/v27/GRADIENT/5/34241f/4/5.png?layout=html','/wallet/art/v24/GRADIENT/32/0b1f3a/9/5.png','/wallet/art/v20/GRADIENT/5/0b1f3a/9/5.png','/wallet/art/v22/GRADIENT/5/0b1f3a/9/5.png']:return 400,b''
             if path in ['/join/demo','/api/public/demo','/engagement.js','/experience.js','/wallet/brand/demo/logo.png']:return 200,b''
             if path in ['/api/me/wallet-status','/api/me/access']:return 401,b''
             if path=='/api/public/demo/join':return 400,b''
             return 404,b''
-        with patch.object(w,'request',side_effect=respond):self.assertEqual(43,w.verify_gateway('http://local','demo'))
-        self.assertEqual(43,len(calls))
+        with patch.object(w,'request',side_effect=respond):self.assertEqual(50,w.verify_gateway('http://local','demo'))
+        self.assertEqual(50,len(calls))
         with patch.object(w,'request',return_value=(503,b'')):
             with self.assertRaises(RuntimeError):w.verify_gateway('http://local','demo')
 
@@ -52,3 +52,14 @@ class WalletArtworkGatewayTests(unittest.TestCase):
             self.assertFalse(allowed('/wallet/art/v24/GRADIENT/'+symbol+'/0b1f3a/4/5.png'))
         for version in ['v20','v22']:
             self.assertFalse(allowed('/wallet/art/'+version+'/GRADIENT/32/0b1f3a/4/5.png'))
+
+    def test_signature_routes_are_bounded_get_only_and_preserve_legacy(self):
+        rules=re.findall(r'"~\^(.+?)\$" 1;',w.gateway_config('a'*32))
+        allowed=lambda method,path:any(re.fullmatch(rule,method+' '+path) for rule in rules)
+        path='/wallet/art/v27/AURORA/32/0b1f3a/4/5.png'
+        self.assertTrue(allowed('GET',path))
+        self.assertTrue(allowed('GET',path+'?layout=poster'))
+        for method in ['POST','PUT','DELETE']:
+            self.assertFalse(allowed(method,path))
+        for bad in [path.replace('/32/','/33/'),path.replace('/v27/','/v24/'),path.replace('0b1f3a','%2e%2e'),path+'/../../.env']:
+            self.assertFalse(allowed('GET',bad))

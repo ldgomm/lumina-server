@@ -36,14 +36,15 @@ fun Route.walletRoutes(service: LoyaltyService, platformToken: String) {
     get("/wallet-ui.js") { call.web("wallet-ui.js", ContentType.Application.JavaScript) }
 
     get("/wallet/art/{version}/{style}/{symbol}/{background}/{filled}/{total}.png") {
-        val version=when(call.parameters["version"]){"v20"->20;"v22"->22;"v24"->24;else->throw Problem(404,"NOT_FOUND","Diseño no encontrado.")}
+        val version=when(call.parameters["version"]){"v20"->20;"v22"->22;"v24"->24;"v27"->27;else->throw Problem(404,"NOT_FOUND","Diseño no encontrado.")}
         fun number(name: String) = call.parameters[name]?.toIntOrNull() ?: throw Problem(400,"INVALID_ARTWORK","Diseño inválido.")
         val art=WalletArtwork(call.parameters["style"]?:"",number("symbol"),call.parameters["background"]?:"",number("filled"),number("total"))
         art.validate()
-        need(version == 24 || art.symbol in 0..9,"NOT_FOUND","Diseño no encontrado.",404)
+        need(version >= 24 || art.symbol in 0..9,"NOT_FOUND","Diseño no encontrado.",404)
         val layout=call.request.queryParameters["layout"]
-        need(layout==null || layout=="apple","INVALID_ARTWORK","Formato inválido.")
-        call.respondBytes(io { art.png(if(layout=="apple") 3 else null,version) },ContentType.Image.PNG)
+        need(layout==null || layout=="apple" || (version==27 && layout=="poster"),"INVALID_ARTWORK","Formato inválido.")
+        need(version==27 || art.style!="AURORA","INVALID_ARTWORK","Acabado no disponible en esa versión.")
+        call.respondBytes(io { if(layout=="poster") art.posterPng() else art.png(if(layout=="apple") 3 else null,version) },ContentType.Image.PNG)
     }
     get("/wallet/logo.png") { call.respondBytes(walletLogo(660), ContentType.Image.PNG) }
     get("/api/me/wallet-status") { io { service.member(call.bearer()) }; call.respond(service.wallets.availability()) }

@@ -103,16 +103,18 @@ class WalletJourneyTest {
             val ready=empty.copy(filled=total)
             assertFalse(empty.png().contentEquals(ready.png()))
             val bytes=ready.png(3);assertTrue(bytes.size<250000)
-            val image=ImageIO.read(ByteArrayInputStream(bytes));assertEquals(1125,image.width);assertEquals(369,image.height)
+            val image=ImageIO.read(ByteArrayInputStream(bytes));assertEquals(1125,image.width);assertEquals(432,image.height)
         }
         val art=WalletArtwork("GRADIENT",32,"0b1f3a",0,0);val blank=ImageIO.read(ByteArrayInputStream(art.png()))
-        assertEquals(blank.getRGB(0,0),blank.getRGB(blank.width/2,blank.height/2))
+        assertEquals(0,art.total)
+        assertEquals(0,art.filled)
+        assertTrue(blank.width==1032 && blank.height==812)
         System.getenv("LOYALTY_ARTWORK_EVIDENCE")?.let { directory ->
             // Deterministic native files used by UI tests, not browser-generated mock artwork.
             val palettes=listOf(1 to "0b1f3a",5 to "34241f",6 to "702c28",3 to "202936",7 to "f2e9da",32 to "193f38",15 to "23566a",9 to "283c50",10 to "792c20",11 to "614626",14 to "6c304c",12 to "e3f0e8",13 to "244c35",16 to "f1e3ec",17 to "153f43",18 to "183765",4 to "202b53",19 to "41355f",21 to "30353e",22 to "e2edf5",23 to "4b3930",24 to "dfeeee",25 to "364b43",26 to "5e3057",27 to "eae5de",28 to "2f4352",29 to "1e3646",30 to "4c3d27",31 to "273a3d",8 to "3f3334",4 to "182f35",2 to "efdfe5")
-            for((symbol,bg) in palettes)for((fill,total) in listOf(1 to 1,0 to 5,2 to 5,4 to 5,5 to 5,0 to 100,50 to 100,99 to 100,100 to 100))for(layout in listOf("apple","google")) {
+            for((symbol,bg) in palettes)for((fill,total) in listOf(1 to 1,0 to 5,2 to 5,4 to 5,5 to 5,0 to 100,50 to 100,99 to 100,100 to 100))for(layout in listOf("apple","google","poster")) {
                 val picture=WalletArtwork(if(total==1)"SOLID" else "GRADIENT",symbol,bg,fill,total)
-                val file=Path.of(directory,picture.path().drop(1)+".$layout.png");Files.createDirectories(file.parent);Files.write(file,picture.png(if(layout=="apple")3 else null))
+                val file=Path.of(directory,picture.path().drop(1)+".$layout.png");Files.createDirectories(file.parent);Files.write(file,if(layout=="poster")picture.posterPng() else picture.png(if(layout=="apple")3 else null))
             }
         }
     }

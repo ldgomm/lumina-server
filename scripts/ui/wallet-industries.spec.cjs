@@ -18,7 +18,7 @@ async function run(){
   await page.route('**/*',async route=>{
    const req=route.request(),u=new URL(req.url());assert.equal(u.origin,'https://loyalty.test');
    if(u.pathname.startsWith('/wallet/art/')){
-    const file=path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')==='apple'?'apple':'google')+'.png');
+    const file=path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')||'google')+'.png');
     assert.ok(fs.existsSync(file),'Missing native image '+u.pathname);
     return route.fulfill({body:fs.readFileSync(file),contentType:'image/png'});
    }
@@ -65,7 +65,7 @@ async function run(){
   await page.locator('[data-preview-provider=apple]').click();assert.equal(await page.locator('#appleJourneyValue').textContent(),'2.50 de 5.00 USD');await rendered('#appleStampArtwork');await shot('v024-apple-cashback','#designPreview');
   await page.locator('#featuredProgramId').selectOption('points');assert.equal(await page.locator('#appleJourneyValue').textContent(),'50 de 100 puntos');
   await page.locator('[data-wallet-example=ready]').click();assert.equal(await page.locator('#appleJourneyLabel').textContent(),'META ALCANZADA');assert.match(await page.locator('#walletProgressNext').textContent(),/Confirma el canje en caja/);
-  await page.locator('[data-wallet-example=paused]').click();assert.equal(await page.locator('#appleJourney').isVisible(),false);assert.equal(await page.locator('#googleJourney').isVisible(),false);assert.equal(await page.locator('#walletProgressLegend').isVisible(),false);assert.equal(await page.locator('#appleStampArtwork').isVisible(),false);
+  await page.locator('[data-wallet-example=paused]').click();assert.equal(await page.locator('#appleJourney').isVisible(),false);assert.equal(await page.locator('#googleJourney').isVisible(),false);assert.equal(await page.locator('#walletProgressLegend').isVisible(),false);assert.equal(await page.locator('#appleStampArtwork').isVisible(),true);
   checks.push('Exact current, target and remaining units across both providers; zero, halfway, near, ready and paused states');
   await page.locator('#featuredProgramId').selectOption('stamps');await page.locator('[data-wallet-example=progress]').click();await page.locator('[data-wallet-style=pet]').click();
   await rendered('#appleStampArtwork');await shot('v024-desktop','.wallet-design-panel');await shot('v024-catalog','.wallet-style-presets');

@@ -13,7 +13,7 @@ async function run(){
   await page.route('**/*',async route=>{
    const req=route.request(),u=new URL(req.url());assert.equal(u.origin,'https://loyalty.test');
    if(u.pathname.startsWith('/wallet/art/')){
-    const file=artifacts&&path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')==='apple'?'apple':'google')+'.png');
+    const file=artifacts&&path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')||'google')+'.png');
     if(!file||!fs.existsSync(file))throw Error('Missing rendered artwork '+u.pathname+u.search);
     return route.fulfill({body:fs.readFileSync(file),contentType:'image/png'});
    }
@@ -53,7 +53,7 @@ async function run(){
   await page.evaluate(()=>{window.originalNow=Date.now;Date.now=()=>window.originalNow()+300001;});await page.waitForFunction(()=>document.querySelector('#restoreResult')?.textContent.includes('venció'));assert.equal(await page.locator('#restoreResult a,#restoreResult img').count(),0);await page.evaluate(()=>{Date.now=window.originalNow;});checks.push('Visible recovery requires identity, blocks concurrent operations, preserves member and removes expired QR');
   await show('sales','CASHIER');await page.locator('#value').fill('FAKE-QR');await page.locator('#lookup button').first().click();await page.locator('.customer-counter').waitFor();assert.equal(await page.locator('#openWalletRecovery,#restoreIssue').count(),0);checks.push('Cashier cannot see owner recovery actions');
   await show('design');await page.locator('#walletDesign').waitFor();await page.waitForFunction(()=>document.querySelector('#appleStampArtwork').complete&&document.querySelector('#appleStampArtwork').naturalWidth>0);
-  assert.match(await page.locator('#appleStampArtwork').getAttribute('src'),/GRADIENT\/6\/0b1f3a\/4\/5.png\?layout=apple/);await fit();await shot('pizza-apple-mobile');
+  assert.match(await page.locator('#appleStampArtwork').getAttribute('src'),/GRADIENT\/6\/0b1f3a\/4\/5.png\?layout=poster/);await fit();await shot('pizza-apple-mobile');
   await page.locator('[data-preview-provider=google]').click();await page.waitForFunction(()=>document.querySelector('#googleStampArtwork').complete&&document.querySelector('#googleStampArtwork').naturalWidth>0);await fit();await shot('pizza-google-mobile');
   await page.locator('#stampSymbol').selectOption('☕');await page.locator('#artworkStyle').selectOption('SOLID');await page.locator('[data-wallet-example=ready]').click();await page.waitForFunction(()=>document.querySelector('#googleStampArtwork').src.includes('/SOLID/5/0b1f3a/5/5.png')&&document.querySelector('#googleStampArtwork').complete);await shot('coffee-google-mobile');
   await page.locator('#saveDesign').click();await page.locator('#walletDesign').waitFor();const saved=calls.find(x=>x.url.endsWith('/wallet-design')&&x.method==='PUT');assert.equal(saved.payload.design.stampSymbol,'☕');assert.equal(saved.payload.design.artworkStyle,'SOLID');checks.push('Real rendered Apple and Google assets follow symbol, gradient and progress; saved choices are shared');

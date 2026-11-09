@@ -29,13 +29,13 @@ class AppleWalletExperienceTest {
     @Test fun `one stamp remaining comes from the matching balance not a stale message`() {
         val p = pass()
         assertEquals("6 / 7", p.front("primaryFields").text())
-        assertEquals("1 sello", p.front("headerFields").text())
+        assertEquals("1 sello", p.detail("card_state_detail").text())
         assertTrue(p.detail("reward_r").text().contains("Te falta 1 sello."))
     }
     @Test fun `ready prize preserves extra stamps and requires cashier confirmation`() {
         val p = pass(listOf(balance(amount = 11)))
         assertEquals("11 sellos", p.front("primaryFields").text())
-        assertEquals("Disponible", p.front("headerFields").text())
+        assertEquals("Disponible", p.detail("card_state_detail").text())
         assertTrue(p.detail("reward_r").text().contains("Pide el canje en caja"))
         assertTrue(p.detail("reward_r").text().contains("Canje: 7 sellos"))
     }
@@ -48,7 +48,7 @@ class AppleWalletExperienceTest {
         val p = pass(listOf(balance("a", amount = 7), balance("b", amount = 2)),
             listOf(reward(), reward("rb", "b", goal = 9)), WalletDesign(featuredProgramId = "b"))
         assertEquals("2 / 9", p.front("primaryFields").text())
-        assertEquals("7 sellos", p.front("headerFields").text())
+        assertEquals("7 sellos", p.detail("card_state_detail").text())
         assertTrue(p.detail("reward_r").text().contains("Saldo: 7 sellos"))
     }
     @Test fun `deleted and paused promotion rewards cannot leak through orphan progress`() {
@@ -58,7 +58,7 @@ class AppleWalletExperienceTest {
     }
     @Test fun `paused business preserves balances without inviting redemption or showing events`() {
         val p = pass(listOf(balance(amount = 7)), active = false)
-        assertEquals("Pausada", p.front("headerFields").text())
+        assertEquals("Pausada", p.detail("card_state_detail").text())
         assertEquals("PREMIO PAUSADO", p.front("auxiliaryFields").text("label"))
         assertTrue(p.detail("reward_r").text().contains("Canjes pausados"))
         assertFalse(p.appleStoreFields().toString().contains("Pide el canje"))
@@ -67,13 +67,13 @@ class AppleWalletExperienceTest {
     @Test fun `cashback progress uses exact money not cents or floating point rounding`() {
         val p = pass(listOf(balance(kind = "CASHBACK", amount = 499)), listOf(reward(kind = "CASHBACK", goal = 500)))
         assertEquals("4.99 USD", p.front("primaryFields").text())
-        assertEquals("0.01 USD", p.front("headerFields").text())
+        assertEquals("0.01 USD", p.detail("card_state_detail").text())
         assertTrue(p.detail("reward_r").text().contains("Canje: 5.00 USD"))
         assertFalse(p.detail("reward_r").text().contains("centavos"))
     }
     @Test fun `multiple rewards choose a deterministic affordable goal in the same program`() {
         val p = pass(rewards = listOf(reward("expensive", goal = 15), reward("affordable", goal = 4), reward("next", goal = 9)))
-        assertEquals("Disponible", p.front("headerFields").text())
+        assertEquals("Disponible", p.detail("card_state_detail").text())
         assertTrue(p.detail("reward_affordable").text().contains("Canje: 4 sellos"))
         assertTrue(p.detail("reward_next").text().contains("Te faltan 3 sellos"))
     }
@@ -94,7 +94,7 @@ class AppleWalletExperienceTest {
         val person = "María de los Ángeles Rodríguez de la Torre"
         val prize = "Un descuento personalizado para tu próximo servicio completo"
         val p = pass(name = person, rewards = listOf(reward(name = prize)))
-        assertTrue(p.front("secondaryFields").text().endsWith("…"))
+        assertTrue(p.front("auxiliaryFields").text().endsWith("…"))
         assertEquals(person, p.detail("member_detail").text())
         assertEquals(prize, p.detail("reward_r").text("label"))
         val fields = p.appleStoreFields()
@@ -116,7 +116,7 @@ class AppleWalletExperienceTest {
         val p = pass(emptyList(), emptyList(), WalletDesign(welcome = "Bienvenido a nuestro club"))
         assertEquals("Bienvenido a nuestro club", p.front("primaryFields").text())
         assertTrue(p.appleStoreFields().getValue("auxiliaryFields").jsonArray.isEmpty())
-        assertEquals("Activa", p.front("headerFields").text())
+        assertEquals("Activa", p.detail("card_state_detail").text())
     }
     @Test fun `rendering keeps pass identity authentication and QR intact`() {
         val p = pass(); val encoded = p.appleJson("pass.example", "TEAM", "https://example.com")
@@ -132,12 +132,12 @@ class AppleWalletExperienceTest {
     @Test fun `points have their own units and do not use a stamp ratio`() {
         val p = pass(listOf(balance(kind = "POINTS", amount = 1)), listOf(reward(kind = "POINTS", goal = 20)))
         assertEquals("1 punto", p.front("primaryFields").text())
-        assertEquals("19 puntos", p.front("headerFields").text())
+        assertEquals("19 puntos", p.detail("card_state_detail").text())
         assertFalse(p.detail("reward_r").text().contains("○"))
     }
     @Test fun `invalid zero cost or mismatched reward kind does not create a ready prize`() {
         val p = pass(rewards = listOf(reward(goal = 0), reward("other", kind = "CASHBACK")))
-        assertEquals("Activa", p.front("headerFields").text())
+        assertEquals("Activa", p.detail("card_state_detail").text())
         assertFalse(p.appleStoreFields().toString().contains("Un corte gratis"))
     }
 }

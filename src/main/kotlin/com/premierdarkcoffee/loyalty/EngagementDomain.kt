@@ -44,7 +44,7 @@ import kotlin.math.pow
         need(displayName.length<=80,"INVALID_DESIGN","Nombre demasiado largo."); text(welcome,80);text(usage,350);text(birthdayMessage,250)
         featuredProgramId?.let(::uuid)
         need(stampSymbol in walletStampSymbols,"INVALID_STAMP","Elige un símbolo de sello disponible.")
-        need(artworkStyle in setOf("SOLID","GRADIENT"),"INVALID_ARTWORK","Elige fondo liso o degradado.")
+        need(artworkStyle in setOf("SOLID","GRADIENT","AURORA"),"INVALID_ARTWORK","Elige Signature, Aurora o Esencial.")
         for (color in listOf(background,foreground,label)) need(color.matches(Regex("#[a-fA-F0-9]{6}")),"INVALID_COLOR","Usa colores hexadecimales.")
         fun luminance(hex: String): Double { val channels=(1..5 step 2).map { hex.substring(it,it+2).toInt(16)/255.0 }.map { if(it<=0.04045)it/12.92 else ((it+0.055)/1.055).pow(2.4) };return channels[0]*.2126+channels[1]*.7152+channels[2]*.0722 }
         fun contrast(a:String,b:String):Double {val x=luminance(a);val y=luminance(b);return (maxOf(x,y)+.05)/(minOf(x,y)+.05)}

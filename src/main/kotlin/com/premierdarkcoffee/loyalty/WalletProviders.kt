@@ -66,7 +66,8 @@ fun applePackage(pass: WalletPass, provider: AppleWalletProvider, origin: String
         val files = linkedMapOf("pass.json" to pass.appleJson(provider.passType, provider.team, origin).toString().toByteArray(),
         "icon.png" to walletLogo(29), "icon@2x.png" to walletLogo(58), "icon@3x.png" to walletLogo(87),
         "logo.png" to pass.brandLogo(1), "logo@2x.png" to pass.brandLogo(2), "logo@3x.png" to pass.brandLogo(3),
-        "strip.png" to pass.artwork().png(1), "strip@2x.png" to pass.artwork().png(2), "strip@3x.png" to pass.artwork().png(3))
+        "strip.png" to pass.artwork().png(1), "strip@2x.png" to pass.artwork().png(2), "strip@3x.png" to pass.artwork().png(3),
+        "artwork.png" to pass.artwork().posterPng(1), "artwork@2x.png" to pass.artwork().posterPng(2), "artwork@3x.png" to pass.artwork().posterPng(3))
     val manifest = JsonObject(files.mapValues { (_, bytes) -> JsonPrimitive(MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }) }).toString().toByteArray()
     files["manifest.json"] = manifest; files["signature"] = provider.sign(manifest)
     return ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { zip -> files.forEach { (name, bytes) -> zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry() } } }.toByteArray()

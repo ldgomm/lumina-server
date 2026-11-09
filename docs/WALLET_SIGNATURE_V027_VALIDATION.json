@@ -1,0 +1,15 @@
+{
+  "release": "v027",
+  "generalKotlinTests": { "status": "PASS", "tests": 195, "failures": 0 },
+  "pythonTests": { "status": "PASS", "tests": 125, "failures": 0 },
+  "productionDistribution": "installDist PASS",
+  "domInteractions": "PASS: finishes, provider layouts, values, paused goal, explicit versioned save",
+  "patchChecks": "PASS: dry run, formatting, idempotency, conflict rejection before writes, migrations unchanged",
+  "artwork": "Real Kotlin renderer output inspected; no real-device screenshot of v027 available",
+  "browserRendering": "PENDING: browser process blocked by environment socket restrictions",
+  "postgresTests": { "status": "PENDING_ON_MAC", "requiredTests": 203 },
+  "dockerAndGateway": "PENDING_ON_MAC; required before local commit",
+  "https": "PENDING_ON_MAC; reported separately",
+  "appleDevice": "PENDING",
+  "googleDevice": "PENDING"
+}

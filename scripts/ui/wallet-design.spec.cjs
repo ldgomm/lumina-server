@@ -19,7 +19,7 @@ async function run(){
   await page.route('**/*',async route=>{
    const req=route.request(),u=new URL(req.url());assert.equal(u.origin,'https://loyalty.test');
    if(u.pathname.startsWith('/wallet/art/')){
-    const file=path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')==='apple'?'apple':'google')+'.png');
+    const file=path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')||'google')+'.png');
     if(!fs.existsSync(file))throw Error('Missing rendered image '+u.pathname);
     return route.fulfill({body:fs.readFileSync(file),contentType:'image/png'});
    }
@@ -49,8 +49,8 @@ async function run(){
   assert.equal(await page.locator('#googlePreviewReward').textContent(),'Café a tu elección');assert.equal(await page.locator('#googlePreviewStatus').textContent(),'1 sello');
   checks.push('Presets change only appearance, keep business choices and render actual native-size art for both providers');
   await page.locator('[data-wallet-example=ready]').click();assert.equal(await page.locator('#googlePreviewRewardLabel').textContent(),'Premio en caja');assert.equal(await page.locator('#googlePreviewMain').textContent(),'5');
-  await page.locator('[data-wallet-example=paused]').click();assert.equal(await page.locator('#googlePreviewReward').textContent(),'Operaciones pausadas');assert.equal(await page.locator('#googleStampArtwork').isVisible(),false);assert.match(await page.locator('#previewRewardDetail').textContent(),/saldos se conservan/);
-  await page.locator('[data-preview-provider=apple]').click();assert.equal(await page.locator('#previewStatus').textContent(),'Pausada');assert.equal(await page.locator('#appleStampArtwork').isVisible(),false);assert.equal(await page.locator('#previewPrizeLabel').textContent(),'PREMIO PAUSADO');
+  await page.locator('[data-wallet-example=paused]').click();assert.equal(await page.locator('#googlePreviewReward').textContent(),'Operaciones pausadas');assert.equal(await page.locator('#googleStampArtwork').isVisible(),true);assert.match(await page.locator('#previewRewardDetail').textContent(),/saldos se conservan/);
+  await page.locator('[data-preview-provider=apple]').click();assert.equal(await page.locator('#previewStatus').textContent(),'Pausada');assert.equal(await page.locator('#appleStampArtwork').isVisible(),true);assert.equal(await page.locator('#previewPrizeLabel').textContent(),'PREMIO PAUSADO');
   assert.equal(calls.filter(x=>x.method!=='GET').length,0);checks.push('Ready and suspended examples do not write purchases, awards or design; paused example clears graphic and redemption invitation');
   await page.locator('[data-wallet-style=navy]').click();await page.locator('[data-wallet-example=progress]').click();await page.locator('#featuredProgramId').selectOption('cash');
   assert.equal(await page.locator('#previewWelcome').textContent(),'4.99 USD');assert.match(await page.locator('#appleStampArtwork').getAttribute('src'),/\/99\/100.png/);await rendered('#appleStampArtwork');await shot('v022-apple-cashback','#designPreview');

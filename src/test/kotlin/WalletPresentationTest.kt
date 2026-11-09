@@ -20,9 +20,11 @@ class WalletPresentationTest {
         val f = fields(p)
         assertEquals("0.00 USD", f.getValue("primaryFields").jsonArray.single().jsonObject.getValue("value").jsonPrimitive.content)
         val extra = f.getValue("auxiliaryFields").jsonArray.map { it.jsonObject }
-        assertEquals(listOf("Puntos", "Sellos"), extra.map { it.getValue("label").jsonPrimitive.content })
-        assertEquals(listOf(100L, 2L), extra.map { it.getValue("value").jsonPrimitive.long })
-        assertTrue(f.getValue("secondaryFields").jsonArray.size + extra.size <= 4)
+        assertTrue(extra.isEmpty())
+        val balancesText = f.getValue("backFields").jsonArray.map { it.jsonObject }.single { it["key"]==JsonPrimitive("balances") }.getValue("value").jsonPrimitive.content
+        assertContains(balancesText,"Puntos por compra: 100 puntos")
+        assertContains(balancesText,"Cada visita cuenta: 2 sellos")
+        assertTrue(f.getValue("secondaryFields").jsonArray.size + extra.size <= 2)
         val json = p.appleJson("pass.com.example.loyalty", "ABCDEFGHIJ", "https://example.com")
         assertEquals(p.serial, json.getValue("serialNumber").jsonPrimitive.content)
         assertEquals(p.token, json.getValue("authenticationToken").jsonPrimitive.content)
@@ -33,10 +35,8 @@ class WalletPresentationTest {
     @Test fun `many programs keep their own names and amounts without overflowing the front`() {
         val balances = listOf(balance("Saldo A", "CASHBACK", 125)) + (1..8).map { balance("Programa $it", "POINTS", it.toLong()) }
         val f = fields(pass(balances))
-        assertEquals(2, f.getValue("auxiliaryFields").jsonArray.size)
-        val labels = f.getValue("auxiliaryFields").jsonArray.map { it.jsonObject.getValue("label").jsonPrimitive.content }
-        assertEquals(listOf("Programa 1", "Programa 2"), labels)
-        val summary = f.getValue("backFields").jsonArray.first().jsonObject.getValue("value").jsonPrimitive.content
+        assertTrue(f.getValue("auxiliaryFields").jsonArray.isEmpty())
+        val summary = f.getValue("backFields").jsonArray.map { it.jsonObject }.single { it["key"]==JsonPrimitive("balances") }.getValue("value").jsonPrimitive.content
         assertTrue(summary.contains("Saldo A: 1.25 USD"))
         for (i in 1..8) assertTrue(summary.contains("Programa $i: $i puntos"))
         val keys = f.values.flatMap { group -> group.jsonArray.map { it.jsonObject.getValue("key").jsonPrimitive.content } }

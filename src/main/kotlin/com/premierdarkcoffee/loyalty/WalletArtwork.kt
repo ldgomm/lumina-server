@@ -15,16 +15,22 @@ val walletStampSymbols = listOf("●", "★", "♥", "✂", "◆", "☕", "🍕"
 
 data class WalletArtwork(val style: String, val symbol: Int, val background: String, val filled: Int, val total: Int) {
     fun validate() {
-        need(style in setOf("SOLID", "GRADIENT") && symbol in walletStampSymbols.indices &&
+        need(style in setOf("SOLID", "GRADIENT", "AURORA") && symbol in walletStampSymbols.indices &&
             background.matches(Regex("[a-fA-F0-9]{6}")) && (total in 0..20 || total == 100) && filled in 0..total,
             "INVALID_ARTWORK", "Diseño de sellos inválido.")
     }
-    fun path() = "/wallet/art/v24/$style/$symbol/${background.lowercase()}/$filled/$total.png"
+    fun path() = "/wallet/art/v27/$style/$symbol/${background.lowercase()}/$filled/$total.png"
 
-    fun png(appleScale: Int? = null, version: Int = 24): ByteArray {
-        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22,24))
-        require(version == 24 || symbol in 0..9)
-        return when(version) { 20 -> legacyPng(appleScale); 22 -> modernPng(appleScale); else -> journeyPng(appleScale) }
+    fun png(appleScale: Int? = null, version: Int = 27): ByteArray {
+        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22,24,27))
+        require(version >= 24 || symbol in 0..9)
+        require(version == 27 || style != "AURORA")
+        return when(version) { 20 -> legacyPng(appleScale); 22 -> modernPng(appleScale); 24 -> journeyPng(appleScale); else -> signaturePng(appleScale) }
+    }
+
+    fun posterPng(scale: Int = 3): ByteArray {
+        validate(); require(scale in 1..3)
+        return signaturePng(scale, poster = true)
     }
 
     private fun legacyPng(appleScale: Int? = null): ByteArray {

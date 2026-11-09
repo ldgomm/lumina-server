@@ -9,8 +9,8 @@ fun googleWalletTemplate(): JsonObject {
     return obj(
         "cardTemplateOverride" to obj("cardRowTemplateInfos" to listOf(
             obj("twoItems" to obj("startItem" to item("object.loyaltyPoints.balance"),"endItem" to item("object.secondaryLoyaltyPoints.balance"))),
-            obj("oneItem" to obj("item" to item("object.textModulesData['journey']"))),
-            obj("oneItem" to obj("item" to item("object.textModulesData['headline']")))
+            obj("oneItem" to obj("item" to item("object.textModulesData['headline']"))),
+            obj("oneItem" to obj("item" to item("object.textModulesData['journey']")))
         )),
         "detailsTemplateOverride" to obj("detailsItemInfos" to details.map { obj("item" to item("object.textModulesData['$it']")) })
     )
