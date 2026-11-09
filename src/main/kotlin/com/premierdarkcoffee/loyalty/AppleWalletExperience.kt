@@ -91,7 +91,7 @@ target.remaining == 0L -> "CANJEA EN CAJA"
         "label" to reward.name, "value" to reward.detail(currency, design.stampSymbol, paused)) }
     val zone = ZoneId.of(snapshot["timezone"]?.jsonPrimitive?.content ?: "America/Guayaquil")
     val updated = updatedAt.atZone(zone).format(DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm", Locale.forLanguageTag("es-EC")))
-    return obj(
+    val fields = obj(
         // One header and two full-width-friendly fields avoid four competing columns.
         "headerFields" to if (artwork().total > 0) listOf(JsonObject(primaryWithChange + obj("label" to when(first?.get("kind")?.jsonPrimitive?.content){"STAMPS"->"SELLOS";"POINTS"->"PUNTOS";else->"SALDO"}))) else listOf(header),
         "primaryFields" to if (artwork().total > 0) emptyList<JsonObject>() else listOf(primaryWithChange),
@@ -112,6 +112,10 @@ target.remaining == 0L -> "CANJEA EN CAJA"
             obj("key" to "updated", "label" to "Última actualización", "value" to "$updated\nHora del negocio. El saldo y las condiciones se confirman en caja.")
         ))
     )
+    return if(design.composition in setOf("EDITORIAL","TICKET","RIBBON") && progress != null) JsonObject(fields + obj(
+        "secondaryFields" to fields.getValue("auxiliaryFields"),
+        "auxiliaryFields" to fields.getValue("secondaryFields")
+    )) else fields
 }
 
 /** iOS/watchOS 27 poster; storeCard remains the fallback for earlier systems. */

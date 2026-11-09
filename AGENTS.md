@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v028 requiere 398 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v029 requiere 409 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -218,3 +218,13 @@ Registrar una compra añade un comprobante al historial y a las métricas de com
 La revisión enumera las promociones elegidas o dice Solo registrar compra. Editar selección, productos, importe o sucursal invalida la revisión. Conservar elecciones explícitas al añadir/quitar productos y al cambiar a compra detallada; eliminar cualquier revisión anterior. Durante el envío no se edita; un fallo conserva payload y clave. Tras un recibo y nuevo cliente, volver a cero seleccionadas. Mostrar beneficios realmente confirmados, con nombre de promoción y singular/plural correcto.
 
 No cambia presentationVersion=27: el mismo registro alimenta Apple y Google. No modificar migraciones, saldos previos, identidades, diseño o túneles. Gate completo: 195 generales + 203 PostgreSQL (398), todas las Python (125), Docker y 50 controles del gateway antes del auto commit. La comprobación DOM de caja verifica interacción y peticiones con red simulada; no sustituye PostgreSQL ni una prueba visual en navegador.
+
+## Composiciones independientes v029
+
+Seis composiciones nuevas (EDITORIAL, STAMPBOOK, TICKET, MOSAIC, RIBBON, PATH), separadas de las 32 paletas y los tres acabados. WalletDesign.composition tiene SIGNATURE como valor compatible con JSON anterior. Cambiar paleta no cambia composición, acabado, logo ni promoción. Cada composición usa un dibujante propio adaptado a Apple clásico, póster y hero Google; no contar colores como diseños distintos.
+
+presentationVersion=29 conserva identidades y saldos en ambas Wallet. Actualizar expectativas actuales, mantener entradas históricas incluida 27. /wallet/art/v29 incluye composición validada y GET acotado, sin consultas privadas. v20/v22/v24/v27 mantienen bytes y restricciones. Sin textos ni QR incrustados; zonas de texto del póster conservan contraste. Saldo y meta exactos siguen nativos; puntos y dinero nunca se transforman en visitas. Sin objetivo, sin progreso activo.
+
+Los templates Google cambian jerarquía y número de filas por composición, con referencias al objeto y ningún dato personal en la clase. Review UNDER_REVIEW y ambos slots de saldo se conservan. Apple reordena los grupos permitidos y conserva todos los detalles, alertas transaccionales e identidad. La UI refleja estas reglas, con distribución orientativa sujeta al sistema.
+
+Gate: 205 pruebas generales + 204 PostgreSQL (409), todas las Python (126), Docker y 61 controles gateway antes de auto commit. Sin push ni renovación automática de túnel. DOM de composición y regresión de caja usan red simulada. Recibir el diseño en iPhone/Android sigue siendo una comprobación física separada.

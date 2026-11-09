@@ -44,7 +44,15 @@ fun Route.walletRoutes(service: LoyaltyService, platformToken: String) {
         val layout=call.request.queryParameters["layout"]
         need(layout==null || layout=="apple" || (version==27 && layout=="poster"),"INVALID_ARTWORK","Formato inválido.")
         need(version==27 || art.style!="AURORA","INVALID_ARTWORK","Acabado no disponible en esa versión.")
-        call.respondBytes(io { if(layout=="poster") art.posterPng() else art.png(if(layout=="apple") 3 else null,version) },ContentType.Image.PNG)
+        call.respondBytes(io { if(layout=="poster") art.posterPng(version=version) else art.png(if(layout=="apple") 3 else null,version) },ContentType.Image.PNG)
+    }
+    get("/wallet/art/v29/{composition}/{style}/{symbol}/{background}/{filled}/{total}.png") {
+        fun number(name: String) = call.parameters[name]?.toIntOrNull() ?: throw Problem(400,"INVALID_ARTWORK","Diseño inválido.")
+        val art = WalletArtwork(call.parameters["style"] ?: "", number("symbol"), call.parameters["background"] ?: "", number("filled"), number("total"), call.parameters["composition"] ?: "")
+        art.validate()
+        val layout = call.request.queryParameters["layout"]
+        need(layout == null || layout in setOf("apple","poster"),"INVALID_ARTWORK","Formato inválido.")
+        call.respondBytes(io { if(layout == "poster") art.posterPng() else art.png(if(layout == "apple") 3 else null) }, ContentType.Image.PNG)
     }
     get("/wallet/logo.png") { call.respondBytes(walletLogo(660), ContentType.Image.PNG) }
     get("/api/me/wallet-status") { io { service.member(call.bearer()) }; call.respond(service.wallets.availability()) }

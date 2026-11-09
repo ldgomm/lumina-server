@@ -16,7 +16,9 @@ async function run(){
   await page.route('**/*',async route=>{
    const req=route.request(),u=new URL(req.url());assert.equal(u.origin,'https://loyalty.test');
    if(u.pathname.startsWith('/wallet/art/')){
-    const file=path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')||'google')+'.png');
+    let file=path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')||'google')+'.png');
+    const sample=u.pathname.match(/^\/wallet\/art\/v29\/(\w+)\/GRADIENT\/5\/0b1f3a\/(\d+)\/(\d+)\.png$/);
+    if(!fs.existsSync(file) && sample)file=path.join(process.env.LOYALTY_COMPOSITION_EVIDENCE || artifacts,`${sample[1]}-${sample[2]}-${sample[3]}-${u.searchParams.get('layout')||'google'}.png`);
     assert.ok(fs.existsSync(file),'Missing native image '+file);
     return route.fulfill({body:fs.readFileSync(file),contentType:'image/png'});
    }
@@ -36,7 +38,7 @@ async function run(){
   await page.locator('[data-wallet-example=half]').click();
   for(const style of ['GRADIENT','AURORA','SOLID']){
    await page.locator('#artworkStyle').selectOption(style);await rendered('#appleStampArtwork');
-   assert.match(await page.locator('#appleStampArtwork').getAttribute('src'),/\/v27\/.*layout=poster/);
+   assert.match(await page.locator('#appleStampArtwork').getAttribute('src'),/\/v29\/SIGNATURE\/.*layout=poster/);
    assert.equal(await page.locator('#appleJourneyValue').textContent(),'50 de 100 puntos');
    assert.equal(await page.locator('#appleJourneyLabel').textContent(),'Faltan 50 puntos');
    assert.equal(await page.locator('#saveDesign').isEnabled(),true);

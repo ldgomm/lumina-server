@@ -207,7 +207,7 @@ class WalletPostgresTest {
         assertEquals(0,count("SELECT count(*) FROM balances WHERE tenant_id=? AND member_id=?",f.staff.tenant,f.member.id))
     }
     @Test fun `presentation upgrade refreshes installed card without changing its money or identity`() {
-        for (previousVersion in listOf(8, 17, 20, 22, 23, 24)) {
+        for (previousVersion in listOf(8, 17, 20, 22, 23, 24, 27)) {
             val f=fixture();earn(f)
             wallet.materialize(f.member,"apple")
             val initial=wallet.materialize(f.member,"google");register(initial)
@@ -216,7 +216,7 @@ class WalletPostgresTest {
             time.value=time.value.plusSeconds(1)
             val upgraded=wallet.materialize(f.member)
             assertTrue(upgraded.tag>initial.tag)
-            assertEquals(27,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
+            assertEquals(29,upgraded.snapshot.getValue("presentationVersion").jsonPrimitive.int)
             assertEquals(initial.serial,upgraded.serial);assertEquals(initial.token,upgraded.token)
             assertEquals(initial.appleType,upgraded.appleType)
             assertEquals(initial.googleId,upgraded.googleId);assertEquals(initial.googleClass,upgraded.googleClass)

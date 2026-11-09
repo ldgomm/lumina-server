@@ -46,6 +46,21 @@ class EngagementPostgresTest {
     private fun count(table:String,f:F)=db.tx{c->c.one("SELECT count(*) FROM $table WHERE tenant_id=?",f.owner.tenant){it.getLong(1)}!!}
     private fun wallet(f:F)=WalletService(service,"https://example.com",WalletCipher(Base64.getEncoder().encodeToString(ByteArray(32){5}))).materialize(f.member)
     private fun parallel(work:()->JsonObject):List<Any>{val executor=Executors.newFixedThreadPool(4);val barrier=CyclicBarrier(4);return try{(1..4).map{executor.submit<Any>{barrier.await();try{work()}catch(e:Problem){e}}}.map{it.get(40,TimeUnit.SECONDS)}}finally{executor.shutdownNow()}}
+    @Test fun `composition persists with version guard and updates the same pass without changing balances or another tenant`() {
+        val f=fixture();val other=fixture();service.purchase(f.owner,purchase(f,4),id())
+        val before=wallet(f);val balances=service.card(f.member).getValue("balances");val ledger=count("ledger",f);val receipts=count("purchases",f)
+        val design=WalletDesign(background="#0b1f3a",foreground="#ffffff",label="#ffffff",stampSymbol="☕",featuredProgramId=f.program,composition="EDITORIAL")
+        service.saveDesign(f.owner,WalletDesignChange(0,design))
+        val first=wallet(f)
+        assertEquals(design,first.design());assertEquals(before.serial,first.serial);assertEquals(before.token,first.token);assertEquals(before.snapshot["cardCode"],first.snapshot["cardCode"]);assertTrue(first.tag>before.tag)
+        assertEquals(googleWalletTemplate("EDITORIAL"),first.googleBrand("https://example.com")["classTemplateInfo"])
+        assertContains(first.applePosterFields().toString(),"Premio pizza")
+        assertFailsWith<Problem>{service.saveDesign(f.owner,WalletDesignChange(0,design.copy(composition="PATH")))}
+        assertEquals("EDITORIAL",wallet(f).design().composition)
+        service.saveDesign(f.owner,WalletDesignChange(1,design.copy(composition="STAMPBOOK")))
+        assertEquals("STAMPBOOK",wallet(f).design().composition);assertEquals("SIGNATURE",wallet(other).design().composition)
+        assertEquals(balances,service.card(f.member).getValue("balances"));assertEquals(ledger,count("ledger",f));assertEquals(receipts,count("purchases",f));assertEquals(0,count("redemptions",f))
+    }
     @Test fun `cashier and both Wallet expose identical conditions without changing money`() {
         val f=fixture("servicio",6,3725)
         service.purchase(f.owner,purchase(f,5,group="servicio"),id())

@@ -13,24 +13,27 @@ import kotlin.math.pow
 val walletStampSymbols = listOf("●", "★", "♥", "✂", "◆", "☕", "🍕", "🛍", "👟", "🔧",
     "🍔", "🥐", "🍦", "🛒", "🎂", "🐾", "🌸", "🏋", "📱", "🎧", "🚗", "🛞", "🧺", "📚", "🦷", "🌿", "🎁", "🏠", "👓", "🔑", "🔨", "⛽", "🍴")
 
-data class WalletArtwork(val style: String, val symbol: Int, val background: String, val filled: Int, val total: Int) {
+data class WalletArtwork(val style: String, val symbol: Int, val background: String, val filled: Int, val total: Int, val composition: String = "SIGNATURE") {
     fun validate() {
+        need(composition in walletCompositions,"INVALID_COMPOSITION","Composición inválida.")
         need(style in setOf("SOLID", "GRADIENT", "AURORA") && symbol in walletStampSymbols.indices &&
             background.matches(Regex("[a-fA-F0-9]{6}")) && (total in 0..20 || total == 100) && filled in 0..total,
             "INVALID_ARTWORK", "Diseño de sellos inválido.")
     }
-    fun path() = "/wallet/art/v27/$style/$symbol/${background.lowercase()}/$filled/$total.png"
+    fun path() = "/wallet/art/v29/$composition/$style/$symbol/${background.lowercase()}/$filled/$total.png"
 
-    fun png(appleScale: Int? = null, version: Int = 27): ByteArray {
-        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22,24,27))
+    fun png(appleScale: Int? = null, version: Int = 29): ByteArray {
+        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22,24,27,29))
         require(version >= 24 || symbol in 0..9)
-        require(version == 27 || style != "AURORA")
-        return when(version) { 20 -> legacyPng(appleScale); 22 -> modernPng(appleScale); 24 -> journeyPng(appleScale); else -> signaturePng(appleScale) }
+        require(version >= 27 || style != "AURORA")
+        require(version == 29 || composition == "SIGNATURE")
+        return when(version) { 20 -> legacyPng(appleScale); 22 -> modernPng(appleScale); 24 -> journeyPng(appleScale); 27 -> signaturePng(appleScale); else -> compositionPng(appleScale) }
     }
 
-    fun posterPng(scale: Int = 3): ByteArray {
+    fun posterPng(scale: Int = 3, version: Int = 29): ByteArray {
         validate(); require(scale in 1..3)
-        return signaturePng(scale, poster = true)
+        require(version == 29 || (version == 27 && composition == "SIGNATURE"))
+        return if(version == 27) signaturePng(scale, poster = true) else compositionPng(scale, poster = true)
     }
 
     private fun legacyPng(appleScale: Int? = null): ByteArray {
@@ -118,12 +121,12 @@ fun WalletPass.artwork(): WalletArtwork {
     val individual=first?.get("kind")==JsonPrimitive("STAMPS") && goal<=20
     val total=if(goal==0L) 0 else if(individual) goal.toInt() else 100
     val filled=when { goal==0L -> 0; individual -> minOf(available,goal).toInt(); else -> (BigInteger.valueOf(minOf(available,goal))*BigInteger.valueOf(100)/BigInteger.valueOf(goal)).toInt() }
-    return WalletArtwork(d.artworkStyle,walletStampSymbols.indexOf(d.stampSymbol).coerceAtLeast(0),d.background.drop(1),filled,total)
+    return WalletArtwork(d.artworkStyle,walletStampSymbols.indexOf(d.stampSymbol).coerceAtLeast(0),d.background.drop(1),filled,total,d.composition)
 }
 
 fun WalletPass.googleArtwork(origin: String): JsonObject {
     val art=artwork()
-    val description=journey()?.let { "${it.summary}. ${it.guidance} Los símbolos llenos indican avance y los contornos, lo pendiente." } ?: "Diseño del negocio, sin meta activa."
+    val description=journey()?.let { "${it.summary}. ${it.guidance} El avance gráfico es orientativo; estos valores indican el saldo y la meta exactos." } ?: "Diseño del negocio, sin meta activa."
     return obj("sourceUri" to obj("uri" to origin+art.path()),"contentDescription" to obj("defaultValue" to obj("language" to "es","value" to description)))
 }
 
