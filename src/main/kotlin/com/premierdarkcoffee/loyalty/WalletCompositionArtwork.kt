@@ -8,7 +8,8 @@ import javax.imageio.ImageIO
 import kotlin.math.*
 
 /** Composition is independent of industry, palette and finish. SIGNATURE preserves saved designs. */
-val walletCompositions = setOf("SIGNATURE", "EDITORIAL", "STAMPBOOK", "TICKET", "MOSAIC", "RIBBON", "PATH")
+val walletCompositionsV29 = setOf("SIGNATURE", "EDITORIAL", "STAMPBOOK", "TICKET", "MOSAIC", "RIBBON", "PATH")
+val walletCompositions = walletCompositionsV29 + setOf("PANORAMA", "PRECISION", "ATELIER")
 
 /** Actual provider assets. No text, QR, user data, fonts, network or database calls. */
 internal fun WalletArtwork.compositionPng(appleScale: Int?, poster: Boolean = false): ByteArray {
@@ -40,7 +41,7 @@ internal fun WalletArtwork.compositionPng(appleScale: Int?, poster: Boolean = fa
     return ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray()
 }
 
-private class CompositionCanvas(val g: Graphics2D, val art: WalletArtwork, val w: Double, val h: Double) {
+internal class CompositionCanvas(val g: Graphics2D, val art: WalletArtwork, val w: Double, val h: Double) {
     val base = Color.decode("#${art.background}")
     val light = luminance(base) > .179
     val ink = if (light) Color(13, 30, 51) else Color(249, 246, 237)
@@ -61,6 +62,9 @@ private class CompositionCanvas(val g: Graphics2D, val art: WalletArtwork, val w
             "MOSAIC" -> mosaic()
             "RIBBON" -> ribbon()
             "PATH" -> path()
+            "PANORAMA" -> panorama()
+            "PRECISION" -> precision()
+            "ATELIER" -> atelier()
         }
     }
     fun alpha(c: Color, a: Int) = Color(c.red, c.green, c.blue, a)

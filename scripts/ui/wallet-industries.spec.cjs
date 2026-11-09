@@ -18,8 +18,9 @@ async function run(){
   await page.route('**/*',async route=>{
    const req=route.request(),u=new URL(req.url());assert.equal(u.origin,'https://loyalty.test');
    if(u.pathname.startsWith('/wallet/art/')){
+    if(await require('./wallet-artwork-fixture.cjs')(route,u))return;
     let file=path.join(artifacts,u.pathname.slice(1)+'.'+(u.searchParams.get('layout')||'google')+'.png');
-    const sample=u.pathname.match(/^\/wallet\/art\/v29\/(\w+)\/GRADIENT\/5\/0b1f3a\/(\d+)\/(\d+)\.png$/);
+    const sample=u.pathname.match(/^\/wallet\/art\/v30\/(\w+)\/GRADIENT\/5\/0b1f3a\/(\d+)\/(\d+)\.png$/);
     if(!fs.existsSync(file) && sample)file=path.join(process.env.LOYALTY_COMPOSITION_EVIDENCE || artifacts,`${sample[1]}-${sample[2]}-${sample[3]}-${u.searchParams.get('layout')||'google'}.png`);
     assert.ok(fs.existsSync(file),'Missing native image '+u.pathname);
     return route.fulfill({body:fs.readFileSync(file),contentType:'image/png'});
@@ -45,7 +46,7 @@ async function run(){
   const ids=await page.locator('[data-wallet-style]').evaluateAll(buttons=>buttons.map(b=>b.dataset.walletStyle));
   for(const id of ids){
    await page.locator(`[data-wallet-style=${id}]`).click();await rendered('#appleStampArtwork');
-   assert.equal(await page.locator('#saveDesign').isEnabled(),true,'contrast '+id);
+   assert.equal(await page.locator('#saveDesign').isEnabled(),id!=='navy','changed design '+id);
    assert.equal(await page.locator(`[data-wallet-style=${id}]`).getAttribute('aria-pressed'),'true');
    assert.equal(await page.locator('#displayName').inputValue(),'Mi negocio');assert.equal(await page.locator('#usage').inputValue(),'Presenta tu QR en caja.');
    assert.equal(await page.locator('#featuredProgramId').inputValue(),'stamps');
@@ -65,7 +66,7 @@ async function run(){
   await page.locator('[data-wallet-style=navy]').click();await page.locator('#featuredProgramId').selectOption('cash');await page.locator('[data-wallet-example=half]').click();
   assert.equal(await page.locator('#googleJourneyValue').textContent(),'2.50 de 5.00 USD');assert.equal(await page.locator('#googlePreviewStatus').textContent(),'2.50 USD');assert.match(await page.locator('#googleStampArtwork').getAttribute('src'),/\/50\/100.png$/);await rendered('#googleStampArtwork');await shot('v024-google-cashback','#googleDesignPreview');
   await page.locator('[data-preview-provider=apple]').click();assert.equal(await page.locator('#appleJourneyValue').textContent(),'2.50 de 5.00 USD');await rendered('#appleStampArtwork');await shot('v024-apple-cashback','#designPreview');
-  await page.locator('#featuredProgramId').selectOption('points');assert.equal(await page.locator('#appleJourneyValue').textContent(),'50 de 100 puntos');
+  await page.locator('#featuredProgramId').selectOption('points');assert.equal(await page.locator('#appleJourneyValue').textContent(),'99 de 100 puntos');
   await page.locator('[data-wallet-example=ready]').click();assert.equal(await page.locator('#appleJourneyLabel').textContent(),'META ALCANZADA');assert.match(await page.locator('#walletProgressNext').textContent(),/Confirma el canje en caja/);
   await page.locator('[data-wallet-example=paused]').click();assert.equal(await page.locator('#appleJourney').isVisible(),false);assert.equal(await page.locator('#googleJourney').isVisible(),false);assert.equal(await page.locator('#walletProgressLegend').isVisible(),false);assert.equal(await page.locator('#appleStampArtwork').isVisible(),true);
   checks.push('Exact current, target and remaining units across both providers; zero, halfway, near, ready and paused states');

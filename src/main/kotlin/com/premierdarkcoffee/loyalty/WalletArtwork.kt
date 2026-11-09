@@ -20,19 +20,21 @@ data class WalletArtwork(val style: String, val symbol: Int, val background: Str
             background.matches(Regex("[a-fA-F0-9]{6}")) && (total in 0..20 || total == 100) && filled in 0..total,
             "INVALID_ARTWORK", "Diseño de sellos inválido.")
     }
-    fun path() = "/wallet/art/v29/$composition/$style/$symbol/${background.lowercase()}/$filled/$total.png"
+    fun path() = "/wallet/art/v30/$composition/$style/$symbol/${background.lowercase()}/$filled/$total.png"
 
-    fun png(appleScale: Int? = null, version: Int = 29): ByteArray {
-        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22,24,27,29))
+    fun png(appleScale: Int? = null, version: Int = 30): ByteArray {
+        validate(); require(appleScale == null || appleScale in 1..3); require(version in setOf(20,22,24,27,29,30))
         require(version >= 24 || symbol in 0..9)
         require(version >= 27 || style != "AURORA")
-        require(version == 29 || composition == "SIGNATURE")
+        require(version >= 29 || composition == "SIGNATURE")
+        require(version != 29 || composition in walletCompositionsV29)
         return when(version) { 20 -> legacyPng(appleScale); 22 -> modernPng(appleScale); 24 -> journeyPng(appleScale); 27 -> signaturePng(appleScale); else -> compositionPng(appleScale) }
     }
 
-    fun posterPng(scale: Int = 3, version: Int = 29): ByteArray {
+    fun posterPng(scale: Int = 3, version: Int = 30): ByteArray {
         validate(); require(scale in 1..3)
-        require(version == 29 || (version == 27 && composition == "SIGNATURE"))
+        require(version in setOf(29,30) || (version == 27 && composition == "SIGNATURE"))
+        require(version != 29 || composition in walletCompositionsV29)
         return if(version == 27) signaturePng(scale, poster = true) else compositionPng(scale, poster = true)
     }
 

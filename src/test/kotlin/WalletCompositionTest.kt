@@ -54,7 +54,7 @@ class WalletCompositionTest {
         for(c in walletCompositions) {
             for(total in listOf(5,20,100)) {val images=listOf(0,total/2,total).map { WalletArtwork("GRADIENT",5,"0b1f3a",it,total,c).png().contentHashCode() };assertEquals(3,images.distinct().size,c)}
             val p=pass(c,"CASHBACK",499,500);assertEquals(99,p.artwork().filled);assertEquals(100,p.artwork().total)
-            assertContains(p.artwork().path(),"/v29/$c/");assertFalse(p.artwork().path().contains("same-"))
+            assertContains(p.artwork().path(),"/v30/$c/");assertFalse(p.artwork().path().contains("same-"))
             assertContains(p.applePosterFields().toString(),"4.99 de 5.00 USD");assertContains(p.googleExperienceFields().toString(),"0.01 USD")
         }
     }
@@ -87,7 +87,7 @@ class WalletCompositionTest {
             val keys=fields.values.flatMap { it.jsonArray }.map{it.jsonObject.getValue("key").jsonPrimitive.content}
             assertEquals(keys.size,keys.distinct().size)
             val first=fields.getValue("primaryFields").jsonArray.first().jsonObject.getValue("key").jsonPrimitive.content
-            if(c in setOf("EDITORIAL","TICKET","RIBBON"))assertEquals("featured_reward",first) else assertEquals("journey",first)
+            if(c in setOf("EDITORIAL","TICKET","RIBBON","PANORAMA","ATELIER"))assertEquals("featured_reward",first) else assertEquals("journey",first)
             assertContains(fields.toString(),"41 de 100 puntos");assertContains(fields.toString(),"Faltan 59 puntos")
             assertEquals(native.getValue("storeCard").jsonObject["backFields"],fields["backFields"])
             assertEquals("same-qr",native.getValue("barcodes").jsonArray.single().jsonObject.getValue("message").jsonPrimitive.content)
@@ -102,8 +102,8 @@ class WalletCompositionTest {
     @Test fun `new public routes are bounded and independent of private database`()=testApplication {
         environment {config=MapApplicationConfig()}
         application {loyaltyRoutes(LoyaltyService(Database(PGSimpleDataSource()),"test-pepper"),"admin","https://example.com")}
-        for(c in walletCompositions)for(suffix in listOf("","?layout=apple","?layout=poster"))assertEquals(HttpStatusCode.OK,client.get("/wallet/art/v29/$c/GRADIENT/5/0b1f3a/4/5.png$suffix").status)
-        val path="/wallet/art/v29/TICKET/GRADIENT/5/0b1f3a/4/5.png"
+        for(c in walletCompositions)for(suffix in listOf("","?layout=apple","?layout=poster"))assertEquals(HttpStatusCode.OK,client.get("/wallet/art/v30/$c/GRADIENT/5/0b1f3a/4/5.png$suffix").status)
+        val path="/wallet/art/v30/TICKET/GRADIENT/5/0b1f3a/4/5.png"
         for(bad in listOf(path.replace("TICKET","CUSTOM"),path.replace("/4/5","/6/5"),path+"?layout=html",path.replace("/5/0b","/33/0b")))assertEquals(HttpStatusCode.BadRequest,client.get(bad).status)
         assertEquals(HttpStatusCode.NotFound,client.post(path).status)
     }

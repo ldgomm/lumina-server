@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v029 requiere 409 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v030 requiere 411 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -228,3 +228,15 @@ presentationVersion=29 conserva identidades y saldos en ambas Wallet. Actualizar
 Los templates Google cambian jerarquía y número de filas por composición, con referencias al objeto y ningún dato personal en la clase. Review UNDER_REVIEW y ambos slots de saldo se conservan. Apple reordena los grupos permitidos y conserva todos los detalles, alertas transaccionales e identidad. La UI refleja estas reglas, con distribución orientativa sujeta al sistema.
 
 Gate: 205 pruebas generales + 204 PostgreSQL (409), todas las Python (126), Docker y 61 controles gateway antes de auto commit. Sin push ni renovación automática de túnel. DOM de composición y regresión de caja usan red simulada. Recibir el diseño en iPhone/Android sigue siendo una comprobación física separada.
+
+## Estudio de tarjetas v030
+
+Tres composiciones nuevas —PANORAMA, PRECISION y ATELIER— llevan la colección a nueve más el medallón original. No confundir las 32 paletas con composiciones. Todas tienen ilustración propia en Apple clásico, póster y Google y usan campos nativos para texto y valores exactos; no incrustar texto ni QR en las imágenes.
+
+presentationVersion=30 conserva ambas identidades, saldos y movimientos. Añadir 29 a las entradas históricas de actualización. /wallet/art/v30 admite las diez composiciones con parámetros acotados y GET; v29 mantiene su allowlist de siete y sus bytes anteriores. Las rutas anteriores no aceptan las composiciones nuevas. V001–V009 inmutables. No renovar túneles automáticamente.
+
+El estudio muestra novedades y la selección actual, permite desplegar las diez composiciones y comparar con los colores/símbolo propios sin guardarlos. El simulador informa acumulado, meta y pendiente en las unidades de la promoción; usa enteros seguros y BigInt para el porcentaje. Cambiar promoción reinicia el ejemplo, pausar o no tener meta desactiva el control. Nunca modifica saldos ni crea operaciones.
+
+El guardado usa una lista explícita de campos del diseño, preserva los campos existentes no editados y excluye estados del simulador, búsquedas y proveedor. Indicar cambios pendientes, deshabilitar guardado sin cambios y restaurar solo el borrador local. Conservar el borrador tras conflicto o fallo, bloquear envíos concurrentes y no sobrescribir cambios ajenos. Galería, navegación por teclado y controles de vista previa deben funcionar en 320 px, 390 px y escritorio.
+
+Gate obligatorio: 207 pruebas generales + 204 PostgreSQL (411), todas las Python (127), Docker y 76 controles de gateway antes de auto commit local, sin push. Las pruebas de interfaz usan datos ficticios y red interceptada; nunca credenciales reales. PostgreSQL, Docker, HTTPS y recepción física en ambos teléfonos son comprobaciones independientes. Una actualización pendiente de conexión requiere recuperar la misma tarjeta, no crear otra ni cambiar su identidad.

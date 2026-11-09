@@ -537,6 +537,9 @@
         const stampOptions = [["●", "● Círculo"], ["★", "★ Estrella"], ["♥", "♥ Corazón"], ["✂", "✂ Barbería"], ["◆", "◆ Diamante"], ["☕", "☕ Café"], ["🍕", "🍕 Pizza"], ["🛍", "🛍 Compras"], ["👟", "👟 Calzado"], ["🔧", "🔧 Taller"], ["🍔", "🍔 Hamburguesa"], ["🥐", "🥐 Panadería"], ["🍦", "🍦 Helado"], ["🛒", "🛒 Supermercado"], ["🎂", "🎂 Pastel"], ["🐾", "🐾 Mascotas"], ["🌸", "🌸 Flores"], ["🏋", "🏋 Gimnasio"], ["📱", "📱 Telefonía"], ["🎧", "🎧 Audio"], ["🚗", "🚗 Auto"], ["🛞", "🛞 Llantas"], ["🧺", "🧺 Lavandería"], ["📚", "📚 Libros"], ["🦷", "🦷 Dental"], ["🌿", "🌿 Bienestar"], ["🎁", "🎁 Regalo"], ["🏠", "🏠 Hogar"], ["👓", "👓 Óptica"], ["🔑", "🔑 Hotel"], ["🔨", "🔨 Ferretería"], ["⛽", "⛽ Combustible"], ["🍴", "🍴 Restaurante"]];
 ;
         const compositions = [
+            ['PANORAMA','Panorama','Paisaje en capas, horizonte y una franja limpia para el avance.'],
+            ['PRECISION','Precisión','Retícula técnica, indicador abierto y módulos de medida.'],
+            ['ATELIER','Atelier','Collage de papel, marca inclinada y colección independiente.'],
             ['EDITORIAL','Editorial','Arte grande y asimétrico; el premio encabeza la tarjeta.'],
             ['STAMPBOOK','Libreta','Hojas, encuadernación y una colección de sellos.'],
             ['TICKET','Cupón','Talón lateral, perforaciones y avance en un bloque propio.'],
@@ -545,13 +548,15 @@
             ['PATH','Recorrido','Una ruta hacia la meta y avance como protagonista.'],
             ['SIGNATURE','Medallón original','Conserva la composición de tus tarjetas anteriores.']
         ];
-        const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress', previewProvider = 'apple', appleLayout = 'poster';
-                root.innerHTML = `<section class="panel wallet-design-panel"><h2>Personaliza tu tarjeta</h2><p>Tu marca, una meta clara y el próximo premio. Personaliza ambas Wallet desde aquí.</p><div class="wallet-design-layout"><form id="walletDesign"><fieldset id="designFields">
+        const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress', previewProvider = 'apple', appleLayout = 'poster', samplePercent = 50, galleryBrand = false, galleryExpanded = false, progressTimer = null;
+                root.innerHTML = `<section class="panel wallet-design-panel"><div class="wallet-studio-heading"><div><span class="eyebrow">ESTUDIO DE TARJETAS</span><h2>Una tarjeta con identidad propia</h2><p>Elige una composición, hazla tuya y comprueba cómo cambia con cada compra.</p></div><div class="wallet-studio-navigation"><button type="button" class="quiet" id="jumpToDesign">Diseñar</button><button type="button" class="quiet" id="jumpToPreview">Ver tarjeta</button></div></div><div class="wallet-design-layout"><form id="walletDesign"><fieldset id="designFields">
             ${field('displayName', 'Nombre en la tarjeta', 'text', d.displayName, 'maxlength="80"')}
             <h3 class="design-colors-heading">1. Elige la composición</h3>
-            <p class="design-help">Seis diseños nuevos con estructuras propias. Las miniaturas usan el mismo azul y símbolo para que compares la composición. El medallón anterior sigue disponible.</p>
+            <p class="design-help">Nueve composiciones y el medallón original. Empieza por Panorama, Precisión y Atelier o explora toda la colección.</p>
             <input type="hidden" id="composition" name="composition" value="${esc(d.composition || 'SIGNATURE')}">
-            <div class="wallet-compositions" role="group" aria-label="Composición de la tarjeta">${compositions.map(([id,name,description],i) => `<button type="button" data-composition="${id}" aria-pressed="false"><img loading="lazy" width="516" height="406" src="/wallet/art/v29/${id}/GRADIENT/5/0b1f3a/50/100.png" alt=""><span class="composition-caption"><small>${i < 6 ? 'DISEÑO '+String(i+1).padStart(2,'0') : 'ANTERIOR'}</small><strong>${name}</strong><span>${description}</span></span><span class="composition-check" aria-hidden="true">✓</span></button>`).join('')}</div>
+            <div class="studio-gallery-toolbar"><button type="button" id="galleryBrand" class="quiet" aria-pressed="false">Comparar con mis colores y símbolo</button><p id="galleryHint" class="design-help">Mismo azul, mismo símbolo y mismo avance para comparar estructuras.</p></div>
+            <div class="wallet-compositions" role="group" aria-label="Composición de la tarjeta">${compositions.map(([id,name,description],i) => `<button type="button" data-composition="${id}" aria-pressed="false"><img loading="lazy" width="516" height="406" src="/wallet/art/v30/${id}/GRADIENT/5/0b1f3a/50/100.png" alt=""><span class="composition-caption"><small>${i < 3 ? 'NUEVO' : id === 'SIGNATURE' ? 'ORIGINAL' : 'DISEÑO '+String(i+1).padStart(2,'0')}</small><strong>${name}</strong><span>${description}</span></span><span class="composition-check" aria-hidden="true">✓</span></button>`).join('')}</div>
+            <button type="button" id="compositionMore" class="quiet" aria-expanded="false">Explorar todas las composiciones</button>
             <p id="compositionStatus" class="design-help" aria-live="polite"></p>
             <h3 class="design-colors-heading">2. Colores y símbolo de tu negocio</h3><p class="design-help">Estas 32 paletas cambian colores y símbolo. La composición que elegiste se conserva. Todo se guarda al pulsar Guardar diseño.</p><div class="wallet-style-search"><label for="walletStyleSearch">Busca tu tipo de negocio<input id="walletStyleSearch" type="search" placeholder="Ej. zapatos, mascotas, pasteles…" maxlength="60" autocomplete="off"></label><label for="walletStyleGroup">Categoría<select id="walletStyleGroup"><option value="">Todas las categorías</option>${[...new Set(presets.map(p => p.group))].map(group => `<option value="${group}">${group}</option>`).join('')}</select></label></div><p id="walletStyleResults" class="design-help" aria-live="polite"></p><div class="wallet-style-presets" role="group" aria-label="Paletas por tipo de negocio">${presets.map(p => `<button type="button" data-wallet-style="${p.id}" aria-pressed="false"><span class="wallet-style-swatch" style="--swatch:${p.background};--swatch-ink:${p.foreground}" aria-hidden="true"><span>${p.symbol}</span></span><strong>${p.name}</strong><small>${p.group}</small></button>`).join('')}</div><button type="button" class="quiet" id="walletStylesMore" aria-expanded="false">Ver todas las paletas</button><p id="presetStatus" class="design-help" aria-live="polite"></p><h3 class="design-colors-heading">Colores</h3>
             ${field('background', 'Color de fondo', 'color', d.background, 'aria-describedby="backgroundHelp"')}
@@ -569,9 +574,10 @@
             ${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
             ${field('usage', 'Cómo usar la tarjeta', 'text', d.usage, 'required maxlength="350"')}
             <p class="design-help">Configura títulos, mensajes y felicitaciones automáticas desde Eventos y cumpleaños.</p>
-            </fieldset><p id="designSaveHint" class="design-help" aria-live="polite"></p><p id="designSaveError" class="design-error" role="alert" hidden></p><button id="saveDesign" type="submit" aria-describedby="designSaveHint">Guardar diseño</button></form>
-            <aside class="design-preview-wrap"><h3>Vista previa de tus Wallet</h3><p class="design-help">Promociones reales, saldos ficticios. Cada Wallet decide la distribución final.</p><div class="wallet-preview-platforms" role="group" aria-label="Wallet de la vista previa"><button type="button" data-preview-provider="apple">Apple Wallet</button><button type="button" data-preview-provider="google">Google Wallet</button></div><p id="previewPlatformHint" class="design-help"></p><div class="wallet-apple-layouts" role="group" aria-label="Formato de Apple"><button type="button" data-apple-layout="poster">Póster · iOS 27+</button><button type="button" data-apple-layout="classic">Clásica · versiones anteriores</button></div>
+            </fieldset><p id="designSaveError" class="design-error" role="alert" hidden></p><div class="studio-savebar"><div><strong id="designChangeStatus" role="status">Diseño guardado</strong><p id="designSaveHint" class="design-help"></p></div><div class="studio-save-actions"><button id="restoreDesign" class="quiet" type="button">Restaurar guardado</button><button id="saveDesign" type="submit" aria-describedby="designSaveHint">Guardar diseño</button></div></div></form>
+            <aside class="design-preview-wrap" id="studioPreview" tabindex="-1"><h3>Así vive tu tarjeta</h3><p class="studio-current-design" id="studioCurrentDesign"></p><p class="design-help">Promociones reales, saldos ficticios. Cada Wallet decide la distribución final.</p><div class="wallet-preview-platforms" role="group" aria-label="Wallet de la vista previa"><button type="button" data-preview-provider="apple">Apple Wallet</button><button type="button" data-preview-provider="google">Google Wallet</button></div><p id="previewPlatformHint" class="design-help"></p><div class="wallet-apple-layouts" role="group" aria-label="Formato de Apple"><button type="button" data-apple-layout="poster">Póster · iOS 27+</button><button type="button" data-apple-layout="classic">Clásica · versiones anteriores</button></div>
             <div class="wallet-preview-modes" role="group" aria-label="Estado de ejemplo de la tarjeta"><button type="button" data-wallet-example="new">Nueva</button><button type="button" data-wallet-example="half">A mitad</button><button type="button" data-wallet-example="progress" class="active">Cerca del premio</button><button type="button" data-wallet-example="ready">Con premio</button><button type="button" data-wallet-example="paused">Pausada</button></div>
+            <div class="studio-simulator"><label for="walletSampleProgress">Prueba el avance de un cliente</label><input id="walletSampleProgress" type="range" min="0" max="100" step="1" value="50" aria-describedby="sampleProgressHint"><div class="studio-progress-metrics"><div><span>ACUMULADO</span><strong id="sampleEarned"></strong></div><div><span>META</span><strong id="sampleGoal"></strong></div><div><span>FALTAN</span><strong id="sampleRemaining"></strong></div></div><p id="sampleProgressHint" class="design-help">Simulación. No cambia saldos ni promociones.</p></div>
             <div id="designPreview" class="design-preview signature-poster"><div class="signature-brand-row"><div class="design-preview-brand"><img id="previewLogo" alt="" hidden><strong id="previewName"></strong></div><div class="apple-preview-fields"><div class="wallet-preview-status"><span id="previewStatusLabel" class="design-preview-label"></span><strong id="previewStatus"></strong></div><div class="wallet-preview-balance"><span id="previewProgram" class="design-preview-label"></span><span id="previewWelcome" class="design-preview-hero"></span></div></div></div><img id="appleStampArtwork" class="stamp-artwork apple-stamp-artwork" alt=""><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div><div class="signature-copy"><div class="wallet-native-journey" id="appleJourney" hidden><span id="appleJourneyLabel"></span><strong id="appleJourneyValue"></strong></div><div id="previewPrizeWrap"><span id="previewPrizeLabel" class="design-preview-label"></span><strong id="previewPrize"></strong></div></div><div class="signature-member"><span class="design-preview-label">TITULAR</span><span>Cliente de ejemplo</span></div></div>
             <div id="googleDesignPreview" class="google-design-preview" hidden><div class="google-preview-brand"><img id="googlePreviewLogo" alt="" hidden><strong id="googlePreviewName"></strong></div><p class="google-preview-member">Cliente de ejemplo</p><div class="google-preview-values"><div><span id="googlePreviewMainLabel"></span><strong id="googlePreviewMain"></strong></div><div><span id="googlePreviewStatusLabel"></span><strong id="googlePreviewStatus"></strong></div></div><div class="google-preview-headline"><span id="googlePreviewRewardLabel"></span><strong id="googlePreviewReward"></strong></div><div class="wallet-native-journey" id="googleJourney" hidden><span id="googleJourneyLabel"></span><strong id="googleJourneyValue"></strong></div><img id="googleStampArtwork" class="stamp-artwork google-stamp-artwork" alt=""><div class="wallet-preview-code" aria-hidden="true"><span>QR personal</span></div></div><div class="wallet-preview-detail" aria-live="polite"><strong id="previewRewardName"></strong><p id="previewRewardConditions" hidden></p><p id="previewRewardDetail"></p><p id="previewStamps"></p><div id="walletProgressLegend" class="wallet-progress-legend" hidden><span><i class="earned" aria-hidden="true"></i>Acumulado</span><span><i aria-hidden="true"></i>Pendiente</span><span id="walletProgressNext"></span></div></div><details class="wallet-preview-more"><summary>Qué verá en los detalles</summary><ol><li>Premio destacado, condiciones y saldo disponible.</li><li>Saldos de cada promoción, sin mezclarlos.</li><li>Últimos consumos y canjes con fecha y sucursal.</li><li>Otros premios, novedades e instrucciones.</li></ol><p>Las promociones pausadas o eliminadas dejan de ofrecerse. Los movimientos ya realizados permanecen en el historial.</p></details><p class="design-help">Esta vista no registra compras ni entrega premios. Al guardar, se enviará el diseño a las tarjetas existentes; la recepción depende de la conexión y de Wallet.</p></aside></div></section>`;
 ;
@@ -605,6 +611,14 @@
             headline: root.querySelector('#googlePreviewReward').parentElement,
             journey: root.querySelector('#googleJourney'), hero: root.querySelector('#googleStampArtwork')
         };
+        const persistedFields = ['displayName','composition','background','foreground','label','featuredProgramId','stampSymbol','artworkStyle','welcome','usage'];
+        const designValues = () => {
+            const values = Object.fromEntries(persistedFields.map(name => [name, f.elements[name].value]));
+            return {...d, ...values, featuredProgramId: values.featuredProgramId || null, logoPng: logo};
+        };
+        const savedDesign = designValues(), savedFingerprint = JSON.stringify(savedDesign);
+        const hasChanges = () => JSON.stringify(designValues()) !== savedFingerprint;
+        const sample = root.querySelector('#walletSampleProgress');
         const specs = [{input: foreground, name: 'Texto', field: 'Color del texto', min: 4.5}, {input: labels, name: 'Etiquetas', field: 'Color de las etiquetas', min: 3}];
         const invalidColors = () => specs.filter(s => walletColorContrast(background.value, s.input.value) < s.min);
         const recommended = () => walletColorContrast(background.value, '#000000') >= walletColorContrast(background.value, '#ffffff') ? '#000000' : '#ffffff';
@@ -626,9 +640,12 @@
             status.textContent = failed.length ? `Falta corregir: ${failed.map(s => s.field.toLowerCase()).join(' y ')}. Puedes conservar el fondo elegido.` : 'Esta combinación se lee bien. Puedes guardar el diseño.';
             status.parentElement.classList.toggle('design-feedback-error', !!failed.length);
             fix.disabled = saving || loadingLogo || !failed.length;
-            save.disabled = saving || loadingLogo || !!failed.length;
+            save.disabled = saving || loadingLogo || !!failed.length || !hasChanges();
             save.textContent = saving ? 'Guardando…' : 'Guardar diseño';
-            root.querySelector('#designSaveHint').textContent = saving ? 'Guardando el diseño…' : loadingLogo ? 'Espera a que termine de preparar el logo.' : failed.length ? 'Guardar está desactivado. Pulsa «Corregir colores» o cambia los campos indicados.' : 'Listo para guardar. La tarjeta conservará su QR y sus saldos.';
+            root.querySelector('#designSaveHint').textContent = saving ? 'Guardando el diseño…' : loadingLogo ? 'Espera a que termine de preparar el logo.' : failed.length ? 'Guardar está desactivado. Pulsa «Corregir colores» o cambia los campos indicados.' : hasChanges() ? 'Al guardar se enviará a Apple y Google. Conserva QR y saldos.' : 'Prueba composiciones o colores. Las simulaciones no se guardan.';
+            root.querySelector('#designChangeStatus').textContent = saving ? 'Guardando…' : hasChanges() ? 'Cambios sin guardar' : 'Diseño guardado';
+            root.querySelector('#designChangeStatus').classList.toggle('is-dirty',hasChanges());
+            root.querySelector('#restoreDesign').disabled = saving || loadingLogo || !hasChanges();
             preview.style.backgroundColor = background.value; preview.style.color = foreground.value;
             preview.style.setProperty('--preview-label', labels.value);
             root.querySelector('#previewName').textContent = f.elements.displayName.value.trim() || state.data.business.name;
@@ -636,10 +653,20 @@
             const program = activePrograms.find(p => p.id === f.elements.featuredProgramId.value) || activePrograms[0];
             const reward = program && state.data.rewards.filter(r => r.active && r.programId === program.id && r.cost > 0).sort((a, b) => a.cost - b.cost || a.id.localeCompare(b.id))[0];
             const kind = program?.config.kind;
-            const amount = !program || example === 'new' ? 0 : reward ? (example === 'ready' ? reward.cost : example === 'half' ? Math.floor(reward.cost / 2) : Math.max(0, reward.cost - 1)) : kind === 'CASHBACK' ? 500 : kind === 'STAMPS' ? 3 : 100;;
+            const measurable = reward && Number.isSafeInteger(reward.cost) && reward.cost > 0;
+            const customAmount = measurable ? Number(BigInt(reward.cost) * BigInt(samplePercent) / 100n) : 0;
+            const amount = !program || example === 'new' ? 0 : reward ? (example === 'custom' && measurable ? customAmount : example === 'ready' ? reward.cost : example === 'half' ? Math.floor(reward.cost / 2) : Math.max(0, reward.cost - 1)) : kind === 'CASHBACK' ? 500 : kind === 'STAMPS' ? 3 : 100;
             const unit = n => kind === 'CASHBACK' ? money(n) : `${n} ${kind === 'STAMPS' ? (n === 1 ? 'sello' : 'sellos') : (n === 1 ? 'punto' : 'puntos')}`;
             const remaining = reward ? Math.max(0, reward.cost - amount) : null;
             const paused = example === 'paused';
+            sample.disabled = saving || loadingLogo || !measurable || paused;
+            if(example !== 'custom') sample.value = measurable ? String(Math.floor(amount/reward.cost*100)) : '0';
+            root.querySelector('#sampleEarned').textContent = paused ? '—' : program ? unit(amount) : '—';
+            root.querySelector('#sampleGoal').textContent = !paused && reward ? unit(reward.cost) : '—';
+            root.querySelector('#sampleRemaining').textContent = !paused && reward ? unit(remaining) : '—';
+            const simulationHint = paused ? 'Operaciones pausadas: no se ofrece un premio ni se muestra avance activo.' : !reward ? 'Activa una promoción con premio para probar su avance. Este editor no crea promociones.' : remaining === 0 ? 'Meta alcanzada en este ejemplo. El canje se confirma en caja.' : `Ejemplo: ${unit(amount)} de ${unit(reward.cost)}. Te falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${unit(remaining)}.`;
+            root.querySelector('#sampleProgressHint').textContent = simulationHint + ' No cambia saldos ni promociones.';
+            sample.setAttribute('aria-valuetext',simulationHint);
             root.querySelector('#previewWelcome').textContent = !program ? f.elements.welcome.value || 'Bienvenido' : reward && kind === 'STAMPS' && remaining > 0 ? `${amount} / ${reward.cost}` : unit(amount);
             root.querySelector('#previewProgram').textContent = reward && !paused ? (kind === 'STAMPS' ? 'SELLOS' : kind === 'POINTS' ? 'PUNTOS' : 'SALDO') : program?.config.name || 'Tu tarjeta';
             root.querySelector('#previewStatusLabel').textContent = paused || !reward ? 'MEMBRESÍA' : remaining === 0 ? 'PREMIO' : remaining === 1 && kind !== 'CASHBACK' ? 'TE FALTA' : 'TE FALTAN';
@@ -654,9 +681,9 @@
             const artworkGoal = !paused && reward ? reward.cost : 0;
             const individual = kind === 'STAMPS' && artworkGoal <= 20;
             const artworkTotal = !artworkGoal ? 0 : individual ? artworkGoal : 100;
-            const artworkFilled = !artworkGoal ? 0 : individual ? Math.min(amount, artworkGoal) : Math.floor(Math.min(amount, artworkGoal) * 100 / artworkGoal);
+            const artworkFilled = !artworkGoal ? 0 : individual ? Math.min(amount, artworkGoal) : Number.isSafeInteger(artworkGoal) && Number.isSafeInteger(amount) ? Number(BigInt(Math.min(amount,artworkGoal))*100n/BigInt(artworkGoal)) : Math.floor(Math.min(amount, artworkGoal) * 100 / artworkGoal);
             const symbol = stampOptions.findIndex(option => option[0] === f.elements.stampSymbol.value);;
-            const artworkPath = `/wallet/art/v29/${f.elements.composition.value}/${f.elements.artworkStyle.value}/${Math.max(0, symbol)}/${background.value.slice(1)}/${artworkFilled}/${artworkTotal}.png`;;
+            const artworkPath = `/wallet/art/v30/${f.elements.composition.value}/${f.elements.artworkStyle.value}/${Math.max(0, symbol)}/${background.value.slice(1)}/${artworkFilled}/${artworkTotal}.png`;;
             for (const [id, suffix] of [['appleStampArtwork', appleLayout === 'poster' ? '?layout=poster' : '?layout=apple'], ['googleStampArtwork', '']]) {
                 const art = root.querySelector('#' + id); art.hidden = false;
                 { art.src = artworkPath + suffix; art.alt = artworkGoal ? `Ejemplo: ${unit(amount)} de ${unit(artworkGoal)}. Caja confirma el canje.` : 'Diseño sin meta activa.'; }
@@ -667,8 +694,21 @@
             preview.dataset.composition = composition; googlePreview.dataset.composition = composition;
             const selection = compositions.find(c => c[0] === composition);
             root.querySelector('#compositionStatus').textContent = selection ? `${selection[1]}: ${selection[2]} Cambiar la composición conserva tus colores, logo y promoción.` : '';
-            root.querySelectorAll('button[data-composition]').forEach(button => { button.setAttribute('aria-pressed',String(button.dataset.composition === composition)); button.disabled = saving || loadingLogo; });
-            const rewardFirst = ['EDITORIAL','TICKET','RIBBON'].includes(composition);
+            root.querySelector('#studioCurrentDesign').textContent = selection ? selection[1] + ' · ' + (hasChanges() ? 'Borrador sin guardar' : 'Diseño guardado') : '';
+            root.querySelectorAll('button[data-composition]').forEach((button,index) => {
+                button.setAttribute('aria-pressed',String(button.dataset.composition === composition)); button.disabled = saving || loadingLogo;
+                button.hidden = !galleryExpanded && index >= 3 && button.dataset.composition !== composition;
+                const image = button.querySelector('img');
+                const url = galleryBrand ? artworkPath.replace('/'+composition+'/', '/'+button.dataset.composition+'/') : `/wallet/art/v30/${button.dataset.composition}/GRADIENT/5/0b1f3a/50/100.png`;
+                if(image.getAttribute('src') !== url) image.setAttribute('src',url);
+            });
+            root.querySelector('#compositionMore').textContent = galleryExpanded ? 'Ver solo novedades y mi selección' : `Explorar las ${compositions.length} composiciones`;
+            root.querySelector('#compositionMore').setAttribute('aria-expanded',String(galleryExpanded));
+            root.querySelector('#compositionMore').disabled = saving || loadingLogo;
+            root.querySelector('#galleryBrand').setAttribute('aria-pressed',String(galleryBrand));
+            root.querySelector('#galleryBrand').disabled = saving || loadingLogo;
+            root.querySelector('#galleryHint').textContent = galleryBrand ? 'Todas las miniaturas usan tus colores, símbolo, acabado y el mismo avance simulado.' : 'Mismo azul, mismo símbolo y mismo avance para comparar estructuras.';
+            const rewardFirst = ['EDITORIAL','TICKET','RIBBON','PANORAMA','ATELIER'].includes(composition);
             const appleCopy = preview.querySelector('.signature-copy');
             if(rewardFirst) appleCopy.append(root.querySelector('#previewPrizeWrap'), root.querySelector('#appleJourney'));
             else appleCopy.append(root.querySelector('#appleJourney'), root.querySelector('#previewPrizeWrap'));
@@ -735,25 +775,45 @@
             const values = googleParts.values;
             const main = googleParts.main, statusCell = googleParts.status;
             const headlineNode = googleParts.headline, journeyNode = googleParts.journey, heroNode = googleParts.hero;
-            values.append(main,statusCell); values.hidden = composition !== 'SIGNATURE' && composition !== 'MOSAIC';
+            values.append(main,statusCell); values.hidden = !['SIGNATURE','MOSAIC','PRECISION'].includes(composition);
             for (const node of [values, headlineNode, journeyNode]) googlePreview.append(node);
             rowOne.replaceChildren(); rowTwo.replaceChildren();
             googlePreview.append(values);
             const hasJourney = !!artworkGoal;
             // Lost targets use Google's status headline and empty journey, without a stale progress row.
-            if(composition === 'STAMPBOOK') { rowTwo.append(journeyNode,headlineNode); googlePreview.insertBefore(heroNode,rowOne); }
+            if(composition === 'STAMPBOOK' || composition === 'ATELIER') { if(composition === 'ATELIER') rowTwo.append(headlineNode,journeyNode); else rowTwo.append(journeyNode,headlineNode); googlePreview.insertBefore(heroNode,rowOne); }
             else if(rewardFirst) { rowOne.append(headlineNode); rowTwo.append(journeyNode,statusCell); googlePreview.insertBefore(heroNode,rowTwo); }
             else if(composition === 'PATH') { rowOne.append(journeyNode); rowTwo.append(headlineNode,statusCell); googlePreview.insertBefore(heroNode,rowTwo); }
             else { rowOne.append(values); rowTwo.append(headlineNode,journeyNode); googlePreview.insertBefore(heroNode,rowTwo); }
-            rowOne.hidden = composition === 'STAMPBOOK' || composition === 'PATH' && !hasJourney;
+            rowOne.hidden = ['STAMPBOOK','ATELIER'].includes(composition) || composition === 'PATH' && !hasJourney;
             rowTwo.classList.toggle('composition-stacked', composition === 'SIGNATURE');
             // Google omits an entirely empty first row, moving the hero above the remaining one.
             if(composition === 'PATH' && !hasJourney) googlePreview.insertBefore(heroNode,rowOne);
             return !failed.length;
         }
         root.querySelectorAll('[data-apple-layout]').forEach(button => { button.onclick = () => { appleLayout = button.dataset.appleLayout; update(); }; });
+        const scrollBehavior = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+        root.querySelector('#jumpToDesign').onclick = () => { f.scrollIntoView({behavior:scrollBehavior(),block:'start'}); f.elements.displayName.focus({preventScroll:true}); };
+        root.querySelector('#jumpToPreview').onclick = () => { const panel=root.querySelector('#studioPreview');panel.scrollIntoView({behavior:scrollBehavior(),block:'start'});panel.focus({preventScroll:true}); };
+        root.querySelector('#compositionMore').onclick = () => { if(saving || loadingLogo)return; galleryExpanded=!galleryExpanded;update(); };
+        root.querySelector('#galleryBrand').onclick = () => { if(saving || loadingLogo)return;galleryBrand=!galleryBrand;update(); };
+        root.querySelector('#restoreDesign').onclick = () => {
+            if(saving || loadingLogo)return;
+            for(const name of persistedFields) f.elements[name].value = savedDesign[name] || '';
+            logoRevision++;logo=savedDesign.logoPng;root.querySelector('#designLogo').value='';
+            root.querySelector('#logoStatus').textContent = logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.';
+            adjustment.textContent='';root.querySelector('#presetStatus').textContent='Se restauró el diseño guardado. No se envió ningún cambio.';
+            f.dataset.palette=[background.value,foreground.value,labels.value].join('/');clearError();update();
+        };
+        const sampleInput = immediate => {
+            if(sample.disabled)return;clearTimeout(progressTimer);
+            const run=()=>{if(!f.isConnected || saving || loadingLogo)return;samplePercent=Math.max(0,Math.min(100,Math.round(Number(sample.value)||0)));example='custom';update();};
+            if(immediate)run();else progressTimer=setTimeout(run,120);
+        };
+        sample.oninput=()=>sampleInput(false);sample.onchange=()=>sampleInput(true);
         function edited(e) {
             if (saving) return;
+            if(e.target === f.elements.featuredProgramId) { clearTimeout(progressTimer);example='progress';samplePercent=50; }
             clearError();
             if (e.target === background || e.target === foreground || e.target === labels) {
                 // Browsers can emit both input and change for one color selection.
@@ -766,7 +826,7 @@
             f.dataset.palette = [background.value, foreground.value, labels.value].join('/');
             update();
         }
-        root.querySelectorAll('[data-wallet-example]').forEach(button => button.onclick = () => { example = button.dataset.walletExample; update(); });
+        root.querySelectorAll('[data-wallet-example]').forEach(button => button.onclick = () => { if(saving || loadingLogo)return;clearTimeout(progressTimer);example = button.dataset.walletExample; update(); });
         root.querySelectorAll('[data-preview-provider]').forEach(button => button.onclick = () => { if (saving || loadingLogo) return; previewProvider = button.dataset.previewProvider; update(); });
         root.querySelectorAll('[data-wallet-style]').forEach(button => button.onclick = () => {
             if (saving || loadingLogo) return;
@@ -812,11 +872,11 @@
             }
         };
         f.addEventListener('submit', async e => {
-            e.preventDefault(); if (saving || loadingLogo) return;
+            e.preventDefault(); if (saving || loadingLogo || !hasChanges()) return;
+            clearTimeout(progressTimer);
             if (!update()) { invalidColors()[0].input.focus(); return; }
             if (!f.reportValidity()) return;
-            const values = Object.fromEntries(new FormData(f));
-            const payload = {expectedVersion: data.version, design: {...d, ...values, featuredProgramId: values.featuredProgramId || null, logoPng: logo}};
+            const payload = {expectedVersion: data.version, design: designValues()};
             clearError(); saving = true; fields.disabled = true; f.setAttribute('aria-busy', 'true'); update();;
             try {
                 await api('/api/staff/wallet-design', payload, 'PUT');

@@ -14,7 +14,8 @@ fun googleWalletTemplate(composition: String = "SIGNATURE"): JsonObject {
     val journey="object.textModulesData['journey']"
     val rows=when(composition) {
         "STAMPBOOK" -> listOf(two(journey,prize))
-        "EDITORIAL", "TICKET", "RIBBON" -> listOf(one(prize),two(journey,remaining))
+        "ATELIER" -> listOf(two(prize,journey))
+        "EDITORIAL", "TICKET", "RIBBON", "PANORAMA" -> listOf(one(prize),two(journey,remaining))
         "PATH" -> listOf(one(journey),two(prize,remaining))
         else -> listOf(two(balance,remaining),two(prize,journey))
     }

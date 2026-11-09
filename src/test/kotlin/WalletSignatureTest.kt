@@ -97,7 +97,7 @@ class WalletSignatureTest {
         val data=p.googleJson(p.googleId!!,p.googleClass!!,"https://example.com")
         assertTrue(data.containsKey("loyaltyPoints") && data.containsKey("secondaryLoyaltyPoints"))
         assertTrue(data.getValue("textModulesData").jsonArray.size<=10)
-        assertContains(data.getValue("heroImage").toString(),"/wallet/art/v29/SIGNATURE/")
+        assertContains(data.getValue("heroImage").toString(),"/wallet/art/v30/SIGNATURE/")
     }
     @Test fun `public poster rendering is bounded and still needs no database`()=testApplication {
         environment { config=MapApplicationConfig() }

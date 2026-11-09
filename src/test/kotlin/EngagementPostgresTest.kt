@@ -58,7 +58,15 @@ class EngagementPostgresTest {
         assertFailsWith<Problem>{service.saveDesign(f.owner,WalletDesignChange(0,design.copy(composition="PATH")))}
         assertEquals("EDITORIAL",wallet(f).design().composition)
         service.saveDesign(f.owner,WalletDesignChange(1,design.copy(composition="STAMPBOOK")))
-        assertEquals("STAMPBOOK",wallet(f).design().composition);assertEquals("SIGNATURE",wallet(other).design().composition)
+        assertEquals("STAMPBOOK",wallet(f).design().composition)
+        for ((index,composition) in listOf("PANORAMA","PRECISION","ATELIER").withIndex()) {
+            service.saveDesign(f.owner,WalletDesignChange(index+2,design.copy(composition=composition)))
+            val updated=wallet(f)
+            assertEquals(composition,updated.design().composition)
+            assertEquals(first.serial,updated.serial);assertEquals(first.token,updated.token);assertEquals(first.googleId,updated.googleId)
+            assertEquals(googleWalletTemplate(composition),updated.googleBrand("https://example.com")["classTemplateInfo"])
+        }
+        assertEquals("SIGNATURE",wallet(other).design().composition)
         assertEquals(balances,service.card(f.member).getValue("balances"));assertEquals(ledger,count("ledger",f));assertEquals(receipts,count("purchases",f));assertEquals(0,count("redemptions",f))
     }
     @Test fun `cashier and both Wallet expose identical conditions without changing money`() {

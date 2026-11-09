@@ -112,7 +112,7 @@ target.remaining == 0L -> "CANJEA EN CAJA"
             obj("key" to "updated", "label" to "Última actualización", "value" to "$updated\nHora del negocio. El saldo y las condiciones se confirman en caja.")
         ))
     )
-    return if(design.composition in setOf("EDITORIAL","TICKET","RIBBON") && progress != null) JsonObject(fields + obj(
+    return if(design.composition in setOf("EDITORIAL","TICKET","RIBBON","PANORAMA","ATELIER") && progress != null) JsonObject(fields + obj(
         "secondaryFields" to fields.getValue("auxiliaryFields"),
         "auxiliaryFields" to fields.getValue("secondaryFields")
     )) else fields
