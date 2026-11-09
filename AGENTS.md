@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v027 requiere 398 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v028 requiere 398 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -208,3 +208,13 @@ Google mantiene loyaltyObject, hero 1032×812 y tres filas nativas, con premio a
 Vista previa con imágenes auténticas del servidor y composición orientativa, selector Apple póster/clásico y Google. No envía operaciones ni guarda opciones de simulación. Mantener campos protegidos, meta, logo y reglas; guardar acabado explícitamente y con versión. Datos ficticios en pruebas.
 
 Gate: 195 generales + 203 PostgreSQL (398), todas las Python (125), Docker y 50 comprobaciones de gateway antes del auto commit local. Trece suites UI interceptadas, incluida wallet-signature.spec.cjs. Pruebas de PostgreSQL real, HTTPS y recepción en ambos teléfonos se informan por separado.
+
+## Selección explícita en caja v028
+
+Las dos interfaces de compra empiezan sin promociones marcadas. Cada petición nueva del panel envía programIds explícito: [] significa ninguna; uno o varios ids significa únicamente esa selección. La API anterior mantiene compatibilidad con clientes que omiten el campo; no modificar el cálculo del ledger ni los hashes de reintentos históricos.
+
+Registrar una compra añade un comprobante al historial y a las métricas de compras. No equivale a conceder un sello: los sellos de visita/unidad, puntos y cashback dependen de la selección y de las condiciones vigentes. Escanear/buscar un cliente no registra compras. Las promociones pausadas quedan fuera del selector. Canjear un premio sigue siendo una elección separada.
+
+La revisión enumera las promociones elegidas o dice Solo registrar compra. Editar selección, productos, importe o sucursal invalida la revisión. Conservar elecciones explícitas al añadir/quitar productos y al cambiar a compra detallada; eliminar cualquier revisión anterior. Durante el envío no se edita; un fallo conserva payload y clave. Tras un recibo y nuevo cliente, volver a cero seleccionadas. Mostrar beneficios realmente confirmados, con nombre de promoción y singular/plural correcto.
+
+No cambia presentationVersion=27: el mismo registro alimenta Apple y Google. No modificar migraciones, saldos previos, identidades, diseño o túneles. Gate completo: 195 generales + 203 PostgreSQL (398), todas las Python (125), Docker y 50 controles del gateway antes del auto commit. La comprobación DOM de caja verifica interacción y peticiones con red simulada; no sustituye PostgreSQL ni una prueba visual en navegador.

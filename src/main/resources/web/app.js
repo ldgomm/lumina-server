@@ -143,6 +143,38 @@ function counterStep(step) {
         if (current) node.setAttribute('aria-current', 'step'); else node.removeAttribute('aria-current');
     });
 }
+// A recorded purchase and promotional earnings are separate choices.
+function selectedPurchasePrograms(f) {
+    return [...f.querySelectorAll('[name=program]:checked')].map(n => n.value).sort();
+}
+function purchasePromotionSelection(selected = []) {
+    const programs = state.data.programs.filter(p => p.config.active);
+    return `<fieldset class="purchase-promotions"><legend>¿Qué promociones quieres aplicar?</legend><p>Elige una, varias o ninguna. Solo acumularán las seleccionadas si cumplen sus condiciones.</p><div class="purchase-promotion-list">${programs.map(p => `<label class="purchase-promotion-option"><input type="checkbox" name="program" value="${esc(p.id)}" ${selected.includes(p.id) ? 'checked' : ''}><span><strong>${esc(p.config.name)}</strong><small>${esc(p.config.kind === 'STAMPS' ? (p.config.countUnits ? 'Sellos por unidad elegible' : 'Sellos por compra elegible') : kinds[p.config.kind])}${p.config.productGroup ? ' · ' + esc(p.config.productGroup) : ''}</small></span></label>`).join('') || '<p>No hay promociones activas. Puedes guardar la compra sin acumulación.</p>'}</div><div class="purchase-selection-footer"><p data-promotion-selection-status role="status"></p><button type="button" class="quiet" data-clear-promotion-selection>Desmarcar todas</button></div><p class="purchase-selection-help">El comprobante registra una compra en el historial y los informes. Los sellos de visita solo se suman si seleccionas su promoción; escanear la tarjeta no acumula beneficios.</p></fieldset>`;
+}
+function bindPurchasePromotionSelection(f) {
+    const update = () => {
+        const count = selectedPurchasePrograms(f).length;
+        f.querySelector('[data-promotion-selection-status]').textContent = count ? `${count} promoción${count === 1 ? '' : 'es'} seleccionada${count === 1 ? '' : 's'}` : 'Ninguna seleccionada · Solo registrar compra';
+        f.querySelector('[data-clear-promotion-selection]').disabled = count === 0;
+    };
+    f.addEventListener('change', update);
+    f.querySelector('[data-clear-promotion-selection]').onclick = () => {
+        if (document.querySelector('form[aria-busy="true"]')) return;
+        f.querySelectorAll('[name=program]').forEach(n => n.checked = false);
+        f.dispatchEvent(new Event('change', {bubbles: true}));
+    };
+    update();
+}
+function purchasePromotionReview(ids) {
+    const selected = state.data.programs.filter(p => ids.includes(p.id));
+    return `<div class="purchase-earning-review"><h4>${selected.length ? 'Promociones seleccionadas' : 'Solo registrar compra'}</h4>${selected.length ? `<ul>${selected.map(p => `<li>${esc(p.config.name)}</li>`).join('')}</ul><p>Se comprobarán sus productos, fechas, sucursal y demás condiciones al guardar. Las promociones sin marcar no acumulan.</p>` : '<p>Sin puntos, sellos ni cashback. Se guardará el total pagado en el historial y los informes.</p>'}</div>`;
+}
+function purchaseEarningsReceipt(earned, selected) {
+    const amount = x => x.kind === 'CASHBACK' ? `${(x.amount / 100).toFixed(2)} ${esc(state.data.business.currency)} de cashback` : `${x.amount} ${x.kind === 'POINTS' ? (x.amount === 1 ? 'punto' : 'puntos') : (x.amount === 1 ? 'sello' : 'sellos')}`;
+    const rows = earned.map(x => `<li><strong>${esc(state.data.programs.find(p => p.id === x.programId)?.config.name || kinds[x.kind])}</strong><span>+${amount(x)}</span></li>`).join('');
+    return `<div class="purchase-earning-receipt"><h3>${earned.length ? 'Promociones aplicadas' : 'Compra sin acumulación'}</h3>${earned.length ? `<ul>${rows}</ul>` : `<p>${selected.length ? 'Las promociones elegidas no generaron saldo: revisa sus condiciones. Una promoción canjeada no vuelve a acumular en esa misma compra.' : 'No seleccionaste promociones. No se añadieron puntos, sellos ni cashback.'}</p>`}<p>El comprobante figura una sola vez en el historial y los informes.</p></div>`;
+}
+
 function counterReceipt(title, body) {
     const found = document.querySelector('#found'); if (!found) return;
     state.member = null; counterStep(3);
@@ -178,7 +210,7 @@ function renderSales() {
         state.member = m; counterStep(2); content.querySelector('.lookup-panel').hidden = true;
         const availableRewards = m.rewards.filter(r => r.active && !r.benefit);
                 const found = document.querySelector('#found');
-        found.innerHTML = `<section class="panel customer-counter"><div class="counter-customer-heading"><div><span class="eyebrow">Cliente en caja</span><h2>${esc(m.member.name)}</h2></div><button type="button" class="quiet" id="changeCustomer">Cambiar cliente</button></div><p>${m.balances.map(b => `${esc(b.name)}: ${b.kind === 'CASHBACK' ? (b.available / 100).toFixed(2) + ' ' + esc(d.business.currency) : b.available + ' ' + esc(kinds[b.kind])}`).join(' · ') || 'Su primera compra empieza aquí.'}</p>${d.role === 'OWNER' ? '<div class="wallet-recovery-callout"><div><strong>Apple y Google Wallet</strong><p>¿No se actualiza o cambió de teléfono?</p></div><button type="button" id="openWalletRecovery" aria-expanded="false" aria-controls="walletRecoveryPanel">Actualizar o recuperar esta tarjeta</button></div><section id="walletRecoveryPanel" class="wallet-recovery-panel" aria-labelledby="walletRecoveryTitle" hidden><div class="counter-customer-heading"><h3 id="walletRecoveryTitle">Actualizar o recuperar esta tarjeta</h3><button type="button" class="quiet" id="closeWalletRecovery">Cerrar ayuda</button></div><p>1. Verifica al titular. 2. Genera el enlace. 3. El cliente abre el QR en su teléfono y guarda la misma tarjeta en Apple o Google Wallet.</p><p>Se conservan su tarjeta y sus saldos. No necesita borrarla ni registrarse de nuevo.</p><form id="restoreIssue"><label for="restoreReason">Qué necesita el cliente</label><select id="restoreReason" name="reason"><option value="CONNECTION_REPAIR">Su tarjeta no se actualiza</option><option value="DEVICE_CHANGE">Cambió o perdió el teléfono</option><option value="REMOVED_CARD">Borró la tarjeta</option></select><label class="check"><input name="identityVerified" type="checkbox" required>Verifiqué presencialmente la identidad del titular.</label><button>Generar QR de actualización o recuperación</button></form><div id="restoreResult" aria-live="polite"></div></section>' : ''}<div class="counter-modes" role="group" aria-label="Qué deseas hacer"><button type="button" data-counter-mode="purchase" aria-pressed="true">Registrar compra</button><button type="button" data-counter-mode="redemption" aria-pressed="false">Canjear un premio</button></div><div class="counter-operation"><section id="counterPurchase"><h3>Registrar compra</h3><form id="purchase"><label for="purchaseBranch">Sucursal</label><select id="purchaseBranch" name="branchId" required>${options(d.branches)}</select>${field('receipt', 'Número único del comprobante', 'text', '', 'required maxlength="100"')}${field('amount', 'Total pagado (' + esc(d.business.currency) + ')', 'number', '', 'required min="0.01" step="any" data-money max="10000000"')}<button>Registrar compra</button></form></section><section id="counterRedemption" hidden><h3>Canjear un premio</h3><p>El cliente presenta su tarjeta y solicita el premio. No necesita abrir la web.</p><form id="counterChoose"><label for="rewardId">Premio</label><select id="rewardId" name="rewardId" required>${availableRewards.map(r => `<option value="${esc(r.id)}" ${(m.balances.find(b => b.programId === r.programId)?.available || 0) < r.cost ? 'disabled' : ''}>${esc(r.name)} · ${rewardCost(r, m.balances)}</option>`).join('')}</select><label for="counterBranch">Sucursal</label><select id="counterBranch" name="branchId" required>${options(d.branches)}</select><button ${availableRewards.some(r => (m.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost) ? '' : 'disabled'}>Revisar canje</button></form><div id="counterReview"></div></section></div></section>`;;
+        found.innerHTML = `<section class="panel customer-counter"><div class="counter-customer-heading"><div><span class="eyebrow">Cliente en caja</span><h2>${esc(m.member.name)}</h2></div><button type="button" class="quiet" id="changeCustomer">Cambiar cliente</button></div><p>${m.balances.map(b => `${esc(b.name)}: ${b.kind === 'CASHBACK' ? (b.available / 100).toFixed(2) + ' ' + esc(d.business.currency) : b.available + ' ' + esc(kinds[b.kind])}`).join(' · ') || 'Su primera compra empieza aquí.'}</p>${d.role === 'OWNER' ? '<div class="wallet-recovery-callout"><div><strong>Apple y Google Wallet</strong><p>¿No se actualiza o cambió de teléfono?</p></div><button type="button" id="openWalletRecovery" aria-expanded="false" aria-controls="walletRecoveryPanel">Actualizar o recuperar esta tarjeta</button></div><section id="walletRecoveryPanel" class="wallet-recovery-panel" aria-labelledby="walletRecoveryTitle" hidden><div class="counter-customer-heading"><h3 id="walletRecoveryTitle">Actualizar o recuperar esta tarjeta</h3><button type="button" class="quiet" id="closeWalletRecovery">Cerrar ayuda</button></div><p>1. Verifica al titular. 2. Genera el enlace. 3. El cliente abre el QR en su teléfono y guarda la misma tarjeta en Apple o Google Wallet.</p><p>Se conservan su tarjeta y sus saldos. No necesita borrarla ni registrarse de nuevo.</p><form id="restoreIssue"><label for="restoreReason">Qué necesita el cliente</label><select id="restoreReason" name="reason"><option value="CONNECTION_REPAIR">Su tarjeta no se actualiza</option><option value="DEVICE_CHANGE">Cambió o perdió el teléfono</option><option value="REMOVED_CARD">Borró la tarjeta</option></select><label class="check"><input name="identityVerified" type="checkbox" required>Verifiqué presencialmente la identidad del titular.</label><button>Generar QR de actualización o recuperación</button></form><div id="restoreResult" aria-live="polite"></div></section>' : ''}<div class="counter-modes" role="group" aria-label="Qué deseas hacer"><button type="button" data-counter-mode="purchase" aria-pressed="true">Registrar compra</button><button type="button" data-counter-mode="redemption" aria-pressed="false">Canjear un premio</button></div><div class="counter-operation"><section id="counterPurchase"><h3>Registrar compra</h3><form id="purchase"><label for="purchaseBranch">Sucursal</label><select id="purchaseBranch" name="branchId" required>${options(d.branches)}</select>${field('receipt', 'Número único del comprobante', 'text', '', 'required maxlength="100"')}${field('amount', 'Total pagado (' + esc(d.business.currency) + ')', 'number', '', 'required min="0.01" step="any" data-money max="10000000"')}${purchasePromotionSelection()}<button>Revisar compra</button></form><div id="purchaseReview"></div></section><section id="counterRedemption" hidden><h3>Canjear un premio</h3><p>El cliente presenta su tarjeta y solicita el premio. No necesita abrir la web.</p><form id="counterChoose"><label for="rewardId">Premio</label><select id="rewardId" name="rewardId" required>${availableRewards.map(r => `<option value="${esc(r.id)}" ${(m.balances.find(b => b.programId === r.programId)?.available || 0) < r.cost ? 'disabled' : ''}>${esc(r.name)} · ${rewardCost(r, m.balances)}</option>`).join('')}</select><label for="counterBranch">Sucursal</label><select id="counterBranch" name="branchId" required>${options(d.branches)}</select><button ${availableRewards.some(r => (m.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost) ? '' : 'disabled'}>Revisar canje</button></form><div id="counterReview"></div></section></div></section>`;;
         const recoveryButton = found.querySelector('#openWalletRecovery'), recoveryPanel = found.querySelector('#walletRecoveryPanel');
         const showRecovery = show => {
             if (!recoveryPanel || content.querySelector('form[aria-busy="true"]')) return;
@@ -207,11 +239,25 @@ function renderSales() {
             const help = document.createElement('p'); help.className = 'empty-reward'; help.textContent = 'No hay premios de entrega directa con saldo suficiente. Los descuentos en productos se revisan al registrar la compra.';
             found.querySelector('#counterChoose').before(help);
         }
+        const purchaseForm = found.querySelector('#purchase');
+        bindPurchasePromotionSelection(purchaseForm);
+        let purchaseRevision = 0;
+        const clearPurchaseReview = () => { purchaseRevision++; found.querySelector('#purchaseReview')?.replaceChildren(); };
+        purchaseForm.addEventListener('input', clearPurchaseReview);
+        purchaseForm.addEventListener('change', clearPurchaseReview);
         form('purchase', async (p, f) => {
-            const payload = {memberId: m.member.id, branchId: p.branchId, receipt: p.receipt, amountMinor: Math.round(Number(p.amount) * 100), currency: d.business.currency};
-            const r = await api('/api/staff/purchases', payload, 'POST', operationKey(f, payload));
-            counterReceipt(r.replayed ? 'Esta compra ya estaba registrada' : 'Compra registrada', `<p>${esc(m.member.name)} · ${(payload.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</p><p>${r.earned.map(x => x.kind === 'CASHBACK' ? `${(x.amount / 100).toFixed(2)} ${esc(d.business.currency)} de cashback` : `${x.amount} ${esc(kinds[x.kind]).toLowerCase()}`).join(' · ') || 'La compra no cumple una promoción activa.'}</p><p>La actualización de Wallet se enviará automáticamente cuando esté habilitado.</p><p class="small">Comprobante: ${esc(r.purchaseId)}</p>`);
-            notice('Compra registrada una sola vez.');
+            const ticket = purchaseRevision;
+            const payload = {memberId: m.member.id, branchId: p.branchId, receipt: p.receipt, amountMinor: Math.round(Number(p.amount) * 100), currency: d.business.currency, programIds: selectedPurchasePrograms(f)};
+            const quote = await api('/api/staff/purchases/quote', payload);
+            if (ticket !== purchaseRevision || !f.isConnected) return;
+            const review = found.querySelector('#purchaseReview');
+            review.innerHTML = `<section class="panel purchase-confirmation"><h3>Confirmar compra</h3><p>${esc(m.member.name)} · <strong>${(quote.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</strong></p>${purchasePromotionReview(payload.programIds)}<p>Confirma cuando el cobro esté realizado en caja.</p><form id="finishSimplePurchase"><button>Guardar compra</button></form></section>`;
+            form('finishSimplePurchase', async () => {
+                if (ticket !== purchaseRevision || !f.isConnected) throw new Error('La compra cambió. Revisa el total otra vez.');
+                const r = await api('/api/staff/purchases', payload, 'POST', operationKey(f, payload));
+                counterReceipt(r.replayed ? 'Esta compra ya estaba registrada' : 'Compra registrada', `<p>${esc(m.member.name)} · ${(payload.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</p>${purchaseEarningsReceipt(r.earned, payload.programIds)}<p>La actualización de Wallet se enviará automáticamente cuando esté habilitado.</p><p class="small">Comprobante: ${esc(r.purchaseId)}</p>`);
+                notice('Compra registrada una sola vez.');
+            });
         });
         let counterRevision = 0;
         const clearCounterReview = () => { counterRevision++; found.querySelector('#counterReview').replaceChildren(); };

@@ -371,3 +371,28 @@ input[data-money]{appearance:textfield;-moz-appearance:textfield}input[data-mone
 @media(max-width:420px){#designPreview,#googleDesignPreview{padding:18px}#designPreview.signature-poster .wallet-preview-code{margin-top:150px}#designPreview .design-preview-brand{font-size:14px}#designPreview .design-preview-hero{font-size:17px}#designPreview.signature-classic .apple-stamp-artwork{width:calc(100% + 36px);margin-left:-18px;margin-right:-18px}#designPreview.signature-classic .signature-copy{grid-template-columns:1fr}#googleDesignPreview .google-stamp-artwork{width:calc(100% + 36px);margin-left:-18px;margin-right:-18px}}
 
 #designPreview .signature-copy>.wallet-preview-balance{text-align:left;align-items:flex-start}#designPreview .signature-copy>.wallet-preview-balance .design-preview-hero{font-size:27px;line-height:1.2;overflow-wrap:anywhere}
+
+/* Purchase selection v028: explicit choices for both cashier forms. */
+.purchase-promotions{margin:22px 0;padding:20px;border:1px solid #ced8e5;border-radius:18px;background:#f8fafc;min-width:0}
+.purchase-promotions legend{padding:0 8px;font-weight:750;color:#0b1f3a}
+.purchase-promotions>p{margin-top:0;color:#475a73;font-size:.95rem}
+.purchase-promotion-list{display:grid;gap:10px}
+.purchase-promotion-option{display:flex;align-items:center;gap:13px;margin:0;padding:14px;border:1px solid #d6deea;border-radius:12px;background:#fff;cursor:pointer}
+.purchase-promotion-option:has(input:checked){border-color:#254b7a;background:#edf3fc;box-shadow:inset 3px 0 #0b1f3a}
+.purchase-promotion-option:focus-within{outline:2px solid #2f68af;outline-offset:2px}
+.purchase-promotion-option input{width:22px;height:22px;flex:0 0 22px;accent-color:#0b1f3a;margin:0}
+.purchase-promotion-option span{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.purchase-promotion-option strong{color:#122740}.purchase-promotion-option small{color:#53647c}
+.purchase-selection-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:14px 0}
+.purchase-selection-footer p{margin:0;font-size:.9rem;font-weight:650;color:#29476c}
+.purchase-selection-footer button{width:auto;margin:0;padding:9px 12px}
+.purchase-promotions .purchase-selection-help{font-size:.85rem;line-height:1.5;margin:0;border-top:1px solid #d6deea;padding-top:14px}
+.purchase-earning-review{background:#f0f4fa;border:1px solid #d6deea;border-radius:12px;padding:16px;margin:16px 0}
+.purchase-earning-review h4{margin:0 0 8px;color:#0b1f3a}.purchase-earning-review p{margin:8px 0 0;font-size:.9rem;color:#405570}
+.purchase-earning-review ul{padding-left:20px;margin:8px 0}
+.purchase-earning-receipt{width:100%;max-width:640px;margin:20px auto;text-align:left;padding:20px;border:1px solid #d6deea;border-radius:16px;background:#f7f9fc}
+.purchase-earning-receipt h3{margin:0 0 14px;font-size:1.1rem;color:#0b1f3a}
+.purchase-earning-receipt ul{list-style:none;padding:0;margin:0}.purchase-earning-receipt li{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #e2e8f0}
+.purchase-earning-receipt li strong{overflow-wrap:anywhere}.purchase-earning-receipt li span{white-space:nowrap;color:#184b71}
+.purchase-earning-receipt p{font-size:.9rem;margin:12px 0 0;color:#52647c}
+@media(max-width:600px){.purchase-promotions{padding:14px}.purchase-promotion-option{padding:13px 10px}.purchase-earning-receipt{padding:15px}.purchase-selection-footer{align-items:flex-start}}
