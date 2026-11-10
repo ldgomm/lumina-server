@@ -114,7 +114,7 @@
                 const {reward: r, name, available, kind, ready, exact} = model;
                 const remaining = Math.max(0, r.cost - available);
                 const status = !exact ? 'Consulta el saldo exacto en caja' : ready ? 'Saldo suficiente' : `Falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${amount(remaining, kind)}`;
-                return `<article class="counter-reward-card ${ready ? 'is-ready' : ''}"><p class="counter-reward-program">${esc(name)}</p><h4>${esc(r.name)}</h4><span class="counter-reward-status">${esc(status)}</span>${exact ? `<progress max="${r.cost}" value="${Math.min(available, r.cost)}" aria-label="${esc('Progreso para ' + r.name)}"></progress><p class="counter-reward-balance">Saldo: <strong>${esc(amount(available, kind))}</strong><br>Canje: ${esc(amount(r.cost, kind))}</p>` : ''}<p class="counter-reward-conditions">${esc(r.benefitText || (r.benefit ? 'El descuento se calcula al revisar los productos de la compra.' : 'Se entrega tras confirmar el canje en caja.'))}</p>${ready ? `<p class="small">Si eliges este premio, el saldo queda en ${esc(amount(available - r.cost, kind))}.</p><button type="button" data-select-counter-reward="${esc(r.id)}">${r.benefit ? 'Aplicar en una compra' : 'Preparar canje'}</button>` : ''}</article>`;
+                return `<article class="counter-reward-card ${ready ? 'is-ready' : ''}"><p class="counter-reward-program">${esc(name)}</p><h4>${esc(r.name)}</h4><span class="counter-reward-status">${esc(status)}</span>${exact ? `<progress max="${r.cost}" value="${Math.min(available, r.cost)}" aria-label="${esc('Progreso para ' + r.name)}"></progress><p class="counter-reward-balance">Saldo: <strong>${esc(amount(available, kind))}</strong><br>Canje: ${esc(amount(r.cost, kind))}</p>` : ''}<p class="counter-reward-conditions">${esc(r.benefitText || (r.benefit ? 'El descuento se calcula al revisar los productos de la compra.' : 'Se entrega tras confirmar el canje en caja.'))}</p>${ready ? `<p class="small">Si eliges este premio, el saldo queda en ${esc(amount(available - r.cost, kind))}.</p><button type="button" ${(state.data.role!=='OWNER'&&(state.data.permissions?.rewards===false||r.benefit&&state.data.permissions?.purchases===false))?'disabled title="Necesita un usuario autorizado para esta operación"':''} data-select-counter-reward="${esc(r.id)}">${r.benefit ? 'Aplicar en una compra' : 'Preparar canje'}</button>` : ''}</article>`;
             }).join('') || '<p class="empty-reward">Todavía no tiene saldo suficiente. En «Todos» puedes ver cuánto falta para cada premio.</p>';
             const more = section.querySelector('#moreCounterRewards'); more.hidden = filtered.length <= 2; more.textContent = expanded ? 'Mostrar menos' : `Mostrar los ${filtered.length} premios`;
             section.querySelectorAll('[data-reward-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.rewardFilter === filter)));
@@ -137,6 +137,7 @@
             if (counter.querySelector('form[aria-busy="true"]')) return;
             filter = button.dataset.rewardFilter; expanded = false; draw();
         });
+        section.querySelector('#jumpToPurchase').hidden=state.data.role!=='OWNER'&&state.data.permissions?.purchases===false;
         section.querySelector('#jumpToPurchase').onclick = () => {
             if (counter.querySelector('form[aria-busy="true"]')) return;
             counter.querySelector('[data-counter-mode="purchase"]').click();
@@ -148,9 +149,9 @@
     }
 
     function enhancePurchase() {
-        const f = document.querySelector('#purchase'); if (!f || f.dataset.productsReady) return;
+        const f = document.querySelector('#purchase'); if (!f || f.dataset.productsReady || state.data.role!=='OWNER' && state.data.permissions?.purchases===false) return;
         f.dataset.productsReady = 'true';
-        const button = document.createElement('button'); button.type = 'button'; button.className = 'quiet'; button.textContent = 'Registrar productos y aplicar un descuento'; f.prepend(button);
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'quiet'; button.textContent = state.data.role!=='OWNER'&&state.data.permissions?.rewards===false?'Registrar productos':'Registrar productos y aplicar un descuento'; f.prepend(button);
         button.onclick = () => checkout(f, state.member);
         if (state.data.programs.some(p => p.config.productGroup || p.config.countUnits)) checkout(f, state.member);
     }
@@ -159,7 +160,7 @@
         const previousBranch = old.elements.branchId?.value, previousReceipt = old.elements.receipt?.value;
         old.closest('#counterPurchase')?.querySelector('#purchaseReview')?.remove();
         const panel = document.createElement('div'); old.replaceWith(panel);
-        const rewards = member.rewards.filter(r => r.active && r.benefit && (member.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost);
+        const rewards = member.rewards.filter(r => (state.data.role==='OWNER'||state.data.permissions?.rewards!==false) && r.active && r.benefit && (member.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost);
         const categories = [...new Set(state.data.programs.map(p => p.config.productGroup).filter(Boolean))];
         let common = {branchId: previousBranch || state.data.branches[0]?.id || '', receipt: previousReceipt || '', reward: '', programs: selectedPurchasePrograms(old)};
         const readRows = f => [...f.querySelectorAll('[data-line]')].map(line => ({name: line.querySelector('[data-name]').value.trim(), group: line.querySelector('[data-group]').value.trim(), quantity: Number(line.querySelector('[data-quantity]').value), unitMinor: line.querySelector('[data-price]').value ? purchaseMinor(line.querySelector('[data-price]').value) : 0}));

@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v037 requiere 500 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v038 requiere 528 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -322,3 +322,15 @@ Los informes de plataforma y actividad son de lectura, con snapshots consistente
 La UI muestra credenciales una sola vez, evita localStorage, documenta motivos y confirma bajas/rotaciones. Un conflicto preserva el formulario. Ignorar respuestas tardías de vistas o sesiones anteriores. Navegación de equipo y actividad solo para dueños; los permisos se verifican también en el servidor.
 
 Gate: 260 unitarias/HTTP + 240 PostgreSQL = 500; 128 Python, Docker y 97 comprobaciones gateway antes del auto commit. management.spec.cjs cubre CRUD, ramas, credenciales, conflictos, historial, plataforma, fichas y móvil con datos ficticios. Conservar la regresión de caja e informes. HTTPS y validación física de Apple/Google se informan aparte.
+
+## Operación, permisos y exportación v038
+
+V011 añade allow_purchases y allow_rewards a staff_tokens, ambos true por compatibilidad. V001–V010 son inmutables. Mantener hash, id y revisión de los accesos existentes. OWNER conserva ambos permisos; CASHIER necesita al menos uno y una sucursal. Una compra que incluye premio requiere ambos. Confirmación reservada, entrega directa, compra y quote verifican permisos en el servidor; la UI no es autorización. Revalidar permisos/revisión bajo el bloqueo de negocio antes de mutar o devolver replay idempotente. Omitir permissions al editar conserva los permisos de Caja; ascender a Dueño habilita ambos. Conservar huellas de altas históricas con permisos completos.
+
+Operación y equipo es de lectura para dueño y administrador autenticados, aislado por negocio y snapshot. Los filtros afectan resumen, evolución, horas, premios, desglose e historial. Mantener fechas locales, intervalo de hasta 366 días, corte asOf, comparación con días completos anteriores y días vacíos en cero. Compras y entregas son hechos independientes: no multiplicar dinero con joins. No llamar retención al conteo de compradores en días distintos ni inferir productividad. No sumar compradores de empleados/sucursales. Explicar límites de listas y cobertura de productos.
+
+Activity CSV reutiliza la consulta autorizada con todos los filtros y corte, exporta todas las páginas hasta 10.000 registros y rechaza excesos con 422; nunca truncar silenciosamente. Importes decimales exactos, UTF-8, celdas protegidas contra fórmulas y comillas escapadas. Excluir tokens, QR y cédulas. Las cuatro rutas nuevas de operaciones/exportación permanecen privadas tras el gateway. Los clientes administrativos no reciben credenciales de dueños ni tokens de cliente.
+
+La interfaz conserva permisos tras errores, oculta acciones no autorizadas, rechaza respuestas tardías y usa memoria de sesión. Un cambio de permisos invalida el contexto anterior, incluida una operación pendiente. Ambos roles de administración disponen del informe con acceso a comprobantes filtrados. No guardar credenciales o historial en localStorage. Se mantienen las identidades y el diseño actual de Apple y Google; no declarar validación física de Wallet por pruebas de informes.
+
+Gate: 268 unitarias/HTTP + 260 PostgreSQL = 528; 128 Python, Docker y 101 comprobaciones gateway antes del auto commit. operations.spec.cjs cubre permisos, fechas, filtros, gráficos, historial, CSV, reintento y móvil en 320/390/1024/1440 px; conservar management.spec.cjs y counter-rewards.spec.cjs. El instalador debe verificarse con código original, reformateado y segunda ejecución, sin escrituras parciales ante conflictos. HTTPS se informa aparte, sin renovación automática. Guía: docs/operacion-permisos-v038.md.

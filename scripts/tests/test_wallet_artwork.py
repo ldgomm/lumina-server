@@ -38,8 +38,8 @@ class WalletArtworkGatewayTests(unittest.TestCase):
             if path in ['/api/me/wallet-status','/api/me/access']:return 401,b''
             if path=='/api/public/demo/join':return 400,b''
             return 404,b''
-        with patch.object(w,'request',side_effect=respond):self.assertEqual(97,w.verify_gateway('http://local','demo'))
-        self.assertEqual(97,len(calls))
+        with patch.object(w,'request',side_effect=respond):self.assertEqual(101,w.verify_gateway('http://local','demo'))
+        self.assertEqual(101,len(calls))
         with patch.object(w,'request',return_value=(503,b'')):
             with self.assertRaises(RuntimeError):w.verify_gateway('http://local','demo')
 

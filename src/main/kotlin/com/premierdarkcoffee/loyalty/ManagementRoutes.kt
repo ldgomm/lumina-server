@@ -7,21 +7,33 @@ import io.ktor.server.routing.*
 import kotlinx.serialization.json.*
 
 private fun ApplicationCall.managementNumber(name: String, default: Int): Int = request.queryParameters[name]?.let { it.toIntOrNull() ?: throw Problem(400,"INVALID_FILTER","Filtro numérico inválido.") } ?: default
-private fun ApplicationCall.managementQuery() = ManagementQuery(managementNumber("days",30),request.queryParameters["kind"]?:"ALL",request.queryParameters["branchId"]?.takeIf(String::isNotBlank),request.queryParameters["actorId"]?.takeIf(String::isNotBlank),request.queryParameters["q"]?:"",managementNumber("offset",0),request.queryParameters["asOf"])
+private fun ApplicationCall.managementQuery() = ManagementQuery(managementNumber("days",30),request.queryParameters["kind"]?:"ALL",request.queryParameters["branchId"]?.takeIf(String::isNotBlank),request.queryParameters["actorId"]?.takeIf(String::isNotBlank),request.queryParameters["q"]?:"",managementNumber("offset",0),request.queryParameters["asOf"],request.queryParameters["fromDate"]?.takeIf(String::isNotBlank),request.queryParameters["throughDate"]?.takeIf(String::isNotBlank))
+
+private fun ApplicationCall.operationsQuery() = OperationsQuery(managementNumber("days",30),request.queryParameters["branchId"]?.takeIf(String::isNotBlank),request.queryParameters["actorId"]?.takeIf(String::isNotBlank),request.queryParameters["fromDate"]?.takeIf(String::isNotBlank),request.queryParameters["throughDate"]?.takeIf(String::isNotBlank),request.queryParameters["asOf"])
+private suspend fun ApplicationCall.activityCsv(service: LoyaltyService, s: Staff) {
+    s.owner();val q=managementQuery();val csv=io { service.activityExport(s,q) }
+    response.header(HttpHeaders.ContentDisposition,"attachment; filename=loyalty-actividad.csv")
+    response.header(HttpHeaders.CacheControl,"no-store")
+    respondText(csv,ContentType.parse("text/csv; charset=utf-8"))
+}
 
 fun Route.managementRoutes(service: LoyaltyService, platformToken: String) {
     route("/api/staff") {
+        get("/operations") { val s=io { service.staff(call.bearer()) };val q=call.operationsQuery();call.respond(io { service.operationsReport(s,q) }) }
+        get("/activity.csv") { val s=io { service.staff(call.bearer()) };call.activityCsv(service,s) }
         get("/team") { val s=io { service.staff(call.bearer()) };call.respond(io { service.team(s) }) }
         put("/team/{id}") { val s=io { service.staff(call.bearer()) };val input=call.body<TeamChange>();call.respond(io { service.editTeamUser(s,call.parameters["id"]!!,input) }) }
         post("/team/{id}/actions") { val s=io { service.staff(call.bearer()) };val input=call.body<TeamAction>();call.respond(io { service.teamAction(s,call.parameters["id"]!!,input) }) }
-        get("/activity") { val s=io { service.staff(call.bearer()).also { it.owner() } };val q=call.managementQuery();call.respond(io { service.managementActivity(s.tenant,q) }) }
+        get("/activity") { val s=io { service.staff(call.bearer()).also { it.owner() } };val q=call.managementQuery();call.respond(io { service.managementActivity(s.tenant,q,s) }) }
     }
     route("/api/platform") {
         intercept(ApplicationCallPipeline.Call) { need(Security.equal(Security.hash(call.bearer()),Security.hash(platformToken)),"UNAUTHORIZED","Acceso no autorizado.",401) }
         get("/overview") { call.respond(io { service.platformOverview(call.managementNumber("days",30),call.request.queryParameters["q"]?:"",call.managementNumber("offset",0)) }) }
         route("/tenants/{tenant}") {
             fun ApplicationCall.owner() = Staff(uuid(parameters["tenant"]!!),"platform","OWNER",null)
-            get("/activity") { val q=call.managementQuery();call.respond(io { service.managementActivity(call.owner().tenant,q) }) }
+            get("/operations") { val q=call.operationsQuery();call.respond(io { service.operationsReport(call.owner(),q) }) }
+            get("/activity.csv") { call.activityCsv(service,call.owner()) }
+            get("/activity") { val q=call.managementQuery();call.respond(io { service.managementActivity(call.owner().tenant,q,call.owner()) }) }
             get("/team") { call.respond(io { service.team(call.owner()) }) }
             put("/team/{id}") { val input=call.body<TeamChange>();call.respond(io { service.editTeamUser(call.owner(),call.parameters["id"]!!,input) }) }
             post("/team/{id}/actions") { val input=call.body<TeamAction>();call.respond(io { service.teamAction(call.owner(),call.parameters["id"]!!,input) }) }

@@ -18,7 +18,7 @@ object TeamManagementMigration {
     }
 }
 
-@Serializable data class TeamChange(val expectedVersion: Int, val name: String, val contact: String = "", val role: String, val branchId: String? = null, val reason: String)
+@Serializable data class TeamChange(val expectedVersion: Int, val name: String, val contact: String = "", val role: String, val branchId: String? = null, val reason: String, val permissions: StaffPermissions? = null)
 @Serializable data class TeamAction(val expectedVersion: Int, val action: String, val reason: String, val confirmed: Boolean = false)
 
 internal fun validateTeam(name: String, contact: String, role: String, branch: String?) {
@@ -32,13 +32,18 @@ internal fun validateTeam(name: String, contact: String, role: String, branch: S
 internal fun teamReason(reason: String) = need(reason.trim().length in 5..500 && reason.none { it.isISOControl() }, "REASON_REQUIRED", "Escribe el motivo del cambio (5 a 500 caracteres).")
 
 /** Business lock comes first. Revocation waits for writes already accepted, then blocks stale credentials. */
-internal fun LoyaltyService.authorizeStaff(c: Connection, s: Staff, exclusive: Boolean = false) {
+internal fun LoyaltyService.authorizeStaff(c: Connection, s: Staff, exclusive: Boolean = false, required: Set<StaffOperation> = emptySet()) {
     need(c.one("SELECT tenant_id FROM business_access WHERE tenant_id=? FOR " + if (exclusive) "UPDATE" else "SHARE", s.tenant) { it.getString(1) } != null, "NOT_FOUND", "Negocio no encontrado.", 404)
     if (s.id == "platform") return // Only constructed after the platform route authenticates its own credential.
     val current = c.one("SELECT role,branch_id,version,revoked_at,archived_at FROM staff_tokens WHERE tenant_id=? AND id=?", s.tenant, s.id) {
         it.getString(1) == s.role && it.getString(2) == s.branch && (s.version == null || it.getInt(3) == s.version) && it.getTimestamp(4) == null && it.getTimestamp(5) == null
     } ?: false
     need(current, "STAFF_ACCESS_CHANGED", "Tu acceso cambió. Inicia sesión con la credencial vigente.", 401)
+    if (required.isNotEmpty() && s.role != "OWNER") {
+        val allowed = c.one("SELECT allow_purchases,allow_rewards FROM staff_tokens WHERE tenant_id=? AND id=?",s.tenant,s.id) { it.getBoolean(1) to it.getBoolean(2) }!!
+        need(StaffOperation.PURCHASE !in required || allowed.first,"PURCHASE_FORBIDDEN","Tu acceso no permite registrar compras. Pide al dueño que revise tus permisos.",403)
+        need(StaffOperation.REWARD !in required || allowed.second,"REWARD_FORBIDDEN","Tu acceso no permite entregar premios ni aplicar descuentos. Pide al dueño que revise tus permisos.",403)
+    }
 }
 
 internal fun staffRows(c: Connection, tenant: String): List<JsonObject> = c.rows("""
@@ -47,6 +52,7 @@ internal fun staffRows(c: Connection, tenant: String): List<JsonObject> = c.rows
 """.trimIndent(), tenant) {
     obj("id" to it.getString("id"), "name" to it.getString("display_name").ifBlank { if (it.getString("role") == "OWNER") "Dueño · ${it.getString("id").takeLast(6)}" else "Caja · ${it.getString("id").takeLast(6)}" },
         "contact" to it.getString("contact"), "role" to it.getString("role"), "branchId" to it.getString("branch_id"), "branch" to it.getString("branch_name"),
+        "permissions" to obj("purchases" to it.getBoolean("allow_purchases"),"rewards" to it.getBoolean("allow_rewards")),
         "version" to it.getInt("version"), "state" to if (it.getTimestamp("archived_at") != null) "ARCHIVED" else if (it.getTimestamp("revoked_at") != null) "INACTIVE" else "ACTIVE",
         "createdAt" to it.getTimestamp("created_at")?.toInstant(), "updatedAt" to it.getTimestamp("updated_at")?.toInstant())
 }
@@ -64,13 +70,19 @@ internal fun LoyaltyService.teamAudit(c: Connection, s: Staff, target: String, a
     c.exec("INSERT INTO audit_events(id,tenant_id,actor_id,action,target_id,created_at,details) VALUES(?,?,?,?,?,?,?::jsonb)",id(),s.tenant,s.id,action,target,Timestamp.from(clock.instant()),details.toString())
 }
 
-private fun teamCreateHash(name: String, input: NewStaff) = Security.hash(obj("name" to name,"contact" to input.contact.trim(),"role" to input.role,"branch" to input.branchId).toString())
+private fun teamCreateHash(name: String, input: NewStaff): String {
+    val base = obj("name" to name,"contact" to input.contact.trim(),"role" to input.role,"branch" to input.branchId)
+    // Keep the legacy hash for grants equivalent to the original full access.
+    val p = input.permissions ?: StaffPermissions()
+    return Security.hash(if (p == StaffPermissions()) base.toString() else JsonObject(base + ("permissions" to obj("purchases" to p.purchases,"rewards" to p.rewards))).toString())
+}
 
 fun LoyaltyService.createTeamUser(s: Staff, input: NewStaff): JsonObject {
     s.owner()
     val name = input.name?.trim() ?: if (input.role == "OWNER") "Dueño" else "Caja"
     validateTeam(name,input.contact,input.role,input.branchId)
     input.requestId?.let(::uuid)
+    val permissions = input.permissions ?: StaffPermissions(); permissions.validate(input.role)
     return db.tx { c ->
         authorizeStaff(c,s,true); commercial.requireActive(c,s.tenant)
         input.branchId?.let { branch(c,s.tenant,it) }
@@ -83,7 +95,8 @@ fun LoyaltyService.createTeamUser(s: Staff, input: NewStaff): JsonObject {
         }
         val token=Security.token(); val target=id(); val at=Timestamp.from(clock.instant())
         c.exec("INSERT INTO staff_tokens(tenant_id,id,token_hash,role,branch_id,display_name,contact,created_at,updated_at,request_id,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?)",s.tenant,target,Security.hash(token),input.role,input.branchId,name,input.contact.trim(),at,at,input.requestId,teamCreateHash(name,input))
-        teamAudit(c,s,target,"CREATE_STAFF",obj("name" to name,"role" to input.role,"branchId" to input.branchId))
+        c.exec("UPDATE staff_tokens SET allow_purchases=?,allow_rewards=? WHERE tenant_id=? AND id=?",permissions.purchases,permissions.rewards,s.tenant,target)
+        teamAudit(c,s,target,"CREATE_STAFF",obj("name" to name,"role" to input.role,"branchId" to input.branchId,"permissions" to obj("purchases" to permissions.purchases,"rewards" to permissions.rewards)))
         obj("id" to target,"token" to token,"version" to 1,"credentialIssued" to true)
     }
 }
@@ -97,9 +110,12 @@ fun LoyaltyService.editTeamUser(s: Staff, target: String, input: TeamChange): Js
         need(before["version"] == JsonPrimitive(input.expectedVersion),"VERSION_CONFLICT","El usuario cambió. Recarga antes de guardar.",409)
         need(target != s.id || (before["role"] == JsonPrimitive(input.role) && before["branchId"] == (input.branchId?.let(::JsonPrimitive) ?: JsonNull)),"SELF_ACCESS_CHANGE","Otro dueño debe cambiar tu propio rol o sucursal.",409)
         input.branchId?.let { branch(c,s.tenant,it) }
+        val permissions = input.permissions ?: if(input.role=="OWNER") StaffPermissions() else json.decodeFromJsonElement<StaffPermissions>(before.getValue("permissions"))
+        permissions.validate(input.role)
         if (before["state"] == JsonPrimitive("ACTIVE") && before["role"] == JsonPrimitive("OWNER") && input.role != "OWNER") requireAnotherOwner(c,s.tenant,target)
         c.exec("UPDATE staff_tokens SET display_name=?,contact=?,role=?,branch_id=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",input.name.trim(),input.contact.trim(),input.role,input.branchId,Timestamp.from(clock.instant()),s.tenant,target)
-        teamAudit(c,s,target,"EDIT_STAFF",obj("reason" to input.reason.trim(),"before" to obj("name" to before["name"],"role" to before["role"],"branchId" to before["branchId"]),"after" to obj("name" to input.name.trim(),"role" to input.role,"branchId" to input.branchId)))
+        c.exec("UPDATE staff_tokens SET allow_purchases=?,allow_rewards=? WHERE tenant_id=? AND id=?",permissions.purchases,permissions.rewards,s.tenant,target)
+        teamAudit(c,s,target,"EDIT_STAFF",obj("reason" to input.reason.trim(),"before" to obj("name" to before["name"],"role" to before["role"],"branchId" to before["branchId"],"permissions" to before["permissions"]),"after" to obj("name" to input.name.trim(),"role" to input.role,"branchId" to input.branchId,"permissions" to obj("purchases" to permissions.purchases,"rewards" to permissions.rewards))))
         obj("id" to target,"version" to input.expectedVersion+1)
     }
 }

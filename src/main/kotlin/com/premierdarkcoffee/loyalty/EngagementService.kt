@@ -49,7 +49,7 @@ fun LoyaltyService.prepareReceipt(c:Connection,s:Staff,p:Purchase):ReceiptCalcul
 fun LoyaltyService.receiptQuote(s:Staff,p:Purchase):JsonObject {
     uuid(p.memberId); uuid(p.branchId); text(p.receipt,100); s.at(p.branchId)
     need(p.amountMinor in 0..1_000_000_000, "INVALID_AMOUNT", "Monto de compra inválido.")
-    return db.tx { c ->authorizeStaff(c,s); commercial.requireActive(c,s.tenant);branch(c,s.tenant,p.branchId);lockMember(c,s.tenant,p.memberId)
+    return db.tx { c ->authorizeStaff(c,s,required=purchaseOperations(p)); commercial.requireActive(c,s.tenant);branch(c,s.tenant,p.branchId);lockMember(c,s.tenant,p.memberId)
         val tenant = c.one("SELECT currency,timezone FROM tenants WHERE id=?",s.tenant) { it.getString(1) to ZoneId.of(it.getString(2)) }!!
         need(p.currency == tenant.first, "CURRENCY_MISMATCH", "La moneda debe coincidir con la del negocio.")
         val calculated = prepareReceipt(c,s,p)

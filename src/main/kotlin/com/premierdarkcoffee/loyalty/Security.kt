@@ -32,7 +32,7 @@ object Security {
         return parts.size == 3 && equal(password(value,parts[1],parts[0].toInt()), encoded)
     }
 }
-data class Staff(val tenant: String, val id: String, val role: String, val branch: String?, val version: Int? = null) {
+data class Staff(val tenant: String, val id: String, val role: String, val branch: String?, val version: Int? = null, val permissions: StaffPermissions = StaffPermissions()) {
     fun owner() = need(role == "OWNER","FORBIDDEN","Requiere administrador del negocio.",403)
     fun at(branchId: String) = need(branch == null || branch == branchId,"BRANCH_FORBIDDEN","Acceso no autorizado a esta sucursal.",403)
 }

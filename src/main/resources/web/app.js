@@ -232,6 +232,7 @@ function renderSales() {
     const d = state.data; state.member = null;
     const content = document.querySelector('#content');
     content.innerHTML = `<ol class="counter-steps" aria-label="Pasos de caja"><li data-counter-step="1" class="current" aria-current="step"><span>1</span>Cliente</li><li data-counter-step="2"><span>2</span>Operación</li><li data-counter-step="3"><span>3</span>Recibo</li></ol><section class="panel lookup-panel"><h2>Atender a un cliente</h2><p>Escanea su tarjeta o busca por cédula o nombre.</p><form id="lookup"><div class="row"><div><label for="kind">Buscar por</label><select id="kind" name="kind"><option value="cardCode">QR de Wallet</option><option value="document">Cédula</option><option value="name">Nombre · sugerencias</option></select></div><div>${field('value', 'Código de tarjeta o cédula', 'text', '', 'required autocomplete="off"')}</div></div><button>Buscar cliente</button><button type="button" class="quiet" id="scanWallet">Escanear con cámara</button></form><div id="scannerMount"></div></section><div id="found"></div><details class="panel"><summary>Confirmar un código de canje anterior</summary><p>Solo para reservas creadas antes de esta actualización. Los nuevos canjes se hacen al buscar la tarjeta.</p><form id="confirm">${field('token', 'Código de canje anterior', 'text', '', 'required autocomplete="off"')}<label for="legacyBranch">Sucursal</label><select id="legacyBranch" name="branchId" required>${options(d.branches)}</select><button>Confirmar entrega</button></form><div id="confirmation"></div></details>`;
+    if(d.role!=='OWNER'&&d.permissions?.rewards===false)content.querySelector('#confirm').closest('details').hidden=true;
     const lookupInput = content.querySelector('#value'), lookupKind = content.querySelector('#kind');
     const suggestions = attachPredictiveSearch(lookupInput, {
         enabled: () => lookupKind.value === 'name',
@@ -278,12 +279,22 @@ function renderSales() {
         found.querySelectorAll('[data-counter-mode]').forEach(button => button.onclick = () => {
             if (content.querySelector('form[aria-busy="true"]')) { notice('Espera a que termine la operación.'); return; }
             const purchase = button.dataset.counterMode === 'purchase';
+            if (d.role !== 'OWNER' && (purchase ? d.permissions?.purchases === false : d.permissions?.rewards === false)) return;
             found.querySelector('#counterPurchase').hidden = !purchase; found.querySelector('#counterRedemption').hidden = purchase;
             found.querySelectorAll('[data-counter-mode]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
         });
         if (!availableRewards.some(r => (m.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost)) {
             const help = document.createElement('p'); help.className = 'empty-reward'; help.textContent = 'No hay premios de entrega directa con saldo suficiente. Los descuentos en productos se revisan al registrar la compra.';
             found.querySelector('#counterChoose').before(help);
+        }
+        if(d.role!=='OWNER' && d.permissions){
+            const allowedPurchase=d.permissions.purchases!==false,allowedReward=d.permissions.rewards!==false;
+            found.querySelector('[data-counter-mode="purchase"]').hidden=!allowedPurchase;
+            found.querySelector('[data-counter-mode="redemption"]').hidden=!allowedReward;
+            found.querySelector('#counterPurchase').hidden=!allowedPurchase;
+            found.querySelector('#counterRedemption').hidden=allowedPurchase||!allowedReward;
+            found.querySelectorAll('[data-counter-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.counterMode===(allowedPurchase?'purchase':'redemption'))));
+            if(!allowedPurchase||!allowedReward){const note=document.createElement('p');note.className='commercial-note';note.textContent=allowedPurchase?'Tu acceso permite registrar compras. Los premios y descuentos requieren otro usuario autorizado.':'Tu acceso permite entregar premios directos. Registrar compras o aplicar un descuento en una compra requiere otro usuario autorizado.';found.querySelector('.counter-modes').before(note);}
         }
         const purchaseForm = found.querySelector('#purchase');
         bindPurchasePromotionSelection(purchaseForm);

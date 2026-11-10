@@ -5,10 +5,10 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.time.ZoneId
 
-data class ManagementQuery(val days: Int = 30, val kind: String = "ALL", val branchId: String? = null, val actorId: String? = null, val search: String = "", val offset: Int = 0, val asOf: String? = null) {
+data class ManagementQuery(val days: Int = 30, val kind: String = "ALL", val branchId: String? = null, val actorId: String? = null, val search: String = "", val offset: Int = 0, val asOf: String? = null, val fromDate: String? = null, val throughDate: String? = null) {
     fun validate() {
         need(days in setOf(7,30,90,365),"INVALID_PERIOD","Elige 7, 30, 90 o 365 días.")
-        need(kind in setOf("ALL","PURCHASE","REWARD","ADMIN"),"INVALID_KIND","Filtro de actividad inválido.")
+        need(kind in setOf("ALL","PURCHASE","REWARD","ADMIN","OPERATIONS"),"INVALID_KIND","Filtro de actividad inválido.")
         need(offset in 0..1_000_000 && offset % 50 == 0,"INVALID_PAGE","Página inválida.")
         need(search.length<=100,"INVALID_SEARCH","Usa hasta 100 caracteres para buscar.")
         branchId?.let(::uuid); if(actorId != null && actorId != "platform")uuid(actorId)
@@ -16,16 +16,20 @@ data class ManagementQuery(val days: Int = 30, val kind: String = "ALL", val bra
 }
 
 /** Operational and management history; read-only, bounded pages and one consistent snapshot. */
-fun LoyaltyService.managementActivity(tenant: String, q: ManagementQuery): JsonObject {
+fun LoyaltyService.managementActivity(tenant: String, q: ManagementQuery, reader: Staff? = null): JsonObject = readManagementActivity(tenant,q,50,reader)
+internal fun LoyaltyService.readManagementActivity(tenant: String, q: ManagementQuery, limit: Int, reader: Staff?): JsonObject {
     uuid(tenant);q.validate()
-    val until=q.asOf?.let { try { Instant.parse(it) } catch (_: Exception) { throw Problem(400,"INVALID_DATE","Fecha de consulta inválida.") } } ?: clock.instant()
-    need(!until.isAfter(clock.instant()),"INVALID_DATE","La fecha de consulta no puede estar en el futuro.")
     return db.tx { c ->
         c.exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         val business=c.one("SELECT name,currency,timezone FROM tenants WHERE id=?",tenant) { Triple(it.getString(1),it.getString(2),ZoneId.of(it.getString(3))) } ?: throw Problem(404,"NOT_FOUND","Negocio no encontrado.")
         q.branchId?.let { branch(c,tenant,it) }
         if(q.actorId != null && q.actorId != "platform")need(c.one("SELECT id FROM staff_tokens WHERE tenant_id=? AND id=?",tenant,q.actorId){it.getString(1)}!=null,"NOT_FOUND","Usuario no encontrado en este negocio.",404)
-        val start=until.atZone(business.third).toLocalDate().minusDays(q.days-1L).atStartOfDay(business.third).toInstant()
+        if(reader!=null){
+            reader.owner();need(reader.tenant==tenant,"FORBIDDEN","Acceso no autorizado.",403)
+            if(reader.id!="platform")need(c.one("SELECT version FROM staff_tokens WHERE tenant_id=? AND id=? AND role='OWNER' AND revoked_at IS NULL AND archived_at IS NULL",tenant,reader.id){reader.version==null||it.getInt(1)==reader.version}==true,"STAFF_ACCESS_CHANGED","Tu acceso cambió. Inicia sesión de nuevo.",401)
+        }
+        val window=reportWindow(clock.instant(),business.third,q.days,q.fromDate,q.throughDate,q.asOf)
+        val start=window.from;val until=window.until
         val result=c.one("""
             WITH scope AS (SELECT ?::text AS tenant,?::timestamptz AS since_at,?::timestamptz AS until_at), events AS (
                 SELECT p.id,p.created_at AS at,'PURCHASE'::text AS kind,p.actor_id,p.branch_id,m.name AS customer,p.receipt AS concept,
@@ -57,17 +61,17 @@ fun LoyaltyService.managementActivity(tenant: String, q: ManagementQuery): JsonO
                 LEFT JOIN staff_tokens s ON s.tenant_id=a.tenant_id AND s.id=a.actor_id
                 WHERE (s.id IS NOT NULL OR a.actor_id='platform') AND a.action NOT IN ('PURCHASE','CONSUME','COUNTER_CONSUME_VERIFIED','PURCHASE_REWARD_CONFIRMED')
             ), filtered AS (
-                SELECT * FROM events WHERE (?='ALL' OR kind=?) AND (?::text IS NULL OR actor_id=?) AND (?::text IS NULL OR branch_id=?)
+                SELECT * FROM events WHERE (?='ALL' OR kind=? OR (?='OPERATIONS' AND kind IN ('PURCHASE','REWARD'))) AND (?::text IS NULL OR actor_id=?) AND (?::text IS NULL OR branch_id=?)
                   AND position(? in translate(lower(concat_ws(' ',customer,concept,actor)),'áéíóúüñ','aeiouun'))>0
             )
             SELECT (SELECT count(*) FROM filtered) AS total,
-              (SELECT coalesce(jsonb_agg(t.data ORDER BY t.at DESC,t.kind,t.id),'[]'::jsonb)::text FROM (SELECT * FROM filtered ORDER BY at DESC,kind,id LIMIT 50 OFFSET ?) t) AS items,
+              (SELECT coalesce(jsonb_agg(t.data ORDER BY t.at DESC,t.kind,t.id),'[]'::jsonb)::text FROM (SELECT * FROM filtered ORDER BY at DESC,kind,id LIMIT ? OFFSET ?) t) AS items,
               (SELECT jsonb_build_object('purchases',count(*) FILTER(WHERE kind='PURCHASE'),'redemptions',count(*) FILTER(WHERE kind='REWARD'),'changes',count(*) FILTER(WHERE kind='ADMIN'),'paidMinor',coalesce(sum((data->>'paidMinor')::bigint),0))::text FROM filtered) AS summary
-        """.trimIndent(),tenant,Timestamp.from(start),Timestamp.from(until),q.kind,q.kind,q.actorId,q.actorId,q.branchId,q.branchId,normalizedSearch(q.search),q.offset) {
+        """.trimIndent(),tenant,Timestamp.from(start),Timestamp.from(until),q.kind,q.kind,q.kind,q.actorId,q.actorId,q.branchId,q.branchId,normalizedSearch(q.search),limit,q.offset) {
             val total=it.getLong("total"); val items=json.parseToJsonElement(it.getString("items")).jsonArray
             obj("total" to total,"items" to items,"summary" to json.parseToJsonElement(it.getString("summary")),"offset" to q.offset,"hasMore" to (q.offset.toLong()+items.size<total))
         }!!
-        JsonObject(result+obj("business" to obj("id" to tenant,"name" to business.first,"currency" to business.second,"timezone" to business.third.id),"from" to start,"asOf" to until,
+        JsonObject(result+obj("business" to obj("id" to tenant,"name" to business.first,"currency" to business.second,"timezone" to business.third.id),"from" to start,"asOf" to until,"fromDate" to window.fromDate,"throughDate" to window.throughDate,
             "users" to staffRows(c,tenant).map { JsonObject(it.filterKeys { key -> key in setOf("id","name","state","role","branchId") }) },
             "branches" to c.rows("SELECT id,name FROM branches WHERE tenant_id=? ORDER BY name,id",tenant){obj("id" to it.getString(1),"name" to it.getString(2))}))
     }

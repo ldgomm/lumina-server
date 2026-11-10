@@ -58,8 +58,8 @@ fun LoyaltyService.redeemAtCounter(staff: Staff, input: CounterRedemption, key: 
     uuid(input.memberId); uuid(input.branchId); uuid(input.rewardId)
     need(input.identityVerified && input.customerConfirmed, "CUSTOMER_CONFIRMATION_REQUIRED", "Verifica al titular y confirma que solicitó este premio antes de entregarlo.")
     need(input.expectedRevision >= 0 && input.expectedRewardVersion > 0, "INVALID_VERSION", "Recarga los datos del cliente y del premio.")
-    return db.tx { c -> authorizeStaff(c,staff); once(c, staff.tenant, "counter-redeem", key, json.encodeToString(input)) {
-        authorizeStaff(c,staff); commercial.requireActive(c, staff.tenant)
+    return db.tx { c -> authorizeStaff(c,staff,required=setOf(StaffOperation.REWARD)); once(c, staff.tenant, "counter-redeem", key, json.encodeToString(input)) {
+        authorizeStaff(c,staff,required=setOf(StaffOperation.REWARD)); commercial.requireActive(c, staff.tenant)
         requireCounterReward(c,staff.tenant,input.rewardId)
         branch(c, staff.tenant, input.branchId)
         lockMember(c, staff.tenant, input.memberId)
