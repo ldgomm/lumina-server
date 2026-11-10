@@ -96,7 +96,7 @@ target.remaining == 0L -> "CANJEA EN CAJA"
         "headerFields" to if (artwork().total > 0) listOf(JsonObject(primaryWithChange + obj("label" to when(first?.get("kind")?.jsonPrimitive?.content){"STAMPS"->"SELLOS";"POINTS"->"PUNTOS";else->"SALDO"}))) else listOf(header),
         "primaryFields" to if (artwork().total > 0) emptyList<JsonObject>() else listOf(primaryWithChange),
         "secondaryFields" to (progress?.let { listOf(obj("key" to "journey", "label" to when {
-            it.remaining == 0L -> "META ALCANZADA"
+            it.remaining == 0L -> it.redemptionLabel
             else -> "Falta${if(it.remaining==1L && it.kind!="CASHBACK") "" else "n"} ${appleAmount(it.remaining, it.kind, currency)}"
         }, "value" to it.summary)) } ?: listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24)))),
         "auxiliaryFields" to extras,

@@ -45,7 +45,7 @@ class GoogleWalletExperienceTest {
     }
     @Test fun `same program chooses lowest cost deterministically and lists other rewards`() {
         val p = pass(rewards = listOf(reward("r3", goal = 15), reward("r1", goal = 4, name = "Descuento A"), reward("r2", goal = 9)))
-        assertEquals("En caja", p.front("secondaryLoyaltyPoints").value())
+        assertEquals("1 canje", p.front("secondaryLoyaltyPoints").value())
         assertTrue(p.detail("featured").startsWith("Descuento A"))
         assertTrue(p.detail("rewards_0").contains("Canje: 9 sellos"))
     }
@@ -87,7 +87,7 @@ class GoogleWalletExperienceTest {
     @Test fun `ready prize keeps surplus balance and asks for cashier confirmation`() {
         val p = pass(listOf(balance(amount = 11)))
         assertEquals("11", p.front().value())
-        assertEquals("En caja", p.front("secondaryLoyaltyPoints").value())
+        assertEquals("1 canje", p.front("secondaryLoyaltyPoints").value())
         assertTrue(p.detail("featured").contains("Saldo suficiente. Pide el canje en caja."))
         assertTrue(p.detail("featured").contains("Saldo: 11 sellos · Canje: 7 sellos"))
     }

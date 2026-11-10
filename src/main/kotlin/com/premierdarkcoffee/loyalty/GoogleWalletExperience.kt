@@ -93,7 +93,7 @@ fun WalletPass.googleExperienceFields(): JsonObject {
     val (secondaryLabel, secondaryValue) = when {
         paused -> "Estado" to "Pausada"
         target == null -> "Estado" to "Activa"
-        target.remaining == 0L -> "Premio" to "En caja"
+        target.remaining == 0L -> "Por saldo" to "${target.available / target.goal} " + if (target.available / target.goal == 1L) "canje" else "canjes"
         else -> (if (target.remaining == 1L && target.kind != "CASHBACK") "Falta" else "Faltan") to googleAmount(target.remaining, target.kind, currency)
     }
     val zone = ZoneId.of(snapshot["timezone"]?.jsonPrimitive?.content ?: "America/Guayaquil")
@@ -113,7 +113,7 @@ fun WalletPass.googleExperienceFields(): JsonObject {
     val headline=obj("id" to "headline", "header" to when {paused->"Estado";target==null->"Tu promoción";target.remaining==0L->"Premio en caja";else->"Próximo premio"},
         "body" to googleShort(if(paused)"Operaciones pausadas" else target?.name ?: first?.getValue("name")?.jsonPrimitive?.content ?: design.welcome,44))
     val earning=if(paused) null else earningRule(first?.get("programId")?.jsonPrimitive?.contentOrNull)
-    val journeyModule = obj("id" to "journey", "header" to (if(progress?.remaining == 0L) "Meta alcanzada" else if(progress != null) "Tu avance" else "Tu tarjeta"),
+    val journeyModule = obj("id" to "journey", "header" to (if(progress?.remaining == 0L) progress.redemptionLabel else if(progress != null) "Tu avance" else "Tu tarjeta"),
         "body" to (progress?.summary ?: if (paused) "Operaciones pausadas" else "Acumula en tus promociones activas"))
     val modules = listOf(headline,journeyModule,obj("id" to "featured", "header" to when { paused -> "Operaciones pausadas"; target == null -> "Tu promoción"; target.remaining == 0L -> "Tu premio disponible"; else -> "Tu próximo premio" }, "body" to featured)) +
         googleModules("balances", "Saldos por promoción", balances.map { "${it.getValue("name").jsonPrimitive.content}\n${walletBalance(it, currency)}" }, if(earning==null) 2 else 1) +

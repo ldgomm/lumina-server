@@ -38,8 +38,8 @@ class WalletJourneyTest {
     @Test fun `overflow and surplus keep precise amounts without authorizing a redemption`() {
         val near=WalletJourney(Long.MAX_VALUE-1,Long.MAX_VALUE,"POINTS","USD")
         assertEquals(99,near.percent);assertEquals(1,near.remaining);assertContains(near.summary,Long.MAX_VALUE.toString())
-        val surplus=pass(amount=11);assertEquals("11 de 5 sellos",surplus.appleProgress());assertEquals(100,surplus.journey()!!.percent)
-        assertEquals("Saldo suficiente. Confirma el canje en caja.",surplus.journey()!!.guidance)
+        val surplus=pass(amount=11);assertEquals("11 sellos disponibles",surplus.appleProgress());assertEquals(100,surplus.journey()!!.percent)
+        assertEquals("Saldo para 2 canjes de este premio. Confirma el canje en caja.",surplus.journey()!!.guidance)
         assertEquals(5,surplus.artwork().filled);assertEquals(11,surplus.snapshot.getValue("balances").jsonArray[0].jsonObject.getValue("available").jsonPrimitive.long)
     }
     @Test fun `new customer sees zero only for active configured promotions without mutating the snapshot`() {

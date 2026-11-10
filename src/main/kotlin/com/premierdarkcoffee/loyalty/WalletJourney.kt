@@ -24,6 +24,9 @@ fun WalletPass.presentationBalances(): List<JsonObject> {
 data class WalletJourney(val available: Long, val goal: Long, val kind: String, val currency: String) {
     init { require(available >= 0 && goal > 0 && kind in setOf("POINTS", "STAMPS", "CASHBACK")) }
     val remaining: Long get() = if (available >= goal) 0 else goal - available
+    val affordableRedemptions: Long get() = available / goal
+    val balanceAfterOne: Long? get() = if (available >= goal) available - goal else null
+    val redemptionLabel: String get() = "Saldo para $affordableRedemptions " + if (affordableRedemptions == 1L) "canje" else "canjes"
     val percent: Int get() = (BigInteger.valueOf(minOf(available, goal)) * BigInteger.valueOf(100) / BigInteger.valueOf(goal)).toInt()
     private fun number(value: Long) = if (kind == "CASHBACK") BigDecimal.valueOf(value, 2).toPlainString() else value.toString()
     private fun unit(value: Long) = when (kind) {
@@ -31,9 +34,9 @@ data class WalletJourney(val available: Long, val goal: Long, val kind: String, 
         "STAMPS" -> if (value == 1L) "sello" else "sellos"
         else -> if (value == 1L) "punto" else "puntos"
     }
-    val summary: String get() = "${number(available)} de ${number(goal)} ${unit(goal)}"
-    val label: String get() = if (remaining == 0L) "META ALCANZADA" else "PROGRESO · $percent%"
-    val guidance: String get() = if (remaining == 0L) "Saldo suficiente. Confirma el canje en caja." else
+    val summary: String get() = if (remaining == 0L) "${number(available)} ${unit(available)} disponible${if (available == 1L && kind != "CASHBACK") "" else "s"}" else "${number(available)} de ${number(goal)} ${unit(goal)}"
+    val label: String get() = if (remaining == 0L) redemptionLabel else "PROGRESO · $percent%"
+    val guidance: String get() = if (remaining == 0L) "$redemptionLabel de este premio. Confirma el canje en caja." else
         "Te falta${if (remaining == 1L && kind != "CASHBACK") "" else "n"} ${number(remaining)} ${unit(remaining)}."
 }
 

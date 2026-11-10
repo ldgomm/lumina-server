@@ -14,6 +14,7 @@ internal fun walletRewardGuidance(available: Long, goal: Long, kind: String, cur
         val remaining = goal - available
         return "Te falta${if (remaining == 1L && kind != "CASHBACK") "" else "n"} ${amount(remaining)}."
     }
-    return "Saldo suficiente. Pide el canje en caja.\n" +
+    val journey = WalletJourney(available, goal, kind, currency)
+    return "Saldo suficiente. Pide el canje en caja.\n${journey.redemptionLabel} de este premio.\n" +
         "Si canjeas este premio, te queda${if (available - goal == 1L && kind != "CASHBACK") "" else "n"} ${amount(available - goal)}.\nCaja confirma el saldo vigente antes del canje."
 }

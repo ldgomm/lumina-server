@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v033 requiere 431 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v034 requiere 439 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -276,3 +276,13 @@ El editor permite seleccionar el foco desde Promoción y textos. La revisión op
 Un fallo o conflicto mantiene el borrador y expectedVersion. El guardado exitoso establece la nueva base de comparación y Restaurar. Las combinaciones visuales y Deshacer combinación conservan el foco, nombre, logo, textos y promoción.
 
 Gate del Mac: 225 pruebas unitarias/HTTP + 206 PostgreSQL (431), 128 Python, Docker y 88 controles gateway antes del auto commit local, sin push. Las pruebas wallet-clarity.dom.cjs y wallet-clarity.spec.cjs cubren prioridades, diez composiciones, textos, conflictos, teclado y anchos 320/390/1024/1440. HTTPS y recepción en cada teléfono requieren evidencia separada.
+
+## Saldo después de un canje v034
+
+presentationVersion=34 actualiza contenido de ambas Wallet conservando saldos, serial, token, googleId, QR y registros. Incluir 32 en la actualización histórica. Las rutas e imágenes permanecen en v32 y sus bytes no cambian. No hay migración SQL, cambio de reglas ni renovación automática de túneles.
+
+Al alcanzar una meta, los campos nativos muestran el saldo disponible y para cuántos canjes completos del mismo premio alcanza. Usar división y resta enteras; evitar productos que desborden y mantener centavos exactos. La capacidad por saldo no confirma una operación ni garantiza disponibilidad: caja verifica condiciones, consentimiento y saldo vigente. Detalles conserva costo, saldo tras un solo canje y condiciones; premios de un mismo programa comparten saldo. Sin meta o negocio pausado no se ofrece un canje. Cambiar presentación jamás modifica balances ni ledger.
+
+El editor incorpora Saldo extra y una simulación reversible Antes/Costo/Queda para Apple y Google, dentro de Probar avance y canjes, contraído al entrar. No crea compras, reservas ni canjes. Después de un canje muestra el saldo restante, incluso si alcanza para otro; el botón no permite encadenar operaciones ficticias. Cambiar promoción, ejemplo o porcentaje reinicia la simulación. Cambiar apariencia conserva el saldo mostrado. Deshacer, guardado versionado, bloqueo de tareas y conflictos mantienen su comportamiento. Excluir todo estado simulado de WalletDesign y localStorage. Desactivar simulación cuando no haya meta entera segura o la tarjeta esté pausada.
+
+Gate del Mac: 233 pruebas unitarias/HTTP + 206 PostgreSQL (439), 128 Python, Docker y 88 controles gateway antes de auto commit local, sin push. wallet-redemption.dom.cjs y wallet-redemption.spec.cjs cubren cálculo, aislamiento, reinicios, teclado, saldo sobrante y anchos 320/390/1024/1440 con datos ficticios. No confundir pruebas de navegador con recepción en iPhone/Android. HTTPS y conexión de tarjetas existentes se informan por separado.
