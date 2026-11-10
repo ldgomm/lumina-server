@@ -39,13 +39,15 @@ import kotlin.math.pow
     val featuredProgramId: String? = null, val stampSymbol: String = "●", val welcome: String = "Bienvenido",
     val usage: String = "Presenta tu tarjeta en caja para acumular y canjear.",
     val birthdayMessage: String = "¡Feliz cumpleaños! Gracias por ser parte de nuestro negocio.",
-    val artworkStyle: String = "GRADIENT", val composition: String = "SIGNATURE", val artworkAccent: String? = null) {
+    val artworkStyle: String = "GRADIENT", val composition: String = "SIGNATURE", val artworkAccent: String? = null,
+    val frontFocus: String = "AUTO") {
     fun validate() {
         need(displayName.length<=80,"INVALID_DESIGN","Nombre demasiado largo."); text(welcome,80);text(usage,350);text(birthdayMessage,250)
         featuredProgramId?.let(::uuid)
         need(stampSymbol in walletStampSymbols,"INVALID_STAMP","Elige un símbolo de sello disponible.")
         need(artworkStyle in setOf("SOLID","GRADIENT","AURORA"),"INVALID_ARTWORK","Elige Cálido, Aurora o Plano.")
         need(composition in walletCompositions,"INVALID_COMPOSITION","Elige una composición disponible.")
+        need(frontFocus in setOf("AUTO", "PROGRESS", "REWARD"), "INVALID_FOCUS", "Elige Automático, Avance o Premio como foco de la tarjeta.")
         artworkAccent?.let { need(it.matches(Regex("#[a-fA-F0-9]{6}")),"INVALID_COLOR","Elige un color de ilustración válido o usa Automático.") }
         for (color in listOf(background,foreground,label)) need(color.matches(Regex("#[a-fA-F0-9]{6}")),"INVALID_COLOR","Usa colores hexadecimales.")
         fun luminance(hex: String): Double { val channels=(1..5 step 2).map { hex.substring(it,it+2).toInt(16)/255.0 }.map { if(it<=0.04045)it/12.92 else ((it+0.055)/1.055).pow(2.4) };return channels[0]*.2126+channels[1]*.7152+channels[2]*.0722 }

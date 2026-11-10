@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v032 requiere 422 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v033 requiere 431 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -264,3 +264,15 @@ El editor ofrece tres combinaciones de apariencia basadas en promotionSuggestion
 El acento tiene modo Automático, selector propio, muestra del color aplicado y explicación del ajuste. Cambiar el fondo recalcula la muestra. No persistir modo de vista previa, categoría sugerida, historial de deshacer ni controles del simulador. Mantener el guardado versionado, la protección del borrador y la recuperación ante 409.
 
 Gate completo: 217 unitarias/HTTP + 205 PostgreSQL = 422, 128 Python, Docker y 88 controles del gateway antes de auto commit local; sin push. HTTPS y recepción en teléfonos se informan aparte, sin renovar automáticamente el túnel. Las pruebas wallet-identity.dom.cjs y wallet-identity.spec.cjs usan datos ficticios y red interceptada; las imágenes de la verificación visual provienen del renderer compilado. Validar las 42 categorías y anchos 320/390/1024/1440, tanto Apple como Google.
+
+## Claridad y revisión v033
+
+WalletDesign.frontFocus admite AUTO, PROGRESS y REWARD, con AUTO como valor compatible. La composición y el foco son independientes: el foco reordena los campos nativos de avance y premio en Apple clásico/póster y las filas Google. Nunca altera la selección de promoción, costo, saldo, ilustración, clave, serial ni QR. El modo explícito Google usa dos filas y conserva referencias del objeto, los dos slots de saldo, detalles completos y reviewStatus UNDER_REVIEW. Sin objetivo o con negocio pausado no se fabrica progreso ni disponibilidad.
+
+Se conservan presentationVersion=32 y las rutas de arte v32: AUTO mantiene la presentación anterior. Guardar un foco distinto incrementa designVersion y encola la actualización existente para ambas Wallet. No hay migración SQL, renovación de URL ni reinstalación de tarjetas.
+
+El editor permite seleccionar el foco desde Promoción y textos. La revisión opcional compara los campos guardados y el borrador, muestra colores y textos completos y permite volver a editar un campo oculto. Solo muestra diferencias persistibles; no envía preferencias de simulación ni guarda automáticamente. La vista de detalles utiliza datos ficticios claramente indicados y no inventa consumos. Escapar todo contenido del negocio.
+
+Un fallo o conflicto mantiene el borrador y expectedVersion. El guardado exitoso establece la nueva base de comparación y Restaurar. Las combinaciones visuales y Deshacer combinación conservan el foco, nombre, logo, textos y promoción.
+
+Gate del Mac: 225 pruebas unitarias/HTTP + 206 PostgreSQL (431), 128 Python, Docker y 88 controles gateway antes del auto commit local, sin push. Las pruebas wallet-clarity.dom.cjs y wallet-clarity.spec.cjs cubren prioridades, diez composiciones, textos, conflictos, teclado y anchos 320/390/1024/1440. HTTPS y recepción en cada teléfono requieren evidencia separada.

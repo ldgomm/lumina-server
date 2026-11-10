@@ -46,6 +46,23 @@ class EngagementPostgresTest {
     private fun count(table:String,f:F)=db.tx{c->c.one("SELECT count(*) FROM $table WHERE tenant_id=?",f.owner.tenant){it.getLong(1)}!!}
     private fun wallet(f:F)=WalletService(service,"https://example.com",WalletCipher(Base64.getEncoder().encodeToString(ByteArray(32){5}))).materialize(f.member)
     private fun parallel(work:()->JsonObject):List<Any>{val executor=Executors.newFixedThreadPool(4);val barrier=CyclicBarrier(4);return try{(1..4).map{executor.submit<Any>{barrier.await();try{work()}catch(e:Problem){e}}}.map{it.get(40,TimeUnit.SECONDS)}}finally{executor.shutdownNow()}}
+    @Test fun `front focus persists versioned without touching artwork identity balances or another business`() {
+        val f=fixture();val other=fixture();service.purchase(f.owner,purchase(f,4),id())
+        val before=wallet(f);val balances=service.card(f.member).getValue("balances");val ledger=count("ledger",f)
+        val original=WalletDesign(featuredProgramId=f.program)
+        for ((index,focus) in listOf("REWARD","PROGRESS","AUTO").withIndex()) {
+            service.saveDesign(f.owner,WalletDesignChange(index,original.copy(frontFocus=focus)))
+            val changed=wallet(f)
+            assertEquals(focus,changed.design().frontFocus);assertEquals(before.serial,changed.serial)
+            assertEquals(before.token,changed.token);assertEquals(before.googleId,changed.googleId)
+            assertEquals(before.snapshot["cardCode"],changed.snapshot["cardCode"]);assertTrue(changed.tag>before.tag)
+            assertEquals(googleWalletTemplate("SIGNATURE",focus),changed.googleBrand("https://example.com")["classTemplateInfo"])
+            assertEquals("AUTO",wallet(other).design().frontFocus)
+            assertEquals(balances,service.card(f.member).getValue("balances"));assertEquals(ledger,count("ledger",f))
+        }
+        assertFailsWith<Problem>{service.saveDesign(f.owner,WalletDesignChange(0,original.copy(frontFocus="REWARD")))}
+        assertEquals("AUTO",wallet(f).design().frontFocus);assertEquals(0,count("redemptions",f))
+    }
     @Test fun `artwork accent persists with optimistic versioning and updates the same card in both providers`() {
         val f=fixture();val other=fixture();service.purchase(f.owner,purchase(f,4),id())
         val before=wallet(f);val balances=service.card(f.member).getValue("balances");val ledger=count("ledger",f)
