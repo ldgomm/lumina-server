@@ -40,10 +40,12 @@ import kotlin.math.pow
     val usage: String = "Presenta tu tarjeta en caja para acumular y canjear.",
     val birthdayMessage: String = "¡Feliz cumpleaños! Gracias por ser parte de nuestro negocio.",
     val artworkStyle: String = "GRADIENT", val composition: String = "SIGNATURE", val artworkAccent: String? = null,
-    val frontFocus: String = "AUTO") {
+    val frontFocus: String = "AUTO", val featuredRewardId: String? = null) {
     fun validate() {
         need(displayName.length<=80,"INVALID_DESIGN","Nombre demasiado largo."); text(welcome,80);text(usage,350);text(birthdayMessage,250)
         featuredProgramId?.let(::uuid)
+        featuredRewardId?.let(::uuid)
+        need(featuredRewardId == null || featuredProgramId != null, "FEATURED_PROGRAM_REQUIRED", "Elige la promoción a la que pertenece el premio destacado.")
         need(stampSymbol in walletStampSymbols,"INVALID_STAMP","Elige un símbolo de sello disponible.")
         need(artworkStyle in setOf("SOLID","GRADIENT","AURORA"),"INVALID_ARTWORK","Elige Cálido, Aurora o Plano.")
         need(composition in walletCompositions,"INVALID_COMPOSITION","Elige una composición disponible.")

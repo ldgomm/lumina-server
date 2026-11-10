@@ -527,3 +527,19 @@ input[data-money]{appearance:textfield;-moz-appearance:textfield}input[data-mone
 .studio-canje-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 16px}.studio-canje-metrics>div{padding:12px 10px;border-radius:12px;background:#fff;min-width:0}.studio-canje-metrics dt{font-size:10px;letter-spacing:.06em;color:#48617e;font-weight:750}.studio-canje-metrics dd{margin:8px 0 0;font-weight:750;font-size:17px;overflow-wrap:anywhere}.studio-canje-metrics>div:last-child{background:#10253f;color:white}.studio-canje-metrics>div:last-child dt{color:#b8d8ff}
 .studio-canje-actions{display:flex;flex-wrap:wrap;gap:8px}.studio-canje-actions [hidden]{display:none}.studio-canje-actions button{min-height:44px;margin:0}.studio-canje #studioCanjeStatus{font-size:12px;line-height:1.5;color:#466181;margin:12px 0 0}.studio-canje.is-after{border:2px solid #1d426d}
 @media(max-width:480px){.studio-canje{padding:14px}.studio-canje-metrics{gap:5px}.studio-canje-metrics>div{padding:10px 6px}.studio-canje-metrics dd{font-size:15px}.studio-canje-actions button{width:100%}.studio-canje-metrics dt{font-size:9px;letter-spacing:.02em}}
+
+/* Featured reward v035: one explicit goal shared by both Wallet previews. */
+.studio-reward-choice{margin:1.25rem 0;padding:1.2rem;border:1px solid #ccd8e8;border-radius:20px;background:linear-gradient(145deg,#f4f7fc,#fff);min-width:0}
+.studio-reward-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem;flex-wrap:wrap}
+.studio-reward-heading h4{margin:.35rem 0 .6rem;line-height:1.25;font-size:1.25rem;color:#10213c}
+.studio-reward-mode{display:inline-flex;padding:.35rem .65rem;border:1px solid #cadaec;border-radius:999px;background:#e9f0fa;color:#1c3c66;font-size:.75rem;font-weight:750;max-width:100%;overflow-wrap:anywhere}
+.studio-reward-choice select{width:100%;min-width:0;max-width:100%;text-overflow:ellipsis}
+.studio-reward-feedback{display:flex;flex-direction:column;align-items:flex-start;gap:.35rem;margin:.65rem 0 1rem}
+.studio-reward-feedback .design-help{margin:0;line-height:1.55}
+.studio-reward-feedback .text-button{min-height:44px;padding:.5rem 0;text-decoration:underline;text-underline-offset:4px;white-space:normal;text-align:left}
+.studio-reward-choice .studio-featured-summary{margin:.5rem 0 0;background:#10243f;color:#fff;border:0;padding:1.1rem;border-radius:14px;overflow-wrap:anywhere}
+.studio-reward-choice .studio-featured-summary .eyebrow{color:#b8d8ff}
+.studio-reward-choice .studio-featured-summary strong{display:block;font-size:1.25rem;line-height:1.35;margin:.35rem 0}
+.studio-reward-choice .studio-featured-summary p,.studio-reward-choice .studio-featured-summary .design-help{color:#d9e5f5;line-height:1.55;margin:.5rem 0 0}
+.studio-reward-choice .studio-reward-note{margin:.9rem 0 0;font-size:.85rem;line-height:1.55}
+@media(max-width:480px){.studio-reward-choice{padding:.85rem;border-radius:16px}.studio-reward-heading h4{font-size:1.13rem}.studio-reward-choice .studio-featured-summary{padding:.9rem}.studio-reward-choice .studio-featured-summary strong{font-size:1.1rem}}

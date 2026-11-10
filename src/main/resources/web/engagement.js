@@ -593,6 +593,17 @@
         const lookPath = look => `/wallet/art/v32/${look.composition}/${look.artworkStyle}/${stampOptions.findIndex(v=>v[0]===look.stampSymbol)}/${look.background.slice(1)}/${look.artworkAccent.slice(1)}/50/100.png`;
         let previousLook = null;
         const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress', previewProvider = 'apple', appleLayout = 'poster', samplePercent = 50, simulatedCanje = false, galleryBrand = false, galleryExpanded = false, progressTimer = null, studioStep = 0, showAllSteps = false;
+        const availablePrograms = () => state.data.programs.filter(p => p.config.active !== false);
+        const rewardsFor = program => program ? state.data.rewards.filter(r => r.active && r.programId === program.id && r.cost > 0).sort((a,b) => a.cost-b.cost || a.id.localeCompare(b.id)) : [];
+        const rewardOptions = (program, selected) => {
+            const units = value => program?.config.kind === 'CASHBACK' ? (Number(value)/100).toFixed(2)+' '+state.data.business.currency : `${value} ${program?.config.kind === 'STAMPS' ? (value===1?'sello':'sellos') : (value===1?'punto':'puntos')}`;
+            const options = [['','Automático · premio de menor costo'], ...rewardsFor(program).map(r => [r.id, `${r.name} · ${units(r.cost)}`])];
+            if(selected && !options.some(([id])=>id===selected)) options.push([selected, (state.data.rewards.find(r=>r.id===selected)?.name || 'Premio guardado')+' · no disponible']);
+            return options;
+        };
+        const initialProgram = availablePrograms().find(p=>p.id===d.featuredProgramId) || availablePrograms()[0];
+        const programOptions = [['', 'Primera promoción activa'], ...availablePrograms().map(p=>[p.id,p.config.name])];
+        if(d.featuredProgramId && !programOptions.some(([id])=>id===d.featuredProgramId)) programOptions.push([d.featuredProgramId, (state.data.programs.find(p=>p.id===d.featuredProgramId)?.config.name || 'Promoción guardada')+' · no disponible']);
                 root.innerHTML = `<section class="panel wallet-design-panel"><div class="wallet-studio-heading"><div><span class="eyebrow">ESTUDIO DE TARJETAS</span><h2>Diseña tu tarjeta</h2><p>Elige su estructura, dale tu identidad y revisa Apple y Google antes de guardar.</p></div><div class="wallet-studio-navigation"><button type="button" class="quiet" id="jumpToDesign">Diseñar</button><button type="button" class="quiet" id="jumpToPreview">Ver tarjeta</button></div></div><div class="wallet-design-layout"><form id="walletDesign" novalidate><div class="studio-steps" role="group" aria-label="Pasos para diseñar la tarjeta">${['Diseño','Marca','Promoción y textos'].map((name,i) => `<button type="button" data-studio-step="${i}" aria-controls="studioStep${i}" aria-expanded="${i===0}"><span aria-hidden="true">${i+1}</span><strong>${name}</strong></button>`).join('')}</div><div class="studio-step-toolbar"><p id="studioStepStatus" role="status">Paso 1 de 3 · Elige una estructura</p><button type="button" id="studioShowAll" class="text-button" aria-expanded="false">Ver todo</button></div><fieldset id="designFields"><section class="studio-step-panel" id="studioStep0" aria-labelledby="studioStep0Title">
             <h3 class="design-colors-heading" id="studioStep0Title" tabindex="-1">Elige una estructura</h3>
             <section class="studio-looks" aria-labelledby="studioLooksTitle"><div class="studio-looks-intro"><span class="eyebrow">UN PUNTO DE PARTIDA</span><h4 id="studioLooksTitle">${categoryId==='GENERAL' ? 'Tres formas de empezar' : 'Ideas para '+esc(category.name)}</h4><p>Combinaciones de composición, colores, símbolo y acabado. Elige una y ajústala a tu marca.</p></div><div class="studio-look-grid">${looks.map(look => `<button type="button" class="studio-look" data-wallet-look="${look.id}" aria-pressed="false"><img loading="lazy" width="516" height="406" src="${lookPath(look)}" alt=""><span><strong>${look.name}</strong><small>${look.id==='0' ? 'Con carácter' : look.id==='1' ? 'Clara y ligera' : 'Contraste nocturno'}</small><span class="studio-look-colors" aria-hidden="true">${[look.background,look.artworkAccent,look.foreground].map(color=>`<i style="background:${color}"></i>`).join('')}</span></span></button>`).join('')}</div><p class="design-help">Solo cambia la apariencia del borrador. Tu logo, nombre, textos y promociones se conservan.</p><div class="studio-look-feedback"><p id="studioLookStatus" role="status"></p><button type="button" class="quiet" id="undoWalletLook" hidden>Deshacer combinación</button></div></section>
@@ -618,7 +629,7 @@
             <section class="studio-accent" aria-labelledby="studioAccentTitle"><h4 id="studioAccentTitle">Color de la ilustración</h4><p class="design-help">Personaliza los trazos y el avance en ambas Wallet. El logo y los colores del texto tienen sus propios ajustes.</p><label class="check"><input id="autoArtworkAccent" type="checkbox" ${d.artworkAccent ? '' : 'checked'}>Automático según el acabado</label><div class="studio-accent-controls"><div>${field('artworkAccent','Mi color de acento','color',d.artworkAccent || d.label,'aria-describedby="artworkAccentStatus"')}</div><div class="studio-accent-applied"><span>COLOR APLICADO</span><span id="artworkAccentSwatch" aria-hidden="true"></span><strong id="artworkAccentApplied"></strong></div></div><p id="artworkAccentStatus" class="design-help" role="status"></p></section>
             <p class="design-help">Cada composición representa el avance de forma propia. Hasta 20 sellos se muestran por unidad; puntos, cashback y metas mayores se representan proporcionalmente. El saldo exacto siempre aparece en texto. La tipografía de los campos la controla cada Wallet.</p>
             </section><section class="studio-step-panel" id="studioStep2" aria-labelledby="studioStep2Title" hidden><h3 class="design-colors-heading" id="studioStep2Title" tabindex="-1">Qué verá tu cliente</h3>
-            <section class="studio-focus" aria-labelledby="studioFocusTitle"><span class="eyebrow">UNA MIRADA, UNA IDEA CLARA</span><h4 id="studioFocusTitle">¿Qué quieres destacar primero?</h4><p class="design-help">Elige el orden del avance y el premio en Apple y Google. Conserva la composición y las reglas de tu promoción.</p><input type="hidden" id="frontFocus" name="frontFocus" value="${esc(d.frontFocus || 'AUTO')}"><div class="studio-focus-options" role="group" aria-label="Foco del frente de la tarjeta">${[['AUTO','Según el diseño','La composición elige el orden.'],['PROGRESS','Primero el avance','Cuánto lleva y cuánto le falta.'],['REWARD','Primero el premio','El beneficio que puede alcanzar.']].map(([id,title,help])=>`<button type="button" data-front-focus="${id}" aria-pressed="false"><span class="studio-focus-diagram focus-${id.toLowerCase()}" aria-hidden="true"><i></i><i></i><i></i></span><strong>${title}</strong><small>${help}</small><span class="studio-focus-check" aria-hidden="true">✓</span></button>`).join('')}</div><p id="studioFocusHint" class="design-help" role="status"></p></section>${select('featuredProgramId', 'Promoción destacada en Wallet', [['', 'Primera promoción activa'], ...state.data.programs.filter(p => p.config.active !== false).map(p => [p.id, p.config.name])], d.featuredProgramId || '')}<p class="design-help">Apple y Google destacarán esta promoción y su premio de menor costo. Los demás saldos y premios siguen disponibles en los detalles de la tarjeta.</p><div class="studio-featured-summary"><span class="eyebrow">EN PRIMER PLANO</span><strong id="studioFeaturedName"></strong><p id="studioFeaturedRule"></p><p id="studioFeaturedHint" class="design-help"></p></div>${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
+            <section class="studio-focus" aria-labelledby="studioFocusTitle"><span class="eyebrow">UNA MIRADA, UNA IDEA CLARA</span><h4 id="studioFocusTitle">¿Qué quieres destacar primero?</h4><p class="design-help">Elige el orden del avance y el premio en Apple y Google. Conserva la composición y las reglas de tu promoción.</p><input type="hidden" id="frontFocus" name="frontFocus" value="${esc(d.frontFocus || 'AUTO')}"><div class="studio-focus-options" role="group" aria-label="Foco del frente de la tarjeta">${[['AUTO','Según el diseño','La composición elige el orden.'],['PROGRESS','Primero el avance','Cuánto lleva y cuánto le falta.'],['REWARD','Primero el premio','El beneficio que puede alcanzar.']].map(([id,title,help])=>`<button type="button" data-front-focus="${id}" aria-pressed="false"><span class="studio-focus-diagram focus-${id.toLowerCase()}" aria-hidden="true"><i></i><i></i><i></i></span><strong>${title}</strong><small>${help}</small><span class="studio-focus-check" aria-hidden="true">✓</span></button>`).join('')}</div><p id="studioFocusHint" class="design-help" role="status"></p></section>${select('featuredProgramId', 'Promoción destacada en Wallet', programOptions, d.featuredProgramId || '')}<section class="studio-reward-choice" aria-labelledby="studioRewardTitle"><div class="studio-reward-heading"><div><span class="eyebrow">UN PREMIO, UNA META CLARA</span><h4 id="studioRewardTitle">El premio que quieres mostrar</h4></div><span id="studioRewardMode" class="studio-reward-mode"></span></div><p class="design-help">Elige qué beneficio verá primero tu cliente en Apple y Google.</p>${select('featuredRewardId','Premio al frente',rewardOptions(initialProgram,d.featuredRewardId || ''),d.featuredRewardId || '')}<div class="studio-reward-feedback"><p id="studioRewardSelectionHint" class="design-help" role="status"></p><button type="button" id="useAutomaticReward" class="text-button" hidden>Usar automático</button></div><div class="studio-featured-summary"><span class="eyebrow">ASÍ APARECERÁ</span><strong id="studioFeaturedName"></strong><p id="studioFeaturedRule"></p><p id="studioFeaturedHint" class="design-help"></p></div><p class="design-help studio-reward-note">Los otros premios siguen en los detalles. Elegir uno aquí cambia la tarjeta; las condiciones de la promoción se editan en Premios.</p></section>${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
             ${field('usage', 'Cómo usar la tarjeta', 'text', d.usage, 'required maxlength="350"')}
             <p class="design-help">Configura títulos, mensajes y felicitaciones automáticas desde Eventos y cumpleaños.</p>
             </section></fieldset><div class="studio-step-footer"><button type="button" class="quiet" id="studioPrevious">Anterior</button><button type="button" id="studioNext">Siguiente: Marca</button></div><details class="studio-change-review" id="studioReviewChanges" hidden><summary><span>Revisar mis cambios</span><strong id="studioChangeCount"></strong></summary><p class="design-help">Compara lo guardado con tu borrador. El envío a ambas Wallet empieza al guardar.</p><ul id="studioChangeList"></ul></details><p id="designSaveError" class="design-error" role="alert" hidden></p><div class="studio-savebar"><div><strong id="designChangeStatus" role="status">Diseño guardado</strong><p id="designSaveHint" class="design-help"></p></div><div class="studio-save-actions"><button id="designFixColors" class="quiet" type="button" hidden>Revisar colores</button><button id="restoreDesign" class="quiet" type="button">Restaurar guardado</button><button id="saveDesign" type="submit" aria-describedby="designSaveHint">Guardar diseño</button></div></div></form>
@@ -658,10 +669,10 @@
             headline: root.querySelector('#googlePreviewReward').parentElement,
             journey: root.querySelector('#googleJourney'), hero: root.querySelector('#googleStampArtwork')
         };
-        const persistedFields = ['displayName','frontFocus','composition','background','foreground','label','featuredProgramId','stampSymbol','artworkStyle','artworkAccent','welcome','usage'];
+        const persistedFields = ['displayName','frontFocus','composition','background','foreground','label','featuredProgramId','featuredRewardId','stampSymbol','artworkStyle','artworkAccent','welcome','usage'];
         const designValues = () => {
             const values = Object.fromEntries(persistedFields.map(name => [name, f.elements[name].value]));
-            return {...d, ...values, featuredProgramId: values.featuredProgramId || null, artworkAccent: root.querySelector('#autoArtworkAccent').checked ? null : values.artworkAccent, logoPng: logo};
+            return {...d, ...values, featuredProgramId: values.featuredProgramId || null, featuredRewardId: values.featuredRewardId || null, artworkAccent: root.querySelector('#autoArtworkAccent').checked ? null : values.artworkAccent, logoPng: logo};
         };
         let savedDesign = designValues(), savedFingerprint = JSON.stringify(savedDesign), reviewFingerprint = null;
         const hasChanges = () => JSON.stringify(designValues()) !== savedFingerprint;
@@ -669,7 +680,7 @@
         const reviewFields = [
             ['composition','Composición',0],['background','Fondo',1],['foreground','Texto',1],['label','Etiquetas',1],['artworkAccent','Acento',1],
             ['stampSymbol','Símbolo',1],['artworkStyle','Acabado',1],['logoPng','Logo',1],['displayName','Nombre',1],
-            ['frontFocus','Foco del frente',2],['featuredProgramId','Promoción destacada',2],['welcome','Bienvenida',2],['usage','Instrucciones',2]
+            ['frontFocus','Foco del frente',2],['featuredProgramId','Promoción destacada',2],['featuredRewardId','Premio al frente',2],['welcome','Bienvenida',2],['usage','Instrucciones',2]
         ];
         function reviewValue(key,value) {
             if(key==='composition') return compositions.find(c=>c[0]===value)?.[1] || 'Medallón';
@@ -678,6 +689,7 @@
             if(key==='artworkAccent') return value || 'Automático';
             if(key==='logoPng') return value ? 'Logo personalizado' : 'Logo predeterminado';
             if(key==='featuredProgramId') return state.data.programs.find(p=>p.id===value)?.config.name || (value ? 'Promoción no disponible' : 'Primera promoción activa');
+            if(key==='featuredRewardId') return state.data.rewards.find(r=>r.id===value)?.name || (value ? 'Premio no disponible' : 'Automático · premio de menor costo');
             if(key==='displayName') return value || state.data.business.name;
             return value || 'Sin texto';
         }
@@ -767,7 +779,19 @@
             failed.forEach(s => { s.input.value = color; });
             adjustment.textContent = failed.length ? `${failed.map(s => s.name).join(' y ')}: ajustado a ${color === '#000000' ? 'negro' : 'blanco'} para conservar tu fondo. Revisa la vista previa antes de guardar.` : '';
         }
+        function syncRewardChoices(selected = f.elements.featuredRewardId.value) {
+            const program = availablePrograms().find(p=>p.id===f.elements.featuredProgramId.value) || availablePrograms()[0];
+            const options = rewardOptions(program,selected), input = f.elements.featuredRewardId;
+            const fingerprint = JSON.stringify(options);
+            if(input.dataset.options !== fingerprint) {
+                input.replaceChildren(...options.map(([id,label])=>new Option(label,id)));
+                input.dataset.options=fingerprint;
+            }
+            input.value=selected || '';
+            return program;
+        }
         function update() {
+            syncRewardChoices();
             syncSteps();
             reviewChanges();
             const frontFocus=f.elements.frontFocus.value;
@@ -809,9 +833,15 @@
             preview.style.backgroundColor = background.value; preview.style.color = foreground.value;
             preview.style.setProperty('--preview-label', labels.value);
             root.querySelector('#previewName').textContent = f.elements.displayName.value.trim() || state.data.business.name;
-            const activePrograms = state.data.programs.filter(p => p.config.active !== false);
-            const program = activePrograms.find(p => p.id === f.elements.featuredProgramId.value) || activePrograms[0];
-            const reward = program && state.data.rewards.filter(r => r.active && r.programId === program.id && r.cost > 0).sort((a, b) => a.cost - b.cost || a.id.localeCompare(b.id))[0];
+            const program = availablePrograms().find(p => p.id === f.elements.featuredProgramId.value) || availablePrograms()[0];
+            const rewards = rewardsFor(program), selectedReward = f.elements.featuredRewardId.value;
+            const chosenReward = program?.id === f.elements.featuredProgramId.value ? rewards.find(r=>r.id===selectedReward) : null;
+            const reward = chosenReward || rewards[0];
+            root.querySelector('#studioRewardMode').textContent = chosenReward ? 'Elegido por ti' : selectedReward ? 'Respaldo automático' : 'Automático';
+            root.querySelector('#studioRewardSelectionHint').textContent = chosenReward ? 'Este premio define el nombre, la meta y el progreso de ambas Wallet. Si se pausa, se mostrará un premio activo de esta promoción; al reactivarse, volverá tu elección.' : selectedReward ? 'Tu elección no está disponible. Ahora se muestra un premio activo, si existe. Puedes elegir otro o volver a Automático.' : rewards.length ? 'Se muestra el premio activo de menor costo. Puedes elegir cualquier otro de esta promoción.' : 'Esta promoción no tiene premios activos. Crea o reactiva uno desde Premios.';
+            f.elements.featuredRewardId.disabled = saving || loadingLogo || !rewards.length && !selectedReward;
+            root.querySelector('#useAutomaticReward').hidden = !selectedReward;
+            root.querySelector('#useAutomaticReward').disabled = saving || loadingLogo;
             const kind = program?.config.kind;
             const measurable = reward && Number.isSafeInteger(reward.cost) && reward.cost > 0;
             const customAmount = measurable ? Number(BigInt(reward.cost) * BigInt(samplePercent) / 100n) : 0;
@@ -925,9 +955,9 @@
             root.querySelector('#studioBackToEditing').hidden = !comparing;
             root.querySelectorAll('.studio-provider-caption').forEach(caption => { caption.hidden = !comparing; });
             root.querySelector('#studioSimulationStatus').textContent = paused ? 'Pausada' : !reward ? 'Sin meta activa' : simulatedCanje ? 'Después: '+unit(amount) : remaining === 0 ? budgetLabel : summary;
-            root.querySelector('#studioFeaturedName').textContent = program?.config.name || 'Tu bienvenida';
-            root.querySelector('#studioFeaturedRule').textContent = reward ? `${reward.name} · ${unit(reward.cost)} para canjear` : program ? 'Esta promoción todavía no tiene un premio activo.' : 'No hay promociones activas. Puedes guardar el diseño y crear una después.';
-            root.querySelector('#studioFeaturedHint').textContent = reward ? (reward.benefitText || 'Se destaca el premio activo de menor costo. Los demás siguen disponibles en los detalles.') : program ? 'Crea el beneficio y su meta desde Premios. El editor no modifica las reglas.' : 'La tarjeta mostrará tu bienvenida hasta que haya una promoción activa.';
+            root.querySelector('#studioFeaturedName').textContent = reward?.name || program?.config.name || 'Tu bienvenida';
+            root.querySelector('#studioFeaturedRule').textContent = reward ? `${unit(reward.cost)} para canjear · ${program.config.name}` : program ? 'Esta promoción todavía no tiene un premio activo.' : 'No hay promociones activas. Puedes guardar el diseño y crear una después.';
+            root.querySelector('#studioFeaturedHint').textContent = reward ? (reward.benefitText || 'El saldo y las condiciones vigentes se confirman en caja.') : program ? 'Crea el beneficio y su meta desde Premios. El editor no modifica las reglas.' : 'La tarjeta mostrará tu bienvenida hasta que haya una promoción activa.';
             root.querySelector('#previewPlatformHint').textContent = previewProvider === 'both' ? 'Mismo diseño y mismo saldo de ejemplo. Cada Wallet adapta sus campos; el teléfono decide la distribución final.' : previewProvider === 'apple'
                 ? (appleLayout === 'poster' ? 'Póster para iOS 27 o posterior. Ilustración real del servidor; composición orientativa. Apple decide la tipografía y la distribución final.' : 'Formato clásico compatible con versiones anteriores. El mismo QR, saldo y premio; Apple decide la distribución final.')
                 : 'Google: saldo, avance y nombre del premio en el frente. Consumos y condiciones en los detalles. El color del texto lo decide Google.';
@@ -1029,7 +1059,8 @@
         root.querySelector('#galleryBrand').onclick = () => { if(saving || loadingLogo)return;galleryBrand=!galleryBrand;update(); };
         root.querySelector('#restoreDesign').onclick = () => {
             if(saving || loadingLogo)return;
-            for(const name of persistedFields) f.elements[name].value = savedDesign[name] || '';
+            for(const name of persistedFields) if(name!=='featuredRewardId') f.elements[name].value = savedDesign[name] || '';
+            syncRewardChoices(savedDesign.featuredRewardId || '');
             f.elements.artworkAccent.value=savedDesign.artworkAccent || savedDesign.label;root.querySelector('#autoArtworkAccent').checked=!savedDesign.artworkAccent;
             previousLook=null;root.querySelector('#studioLookStatus').textContent='';
             simulatedCanje=false;
@@ -1046,7 +1077,11 @@
         sample.oninput=()=>sampleInput(false);sample.onchange=()=>sampleInput(true);
         function edited(e) {
             if (saving) return;
-            if(e.target === f.elements.featuredProgramId) { clearTimeout(progressTimer);example='progress';samplePercent=50;simulatedCanje=false; }
+            if(e.target === f.elements.featuredProgramId || e.target === f.elements.featuredRewardId) {
+                clearTimeout(progressTimer);example='progress';samplePercent=50;simulatedCanje=false;
+                if(e.target === f.elements.featuredProgramId) f.elements.featuredRewardId.value='';
+                else if(f.elements.featuredRewardId.value && !f.elements.featuredProgramId.value) f.elements.featuredProgramId.value=availablePrograms()[0]?.id || '';
+            }
             clearError();
             if(appearanceFields.includes(e.target.name) || e.target.id==='autoArtworkAccent') { previousLook=null;root.querySelector('#studioLookStatus').textContent=''; }
             if (e.target === background || e.target === foreground || e.target === labels) {
@@ -1060,6 +1095,7 @@
             f.dataset.palette = [background.value, foreground.value, labels.value].join('/');
             update();
         }
+        root.querySelector('#useAutomaticReward').onclick=()=>{if(saving || loadingLogo)return;f.elements.featuredRewardId.value='';edited({target:f.elements.featuredRewardId});f.elements.featuredRewardId.focus();};
         root.querySelectorAll('[data-wallet-example]').forEach(button => button.onclick = () => { if(saving || loadingLogo)return;clearTimeout(progressTimer);example = button.dataset.walletExample; simulatedCanje=false; update(); });
         root.querySelectorAll('[data-preview-provider]').forEach(button => button.onclick = () => { if (saving || loadingLogo) return; const changedComparison = (previewProvider === 'both') !== (button.dataset.previewProvider === 'both'); previewProvider = button.dataset.previewProvider; update(); if (changedComparison) root.querySelector('#studioPreview').scrollIntoView({behavior:scrollBehavior(),block:'start'}); });
         root.querySelectorAll('[data-wallet-style]').forEach(button => button.onclick = () => {

@@ -116,14 +116,10 @@ internal fun drawWalletStamp(g: Graphics2D, symbol: Int) {
 
 fun WalletPass.artwork(): WalletArtwork {
     val d=design()
-    val balances=presentationBalances().sortedBy { if(it["programId"]?.jsonPrimitive?.contentOrNull==d.featuredProgramId) 0 else 1 }
-    val first=balances.firstOrNull()
-    val target=snapshot["rewardProgress"]?.jsonArray.orEmpty().map { it.jsonObject }.filter {
-        first?.get("programId")!=null && it["programId"]==first["programId"] && it["kind"]==first["kind"] && (it["goal"]?.jsonPrimitive?.longOrNull?:0)>0
-    }.sortedWith(compareBy<JsonObject> { it.getValue("goal").jsonPrimitive.long }.thenBy { it.getValue("id").jsonPrimitive.content }).firstOrNull()
-    val goal=if(snapshot["canOperate"]?.jsonPrimitive?.booleanOrNull==true) target?.get("goal")?.jsonPrimitive?.longOrNull?:0 else 0
-    val available=maxOf(0,first?.get("available")?.jsonPrimitive?.longOrNull?:0)
-    val individual=first?.get("kind")==JsonPrimitive("STAMPS") && goal<=20
+    val progress=journey()
+    val goal=progress?.goal?:0
+    val available=progress?.available?:0
+    val individual=progress?.kind=="STAMPS" && goal<=20
     val total=if(goal==0L) 0 else if(individual) goal.toInt() else 100
     val filled=when { goal==0L -> 0; individual -> minOf(available,goal).toInt(); else -> (BigInteger.valueOf(minOf(available,goal))*BigInteger.valueOf(100)/BigInteger.valueOf(goal)).toInt() }
     return WalletArtwork(d.artworkStyle,walletStampSymbols.indexOf(d.stampSymbol).coerceAtLeast(0),d.background.drop(1),filled,total,d.composition,d.artworkAccent?.removePrefix("#"))

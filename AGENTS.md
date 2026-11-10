@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v034 requiere 439 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v035 requiere 452 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -286,3 +286,13 @@ Al alcanzar una meta, los campos nativos muestran el saldo disponible y para cu�
 El editor incorpora Saldo extra y una simulación reversible Antes/Costo/Queda para Apple y Google, dentro de Probar avance y canjes, contraído al entrar. No crea compras, reservas ni canjes. Después de un canje muestra el saldo restante, incluso si alcanza para otro; el botón no permite encadenar operaciones ficticias. Cambiar promoción, ejemplo o porcentaje reinicia la simulación. Cambiar apariencia conserva el saldo mostrado. Deshacer, guardado versionado, bloqueo de tareas y conflictos mantienen su comportamiento. Excluir todo estado simulado de WalletDesign y localStorage. Desactivar simulación cuando no haya meta entera segura o la tarjeta esté pausada.
 
 Gate del Mac: 233 pruebas unitarias/HTTP + 206 PostgreSQL (439), 128 Python, Docker y 88 controles gateway antes de auto commit local, sin push. wallet-redemption.dom.cjs y wallet-redemption.spec.cjs cubren cálculo, aislamiento, reinicios, teclado, saldo sobrante y anchos 320/390/1024/1440 con datos ficticios. No confundir pruebas de navegador con recepción en iPhone/Android. HTTPS y conexión de tarjetas existentes se informan por separado.
+
+## Premio al frente v035
+
+WalletDesign.featuredRewardId es opcional y requiere featuredProgramId válido del mismo negocio. Validar UUID, propiedad y correspondencia con la promoción antes de guardar. La elección persiste por versión y no cambia costos, reglas, balances ni la autorización de canjes. Los premios inactivos pueden conservarse como preferencia; nunca se incluyen como activos en el snapshot. Ante ausencia, el frente vuelve al premio activo de menor costo dentro de la promoción. Al reactivarlo se recupera la elección. Una promoción pausada o eliminada sigue excluida.
+
+Apple clásico/póster, Google, WalletJourney y las imágenes usan el mismo premio y su meta, con aritmética entera. Mantener la elección dentro de los veinte premios del snapshot, priorizando primero el premio elegido y luego su promoción. Los demás premios conservan sus detalles hasta los límites nativos; no sumar saldos entre programas. Mantener presentationVersion=34 y rutas v32; la selección automática sin preferencia conserva la presentación anterior. Guardar incrementa designVersion y adelanta el escaneo existente de ambas Wallet. V001–V009 no cambian.
+
+El editor ofrece Premio al frente en Promoción y textos, muestra nombre, meta y condiciones del premio elegido y permite volver a Automático. Filtrar opciones por promoción y premios activos. Si la promoción era automática, elegir un premio fija su promoción explícitamente. Cambiar de promoción limpia la elección; cambiar promoción o premio reinicia la simulación. Cambios de apariencia y plataforma mantienen el objetivo. Conservar preferencias pausadas como no disponibles, mostrar el respaldo activo y permitir editar o restaurar el borrador sin eliminar la preferencia silenciosamente. Los campos se comparan en la revisión y Restaurar reconstruye las opciones de la promoción guardada. Escapar nombres; el simulador nunca se persiste.
+
+Gate del Mac: 241 unitarias/HTTP + 211 PostgreSQL (452), 128 Python, Docker y 88 comprobaciones gateway antes del auto commit local; sin push. wallet-featured-reward.dom.cjs y wallet-featured-reward.spec.cjs cubren selección, respaldo, pausa, meta, canje simulado, aislamiento, guardado, conflictos, restauración, teclado y anchos 320/390/1024/1440. HTTPS y recepción en iPhone/Android siguen siendo comprobaciones separadas; nunca renovar túneles automáticamente.

@@ -106,10 +106,15 @@ fun LoyaltyService.design(s:Staff)=db.tx{c->s.owner();c.one("SELECT version,conf
 fun LoyaltyService.saveDesign(s:Staff,input:WalletDesignChange):JsonObject {s.owner();input.design.validate();return db.tx{c->
     commercial.requireActive(c,s.tenant)
     input.design.featuredProgramId?.let{pid->need(c.one("SELECT id FROM programs WHERE tenant_id=? AND id=? AND deleted_at IS NULL",s.tenant,pid){it.getString(1)}!=null,"NOT_FOUND","Promoción no encontrada.",404)}
+    input.design.featuredRewardId?.let { rid ->
+        need(c.one("SELECT id FROM rewards WHERE tenant_id=? AND program_id=? AND id=?", s.tenant, input.design.featuredProgramId, rid) { it.getString(1) } != null,
+            "NOT_FOUND", "El premio no pertenece a la promoción elegida.", 404)
+    }
     c.rows("SELECT pg_advisory_xact_lock(hashtextextended(?,0))","design:${s.tenant}"){true}
     val version=c.one("SELECT version FROM wallet_designs WHERE tenant_id=?",s.tenant){it.getInt(1)}?:0
     need(version==input.expectedVersion,"VERSION_CONFLICT","El diseño cambió. Recarga antes de guardar.",409)
     c.exec("INSERT INTO wallet_designs(tenant_id,version,config) VALUES(?,?,?::jsonb) ON CONFLICT(tenant_id) DO UPDATE SET version=excluded.version,config=excluded.config",s.tenant,version+1,json.encodeToString(input.design))
+    queuePromotionCards(c,s.tenant)
     audit(c,s.tenant,s.id,"WALLET_DESIGN_UPDATED",s.tenant);obj("version" to version+1)
 }}
 fun LoyaltyService.savePreferences(s:Staff,memberId:String,input:CustomerPreferencesChange):JsonObject {s.owner();need(input.customerConfirmed,"CONSENT_REQUIRED","Confirma que el cliente autorizó estas preferencias.");input.preferences.validate();return db.tx{c->

@@ -38,7 +38,8 @@ private fun WalletPass.appleRewards(balances: List<JsonObject>): List<AppleRewar
         if ((reward["goal"]?.jsonPrimitive?.longOrNull ?: 0) <= 0) return@mapNotNull null
         if (reward["kind"] != balance["kind"]) return@mapNotNull null
         AppleReward(reward, balance)
-    }.sortedWith(compareBy<AppleReward> { balances.indexOf(it.balance) }.thenBy { it.goal }.thenBy { it.id })
+    }.sortedWith(compareBy<AppleReward> { balances.indexOf(it.balance) }
+        .thenBy { design().rewardPriority(it.source["programId"]?.jsonPrimitive?.contentOrNull, it.id) }.thenBy { it.goal }.thenBy { it.id })
 }
 
 private fun AppleReward.detail(currency: String, symbol: String, paused: Boolean): String {

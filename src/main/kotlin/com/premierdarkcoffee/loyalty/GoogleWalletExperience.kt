@@ -78,7 +78,8 @@ fun WalletPass.googleExperienceFields(): JsonObject {
         val balance = byId[reward["programId"]?.jsonPrimitive?.contentOrNull] ?: return@mapNotNull null
         if ((reward["goal"]?.jsonPrimitive?.longOrNull ?: 0) <= 0 || reward["kind"] != balance["kind"]) return@mapNotNull null
         GoogleReward(reward, balance)
-    }.sortedWith(compareBy<GoogleReward> { balances.indexOf(it.balance) }.thenBy { it.goal }.thenBy { it.id })
+    }.sortedWith(compareBy<GoogleReward> { balances.indexOf(it.balance) }
+        .thenBy { design.rewardPriority(it.source["programId"]?.jsonPrimitive?.contentOrNull, it.id) }.thenBy { it.goal }.thenBy { it.id })
     val first = balances.firstOrNull()
     val target = rewards.firstOrNull { it.balance == first }
     val progress = journey()

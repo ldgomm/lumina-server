@@ -40,6 +40,10 @@ data class WalletJourney(val available: Long, val goal: Long, val kind: String, 
         "Te falta${if (remaining == 1L && kind != "CASHBACK") "" else "n"} ${number(remaining)} ${unit(remaining)}."
 }
 
+/** An explicit reward is preferred only inside its own featured program. */
+internal fun WalletDesign.rewardPriority(programId: String?, rewardId: String?): Int =
+    if (featuredProgramId != null && featuredProgramId == programId && featuredRewardId != null && featuredRewardId == rewardId) 0 else 1
+
 fun WalletPass.journey(): WalletJourney? {
     if (snapshot["canOperate"]?.jsonPrimitive?.booleanOrNull != true) return null
     val first = presentationBalances().sortedBy {
@@ -48,7 +52,8 @@ fun WalletPass.journey(): WalletJourney? {
     val target = snapshot["rewardProgress"]?.jsonArray.orEmpty().map { it.jsonObject }.filter {
         first["programId"] != null && it["programId"] == first["programId"] && it["kind"] == first["kind"] &&
             (it["goal"]?.jsonPrimitive?.longOrNull ?: 0) > 0
-    }.sortedWith(compareBy<JsonObject> { it.getValue("goal").jsonPrimitive.long }.thenBy { it.getValue("id").jsonPrimitive.content }).firstOrNull() ?: return null
+    }.sortedWith(compareBy<JsonObject> { design().rewardPriority(it["programId"]?.jsonPrimitive?.contentOrNull, it["id"]?.jsonPrimitive?.contentOrNull) }
+        .thenBy { it.getValue("goal").jsonPrimitive.long }.thenBy { it.getValue("id").jsonPrimitive.content }).firstOrNull() ?: return null
     return WalletJourney(maxOf(0, first.getValue("available").jsonPrimitive.long), target.getValue("goal").jsonPrimitive.long,
         first.getValue("kind").jsonPrimitive.content, snapshot.getValue("currency").jsonPrimitive.content)
 }
