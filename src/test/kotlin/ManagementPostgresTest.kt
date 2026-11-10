@@ -141,7 +141,7 @@ class ManagementPostgresTest {
     }
     @Test fun `migration rerun keeps old credentials and snapshots immutable`() {
         val f=fixture();val a=hire(f);purchase(f,service.staff(a.str("token")));db.migrate();assertEquals(f.owner.id,service.staff(f.token).id)
-        assertEquals(12,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        assertEquals(13,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
         assertFailsWith<java.sql.SQLException>{db.tx{it.exec("UPDATE audit_events SET actor_name='Changed' WHERE tenant_id=?",f.owner.tenant)}}
     }
     @Test fun `platform endpoints require platform authentication and never expose scannable customer cards`()=testApplication {

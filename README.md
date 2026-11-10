@@ -53,3 +53,13 @@ El registro del cliente no tiene contraseña. El QR del negocio abre el formular
 Loyalty usa su propia base y volumen Docker; no importa automáticamente datos ni credenciales de Comeback. Conservar el proyecto anterior permite una futura migración explícita si se necesita. El nombre interno `comeback_migrations` y los identificadores de pases se mantienen para preservar compatibilidad; todas las declaraciones Kotlin usan el paquete Loyalty.
 
 Consulta `docs/local-v008.md` para los comandos de administración y las verificaciones.
+
+<!-- loyalty-v040 -->
+
+## Administración integral v040
+
+La entrega actual incorpora un centro de control para dueño y plataforma, directorio editable de sucursales, filtros y permisos de equipo, actividad conectada a los informes, ficha con cambios protegidos y una cuenta más clara.
+
+Desde Downloads: `bash loyalty_administracion_v040.sh`. Requiere v039. Se aplican los cambios sobre el código existente, respetando reformateos equivalentes de IntelliJ; se comprueban pruebas, Docker y gateway antes del commit local. HTTPS se valida aparte. El resultado y el mismo instalador se guardan en un ZIP de Downloads.
+
+Consulta [la guía de Administración v040](docs/administracion-v040.md) para conocer los cambios de cada sección, la validación y los límites de los informes.

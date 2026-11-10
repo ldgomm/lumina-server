@@ -184,6 +184,21 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
             "periodStart" to r.getDate("period_start")?.toString(), "periodEnd" to r.getDate("period_end")?.toString(), "planVersion" to r.getObject("plan_version"),
             "voidReason" to r.getString("void_reason"), "createdAt" to r.instant("created_at"))
     }
+    internal fun administrationSnapshot(c: Connection, tenant: String, staffId: String?): JsonObject {
+        val date=today(c,tenant)
+        val access=c.one("SELECT state,reason,version FROM business_access WHERE tenant_id=?",tenant) {
+            obj("state" to it.getString(1),"reason" to it.getString(2),"version" to it.getInt(3))
+        } ?: throw Problem(404,"NOT_FOUND","Negocio no encontrado.")
+        val p=plan(c,tenant)
+        val summary=c.one("SELECT coalesce(sum(amount_minor-paid_minor) FILTER(WHERE voided_at IS NULL),0),coalesce(sum(amount_minor-paid_minor) FILTER(WHERE voided_at IS NULL AND due_on<?),0),min(due_on) FILTER(WHERE voided_at IS NULL AND amount_minor>paid_minor) FROM billing_invoices WHERE tenant_id=?",Date.valueOf(date),tenant) {
+            obj("balanceMinor" to it.getLong(1),"overdueMinor" to it.getLong(2),"nextDueOn" to it.getDate(3)?.toString())
+        }
+        val notices=c.one("SELECT count(*),count(*) FILTER(WHERE r.read_at IS NULL) FROM business_notices n LEFT JOIN business_notice_reads r ON r.tenant_id=n.tenant_id AND r.notice_id=n.id AND r.staff_id=? WHERE n.tenant_id=? AND (n.expires_on IS NULL OR n.expires_on>=?)",staffId,tenant,Date.valueOf(date)) {
+            obj("active" to it.getLong(1),"unread" to if(staffId==null)null else it.getLong(2))
+        }
+        return obj("today" to date,"access" to effective(c,tenant,access,date),"summary" to summary,"notices" to notices,
+            "membership" to p?.let { obj("name" to it.first.name,"recurring" to it.first.recurring,"nextChargeOn" to it.third,"feeMinor" to it.first.feeMinor,"intervalMonths" to it.first.intervalMonths) })
+    }
     fun ownerAccount(s: Staff, offset: Int = 0): JsonObject { s.owner(); return account(s.tenant, s.id, offset) }
     fun account(tenant: String, staffId: String? = null, offset: Int = 0): JsonObject = db.tx { c ->
         need(offset in 0..1_000_000, "INVALID_PAGE", "Página inválida.")

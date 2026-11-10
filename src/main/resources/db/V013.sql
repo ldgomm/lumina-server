@@ -1,0 +1,2 @@
+ALTER TABLE branches ADD COLUMN version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0);
+ALTER TABLE branches ADD COLUMN updated_at TIMESTAMPTZ;

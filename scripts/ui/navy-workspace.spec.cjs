@@ -21,6 +21,8 @@ async function run(){
    const request=route.request(),u=new URL(request.url());assert.equal(u.origin,'https://loyalty.test');
    if(u.pathname.startsWith('/api/')){
     const body=request.postDataJSON();calls.push({path:u.pathname,method:request.method(),q:u.searchParams.get('q'),body});
+    if(u.pathname==='/api/platform/overview')return route.fulfill({json:{summary:{businesses:1,branches:2,clients:124,newClients:0,purchases:0,redemptions:0},currencies:[],businesses:[],total:0,hasMore:false}});
+    if(u.pathname.endsWith('/administration'))return route.fulfill({json:{business:account.business,asOf:'2026-11-10T18:00:00Z',profile:{present:true,category:{name:'Cafetería'},city:'Quito'},team:{active:1,owners:1,inactive:0,archived:0},branches:{total:staff.branches.length,withoutCashier:0},pendingProfileRequests:0,account:{...account,notices:{active:0,unread:0}}}});
     if(u.pathname==='/api/platform/tenants'){if(delayList){pendingList=()=>route.fulfill({json:{items:businesses,nextOffset:null}});return;}return route.fulfill({json:{items:businesses,nextOffset:null}});}
     if(u.pathname==='/api/platform/tenant-suggestions'){
      const q=u.searchParams.get('q');
@@ -38,6 +40,7 @@ async function run(){
      }
      return route.fulfill({json:{business:staff.business,version:profileVersion,profile,categoryOptions,categoryContext:promotionSuggestions.category,rucVerification:'NOT_VERIFIED'}});
     }
+    if(u.pathname==='/api/staff/wallet-design')return route.fulfill({json:{version:1,design:{displayName:'Café Aurora'}}});
     if(u.pathname==='/api/staff/access')return route.fulfill({json:{canOperate:true}});
     if(u.pathname==='/api/staff/member-suggestions')return route.fulfill({json:{items:[{name:'Ana Ejemplo',cardCode:'FAKE-CARD-000001'},{name:'Ana Ejemplo',cardCode:'FAKE-CARD-000002'}]}});
     if(u.pathname==='/api/staff/members/lookup')return route.fulfill({json:member});
@@ -54,13 +57,13 @@ async function run(){
   const waitUntil=async read=>{for(let i=0;i<500&&!read();i++)await new Promise(r=>setTimeout(r,10));assert.ok(read(),'Expected pending request');};
   const noOverflow=async()=>assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   const shot=async name=>{if(evidence){fs.mkdirSync(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,name+'.png'),fullPage:true});}};
-  await page.goto('https://loyalty.test/platform');await page.locator('#platformToken').fill('FICTIONAL');await page.locator('#platformLogin button').click();await page.locator('#newBusiness').waitFor();
+  await page.goto('https://loyalty.test/platform');await page.locator('#platformToken').fill('FICTIONAL');await page.locator('#platformLogin button').click();await page.locator('[data-manage]').click();await page.locator('#newBusiness').waitFor();
   assert.equal(await page.locator('#newBusiness').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(11, 31, 58)');await noOverflow();await shot('navy-platform-desktop');
   await page.locator('#query').fill('Caf');await page.locator('#query-suggestions [role=option]').waitFor();
   assert.equal(calls.filter(c=>c.method==='POST').length,0);assert.equal(await page.locator('#query').getAttribute('aria-expanded'),'true');
   await page.locator('#query').press('ArrowDown');await page.locator('#query').press('Enter');await page.locator('[data-commercial-pane=profile]').waitFor();
   checks.push('Platform search is read-only until explicit keyboard selection; Navy primary button');
-  await page.locator('#backBusinesses').click();await page.locator('#query').fill('lenta');await waitUntil(()=>pendingSearch);
+  await page.locator('#backBusinesses').click();await page.locator('[data-manage]').click();await page.locator('#query').fill('lenta');await waitUntil(()=>pendingSearch);
   await page.locator('#query').fill('179');await page.locator('#query-suggestions [role=option]').waitFor();await pendingSearch();
   await page.waitForTimeout(80);assert.match(await page.locator('#query-suggestions').textContent(),/Café Aurora/);assert.doesNotMatch(await page.locator('#query-suggestions').textContent(),/antigua/);
   await page.locator('#query').press('Escape');assert.equal(await page.locator('#query').getAttribute('aria-expanded'),'false');
@@ -81,12 +84,12 @@ async function run(){
   const sent=calls.find(c=>c.path==='/api/platform/businesses').body;assert.deepEqual(sent.profile,profile);assert.deepEqual(sent.firstBranch,{name:'Principal',code:'PRINCIPAL'});
   await pendingCreate();await page.locator('#openCreatedBusiness').waitFor();assert.match(await page.locator('.business-created').textContent(),/FICTIONAL-ONE-TIME-CREDENTIAL/);
   checks.push('Three-step registration validates RUC, preserves previous steps, previews data and sends exactly one request');
-  await page.locator('#openCreatedBusiness').click();await page.locator('#businessProfileForm').waitFor();failProfile=true;await page.locator('#city').fill('Cuenca');await page.locator('#correctionReason').fill('Cambio solicitado y verificado');await page.locator('#businessProfileForm>button').click();
+  await page.locator('#openCreatedBusiness').click();await page.locator('#businessProfileForm').waitFor();failProfile=true;await page.locator('#city').fill('Cuenca');await page.locator('#correctionReason').fill('Cambio solicitado y verificado');await page.locator('#businessProfileForm button[type=submit]').click();
   await page.locator('#businessProfileForm>.form-feedback:not([hidden])').waitFor();assert.equal(await page.locator('#city').inputValue(),'Cuenca');assert.match(await page.locator('.form-feedback').textContent(),/Recarga/);assert.equal(await page.getByRole('button',{name:'Recargar ficha guardada'}).isVisible(),true);
-  failProfile=false;await page.locator('#businessProfileForm>button').click();await page.waitForFunction(()=>document.querySelector('#profileSaved').textContent.includes('Datos guardados'));
+  failProfile=false;await page.locator('#businessProfileForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#profileSaved').textContent.includes('Datos guardados'));
   checks.push('Version conflict leaves edits visible; successful save uses expected version');;
   await page.setViewportSize({width:390,height:844});await noOverflow();await shot('navy-profile-mobile');
-  await page.locator('#backBusinesses').click();await page.locator('#newBusiness').click();await noOverflow();await shot('navy-registration-mobile');await page.locator('#closeRegistration').click();
+  await page.locator('#backBusinesses').click();await page.locator('[data-manage]').click();await page.locator('#newBusiness').click();await noOverflow();await shot('navy-registration-mobile');await page.locator('#closeRegistration').click();
   await page.goto('https://loyalty.test/');
   const showStaff=async(role='OWNER',tab='sales')=>{await page.evaluate(({data,tab})=>{state.token='FICTIONAL';state.data=data;state.tab=tab;renderMerchant();}, {data:{...staff,role},tab});};
   await showStaff();await page.locator('#kind').selectOption('name');await page.locator('#value').fill('Ana');await page.locator('#value-suggestions [role=option]').first().waitFor();
@@ -101,7 +104,7 @@ async function run(){
   checks.push('Section finder respects existing role menu; mobile layouts fit 320 and 390 pixels');
   await page.setViewportSize({width:1440,height:1100});await showStaff('OWNER','overview');await page.locator('.overview-hero').waitFor();await shot('navy-owner-desktop');
   assert.equal(await page.locator('.workspace-sidebar').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(11, 31, 58)');await noOverflow();
-  await page.goto('https://loyalty.test/platform');await page.locator('#platformToken').fill('FICTIONAL');await page.locator('#platformLogin button').click();await page.locator('#newBusiness').click();
+  await page.goto('https://loyalty.test/platform');await page.locator('#platformToken').fill('FICTIONAL');await page.locator('#platformLogin button').click();await page.locator('[data-manage]').click();await page.locator('#newBusiness').click();
   await page.locator('#name').fill('Otra marca de ejemplo');for(const key of ['legalName','ruc','activity'])await page.locator('#'+key).fill(profile[key]);await page.locator('#category').selectOption('CAFE');await page.locator('#registrationNext').click();;
   for(const key of ['contactName','email','phone','province','city','address'])await page.locator('#'+key).fill(profile[key]);await page.locator('#registrationNext').click();
   pendingCreate=null;delayList=true;await page.locator('#registrationNext').click();await waitUntil(()=>pendingCreate);await pendingCreate();await waitUntil(()=>pendingList);

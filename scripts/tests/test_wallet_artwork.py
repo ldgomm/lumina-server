@@ -38,14 +38,16 @@ class WalletArtworkGatewayTests(unittest.TestCase):
             if path in ['/api/me/wallet-status','/api/me/access']:return 401,b''
             if path=='/api/public/demo/join':return 400,b''
             return 404,b''
-        with patch.object(w,'request',side_effect=respond):self.assertEqual(105,w.verify_gateway('http://local','demo'))
-        self.assertEqual(105,len(calls))
+        with patch.object(w,'request',side_effect=respond):self.assertEqual(113,w.verify_gateway('http://local','demo'))
+        self.assertEqual(113,len(calls))
+        for endpoint,methods in [('/api/staff/administration',['GET']),('/api/staff/branch-directory',['GET','POST']),('/api/staff/branch-directory/example',['PUT']),('/api/platform/tenants/example/administration',['GET']),('/api/platform/tenants/example/branch-directory',['GET','POST']),('/api/platform/tenants/example/branch-directory/example',['PUT'])]:
+            for method in methods:self.assertIn(('http://local'+endpoint,method),calls)
         with patch.object(w,'request',return_value=(503,b'')):
             with self.assertRaises(RuntimeError):w.verify_gateway('http://local','demo')
 
     def test_owner_experience_routes_never_enter_public_tunnel(self):
         rules=re.findall(r'"~\^(.+?)\$" 1;',w.gateway_config('a'*32))
-        for path in ['/api/staff/birthday-settings','/api/staff/business-profile/requests','/api/staff/promotion-setups','/api/staff/metrics?days=365','/api/platform/tenants/example/profile-requests/example']:
+        for path in ['/api/staff/administration','/api/staff/branch-directory','/api/staff/branch-directory/example','/api/platform/tenants/example/administration','/api/platform/tenants/example/branch-directory','/api/platform/tenants/example/branch-directory/example','/api/staff/birthday-settings','/api/staff/business-profile/requests','/api/staff/promotion-setups','/api/staff/metrics?days=365','/api/platform/tenants/example/profile-requests/example']:
             for method in ['GET','POST','PUT','DELETE']:
                 self.assertFalse(any(re.fullmatch(rule,method+' '+path) for rule in rules),(method,path))
 

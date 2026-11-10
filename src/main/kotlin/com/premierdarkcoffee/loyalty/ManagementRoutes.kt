@@ -11,6 +11,8 @@ private fun ApplicationCall.managementQuery() = ManagementQuery(managementNumber
 
 private fun ApplicationCall.walletHealthQuery() = WalletHealthQuery(request.queryParameters["provider"]?:"ALL",request.queryParameters["state"]?:"ALL",request.queryParameters["q"]?:"",managementNumber("offset",0))
 
+private fun ApplicationCall.branchDirectoryQuery() = BranchDirectoryQuery(request.queryParameters["q"]?:"",managementNumber("offset",0))
+
 private fun ApplicationCall.operationsQuery() = OperationsQuery(managementNumber("days",30),request.queryParameters["branchId"]?.takeIf(String::isNotBlank),request.queryParameters["actorId"]?.takeIf(String::isNotBlank),request.queryParameters["fromDate"]?.takeIf(String::isNotBlank),request.queryParameters["throughDate"]?.takeIf(String::isNotBlank),request.queryParameters["asOf"])
 private suspend fun ApplicationCall.activityCsv(service: LoyaltyService, s: Staff) {
     s.owner();val q=managementQuery();val csv=io { service.activityExport(s,q) }
@@ -21,6 +23,11 @@ private suspend fun ApplicationCall.activityCsv(service: LoyaltyService, s: Staf
 
 fun Route.managementRoutes(service: LoyaltyService, platformToken: String) {
     route("/api/staff") {
+        get("/administration") { val s=io { service.staff(call.bearer()) };call.respond(io { service.administration(s) }) }
+        get("/branch-directory") { val s=io { service.staff(call.bearer()) };val q=call.branchDirectoryQuery();call.respond(io { service.branchDirectory(s,q) }) }
+        post("/branch-directory") { val s=io { service.staff(call.bearer()) };val input=call.body<ManagedBranch>();call.respond(HttpStatusCode.Created,io { service.createManagedBranch(s,input,call.key()) }) }
+        put("/branch-directory/{id}") { val s=io { service.staff(call.bearer()) };val input=call.body<ManagedBranchChange>();call.respond(io { service.editManagedBranch(s,call.parameters["id"]!!,input,call.key()) }) }
+
         get("/wallet-health") { val s=io { service.staff(call.bearer()) };val q=call.walletHealthQuery();call.respond(io { service.walletHealth(s,q) }) }
         post("/wallet-health/{member}/{provider}/retry") { val s=io { service.staff(call.bearer()) };val input=call.body<WalletRetry>();call.respond(io { service.retryWallet(s,call.parameters["member"]!!,call.parameters["provider"]!!,input,call.key()) }) }
         get("/operations") { val s=io { service.staff(call.bearer()) };val q=call.operationsQuery();call.respond(io { service.operationsReport(s,q) }) }
@@ -35,6 +42,11 @@ fun Route.managementRoutes(service: LoyaltyService, platformToken: String) {
         get("/overview") { call.respond(io { service.platformOverview(call.managementNumber("days",30),call.request.queryParameters["q"]?:"",call.managementNumber("offset",0)) }) }
         route("/tenants/{tenant}") {
             fun ApplicationCall.owner() = Staff(uuid(parameters["tenant"]!!),"platform","OWNER",null)
+            get("/administration") { call.respond(io { service.administration(call.owner()) }) }
+            get("/branch-directory") { val q=call.branchDirectoryQuery();call.respond(io { service.branchDirectory(call.owner(),q) }) }
+            post("/branch-directory") { val input=call.body<ManagedBranch>();call.respond(HttpStatusCode.Created,io { service.createManagedBranch(call.owner(),input,call.key()) }) }
+            put("/branch-directory/{id}") { val input=call.body<ManagedBranchChange>();call.respond(io { service.editManagedBranch(call.owner(),call.parameters["id"]!!,input,call.key()) }) }
+
             get("/wallet-health") { val q=call.walletHealthQuery();call.respond(io { service.walletHealth(call.owner(),q) }) }
             post("/wallet-health/{member}/{provider}/retry") { val input=call.body<WalletRetry>();call.respond(io { service.retryWallet(call.owner(),call.parameters["member"]!!,call.parameters["provider"]!!,input,call.key()) }) }
             get("/operations") { val q=call.operationsQuery();call.respond(io { service.operationsReport(call.owner(),q) }) }

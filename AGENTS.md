@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v039 requiere 550 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v040 requiere 570 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -346,3 +346,19 @@ Reintento explícito por cliente y proveedor: dueño vigente o administrador, Id
 UI Navy compartida entre dueño y plataforma, acceso directo a ficha y recuperación para dueño, códigos de soporte saneados, historial con responsable/motivo. Mantener motivo y clave tras error; descartar respuestas tardías o de otra sesión; no almacenar credenciales ni datos de clientes en el navegador. El administrador consulta por negocio con su propia credencial.
 
 Gate del Mac: 272 unitarias/HTTP + 278 PostgreSQL = 550; 128 Python, Docker local y 105 comprobaciones gateway antes del commit local, sin push. wallet-health.spec.cjs verifica dueño, plataforma, filtros, reintento, claves, errores, aislamiento, HTML y 320/390/1024/1440 px. Mantener regresión de operaciones, equipo y caja. HTTPS se informa aparte; nunca renovar túneles automáticamente. Una solicitud procesada no equivale a APPLE_DEVICE_VALIDATION ni GOOGLE_DEVICE_VALIDATION.
+
+## Administración integral v040
+
+V013 añade version y updated_at a branches. V001–V012 son inmutables. Conservar identidades de negocio, sucursal, personal, tarjetas, saldos, seriales, tokens, QR, presentationVersion=34 y arte v32. El cambio es del panel de administración, sin cambios de diseño nativo ni notificaciones.
+
+El centro de Administración y el directorio de sucursales son privados del dueño vigente y administrador de plataforma. Usan REPEATABLE READ READ ONLY y revalidan el acceso. El centro informa ficha, solicitudes, equipo y cuenta emitida; nunca sincroniza cargos, envía mensajes ni consulta proveedores. No confundir acceso activo con personal conectado ni configuración disponible con Wallet verificada. El saldo pendiente incluye solo cargos ya emitidos.
+
+El directorio consulta 25 sucursales por página, búsqueda literal sin tildes, orden estable y métricas de los últimos 30 días locales, incluido hoy. Compras, pagos y canjes se agregan independientemente para evitar multiplicación por joins; premios solo CONSUMED. Crear/editar es idempotente por actor. Revalidar acceso bajo el bloqueo del negocio antes de replay; después bloquear sucursal. Crear exige negocio activo. Editar nombre/código exige expectedVersion, motivo y auditoría antes/después; no cambia tenant, id ni relaciones. La corrección de etiquetas sigue disponible si la operación está suspendida. Código único dentro del negocio; nombres históricos de responsables permanecen inmutables. Las listas muestran el nombre actual de la sucursal.
+
+El dueño consulta identidad fiscal, categoría y ubicación como datos protegidos; contacto, web y redes son editables. Conservar category al enviar un formulario con el selector deshabilitado. Guardado, revisión, restauración y solicitudes de corrección mantienen borradores en memoria. Cancelar, navegar y salir requieren decidir sobre borradores; un cambio de negocio/sesión retira diálogos y respuestas tardías. Un formulario en guardado bloquea la salida. Nunca guardar credenciales ni datos personales en localStorage/sessionStorage.
+
+Equipo conserva filtros de nombre, estado, sucursal, rol, permiso y orden después de editar. Los presets de permisos solo rellenan el editor; guardar sigue siendo explícito y el servidor autoriza. La baja elimina acceso, no auditoría. Una credencial se muestra una sola vez, con comprobación de sesión. Actividad distingue antes/después, conserva filtros y permite copiar comprobantes. Operación e Informes enlazan con el historial del día y la sucursal, respetando el período y negocio.
+
+Mi cuenta diferencia cargos y pagos, fechas de vencimiento y programación. Buscar/filtrar/exportar afecta únicamente a los registros de la página cargada; indicarlo junto al control. No llamar completa a esa exportación. Mantener exportación completa de Actividad (hasta 10.000 registros, error explícito si excede), importes exactos y protección CSV contra fórmulas. Los pagos administrativos no debitan tarjetas bancarias.
+
+Gate del Mac: 276 unitarias/HTTP + 294 PostgreSQL = 570; 128 Python, Docker local y 113 comprobaciones gateway antes del commit automático local, sin push. Ocho comprobaciones nuevas rechazan las rutas administrativas en el gateway. administration.spec.cjs cubre los siete destinos, filtros, CRUD de sucursales, conflictos, idempotencia, formularios, cuenta, CSV, historial, plataforma, sesión y 320/390/1024/1440 px. Mantener regresiones de equipo, operación, ficha, registro, categorías, caja y centro Wallet. El instalador se prueba con código original, reformateo, orden de imports, segunda ejecución y conflicto sin escrituras parciales. HTTPS y teléfonos se informan por separado, sin renovación automática del túnel. Guía: docs/administracion-v040.md.

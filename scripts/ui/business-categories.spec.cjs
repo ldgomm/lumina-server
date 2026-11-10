@@ -21,6 +21,7 @@ async function run(){
      if(catalogMode==='slow'){pendingCatalog=()=>route.fulfill({json:{version:1,categories:categoryOptions}});return;}
      return route.fulfill({json:{version:1,categories:categoryOptions}});
     }
+    if(u.pathname==='/api/platform/overview')return route.fulfill({json:{summary:{businesses:1,branches:2,clients:124,newClients:0,purchases:0,redemptions:0},currencies:[],businesses:[],total:0,hasMore:false}});
     if(u.pathname==='/api/platform/tenants')return route.fulfill({json:{items:[{...staff.business,state:'ACTIVE',clients:0,balanceMinor:0}],nextOffset:null}});
     if(u.pathname==='/api/staff/access')return route.fulfill({json:{canOperate:true}});
     if(u.pathname==='/api/staff/dashboard')return route.fulfill({json:staff});
@@ -87,7 +88,7 @@ async function run(){
   await page.evaluate(staff=>{state.data=staff;state.tab='business';renderMerchant();},staff);await page.locator('#businessProfileForm').waitFor();
   assert.equal(await page.locator('#category').isDisabled(),true);assert.equal(await page.locator('#category').inputValue(),'CAFE');assert.equal(await page.locator('#jumpToProfileRequest').isVisible(),true);
   checks.push('Legacy fallback is explained and owner category changes use the administrator correction flow');
-  await page.goto('https://loyalty.test/platform');await page.locator('#platformToken').fill('FICTIONAL');await page.locator('#platformLogin button').click();
+  await page.goto('https://loyalty.test/platform');await page.locator('#platformToken').fill('FICTIONAL');await page.locator('#platformLogin button').click();await page.locator('[data-manage]').click();
   catalogMode='fail';await page.locator('#newBusiness').click();await page.locator('#retryCategoryLoad').waitFor();assert.equal(await page.locator('#businessRegistration').count(),0);
   catalogMode='normal';await page.locator('#retryCategoryLoad').click();await page.locator('#category').waitFor();
   assert.equal(await page.locator('#category option').count(),43);assert.equal(await page.locator('#category').getAttribute('required'),'');

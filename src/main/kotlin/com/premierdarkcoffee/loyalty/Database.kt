@@ -45,6 +45,7 @@ class Database(val source: DataSource) : AutoCloseable {
         TeamManagementMigration.apply(c)
         StaffOperationsMigration.apply(c)
         WalletHealthMigration.apply(c)
+        AdministrationMigration.apply(c)
         
     }
     override fun close() { (source as? AutoCloseable)?.close() }

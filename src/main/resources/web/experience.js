@@ -2,6 +2,7 @@
 // Interface only: balances, quotes and permissions remain authoritative on the server.
 (() => {
     const pages = {
+        administration: ['Centro de control', 'Administración en un solo lugar.', 'Pendientes, personas, locales y cuenta, con acceso directo a cada decisión.', 'grid'],
         overview: ['Resumen', 'Tu negocio, de un vistazo.', 'Actividad registrada y accesos para el día a día.', 'home'],
         sales: ['Caja', 'Una buena visita empieza aquí.', 'Busca la tarjeta, registra la operación y sigue con el próximo cliente.', 'scan'],
         radar: ['Radar de regreso', 'La próxima visita tiene una razón.', 'Ritmos de compra y oportunidades con una explicación clara.', 'spark'],
@@ -14,13 +15,15 @@
         walletHealth: ['Estado de tarjetas', 'Tus tarjetas, bajo control.', 'Apple y Google: pendientes, conexión y reintentos con historial.', 'card'],
         team: ['Equipo y accesos', 'Tu equipo, bien organizado.', 'Personas, permisos y credenciales de cada sucursal.', 'people'],
         operations: ['Operación y equipo', 'Decide con datos de cada sucursal.', 'Compras, horarios y premios por responsable, con filtros y comprobantes.', 'chart'],
-        activity: ['Actividad', 'Cada movimiento tiene un responsable.', 'Consulta compras, premios entregados y cambios del negocio.', 'chart'],
+        activity: ['Actividad', 'Cada movimiento tiene un responsable.', 'Consulta compras, premios entregados y cambios del negocio.', 'receipt'],
         branches: ['Sucursales', 'Un negocio. Todo conectado.', 'Tus locales comparten la tarjeta; cada cajero tiene su propio acceso.', 'store'],
         business: ['Mi negocio', 'La información de tu negocio.', 'Datos fiscales, contacto y ubicación, siempre a mano.', 'store'],
         account: ['Mi cuenta', 'Tu cuenta, siempre clara.', 'Consulta membresía, cargos, pagos y avisos.', 'card'],
         reports: ['Informes', 'Entiende cómo crece tu negocio.', 'Datos de las operaciones que has registrado en Loyalty.', 'chart']
     };;
     const shapes = {
+        grid:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+        receipt:'<path d="M5 21V3l3 2 4-2 4 2 3-2v18l-3-2-4 2-4-2ZM9 9h6M9 13h6"/>',
         home: '<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>',
         scan: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M5 12h14"/>',
         people: '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 4a5 5 0 0 1 3 5"/>',
@@ -35,7 +38,8 @@
     const icon = name => `<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${shapes[name] || shapes.spark}</svg>`;
     const busy = () => Boolean(document.querySelector('form[aria-busy="true"]'));
     const leaveDesign = action => { const proceed=()=>window.loyaltyDesignLeave ? window.loyaltyDesignLeave(action) : action(); return window.loyaltyOperationLeave ? window.loyaltyOperationLeave(proceed) : proceed(); };
-    const go = tab => { if (busy()) { notice('Espera a que termine la operación.'); return; } leaveDesign(() => { state.tab = tab; renderMerchant(); document.querySelector('#sectionTitle')?.focus(); }); };
+    const go = tab => { if (busy()) { notice('Espera a que termine la operación.'); return; } window.loyaltyAdminLeave(()=>leaveDesign(() => { state.tab = tab; renderMerchant(); document.querySelector('#sectionTitle')?.focus(); })); };
+    window.loyaltyNavigate=go;
     const money = value => new Intl.NumberFormat('es-EC', {style: 'currency', currency: state.data.business.currency}).format(Number(value || 0) / 100);
     const date = value => value ? new Intl.DateTimeFormat('es-EC', {timeZone: state.data.business.timezone, dateStyle: 'medium'}).format(new Date(value)) : 'Sin compras';
 
@@ -52,7 +56,7 @@
             const home = document.createElement('button'); home.dataset.tab = 'overview'; home.textContent = 'Resumen'; home.onclick = () => go('overview'); nav.prepend(home);
             const radar=document.createElement('button');radar.dataset.tab='radar';radar.textContent='Radar de regreso';radar.onclick=()=>go('radar');nav.append(radar);;
         }
-        if(state.data.role==='OWNER'){for(const tab of ['team','activity','operations','walletHealth']){const b=document.createElement('button');b.dataset.tab=tab;b.onclick=()=>go(tab);nav.append(b);}}
+        if(state.data.role==='OWNER'){for(const tab of ['administration','team','activity','operations','walletHealth']){const b=document.createElement('button');b.dataset.tab=tab;b.onclick=()=>go(tab);nav.append(b);}}
         const buttons = [...nav.querySelectorAll('button')];
         for (const button of buttons) {
             const tab = button.dataset.tab || Object.keys(pages).find(key => pages[key][0] === button.textContent);
@@ -62,7 +66,7 @@
             button.innerHTML = icon(pages[tab][3]) + `<span>${pages[tab][0]}</span>`;
         }
         nav.replaceChildren();
-        const groups = [['Día a día', ['overview', 'sales', 'customers', 'radar']], ['Fidelización', ['programs', 'rewards', 'design', 'walletHealth', 'events', 'qr']], ['Administración', ['business', 'branches', 'team', 'activity', 'operations', 'account', 'reports']]];
+        const groups = [['Día a día', ['overview', 'sales', 'customers', 'radar']], ['Fidelización', ['programs', 'rewards', 'design', 'walletHealth', 'events', 'qr']], ['Administración', ['administration', 'business', 'branches', 'team', 'activity', 'operations', 'account', 'reports']]];
         for (const [label, keys] of groups) {
             const items = keys.map(key => buttons.find(b => b.dataset.tab === key)).filter(Boolean);
             if (!items.length) continue;
@@ -90,6 +94,7 @@
         }, true);
         shell.querySelector('#quickCounter')?.addEventListener('click', () => go('sales'));
         if (state.tab === 'overview' && state.data.role === 'OWNER') overview(content);
+        if(state.data.role==='OWNER'&&['administration','branches'].includes(state.tab))window.LoyaltyAdministration[state.tab==='administration'?'home':'branches'](content,{path:'/api/staff',business:state.data.business});
         if (['team','activity','operations','walletHealth'].includes(state.tab) && state.data.role === 'OWNER') window.LoyaltyManagement[state.tab](content,{path:'/api/staff',business:state.data.business});
         if (state.tab === 'radar' && state.data.role === 'OWNER') window.renderReturnRadar(content,{path:'/api/staff/return-radar',valid:()=>state.tab==='radar'&&state.data?.role==='OWNER',owner:true});;
     };;
