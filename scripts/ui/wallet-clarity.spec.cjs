@@ -1,6 +1,6 @@
 // Real browser and compiled artwork. Only synthetic business data and intercepted requests.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE;
 const initial={composition:'PANORAMA',frontFocus:'AUTO',displayName:'Café de barrio',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'p',stampSymbol:'☕',artworkStyle:'GRADIENT',artworkAccent:'#e9b774',welcome:'Bienvenido',usage:'Presenta tu QR en caja para acumular y canjear.',birthdayMessage:'Feliz cumpleaños',logoPng:null};
 const prize='Café de especialidad y una porción de pastel de la casa';
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de barrio',currency:'USD',timezone:'America/Guayaquil'},promotionSuggestions:{category:{id:'CAFE',name:'Cafetería',source:'SELECTED'}},branches:[],programs:[{id:'p',config:{name:'Un café más cerca',kind:'STAMPS',active:true}}],rewards:[{id:'r',programId:'p',active:true,cost:5,name:prize,benefitText:'Canje de un premio en caja.'}]};

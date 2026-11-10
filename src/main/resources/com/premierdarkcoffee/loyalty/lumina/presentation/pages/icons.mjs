@@ -1,0 +1,18 @@
+const paths={
+  home:'M3 10 12 3l9 7v10H3Z M9 20v-7h6v7',
+  clients:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M17 4a4 4 0 0 1 0 8 M18 15a4 4 0 0 1 4 4v2',
+  content:'M4 4h16v16H4Z M8 8h8 M8 12h8 M8 16h5',
+  calendar:'M4 5h16v16H4Z M4 10h16 M8 3v4 M16 3v4',
+  wallet:'M3 6h17v15H3Z M3 6V3h14v3 M15 11h7v5h-7Z M18 13.5h.1',
+  social:'M4 3h16v18H4Z M9 7l7 5-7 5Z',
+  maps:'M12 22s8-7 8-13A8 8 0 0 0 4 9c0 6 8 13 8 13Z M12 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+  web:'M3 4h18v16H3Z M3 9h18 M7 6.5h.1 M10 6.5h.1 M8 13l-2 2 2 2 M16 13l2 2-2 2',
+  plans:'m12 2 10 5-10 5L2 7Z M2 12l10 5 10-5 M2 17l10 5 10-5',
+  metrics:'M4 3v18h17 M8 16v-5 M13 16V7 M18 16V4',
+  settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2',
+  arrow:'M4 12h16 M14 6l6 6-6 6',
+  check:'m5 12 4 4L19 6',
+  search:'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14 M15 15l6 6',
+  menu:'M3 6h18 M3 12h18 M3 18h18',
+};
+export const icon=(name,css='')=>`<svg class="icon ${css}" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.content}"/></svg>`;

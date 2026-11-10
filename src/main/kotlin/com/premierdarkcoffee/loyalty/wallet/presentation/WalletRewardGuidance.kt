@@ -1,0 +1,22 @@
+package com.premierdarkcoffee.loyalty.wallet.presentation
+
+import com.premierdarkcoffee.loyalty.infrastructure.persistence.one
+
+import java.math.BigDecimal
+
+/** Presentation only: a forecast for one reward, never a reservation or a canje. */
+internal fun walletRewardGuidance(available: Long, goal: Long, kind: String, currency: String, paused: Boolean): String {
+    fun amount(value: Long) = when (kind) {
+        "CASHBACK" -> BigDecimal.valueOf(value, 2).toPlainString() + " " + currency
+        "STAMPS" -> "$value " + if (value == 1L) "sello" else "sellos"
+        else -> "$value " + if (value == 1L) "punto" else "puntos"
+    }
+    if (paused) return "Canjes pausados. Tu saldo se conserva."
+    if (available < goal) {
+        val remaining = goal - available
+        return "Te falta${if (remaining == 1L && kind != "CASHBACK") "" else "n"} ${amount(remaining)}."
+    }
+    val journey = WalletJourney(available, goal, kind, currency)
+    return "Saldo suficiente. Pide el canje en caja.\n${journey.redemptionLabel} de este premio.\n" +
+        "Si canjeas este premio, te queda${if (available - goal == 1L && kind != "CASHBACK") "" else "n"} ${amount(available - goal)}.\nCaja confirma el saldo vigente antes del canje."
+}

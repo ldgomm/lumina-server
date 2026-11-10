@@ -1,6 +1,6 @@
 # Loyalty
 
-El proyecto está en `/Users/ldgomm/Developer/pdc/sales/loyalty`. El paquete único es `com.premierdarkcoffee.loyalty`. Conserva el formato y el orden de declaraciones de IntelliJ; modifica únicamente las regiones necesarias. No confundas reformateo con cambios de lógica.
+El proyecto está en `/Users/ldgomm/Developer/pdc/sales/loyalty`. El namespace base es `com.premierdarkcoffee.loyalty`, organizado en subpaquetes por responsabilidad (v041). Conserva el formato y el orden de declaraciones de IntelliJ; modifica únicamente las regiones necesarias. No confundas reformateo con cambios de lógica.
 
 El usuario autoriza commits locales automáticos después de aprobar la validación completa. No hacer push. El script se ejecuta desde Downloads y genera allí un ZIP con el mismo .sh, código antes/después, pruebas, errores, registros redactados y commit. Excluir archivos privados, certificados, tokens, pases, cachés y `.git`.
 
@@ -362,3 +362,21 @@ Equipo conserva filtros de nombre, estado, sucursal, rol, permiso y orden despu�
 Mi cuenta diferencia cargos y pagos, fechas de vencimiento y programación. Buscar/filtrar/exportar afecta únicamente a los registros de la página cargada; indicarlo junto al control. No llamar completa a esa exportación. Mantener exportación completa de Actividad (hasta 10.000 registros, error explícito si excede), importes exactos y protección CSV contra fórmulas. Los pagos administrativos no debitan tarjetas bancarias.
 
 Gate del Mac: 276 unitarias/HTTP + 294 PostgreSQL = 570; 128 Python, Docker local y 113 comprobaciones gateway antes del commit automático local, sin push. Ocho comprobaciones nuevas rechazan las rutas administrativas en el gateway. administration.spec.cjs cubre los siete destinos, filtros, CRUD de sucursales, conflictos, idempotencia, formularios, cuenta, CSV, historial, plataforma, sesión y 320/390/1024/1440 px. Mantener regresiones de equipo, operación, ficha, registro, categorías, caja y centro Wallet. El instalador se prueba con código original, reformateo, orden de imports, segunda ejecución y conflicto sin escrituras parciales. HTTPS y teléfonos se informan por separado, sin renovación automática del túnel. Guía: docs/administracion-v040.md.
+
+
+## Organización y portal Lúmina v041
+
+Los paquetes Kotlin viven debajo de `com.premierdarkcoffee.loyalty`: application, access, businesses, fidelity, wallet, marketing, billing, analytics, shared e infrastructure. Wallet separa providers, presentation y artwork. Las pruebas usan los mismos subpaquetes; checkpoint.SUITES conserva las 570 pruebas existentes con sus FQN actualizados.
+
+El portal Lúmina conserva su motor Node y SQLite actuales. Su código está en src/main/resources/com/premierdarkcoffee/loyalty/lumina, por módulos, y sus pruebas en src/test/resources con el mismo namespace. No presentar JavaScript como código Kotlin. lumina-agency/src/server.mjs es únicamente un lanzador compatible. Los datos continúan en ~/.lumina-digital/agency o LUMINA_DATA_DIR; nunca inicializar otra base por reorganizar fuentes.
+
+Las rutas HTTP, identidades Wallet, secretos, archivos SQL y presentationVersion=34 se conservan. application.yaml y las clases JVM de entrada antiguas siguen funcionando. Los recursos internos se organizan por namespace sin cambiar URLs públicas.
+
+Wallet usa una credencial de Loyalty existente, guardada solo en memoria durante la sesión autenticada de Lúmina. El dueño únicamente accede al tenant vinculado, y cada operación revalida esa pertenencia. El administrador de agencia necesita la credencial de plataforma. Los permisos WALLET.VIEW/REQUEST de colaborador son de servicios; no conceden acceso de dueño ni plataforma. Caja mantiene su delegación y sucursal propias. Las escrituras del espacio Wallet requieren sesión, origen y CSRF; el proxy usa una lista cerrada de rutas y métodos.
+
+El checkpoint ejecuta además las 17 pruebas HTTP de Lúmina antes de Kotlin y PostgreSQL. No crear commit si falla cualquiera. La revisión visual en navegador y la recepción de tarjetas en dispositivos se informan separadas. No renovar túneles, claves, seriales ni identificadores por esta actualización.
+
+
+## Corrección de imports v041r1
+
+`WalletHttp` es una interfaz funcional. Su método `send` no es una declaración de paquete ni se importa desde `wallet.providers`. La revisión v041r1 retira ese import inválido de CustomerWorkspace, BusinessProfiles, WalletService y ManagementPostgresTest. No cambia cuerpos Kotlin, contratos HTTP, esquemas ni identidades Wallet. Mantener las 570 pruebas y todos los gates; un fallo de compileKotlin no constituye un fallo de Wallet ni permite omitir compileTestKotlin.

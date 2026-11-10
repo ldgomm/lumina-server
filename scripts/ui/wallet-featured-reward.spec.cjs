@@ -1,6 +1,6 @@
 // Real browser + compiled Kotlin artwork. Business data and API responses are fictional.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE;
 const initial={composition:'ATELIER',frontFocus:'REWARD',displayName:'Café de barrio',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'s',featuredRewardId:null,stampSymbol:'☕',artworkStyle:'GRADIENT',artworkAccent:'#e9b774',welcome:'Bienvenido',usage:'Presenta tu QR en caja.',birthdayMessage:'Feliz cumpleaños',logoPng:null};
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de barrio',currency:'USD',timezone:'America/Guayaquil'},promotionSuggestions:{category:{id:'CAFE',name:'Cafetería',source:'SELECTED'}},branches:[],programs:[{id:'s',config:{name:'Momentos de café',kind:'STAMPS',active:true}},{id:'p',config:{name:'Club de puntos',kind:'POINTS',active:true}}],rewards:[{id:'r1',programId:'s',active:true,cost:5,name:'Un café de especialidad'},{id:'r2',programId:'s',active:true,cost:12,name:'Café para compartir',benefitText:'Dos cafés de la casa.'},{id:'r3',programId:'s',active:false,cost:3,name:'Premio pausado'},{id:'r4',programId:'p',active:true,cost:200,name:'Premio por 200 puntos'}]};
 (async()=>{

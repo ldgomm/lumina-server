@@ -1,8 +1,8 @@
 // Fully intercepted fictional fixtures. Never sends a real message or business operation.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
-const catalog=JSON.parse(fs.readFileSync(path.resolve(web,'../business-categories.json'),'utf8'));
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE;
+const catalog=JSON.parse(fs.readFileSync(path.resolve(web,'../../businesses/business-categories.json'),'utf8'));
 const categoryOptions=catalog.map(({id,name,group})=>({id,name,group}));
 const cafe=catalog.find(c=>c.id==='CAFE');
 const promotionSuggestions={version:1,category:{id:cafe.id,name:cafe.name,source:'SELECTED'},productExamples:cafe.productExamples,examples:cafe.examples};

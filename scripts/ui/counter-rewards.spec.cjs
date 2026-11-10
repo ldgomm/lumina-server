@@ -3,7 +3,7 @@ const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const web = path.resolve(__dirname, '../../src/main/resources/web');
+const web = path.resolve(__dirname, '../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const evidence = process.env.LOYALTY_UI_EVIDENCE;
 const program = (id, name, kind = 'STAMPS', extra = {}) => ({id, config: {active: true, name, kind, ...extra}});
 const programs = [program('service', 'Servicios', 'STAMPS', {productGroup: 'servicio', countUnits: true}), program('points', 'Club de compras', 'POINTS'), program('near', 'Visitas al taller'), program('new', 'Nueva promoción'), program('cash', 'Saldo promocional', 'CASHBACK'), program('paused', 'Promoción pausada', 'STAMPS', {active: false})];

@@ -1,6 +1,6 @@
 // Chromium with fictional fixtures only. All network is intercepted; no real users or credentials.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE;
 const business={id:'demo',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil',joinedAt:'2026-01-01',tenureDays:314};
 const branches=[{id:'centro',name:'Centro',code:'C'},{id:'norte',name:'Norte',code:'N'}];
 const staff={role:'OWNER',business,branches,programs:[],rewards:[]};

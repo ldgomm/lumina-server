@@ -1,7 +1,7 @@
 'use strict';
 // Real browser, synthetic customers and intercepted network; never touches a live business.
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),business={id:'demo',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil',joinedAt:'2026-01-01',tenureDays:314},staff={role:'OWNER',business,branches:[],programs:[],rewards:[]};
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),business={id:'demo',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil',joinedAt:'2026-01-01',tenureDays:314},staff={role:'OWNER',business,branches:[],programs:[],rewards:[]};
 const at='2026-11-10T18:00:00Z';
 const initial=()=>[
  {memberId:'carla',name:'Carla Gómez',provider:'GOOGLE',state:'RETRYING',errorCode:'GOOGLE_OBJECT_503',attempts:2,canRetry:true},

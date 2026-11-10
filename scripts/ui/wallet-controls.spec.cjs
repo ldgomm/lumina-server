@@ -1,7 +1,7 @@
 // Fictional data and fully intercepted network; no customer account or real Wallet is contacted.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE,artifacts=process.env.LOYALTY_ARTWORK_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE,artifacts=process.env.LOYALTY_ARTWORK_EVIDENCE;
 const config={name:'Pizza a tu manera',kind:'STAMPS',active:true,stampsPerPurchase:1,minimumSpendMinor:100,unitMinor:100,pointsPerUnit:1,cashbackBps:500,productGroup:'pizza artesanal',countUnits:true,branchIds:['centro'],window:{startsAt:null,endsAt:null,weekdays:[2,4,6],localStart:'16:00',localEnd:'22:00'},bonuses:[{priority:3,multiplier:2,branchIds:['centro'],window:{startsAt:null,endsAt:null,weekdays:[4],localStart:'18:00',localEnd:'19:00'}}]};
 const staff={role:'OWNER',business:{id:'fiction',name:'Pizzería de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'centro',name:'Centro'}],programs:[{id:'promo',version:4,config:structuredClone(config)}],rewards:[{id:'reward',programId:'promo',active:true,cost:5,name:'Pizza a elección',version:1}]};
 const design={displayName:'Pizzería de ejemplo',background:'#0b1f3a',foreground:'#ffffff',label:'#ffffff',featuredProgramId:'promo',stampSymbol:'🍕',artworkStyle:'GRADIENT',welcome:'Bienvenido',usage:'Presenta el QR en caja.',birthdayMessage:'¡Feliz cumpleaños!',logoPng:null};

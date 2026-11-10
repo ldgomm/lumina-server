@@ -1,10 +1,10 @@
 // Actual editor, fictional businesses, intercepted API. No issuer credentials or live customer operations.
 const {JSDOM,VirtualConsole}=require(process.env.LOYALTY_TEST_JSDOM || 'jsdom');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const initial={displayName:'Mi marca',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'p',stampSymbol:'☕',composition:'PANORAMA',artworkStyle:'GRADIENT',artworkAccent:null,welcome:'Bienvenido',usage:'Presenta tu QR.',birthdayMessage:'Un mensaje propio',logoPng:'fictional-logo'};
 const staff={role:'OWNER',business:{id:'fiction',name:'Pizzería es solo un nombre',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[{id:'p',config:{name:'Puntos',kind:'POINTS',active:true}}],rewards:[{id:'r',programId:'p',active:true,cost:100,name:'Premio de ejemplo'}]};
-const categories=JSON.parse(fs.readFileSync(path.join(web,'../business-categories.json'),'utf8'));
+const categories=JSON.parse(fs.readFileSync(path.join(web,'../../businesses/business-categories.json'),'utf8'));
 (async()=>{
  const errors=[],calls=[],checks=[];let design={...initial},version=4,fail=false;
  const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));

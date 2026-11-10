@@ -1,7 +1,7 @@
 // Native priority, optional review, safe content and optimistic save. Fictional data only.
 const {JSDOM,VirtualConsole}=require(process.env.LOYALTY_TEST_JSDOM || 'jsdom');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const initial={displayName:'Mi marca',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'p',stampSymbol:'☕',composition:'PANORAMA',artworkStyle:'GRADIENT',artworkAccent:null,welcome:'Bienvenido',usage:'Presenta tu QR en caja.',birthdayMessage:'Mensaje propio',logoPng:null};
 const fullPrize='Café de especialidad con un nombre completo y condiciones propias';
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[{id:'p',config:{name:'Puntos por compra',kind:'POINTS',active:true}},{id:'s',config:{name:'Visitas',kind:'STAMPS',active:true}},{id:'c',config:{name:'Cashback',kind:'CASHBACK',active:true}},{id:'e',config:{name:'Sin premio',kind:'STAMPS',active:true}},{id:'paused',config:{name:'Pausada',kind:'STAMPS',active:false}}],rewards:[{id:'r',programId:'p',active:true,cost:100,name:fullPrize,benefitText:'Una unidad de menor precio de café.'},{id:'s',programId:'s',active:true,cost:5,name:'Un corte'},{id:'c',programId:'c',active:true,cost:500,name:'Beneficio de 5 USD'},{id:'off',programId:'p',active:false,cost:1,name:'No visible'}]};

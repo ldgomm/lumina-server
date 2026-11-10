@@ -1,6 +1,6 @@
 // Browser workflow check: actual editor, genuine local artwork, fictional records and intercepted API.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE;
 const initial={composition:'PANORAMA',displayName:'Café de ejemplo',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'p',stampSymbol:'☕',artworkStyle:'GRADIENT',welcome:'Bienvenido',usage:'Presenta tu QR en caja.',birthdayMessage:'Feliz cumpleaños',logoPng:null};
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[{id:'p',config:{name:'Puntos por compra',kind:'POINTS',active:true}},{id:'cash',config:{name:'Cashback',kind:'CASHBACK',active:true}}],rewards:[{id:'r',programId:'p',active:true,cost:100,name:'Café de cortesía',benefitText:'Una bebida pequeña'},{id:'c',programId:'cash',active:true,cost:500,name:'Beneficio de 5 USD'}]};
 (async()=>{

@@ -1,7 +1,4 @@
 package com.premierdarkcoffee.loyalty
 
-import io.ktor.server.netty.EngineMain
-
-fun main(args: Array<String>) {
-    EngineMain.main(args)
-}
+/** Compatibility entry point for existing manual launch commands. */
+fun main(args: Array<String>) = com.premierdarkcoffee.loyalty.application.main(args)

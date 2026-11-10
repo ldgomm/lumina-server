@@ -1,7 +1,7 @@
 // Genuine server images, fictional data, fully intercepted requests. No purchases or live credentials.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),artifacts=process.env.LOYALTY_ARTWORK_EVIDENCE,evidence=process.env.LOYALTY_UI_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),artifacts=process.env.LOYALTY_ARTWORK_EVIDENCE,evidence=process.env.LOYALTY_UI_EVIDENCE;
 const design={displayName:'Café de ejemplo',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'points',stampSymbol:'☕',artworkStyle:'GRADIENT',welcome:'Bienvenido',usage:'Presenta tu QR en caja.',birthdayMessage:'¡Feliz cumpleaños!',logoPng:null};
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[
  {id:'stamps',config:{name:'Cada visita cuenta',kind:'STAMPS',active:true}},

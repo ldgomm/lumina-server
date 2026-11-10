@@ -1,6 +1,6 @@
 // Real browser, intercepted fictional fixtures. Never connects to a production business.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE;
 const business={id:'demo',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil',joinedAt:'2026-01-01',tenureDays:314};
 const baseBranches=[{id:'centro',name:'Centro',code:'C',version:1,cashiers:2,purchases:84,paidMinor:138450,rewards:12},{id:'norte',name:'Norte',code:'N',version:1,cashiers:0,purchases:29,paidMinor:38450,rewards:3}];
 const users=[{id:'owner',name:'María Torres',role:'OWNER',state:'ACTIVE',version:1,createdAt:'2026-01-01'},{id:'ana',name:'Ana Pérez',contact:'ana@example.test',role:'CASHIER',branchId:'centro',branch:'Centro',state:'ACTIVE',version:1,permissions:{purchases:true,rewards:false},createdAt:'2026-04-01'},{id:'luis',name:'Luis Vera',role:'CASHIER',branchId:'norte',branch:'Norte',state:'INACTIVE',version:2,permissions:{purchases:true,rewards:true},createdAt:'2026-02-01'}];

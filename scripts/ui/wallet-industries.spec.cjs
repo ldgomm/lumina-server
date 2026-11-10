@@ -1,7 +1,7 @@
 // New styles, accessible progress and explicit saves. All network requests are intercepted.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),artifacts=process.env.LOYALTY_ARTWORK_EVIDENCE,evidence=process.env.LOYALTY_UI_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),artifacts=process.env.LOYALTY_ARTWORK_EVIDENCE,evidence=process.env.LOYALTY_UI_EVIDENCE;
 const design={displayName:'Mi negocio',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'stamps',stampSymbol:'★',artworkStyle:'GRADIENT',welcome:'Bienvenido',usage:'Presenta tu QR en caja.',birthdayMessage:'¡Feliz cumpleaños!',logoPng:null};
 const staff={role:'OWNER',business:{id:'fiction',name:'Mi negocio',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[
  {id:'stamps',config:{name:'Cada visita cuenta',kind:'STAMPS',active:true}},

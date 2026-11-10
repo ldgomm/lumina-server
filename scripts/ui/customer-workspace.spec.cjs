@@ -1,7 +1,7 @@
 // Fictional network fixtures. No real customer, purchase, canje, Wallet or notification is contacted.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const evidence=process.env.LOYALTY_UI_EVIDENCE;
 const staff={role:'OWNER',business:{id:'aurora',name:'Café Aurora',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'centro',name:'Centro'},{id:'norte',name:'Norte'}],programs:[],rewards:[]};
 const summary={registeredCustomers:51,returningCustomers:12,readyCustomers:4,nearCustomers:7,inactiveCustomers:3,newCustomers:2,periodBuyers:20,periodReturningBuyers:12,periodPurchases:48,periodSpentMinor:32500,periodDiscountMinor:2500,periodClaimedRewards:9};

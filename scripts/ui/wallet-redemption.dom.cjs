@@ -1,7 +1,7 @@
 // Reversible previews use fictional balances. Every request is intercepted.
 const {JSDOM,VirtualConsole}=require(process.env.LOYALTY_TEST_JSDOM || 'jsdom');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const initial={composition:'PANORAMA',frontFocus:'AUTO',displayName:'Café de ejemplo',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'s',stampSymbol:'☕',artworkStyle:'GRADIENT',artworkAccent:null,welcome:'Bienvenido',usage:'Presenta tu QR.',birthdayMessage:'Feliz cumpleaños',logoPng:null};
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[['s','STAMPS'],['p','POINTS'],['c','CASHBACK'],['one','POINTS'],['cent','CASHBACK'],['large','CASHBACK'],['unsafe','POINTS'],['empty','STAMPS']].map(([id,kind])=>({id,config:{name:id,kind,active:true}})),rewards:[['s',5],['p',100],['c',500],['one',1],['cent',1],['large',9007199254740990],['unsafe',9007199254740992]].map(([programId,cost])=>({id:'r-'+programId,programId,cost,name:'Premio '+programId,active:true}))};
 (async()=>{

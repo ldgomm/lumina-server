@@ -1,7 +1,7 @@
 // Real local artwork; fictional customers and fully intercepted API/network.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const evidence=process.env.LOYALTY_UI_EVIDENCE,artifacts=process.env.LOYALTY_ARTWORK_EVIDENCE;
 const design={displayName:'Café de ejemplo',background:'#0b1f3a',foreground:'#ffffff',label:'#ffffff',featuredProgramId:'stamps',stampSymbol:'★',artworkStyle:'GRADIENT',welcome:'Bienvenido a nuestro club',usage:'Presenta el QR en caja.',birthdayMessage:'¡Feliz cumpleaños!',logoPng:null};
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[

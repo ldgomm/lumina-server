@@ -1,8 +1,8 @@
 // All network is intercepted. This suite never creates a real business, promotion or Wallet.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
-const catalog=JSON.parse(fs.readFileSync(path.resolve(web,'../business-categories.json'),'utf8'));
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE;
+const catalog=JSON.parse(fs.readFileSync(path.resolve(web,'../../businesses/business-categories.json'),'utf8'));
 const categoryOptions=catalog.map(({id,name,group})=>({id,name,group}));
 const profile={legalName:'Negocio Ejemplo S.A.',ruc:'1790012345001',activity:'Venta de alimentos',category:'CAFE',contactName:'Persona de prueba',email:'persona@example.test',phone:'0991234567',province:'Pichincha',city:'Quito',address:'Dirección ficticia 123',website:'',socialLinks:{}};
 let staff={role:'OWNER',business:{id:'example',name:'Negocio de prueba',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'centro',name:'Centro'},{id:'norte',name:'Norte'}],programs:[],rewards:[]};

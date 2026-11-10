@@ -1,7 +1,7 @@
 // UI contract checks with jsdom 26. All requests are intercepted; no real transactions.
 const {JSDOM,VirtualConsole}=require(process.env.LOYALTY_TEST_JSDOM || 'jsdom');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const checks=[];
 const program=(id,name,kind,extra={})=>({id,version:1,config:{active:true,name,kind,...extra}});
 const programs=[program('points','Puntos de compras','POINTS'),program('cash','Cashback del 5%','CASHBACK'),program('visits','Visitas y premio','STAMPS'),program('paused','Pausada','STAMPS',{active:false})];

@@ -1,7 +1,7 @@
 // Optional visual validation in a development environment with Playwright and a local artifact server.
 // All data is fictional; all network requests are intercepted. The production server does not need Node.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),artifacts=process.env.LOYALTY_COMPOSITION_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),artifacts=process.env.LOYALTY_COMPOSITION_EVIDENCE;
 const compositions=['PANORAMA','PRECISION','ATELIER','EDITORIAL','STAMPBOOK','TICKET','MOSAIC','RIBBON','PATH','SIGNATURE'];
 const design={displayName:'Café de ejemplo',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'p',stampSymbol:'☕',artworkStyle:'GRADIENT',welcome:'Bienvenido',usage:'Presenta tu QR.',birthdayMessage:'Feliz cumpleaños',logoPng:null,composition:'EDITORIAL'};
 const data={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[{id:'p',config:{name:'Puntos',kind:'POINTS',active:true}}],rewards:[{id:'r',programId:'p',active:true,cost:100,name:'Premio de ejemplo'}]};

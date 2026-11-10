@@ -1,7 +1,7 @@
 // Fictional data only. All requests are intercepted; no purchases or provider calls.
 const {JSDOM,VirtualConsole}=require(process.env.LOYALTY_TEST_JSDOM || 'jsdom');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const initial={composition:'PANORAMA',frontFocus:'PROGRESS',displayName:'Café de ejemplo',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:null,featuredRewardId:null,stampSymbol:'☕',artworkStyle:'GRADIENT',artworkAccent:null,welcome:'Bienvenido',usage:'Presenta tu QR.',birthdayMessage:'Feliz cumpleaños',logoPng:null};
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency:'USD'},branches:[],programs:[['s','STAMPS'],['p','POINTS'],['c','CASHBACK'],['empty','STAMPS']].map(([id,kind])=>({id,config:{name:'Promoción '+id,kind,active:true}})),rewards:[['a','s',5,'Un café'],['b','s',12,'Café para dos'],['paused','s',3,'Pausado'],['p1','p',100,'Premio de puntos'],['p2','p',200,'Premio mayor'],['c1','c',500,'Bono'],['c2','c',1025,'Bono mayor']].map(([id,programId,cost,name])=>({id,programId,cost,name,active:id!=='paused'}))};
 (async()=>{

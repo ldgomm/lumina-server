@@ -1,7 +1,7 @@
 // Guided editor and draft-loss regressions. Executes real UI scripts with fictional data only.
 const {JSDOM,VirtualConsole}=require(process.env.LOYALTY_TEST_JSDOM || 'jsdom');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const design={composition:'PANORAMA',displayName:'Café de ejemplo',background:'#0b1f3a',foreground:'#ffffff',label:'#b8d8ff',featuredProgramId:'points',stampSymbol:'☕',artworkStyle:'GRADIENT',welcome:'Bienvenido',usage:'Presenta tu QR.',birthdayMessage:'Feliz cumpleaños',logoPng:null};
 const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[{id:'points',config:{name:'Puntos',kind:'POINTS',active:true}},{id:'cash',config:{name:'Cashback',kind:'CASHBACK',active:true}},{id:'empty',config:{name:'Próximamente',kind:'STAMPS',active:true}},{id:'paused',config:{name:'Pausada',kind:'POINTS',active:false}}],rewards:[{id:'r1',programId:'points',active:true,cost:100,name:'Un café',benefitText:'Café pequeño'},{id:'r2',programId:'cash',active:true,cost:500,name:'Beneficio de 5 USD'},{id:'off',programId:'points',active:false,cost:1,name:'Premio eliminado'}]};
 (async()=>{

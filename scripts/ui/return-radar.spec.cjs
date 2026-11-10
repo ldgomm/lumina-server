@@ -1,7 +1,7 @@
 // Fictional, fully intercepted network. Opening the radar must never mutate a customer.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web'),evidence=process.env.LOYALTY_UI_EVIDENCE;
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty'),evidence=process.env.LOYALTY_UI_EVIDENCE;
 const staff={role:'OWNER',business:{id:'fiction',name:'Café Aurora · Ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[],programs:[],rewards:[]};
 const rows=Array.from({length:23},(_,i)=>({id:'c'+i,name:i===0?'Ana <img src=x onerror=alert(1)>':'Cliente de ejemplo '+i,cardSuffix:'0000'+i,purchases:8,spentMinor:9000,lastPurchase:'2026-10-25T17:00:00Z',daysSinceLastPurchase:14,sampleDays:8,cadenceDays:7,attentionAfterDays:11,late:i<4,readyRewards:i%2,nearRewards:1}));
 const base={summary:{total:23,late:4,ready:12,near:23,first:0,rhythmic:23},asOf:'2026-11-08T17:00:00Z',timezone:'America/Guayaquil',cohorts:[{month:'2026-10-01',starters:12,eligible:8,returned:5,rate:62.5},{month:'2026-11-01',starters:5,eligible:0,returned:0,rate:null}]};

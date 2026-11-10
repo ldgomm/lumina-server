@@ -1,7 +1,7 @@
 // Fully intercepted fictional data. Never connects to a real business or Wallet provider.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const web=path.resolve(__dirname,'../../src/main/resources/web');
+const web=path.resolve(__dirname,'../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty');
 const config={name:'Puntos por regresar',kind:'POINTS',active:true,stampsPerPurchase:1,minimumSpendMinor:100,unitMinor:100,pointsPerUnit:1,cashbackBps:500,productGroup:'',countUnits:false,branchIds:[],window:{startsAt:null,endsAt:null,weekdays:[1,2,3,4,5,6,7],localStart:null,localEnd:null},bonuses:[]};
 const data={role:'OWNER',business:{id:'fictional',name:'Negocio de ejemplo',currency:'USD',timezone:'America/Guayaquil'},branches:[{id:'centre',name:'Centro'}],programs:[{id:'points',version:3,config},{id:'stamps',version:2,config:{...config,name:'Visitas',kind:'STAMPS'}},{id:'cash',version:1,config:{...config,name:'Cashback',kind:'CASHBACK',active:false}}],rewards:[{id:'r1',programId:'points',name:'Premio a elección',cost:100,version:2,active:true,benefit:null},{id:'r2',programId:'points',name:'Otra opción',cost:300,version:1,active:true,benefit:null},{id:'r3',programId:'stamps',name:'Descuento café',cost:4,version:1,active:true,benefit:{discountBps:5000,group:'café',scope:'ITEM'},benefitText:'50% en una unidad elegible de café'},{id:'r4',programId:'cash',name:'Saldo para premio',cost:525,version:1,active:false,benefit:null}]};
 async function run(){
