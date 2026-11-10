@@ -125,6 +125,36 @@ function attachPredictiveSearch(input, {load, choose, label, description = () =>
     input.form?.addEventListener('submit', clear);
     return {clear};
 }
+// A pending purchase or promotion stays in memory until saved or explicitly discarded.
+(() => {
+    let draft = null;
+    const valid = () => draft && draft.scope.isConnected && draft.token === state.token;
+    const track = e => {
+        const f=e.target.closest?.('#purchase,#productPurchase,#programV7,#promotionTemplate');
+        if (!f || f.getAttribute('aria-busy')==='true') return;
+        draft={scope:f.closest('.customer-counter') || f,token:state.token,kind:f.id==='purchase'||f.id==='productPurchase'?'compra':'promoción'};
+    };
+    document.addEventListener('input',track);document.addEventListener('change',track);
+    window.loyaltyOperationLeave = proceed => {
+        if (!valid()) { draft=null; return proceed(); }
+        if (document.querySelector('form[aria-busy="true"]')) { notice('Espera a que termine la operación.'); return; }
+        if (document.querySelector('#operationDraftDialog')) return;
+        const trigger=document.activeElement, dialog=document.createElement('dialog');dialog.id='operationDraftDialog';dialog.className='operation-draft-dialog';dialog.setAttribute('aria-labelledby','operationDraftTitle');
+        dialog.innerHTML=`<span class="eyebrow">CAMBIOS SIN GUARDAR</span><h2 id="operationDraftTitle">Tu ${draft.kind} sigue en preparación.</h2><p>Si sales ahora, perderás los datos de este formulario. Revisar una compra no la registra.</p><p>Si un envío perdió la conexión, conserva el comprobante y reintenta desde esta misma pantalla para recuperar su resultado.</p><div class="draft-dialog-actions"><button type="button" id="keepOperationDraft">Seguir aquí</button><button type="button" class="quiet" id="discardOperationDraft">Salir y descartar formulario</button></div>`;
+        document.body.append(dialog);
+        dialog.addEventListener('close',()=>{dialog.remove();if(trigger?.isConnected)trigger.focus();});
+        dialog.querySelector('#keepOperationDraft').onclick=()=>dialog.close();
+        dialog.querySelector('#discardOperationDraft').onclick=()=>{draft=null;dialog.close();proceed();};
+        dialog.showModal();dialog.querySelector('#keepOperationDraft').focus();
+    };
+    document.addEventListener('click',e=>{
+        const target=e.target.closest?.('[data-tab],#quickCounter,#exit,#changeCustomer,#backToPromotions,#advancedPromotion,a.brand');
+        if(!target||!valid())return;
+        e.preventDefault();e.stopImmediatePropagation();window.loyaltyOperationLeave(()=>{if(target.isConnected)target.click();});
+    },true);
+    window.addEventListener('beforeunload',e=>{if(valid()){e.preventDefault();e.returnValue='';}});
+})();
+
 exit.onclick=async()=>{if(state.slug){try{await api('/api/me/logout',{})}catch{}}state.token='';state.member=null;state.data=null;state.tab='sales';exit.hidden=true;state.slug?customerStart():welcome()};;
 function welcome(){exit.textContent="Salir";app.innerHTML=`<div class="intro"><div class="eyebrow">Fidelización para tu negocio</div><h1>Dales un motivo<br>para volver.</h1><p>Premia cada visita. Reúne puntos, sellos y recompensas en una tarjeta que funciona en todas tus sucursales.</p></div><div class="grid"><section class="panel"><h2>Entrar a mi negocio</h2><p>Usa la credencial de administrador o de caja del piloto.</p><form id="staffLogin">${field('credential','Credencial de acceso','password','','required autocomplete="off"')}<button>Entrar</button></form></section><section class="card"><div class="eyebrow">Una tarjeta, más posibilidades</div><h2>Cada compra cuenta.</h2><p>Tus clientes se registran desde el QR del negocio y conservan su saldo al visitar otra sucursal.</p><p class="small">El cliente guarda su tarjeta en Wallet y la presenta en caja. No necesita contraseña. La activación en teléfonos requiere configurar Apple o Google.</p></section></div>`;
  form('staffLogin',async d=>{state.token=d.credential.trim();try{await merchant()}catch(issue){state.token='';throw issue}})}
@@ -168,6 +198,22 @@ function bindPurchasePromotionSelection(f) {
 function purchasePromotionReview(ids) {
     const selected = state.data.programs.filter(p => ids.includes(p.id));
     return `<div class="purchase-earning-review"><h4>${selected.length ? 'Promociones seleccionadas' : 'Solo registrar compra'}</h4>${selected.length ? `<ul>${selected.map(p => `<li>${esc(p.config.name)}</li>`).join('')}</ul><p>Se comprobarán sus productos, fechas, sucursal y demás condiciones al guardar. Las promociones sin marcar no acumulan.</p>` : '<p>Sin puntos, sellos ni cashback. Se guardará el total pagado en el historial y los informes.</p>'}</div>`;
+}
+function purchaseEarningReview(quote) {
+    if (!Array.isArray(quote.earnings)) return '';
+    const currency = quote.currency || state.data.business.currency;
+    const units = (n, kind) => kind === 'CASHBACK' ? (Number(n) / 100).toFixed(2) + ' ' + currency : n + ' ' + (kind === 'STAMPS' ? (n === 1 ? 'sello' : 'sellos') : (n === 1 ? 'punto' : 'puntos'));
+    const reason = row => ({EARNED:'Se añadirá al confirmar',REDEEMED_PROGRAM:'El canje no acumula en esta misma promoción',PRODUCTS_REQUIRED:'Faltan productos de la categoría elegible',OTHER_BRANCH:'Esta sucursal no está incluida',OUTSIDE_WINDOW:'Fuera de las fechas, días u horas de la promoción',MINIMUM_SPEND:'No llega al mínimo elegible de '+(row.minimumSpendMinor/100).toFixed(2)+' '+currency,BELOW_UNIT:'El importe no completa una unidad de acumulación',PAUSED:'Promoción pausada'})[row.reason] || 'Sin acumulación';
+    return `<section class="earning-forecast" aria-label="Beneficios de esta compra"><div class="section-heading"><h4>Así cambiará su tarjeta</h4><span class="tag">Revisión del servidor</span></div>${quote.earnings.length ? `<div class="earning-forecast-list">${quote.earnings.map(row=>`<div class="earning-forecast-row ${row.amount>0?'will-earn':'no-earning'}"><div><strong>${esc(row.name)}</strong><small>${esc(reason(row))}</small>${row.eligiblePaidMinor>0?`<small>Importe elegible pagado: ${(row.eligiblePaidMinor/100).toFixed(2)} ${esc(currency)}</small>`:''}</div><b>${row.amount>0?'+':''}${esc(units(row.amount,row.kind))}</b></div>`).join('')}</div>` : '<p>Solo se registra la compra. No se añadirán puntos, sellos ni cashback.</p>'}<p class="small">La compra contará en el historial. Este cálculo no guarda ni canjea nada. Si cambia la tarjeta o una condición, tendrás que revisar otra vez.</p></section>`;
+}
+// Parse typed currency without floating-point rounding or silently accepting fractions of a cent.
+function purchaseMinor(value) {
+    const text = String(value).trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(text)) throw new Error('Escribe un monto con hasta dos decimales.');
+    const [whole, fraction=''] = text.split('.');
+    const result = BigInt(whole) * 100n + BigInt(fraction.padEnd(2,'0'));
+    if (result > 1000000000n) throw new Error('El monto máximo es 10000000.00.');
+    return Number(result);
 }
 function purchaseEarningsReceipt(earned, selected) {
     const amount = x => x.kind === 'CASHBACK' ? `${(x.amount / 100).toFixed(2)} ${esc(state.data.business.currency)} de cashback` : `${x.amount} ${x.kind === 'POINTS' ? (x.amount === 1 ? 'punto' : 'puntos') : (x.amount === 1 ? 'sello' : 'sellos')}`;
@@ -247,11 +293,12 @@ function renderSales() {
         purchaseForm.addEventListener('change', clearPurchaseReview);
         form('purchase', async (p, f) => {
             const ticket = purchaseRevision;
-            const payload = {memberId: m.member.id, branchId: p.branchId, receipt: p.receipt, amountMinor: Math.round(Number(p.amount) * 100), currency: d.business.currency, programIds: selectedPurchasePrograms(f)};
+            const payload = {memberId: m.member.id, branchId: p.branchId, receipt: p.receipt, amountMinor: purchaseMinor(p.amount), currency: d.business.currency, programIds: selectedPurchasePrograms(f)};
             const quote = await api('/api/staff/purchases/quote', payload);
             if (ticket !== purchaseRevision || !f.isConnected) return;
+            if (quote.earningReview) payload.expectedEarningReview = quote.earningReview;
             const review = found.querySelector('#purchaseReview');
-            review.innerHTML = `<section class="panel purchase-confirmation"><h3>Confirmar compra</h3><p>${esc(m.member.name)} · <strong>${(quote.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</strong></p>${purchasePromotionReview(payload.programIds)}<p>Confirma cuando el cobro esté realizado en caja.</p><form id="finishSimplePurchase"><button>Guardar compra</button></form></section>`;
+            review.innerHTML = `<section class="panel purchase-confirmation"><h3>Confirmar compra</h3><p>${esc(m.member.name)} · <strong>${(quote.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</strong></p>${purchasePromotionReview(payload.programIds)}${purchaseEarningReview(quote)}<p>Confirma cuando el cobro esté realizado en caja.</p><form id="finishSimplePurchase"><button>Guardar compra</button></form></section>`;
             form('finishSimplePurchase', async () => {
                 if (ticket !== purchaseRevision || !f.isConnected) throw new Error('La compra cambió. Revisa el total otra vez.');
                 const r = await api('/api/staff/purchases', payload, 'POST', operationKey(f, payload));

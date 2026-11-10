@@ -249,6 +249,7 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
                     WHERE tenant_id=? AND status='CONSUMED' AND consumed_at>=? AND consumed_at<=? GROUP BY confirmed_branch_id
                 ) r ON r.confirmed_branch_id=b.id WHERE b.tenant_id=? ORDER BY coalesce(p.sales,0) DESC,b.name,b.id LIMIT 50
             """.trimIndent(),tenant,start,end,tenant,start,end,tenant) { obj("id" to it.getString(1),"name" to it.getString(2),"purchases" to it.getLong(3),"salesMinor" to it.getLong(4),"clients" to it.getLong(5),"redemptions" to it.getLong(6)) },
+            "detailedPurchases" to c.one("SELECT count(*) FROM purchases WHERE tenant_id=? AND created_at>=? AND created_at<=? AND jsonb_array_length(items)>0",tenant,start,end) { it.getLong(1) },
             "categories" to c.rows("""
                 SELECT min(item->>'group') AS category,sum((item->>'quantity')::bigint) AS units
                 FROM purchases p CROSS JOIN LATERAL jsonb_array_elements(p.items) item

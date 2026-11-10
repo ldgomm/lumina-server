@@ -58,9 +58,7 @@ fun WalletPass.appleExperienceFields(): JsonObject {
     val design = design()
     val currency = snapshot.getValue("currency").jsonPrimitive.content
     val paused = !snapshot.getValue("canOperate").jsonPrimitive.boolean
-    val balances = presentationBalances().sortedBy {
-        if (it["programId"]?.jsonPrimitive?.contentOrNull == design.featuredProgramId) 0 else 1
-    }
+    val balances = prioritizedBalances()
     val first = balances.firstOrNull()
     val rewards = appleRewards(balances)
     // Costs and available units are comparable only within the same promotion.

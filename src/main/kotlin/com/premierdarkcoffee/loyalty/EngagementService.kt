@@ -17,9 +17,9 @@ object EngagementMigration {
 
 data class ReceiptCalculation(val gross:Long,val discount:Long,val reward:JsonObject?=null) { val net get()=gross-discount }
 fun Purchase.idempotencyPayload():String {
-    val encoded=json.parseToJsonElement(json.encodeToString(this)).jsonObject
+    val encoded=JsonObject(json.parseToJsonElement(json.encodeToString(this)).jsonObject.filterKeys { it != "expectedEarningReview" || expectedEarningReview != null })
     // Keep the pre-v010 hash for an unchanged legacy request, including in-flight retries.
-    val legacy=items.isEmpty() && programIds==null && rewardId==null && expectedRevision==null && expectedRewardVersion==null && !identityVerified && !customerConfirmed
+    val legacy=items.isEmpty() && programIds==null && rewardId==null && expectedRevision==null && expectedRewardVersion==null && !identityVerified && !customerConfirmed && expectedEarningReview==null
     return if(legacy)JsonObject(encoded.filterKeys{it in setOf("memberId","branchId","receipt","amountMinor","currency")}).toString()else encoded.toString()
 }
 fun LoyaltyService.prepareReceipt(c:Connection,s:Staff,p:Purchase):ReceiptCalculation {
@@ -47,11 +47,17 @@ fun LoyaltyService.prepareReceipt(c:Connection,s:Staff,p:Purchase):ReceiptCalcul
 }
 
 fun LoyaltyService.receiptQuote(s:Staff,p:Purchase):JsonObject {
-    s.at(p.branchId)
-    return db.tx{c->commercial.requireActive(c,s.tenant);branch(c,s.tenant,p.branchId);lockMember(c,s.tenant,p.memberId)
-        val calculated=prepareReceipt(c,s,p)
+    uuid(p.memberId); uuid(p.branchId); text(p.receipt,100); s.at(p.branchId)
+    need(p.amountMinor in 0..1_000_000_000, "INVALID_AMOUNT", "Monto de compra inválido.")
+    return db.tx { c ->commercial.requireActive(c,s.tenant);branch(c,s.tenant,p.branchId);lockMember(c,s.tenant,p.memberId)
+        val tenant = c.one("SELECT currency,timezone FROM tenants WHERE id=?",s.tenant) { it.getString(1) to ZoneId.of(it.getString(2)) }!!
+        need(p.currency == tenant.first, "CURRENCY_MISMATCH", "La moneda debe coincidir con la del negocio.")
+        val calculated = prepareReceipt(c,s,p)
+        val review = purchaseReview(c,s,p,calculated,clock.instant(),tenant.second)
         obj("grossMinor" to calculated.gross,"discountMinor" to calculated.discount,"amountMinor" to calculated.net,
-            "rewardName" to calculated.reward?.get("name"),"currency" to p.currency)
+            "rewardName" to calculated.reward?.get("name"), "currency" to p.currency,
+            "earnings" to review.entries, "earningReview" to review.fingerprint,
+            "note" to "La compra contará en el historial. Solo acumulan las promociones elegidas que cumplen sus condiciones.")
     }
 }
 
@@ -68,15 +74,8 @@ fun LoyaltyService.consumeReceiptReward(c:Connection,s:Staff,p:Purchase,r:Receip
 
 /** Discounts earn no stamps in the redeemed program; other programs use the paid amount. */
 fun Program.earnReceipt(p:Purchase,programId:String,r:ReceiptCalculation,at:Instant,zone:ZoneId):Long {
-    if(p.programIds!=null && programId !in p.programIds)return 0
-    if(r.reward?.get("programId")?.jsonPrimitive?.content==programId)return 0
-    val matches=p.items.filter{productGroup.isBlank() || it.group.equals(productGroup,true)}
-    if(productGroup.isNotBlank() && matches.isEmpty())return 0
-    val eligibleGross=if(p.items.isEmpty())r.gross else matches.sumOf{it.total}
     // Proportional allocation prevents granting more cashback than the actual paid amount.
-    val eligiblePaid=eligibleGross*r.net/r.gross
-    val base=earn(eligiblePaid,p.branchId,at,zone)
-    return if(countUnits)base*matches.sumOf{it.quantity} else base
+    return explainReceipt(p,programId,r,at,zone).amount
 }
 
 fun requireCounterReward(c:Connection,tenant:String,reward:String) {

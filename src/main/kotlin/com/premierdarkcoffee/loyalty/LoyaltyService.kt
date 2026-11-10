@@ -201,30 +201,34 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         return db.tx { c -> once(c,s.tenant,"purchase:${s.id}",key,normalized.idempotencyPayload()) {
         commercial.requireActive(c, s.tenant);
         
-            branch(c,s.tenant,input.branchId); lockMember(c,s.tenant,input.memberId); releaseExpired(c,s.tenant,input.memberId)
+            branch(c,s.tenant,input.branchId); lockMember(c,s.tenant,input.memberId)
+            if (input.expectedEarningReview == null) releaseExpired(c,s.tenant,input.memberId)
             val tenant = c.one("SELECT currency,timezone FROM tenants WHERE id=?",s.tenant) { it.getString(1) to ZoneId.of(it.getString(2)) }!!
             need(input.currency == tenant.first,"CURRENCY_MISMATCH","La moneda debe coincidir con la del negocio.")
             val duplicate = c.one("SELECT id FROM purchases WHERE tenant_id=? AND branch_id=? AND receipt=?",s.tenant,input.branchId,normalized.receipt) { it.getString(1) }
             need(duplicate == null,"DUPLICATE_RECEIPT","Este comprobante ya se registró en esta sucursal.",409)
             val calculation = prepareReceipt(c,s,input)
             need(input.amountMinor==calculation.net,"TOTAL_CHANGED","El total no coincide con los productos y el premio. Revisa el cálculo antes de confirmar.",409)
+            val at = now()
+            // Lock the parent first, then read its immutable version in a new READ COMMITTED snapshot.
+            // A joined locking query could miss a newly committed version after waiting on an editor.
+            val review = purchaseReview(c,s,input,calculation,at,tenant.second)
+            need(input.expectedEarningReview == null || input.expectedEarningReview == review.fingerprint,
+                "EARNING_REVIEW_CHANGED", "Cambió la tarjeta o una condición de la promoción. Revisa de nuevo antes de guardar; no se registró esta compra.", 409)
+            // Expiry is part of this write, not an intervening operation. Validate the
+            // read-only review before expiry advances the member revision itself.
+            if (input.expectedEarningReview != null) releaseExpired(c,s.tenant,input.memberId)
             val redemption = consumeReceiptReward(c,s,input,calculation)
-            val purchase = id(); val at = now()
+            val purchase = id()
             c.exec("INSERT INTO purchases(tenant_id,id,member_id,branch_id,receipt,amount_minor,currency,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)",s.tenant,purchase,input.memberId,input.branchId,normalized.receipt,input.amountMinor,input.currency,s.id,
                 Timestamp.from(at))
             c.exec("UPDATE purchases SET gross_minor=?,discount_minor=?,items=?::jsonb,redemption_id=? WHERE tenant_id=? AND id=?",calculation.gross,calculation.discount,json.encodeToString(input.items),redemption,s.tenant,purchase)
-            // Lock the parent first, then read its immutable version in a new READ COMMITTED snapshot.
-            // A joined locking query could miss a newly committed version after waiting on an editor.
-            val lockedPrograms = c.rows("SELECT id,current_version FROM programs WHERE tenant_id=? AND deleted_at IS NULL ORDER BY id FOR SHARE",s.tenant) { it.getString(1) to it.getInt(2) }
-            need(input.programIds==null || input.programIds.all{selected->lockedPrograms.any{it.first==selected}},"NOT_FOUND","Promoción no encontrada en este negocio.",404)
-            val earned = lockedPrograms.mapNotNull { (program,version) ->
-                val config = c.one("SELECT config::text FROM program_versions WHERE tenant_id=? AND program_id=? AND version=?",s.tenant,program,version) { json.decodeFromString<Program>(it.getString(1)) }!!
-                if (input.programIds?.contains(program)==true) need(config.active,"PROMOTION_PAUSED","La promoción seleccionada está pausada. Actualiza las promociones de la compra.",409)
-                val amount = config.earnReceipt(input,program,calculation,at,tenant.second)
-                if (amount == 0L) null else {
-                    ledger(c,s.tenant,input.memberId,program,amount,"EARN",purchase,version)
-                    obj("programId" to program,"version" to version,"kind" to config.kind,"amount" to amount)
-                }
+            val earned = review.entries.filter { it.getValue("amount").jsonPrimitive.long > 0 }.map { entry ->
+                val program = entry.getValue("programId").jsonPrimitive.content
+                val version = entry.getValue("version").jsonPrimitive.int
+                val amount = entry.getValue("amount").jsonPrimitive.long
+                ledger(c,s.tenant,input.memberId,program,amount,"EARN",purchase,version)
+                obj("programId" to program,"version" to version,"kind" to entry.getValue("kind"),"amount" to amount)
             }
             changed(c,s.tenant,input.memberId); audit(c,s.tenant,s.id,"PURCHASE",purchase)
             obj("purchaseId" to purchase,"earned" to earned,"recordedAt" to at,"grossMinor" to calculation.gross,"discountMinor" to calculation.discount,"amountMinor" to calculation.net,"redemptionId" to redemption)

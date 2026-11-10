@@ -193,42 +193,71 @@
     }
     window.LoyaltyRewardGoals = {open: showRewardGoal};
 
+    function promotionSummary(program, now = new Date()) {
+        const p = program.config, w = p.window || {}, all = state.data.branches;
+        const days = w.weekdays || [1,2,3,4,5,6,7];
+        const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:state.data.business.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(now).map(x=>[x.type,x.value]));
+        const weekday = new Date(`${parts.year}-${parts.month}-${parts.day}T12:00:00Z`).getUTCDay() || 7;
+        const time = `${parts.hour}:${parts.minute}:${parts.second}`, start = w.localStart?.padEnd(8,':00').slice(0,8), end = w.localEnd?.padEnd(8,':00').slice(0,8);
+        const inHours = !start ? days.includes(weekday) : start < end ? days.includes(weekday) && time >= start && time < end : time >= start && days.includes(weekday) || time < end && days.includes(weekday === 1 ? 7 : weekday-1);
+        const status = !p.active ? 'PAUSED' : w.endsAt && now >= new Date(w.endsAt) ? 'ENDED' : w.startsAt && now < new Date(w.startsAt) ? 'SCHEDULED' : inHours ? 'NOW' : 'OUTSIDE';
+        const label = {PAUSED:'Pausada',ENDED:'Finalizada',SCHEDULED:'Programada',NOW:'En horario',OUTSIDE:'Fuera de horario'}[status];
+        const money = n => (Number(n)/100).toFixed(2)+' '+state.data.business.currency;
+        const rule = p.kind==='POINTS' ? `${p.pointsPerUnit} punto${p.pointsPerUnit===1?'':'s'} por cada ${money(p.unitMinor)} completos` : p.kind==='CASHBACK' ? `${p.cashbackBps/100}% del importe elegible pagado` : `${p.stampsPerPurchase} sello${p.stampsPerPurchase===1?'':'s'} por ${p.countUnits?'unidad pagada':'compra elegible'}`;
+        const format = value => new Intl.DateTimeFormat('es-EC',{timeZone:state.data.business.timezone,dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
+        const branches = !p.branchIds?.length ? 'Todas las sucursales actuales y futuras' : p.branchIds.map(id=>all.find(b=>b.id===id)?.name || 'Sucursal seleccionada').join(', ');
+        const activeRewards = state.data.rewards.filter(r=>r.programId===program.id && r.active);
+        const endingSoon = p.active && w.endsAt && new Date(w.endsAt)>now && new Date(w.endsAt)-now<=7*86400000;
+        return {status,label,rule,branches,activeRewards,endingSoon,conditions:[
+            ['Compra mínima elegible',money(p.minimumSpendMinor || 1)],
+            ['Productos',p.productGroup || 'Todos los productos'],
+            ['Sucursales',branches],
+            ['Días',days.length===7?'Todos los días':days.map(n=>['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][n-1]).join(' · ')],
+            ['Horario',start?start+' – '+end+(start>end?' del día siguiente':''):'Todo el día'],
+            ['Vigencia',(w.startsAt?format(w.startsAt):'Desde ahora')+' → '+(w.endsAt?format(w.endsAt):'Sin fecha final')]
+        ]};
+    }
+    window.LoyaltyPromotionSummary = promotionSummary;
+
     function programList() {
-        const root = document.querySelector('#content');;
-        const programs = state.data.programs;
-        let status = 'ALL';
-        root.innerHTML = `<div class="promotion-toolbar"><p>${programs.length} promoción${programs.length === 1 ? '' : 'es'} en tu negocio.<br>Las pausadas se conservan aquí y se ocultan a tus clientes.</p><button type="button" id="newPromotion">+ Crear promoción</button></div><div class="promotion-controls"><div class="promotion-search"><label for="searchPromotions">Buscar una promoción</label><input type="search" id="searchPromotions" placeholder="Nombre o categoría" maxlength="120" autocomplete="off"></div><div class="promotion-status" role="group" aria-label="Estado de las promociones"><button type="button" data-promotion-status="ALL" aria-pressed="true">Todas</button><button type="button" data-promotion-status="ACTIVE" aria-pressed="false">Activas</button><button type="button" data-promotion-status="PAUSED" aria-pressed="false">Pausadas</button></div></div><div class="promotion-cards" id="promotionCards"></div><p id="promotionListCount" role="status" aria-live="polite"></p>`;
+        const root = document.querySelector('#content'), programs = state.data.programs;
+        let status = window.loyaltyPromotionFilter || 'ALL', kind='ALL'; delete window.loyaltyPromotionFilter;
+        const summaries = new Map(programs.map(p=>[p.id,promotionSummary(p)]));
+        const counts = {ALL:programs.length,ACTIVE:programs.filter(p=>p.config.active).length,PAUSED:programs.filter(p=>!p.config.active).length,SCHEDULED:[...summaries.values()].filter(s=>s.status==='SCHEDULED').length,ENDED:[...summaries.values()].filter(s=>s.status==='ENDED').length,NO_REWARD:programs.filter(p=>p.config.active&&!summaries.get(p.id).activeRewards.length).length};
+        const filters=[['ALL','Todas'],['ACTIVE','Habilitadas'],['PAUSED','Pausadas'],['SCHEDULED','Programadas'],['ENDED','Finalizadas'],['NO_REWARD','Sin premio activo']];
+        root.innerHTML=`<section class="promotion-command"><div><span class="eyebrow">TU CATÁLOGO DE BENEFICIOS</span><h2>Una regla clara.<br>Un motivo para volver.</h2><p>Revisa acumulación, metas y disponibilidad en el mismo lugar.</p></div><button type="button" id="newPromotion">+ Crear promoción</button></section><div class="promotion-controls"><div class="promotion-search"><label for="searchPromotions">Buscar promoción o premio</label><input type="search" id="searchPromotions" placeholder="Nombre, premio, producto o sucursal" maxlength="120" autocomplete="off"></div><div><label for="promotionKindFilter">Tipo de acumulación</label><select id="promotionKindFilter"><option value="ALL">Todos los tipos</option><option value="STAMPS">Sellos</option><option value="POINTS">Puntos</option><option value="CASHBACK">Cashback</option></select></div></div><div class="promotion-status promotion-filter-row" role="group" aria-label="Estado de las promociones">${filters.map(([id,label])=>`<button type="button" data-promotion-status="${id}" aria-pressed="${status===id}">${label} <span>${counts[id]}</span></button>`).join('')}</div><p id="promotionListCount" role="status" aria-live="polite"></p><div class="promotion-cards" id="promotionCards"></div><p class="small">Disponibilidad según ${esc(state.data.business.timezone)}. Caja comprueba importes, productos y condiciones al registrar cada compra.</p>`;
+        const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
         const draw = () => {
-            const search = root.querySelector('#searchPromotions').value.trim().toLocaleLowerCase('es');
-            const shown = programs.filter(p => (status === 'ALL' || p.config.active === (status === 'ACTIVE')) && (p.config.name + ' ' + (p.config.productGroup || '')).toLocaleLowerCase('es').includes(search));
-            root.querySelector('#promotionCards').innerHTML = shown.map(p => {
-                const config = p.config;
-                const rewards = state.data.rewards.filter(r => r.programId === p.id && r.active);
-                const cost = r => config.kind === 'CASHBACK' ? (r.cost / 100).toFixed(2) + ' ' + state.data.business.currency : r.cost + ' ' + kinds[config.kind].toLowerCase();
-                const rule = config.kind === 'POINTS' ? `${config.pointsPerUnit} puntos por cada ${(config.unitMinor / 100).toFixed(2)} ${state.data.business.currency}` : config.kind === 'CASHBACK' ? `${config.cashbackBps / 100}% de cashback promocional` : `${config.stampsPerPurchase} sello${config.stampsPerPurchase === 1 ? '' : 's'} por ${config.countUnits ? 'unidad pagada' : 'compra registrada'}${config.productGroup ? ' · ' + config.productGroup : ''}`;
-                                return `<article class="panel promotion-item" data-promotion-card="${esc(p.id)}"><div class="promotion-card-top"><span class="eyebrow">${esc(kinds[config.kind])} · v${p.version}</span><span class="promotion-state ${config.active ? '' : 'paused'}">${config.active ? 'Activa' : 'Pausada'}</span></div><h2>${esc(config.name)}</h2><p>${esc(rule)}<br>${config.branchIds.length ? config.branchIds.length + ' sucursal(es) seleccionada(s)' : 'Todas las sucursales'} · Según fechas y condiciones</p>${rewardGoals(p)}<div class="promotion-card-foot"><button type="button" class="promotion-toggle" data-program-status="${esc(p.id)}">${config.active ? 'Pausar promoción' : 'Reactivar promoción'}</button><button type="button" class="quiet" data-program-edit="${esc(p.id)}">Editar promoción</button><button type="button" class="danger-quiet" data-program-delete="${esc(p.id)}" aria-label="Eliminar ${esc(config.name)}">Eliminar</button></div></article>`;;
-            }).join('') || `<section class="panel experience-empty promotion-empty"><strong>${programs.length ? 'No encontramos promociones con estos filtros.' : 'Dale forma al próximo regreso.'}</strong><p>${programs.length ? 'Prueba con otro nombre o cambia el estado.' : 'Elige qué acumula tu cliente y qué premio recibirá. Tú defines la cantidad, el porcentaje y las condiciones.'}</p><button type="button" class="quiet" id="emptyPromotionAction">${programs.length ? 'Quitar filtros' : 'Crear mi primera promoción'}</button></section>`;
-                        root.querySelector('#promotionListCount').textContent = `${shown.length} de ${programs.length} promociones`;
-            bindRewardGoals(root);;
-            root.querySelectorAll('[data-program-status]').forEach(b => b.onclick = () => showProgramStatus(programs.find(p => p.id === b.dataset.programStatus), b));
-            root.querySelectorAll('[data-program-edit]').forEach(b => b.onclick = () => renderPrograms(programs.find(p => p.id === b.dataset.programEdit)));
-            root.querySelectorAll('[data-program-delete]').forEach(b => b.onclick = () => showProgramRemoval(b.dataset.programDelete).catch(e => notice(e.message)));;
-            root.querySelector('#emptyPromotionAction')?.addEventListener('click', () => {
-                if (!programs.length) { renderPrograms(null, true); return; }
-                status = 'ALL'; root.querySelector('#searchPromotions').value = ''; sync(); draw();
+            const search = normalize(root.querySelector('#searchPromotions').value.trim());
+            const shown = programs.filter(p=>{
+                const info=summaries.get(p.id), rewards=state.data.rewards.filter(r=>r.programId===p.id);
+                const match=status==='ALL'||status==='ACTIVE'&&p.config.active||status==='PAUSED'&&!p.config.active||status==='NO_REWARD'&&p.config.active&&!info.activeRewards.length||info.status===status;
+                return match&&(kind==='ALL'||p.config.kind===kind)&&normalize([p.config.name,p.config.productGroup,info.branches,...rewards.map(r=>r.name)].join(' ')).includes(search);
             });
+            root.querySelector('#promotionCards').innerHTML=shown.map(p=>{
+                const info=summaries.get(p.id), config=p.config;
+                return `<article class="panel promotion-item" data-promotion-card="${esc(p.id)}"><div class="promotion-card-top"><span class="eyebrow">${esc(kinds[config.kind])} · v${p.version}</span><span class="promotion-state status-${info.status.toLowerCase()}">${info.label}</span></div><h2>${esc(config.name)}</h2><p class="promotion-rule">${esc(info.rule)}</p>${info.endingSoon?'<p class="promotion-attention">Finaliza en los próximos 7 días. Revisa su vigencia.</p>':''}${config.active&&!info.activeRewards.length?'<div class="promotion-attention"><strong>Falta el beneficio para tu cliente.</strong><p>Puede acumular según las reglas, pero no hay un premio activo que canjear.</p><button type="button" class="text-button" data-add-reward="'+esc(p.id)+'">Crear un premio →</button></div>':''}<details class="promotion-conditions"><summary>Condiciones de acumulación</summary><dl>${info.conditions.map(([name,value])=>`<div><dt>${esc(name)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>${config.bonuses?.length?`<p><strong>${config.bonuses.length} bono${config.bonuses.length===1?'':'s'} adicional${config.bonuses.length===1?'':'es'}</strong>. Solo aplica el de mayor prioridad que coincida.</p><ul>${config.bonuses.map(b=>`<li>Prioridad ${b.priority}: ×${b.multiplier}${b.window?.localStart?' · '+esc(b.window.localStart)+' – '+esc(b.window.localEnd):''}${b.branchIds?.length?' · Sucursales seleccionadas':''}</li>`).join('')}</ul>`:''}<p class="small">Se acumula sobre el importe elegible pagado. Canjear no acumula en esta misma promoción.</p></details>${rewardGoals(p)}<div class="promotion-card-foot"><button type="button" class="promotion-toggle" data-program-status="${esc(p.id)}">${config.active?'Pausar promoción':'Reactivar promoción'}</button><button type="button" class="quiet" data-program-edit="${esc(p.id)}">Editar promoción</button><button type="button" class="danger-quiet" data-program-delete="${esc(p.id)}" aria-label="Eliminar ${esc(config.name)}">Eliminar</button></div></article>`;
+            }).join('')||`<section class="panel experience-empty promotion-empty"><strong>${programs.length?'No hay coincidencias con estos filtros.':'Crea el primer motivo para volver.'}</strong><p>${programs.length?'Busca otro término o restablece los filtros.':'El asistente te ayudará a definir la acumulación y el premio juntos.'}</p><button type="button" class="quiet" id="emptyPromotionAction">${programs.length?'Quitar filtros':'Crear mi primera promoción'}</button></section>`;
+            root.querySelector('#promotionListCount').textContent=`${shown.length} de ${programs.length} promociones`;
+            bindRewardGoals(root);
+            root.querySelectorAll('[data-program-status]').forEach(b=>b.onclick=()=>showProgramStatus(programs.find(p=>p.id===b.dataset.programStatus),b));
+            root.querySelectorAll('[data-program-edit]').forEach(b=>b.onclick=()=>renderPrograms(programs.find(p=>p.id===b.dataset.programEdit)));
+            root.querySelectorAll('[data-program-delete]').forEach(b=>b.onclick=()=>showProgramRemoval(b.dataset.programDelete).catch(e=>notice(e.message)));
+            root.querySelectorAll('[data-add-reward]').forEach(b=>b.onclick=()=>{state.tab='rewards';renderMerchant();const select=document.querySelector('#reward [name=programId]');if(select){select.value=b.dataset.addReward;select.dispatchEvent(new Event('change',{bubbles:true}));}document.querySelector('#reward [name=name]')?.focus();});
+            root.querySelector('#emptyPromotionAction')?.addEventListener('click',()=>{if(!programs.length){renderPrograms(null,true);return;}status='ALL';kind='ALL';root.querySelector('#searchPromotions').value='';root.querySelector('#promotionKindFilter').value='ALL';sync();draw();});
         };
-        const sync = () => root.querySelectorAll('[data-promotion-status]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.promotionStatus === status)));
-        root.querySelector('#searchPromotions').oninput = draw;
-        root.querySelectorAll('[data-promotion-status]').forEach(b => b.onclick = () => { status = b.dataset.promotionStatus; sync(); draw(); });
-        root.querySelector('#newPromotion').onclick = () => renderPrograms(null, true);
+        const sync=()=>root.querySelectorAll('[data-promotion-status]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.promotionStatus===status)));
+        root.querySelector('#searchPromotions').oninput=draw;
+        root.querySelector('#promotionKindFilter').onchange=e=>{kind=e.target.value;draw();};
+        root.querySelectorAll('[data-promotion-status]').forEach(b=>b.onclick=()=>{status=b.dataset.promotionStatus;sync();draw();});
+        root.querySelector('#newPromotion').onclick=()=>renderPrograms(null,true);
         draw();
     }
 
     renderPrograms = function (edit = null, create = false) {
         if (!edit && !create) { programList(); return; }
         let current = edit ? JSON.parse(JSON.stringify(edit.config)) : {name: '', kind: 'POINTS', active: true, unitMinor: 100, pointsPerUnit: 1, cashbackBps: 500, stampsPerPurchase: 1, minimumSpendMinor: 1, branchIds: [], window: emptyWindow(), bonuses: []};
-        let advancedOpen = Boolean(edit);
+        let advancedOpen = Boolean(edit), pendingDraft = false;
         const read = form => {
             const type = edit ? edit.config.kind : form.elements.kind.value;
             return {name: form.elements.name.value, kind: type, active: form.elements.active.checked,
@@ -244,11 +273,14 @@
                         bindRewardGoals(content);
             const formNode = document.querySelector('#programV7');;
             const kind = formNode.elements.kind;;
+            formNode.addEventListener('input',()=>{pendingDraft=true;});
+            formNode.addEventListener('change',()=>{pendingDraft=true;});
+            if(pendingDraft)formNode.dispatchEvent(new Event('change',{bubbles:true}));
             const showKind = () => content.querySelectorAll('[data-promotion-kind]').forEach(section => { const hidden = section.dataset.promotionKind !== kind.value; section.hidden = hidden; section.querySelectorAll('input').forEach(input => input.disabled = hidden); });
             kind.onchange = showKind; showKind();
-            content.querySelectorAll('[data-preset]').forEach(button => button.onclick = () => { kind.value = button.dataset.preset; if (!formNode.elements.name.value.trim()) formNode.elements.name.value = button.textContent; showKind(); });
-            document.querySelector('#addBonus').onclick = () => { current = read(formNode); current.bonuses.push({priority: Math.max(0, ...current.bonuses.map(b => b.priority)) + 1, multiplier: 2, window: emptyWindow(), branchIds: []}); advancedOpen = true; render(); };
-            content.querySelectorAll('[data-remove-bonus]').forEach(button => button.onclick = () => { current = read(formNode); current.bonuses.splice(Number(button.dataset.removeBonus), 1); advancedOpen = true; render(); });
+            content.querySelectorAll('[data-preset]').forEach(button => button.onclick = () => { kind.value = button.dataset.preset; if (!formNode.elements.name.value.trim()) formNode.elements.name.value = button.textContent; showKind(); formNode.dispatchEvent(new Event('change',{bubbles:true})); });
+            document.querySelector('#addBonus').onclick = () => { current = read(formNode); current.bonuses.push({priority: Math.max(0, ...current.bonuses.map(b => b.priority)) + 1, multiplier: 2, window: emptyWindow(), branchIds: []}); advancedOpen = true; pendingDraft = true; render(); };
+            content.querySelectorAll('[data-remove-bonus]').forEach(button => button.onclick = () => { current = read(formNode); current.bonuses.splice(Number(button.dataset.removeBonus), 1); advancedOpen = true; pendingDraft = true; render(); });
             content.querySelector('#backToPromotions').onclick = () => renderPrograms();
             form('programV7', async (_, f) => {
                 const program = read(f);

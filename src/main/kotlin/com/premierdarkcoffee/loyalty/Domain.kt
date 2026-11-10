@@ -85,7 +85,7 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
 @Serializable data class Purchase(val memberId: String, val branchId: String, val receipt: String, val amountMinor: Long, val currency: String,
     val items: List<PurchaseItem> = emptyList(), val programIds: Set<String>? = null, val rewardId: String? = null,
     val expectedRevision: Long? = null, val expectedRewardVersion: Int? = null,
-    val identityVerified: Boolean = false, val customerConfirmed: Boolean = false)
+    val identityVerified: Boolean = false, val customerConfirmed: Boolean = false, val expectedEarningReview: String? = null)
 @Serializable data class Reserve(val rewardId: String)
 @Serializable data class Confirm(val token: String, val branchId: String)
 @Serializable data class Lookup(val document: String? = null, val cardCode: String? = null)

@@ -40,9 +40,10 @@ import kotlin.math.pow
     val usage: String = "Presenta tu tarjeta en caja para acumular y canjear.",
     val birthdayMessage: String = "¡Feliz cumpleaños! Gracias por ser parte de nuestro negocio.",
     val artworkStyle: String = "GRADIENT", val composition: String = "SIGNATURE", val artworkAccent: String? = null,
-    val frontFocus: String = "AUTO", val featuredRewardId: String? = null) {
+    val frontFocus: String = "AUTO", val featuredRewardId: String? = null, val automaticPriority: String = "ORDER") {
     fun validate() {
         need(displayName.length<=80,"INVALID_DESIGN","Nombre demasiado largo."); text(welcome,80);text(usage,350);text(birthdayMessage,250)
+        need(automaticPriority in setOf("ORDER", "PROGRESS"), "INVALID_PRIORITY", "Elige orden fijo o cercanía al premio.")
         featuredProgramId?.let(::uuid)
         featuredRewardId?.let(::uuid)
         need(featuredRewardId == null || featuredProgramId != null, "FEATURED_PROGRAM_REQUIRED", "Elige la promoción a la que pertenece el premio destacado.")

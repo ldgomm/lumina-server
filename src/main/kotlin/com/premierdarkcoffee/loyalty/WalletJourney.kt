@@ -46,9 +46,7 @@ internal fun WalletDesign.rewardPriority(programId: String?, rewardId: String?):
 
 fun WalletPass.journey(): WalletJourney? {
     if (snapshot["canOperate"]?.jsonPrimitive?.booleanOrNull != true) return null
-    val first = presentationBalances().sortedBy {
-        if (it["programId"]?.jsonPrimitive?.contentOrNull == design().featuredProgramId) 0 else 1
-    }.firstOrNull() ?: return null
+    val first = prioritizedBalances().firstOrNull() ?: return null
     val target = snapshot["rewardProgress"]?.jsonArray.orEmpty().map { it.jsonObject }.filter {
         first["programId"] != null && it["programId"] == first["programId"] && it["kind"] == first["kind"] &&
             (it["goal"]?.jsonPrimitive?.longOrNull ?: 0) > 0

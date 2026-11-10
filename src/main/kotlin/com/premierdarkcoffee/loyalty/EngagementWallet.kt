@@ -23,8 +23,9 @@ fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=tr
         LEFT JOIN balances b ON b.tenant_id=r.tenant_id AND b.program_id=r.program_id AND b.member_id=?
         WHERE r.tenant_id=? AND r.active AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=p.tenant_id)
         ORDER BY CASE WHEN r.id=? AND r.program_id=? THEN 0 ELSE 1 END,
-            CASE WHEN r.program_id=? THEN 0 ELSE 1 END,r.program_id,r.cost,r.id LIMIT 20
-    """.trimIndent(),member.id,member.tenant,design.featuredRewardId,design.featuredProgramId,design.featuredProgramId){val available=it.getLong("available");val cost=it.getLong("cost");val remaining=maxOf(0,cost-available)
+            CASE WHEN r.program_id=? THEN 0 ELSE 1 END,
+            CASE WHEN ? THEN least(1::numeric,coalesce(b.available,0)::numeric/r.cost) ELSE 0 END DESC,r.program_id,r.cost,r.id LIMIT 20
+    """.trimIndent(),member.id,member.tenant,design.featuredRewardId,design.featuredProgramId,design.featuredProgramId,design.automaticPriority=="PROGRESS"){val available=it.getLong("available");val cost=it.getLong("cost");val remaining=maxOf(0,cost-available)
         val unit=when(it.getString("kind")){"STAMPS"->if(remaining==1L)"sello" else "sellos";"POINTS"->if(remaining==1L)"punto" else "puntos";else->"centavos de cashback"}
         val message=if(remaining==0L)"Ya puedes canjear: ${it.getString("name")}" else "Te ${if(remaining==1L)"falta" else "faltan"} $remaining $unit para ${it.getString("name")}"
         obj("id" to it.getString("id"),"name" to it.getString("name"),"programId" to it.getString("program_id"),"goal" to cost,"available" to available,"remaining" to remaining,"kind" to it.getString("kind"),"message" to message,"benefitText" to rewardBenefitDescription(it.getString("benefit")))
