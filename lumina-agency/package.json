@@ -1,11 +1,11 @@
 {
   "name": "lumina-agency",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "engines": { "node": ">=24.2.0" },
   "scripts": {
     "start": "node src/server.mjs",
-    "test": "node --test test/portal.test.mjs test/loyalty.test.mjs"
+    "test": "node --test test/portal.test.mjs test/loyalty.test.mjs test/forms.test.mjs"
   }
 }

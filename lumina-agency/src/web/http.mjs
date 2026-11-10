@@ -9,7 +9,9 @@ export function sessionCookie(token, secure = false) {
 }
 export function securityHeaders(res, caja = false) {
   res.setHeader('Cache-Control','no-store');
-  res.setHeader('Referrer-Policy','no-referrer');
+  // Native POST forms need their same-origin Origin header for the CSRF check.
+  // no-referrer changes it to "null" (Fetch Standard, append a request Origin header).
+  res.setHeader('Referrer-Policy','same-origin');
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('X-Frame-Options','DENY');
   res.setHeader('Permissions-Policy',`camera=${caja ? '(self)' : '()'}, microphone=(), geolocation=()`);
