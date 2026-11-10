@@ -182,7 +182,7 @@ class WalletFirstPostgresTest {
         assertTrue(details.any { it.str("label").startsWith("COMPRA") && it.str("value") == "20.00 USD\nSucursal: Centro" })
     }
     @Test fun `new migration is repeatable and keeps legacy login compatible`() {
-        val f=fixture();db.migrate();assertEquals(9,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        val f=fixture();db.migrate();assertEquals(10,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
         val legacy=service.enroll(f.slug,Enrollment("Legacy","LEGACY123","test-password-123",true))
         assertEquals(service.member(legacy.str("token")),service.member(service.login(f.slug,Login("LEGACY123","test-password-123")).str("token")))
         assertEquals(2,count("members",f))

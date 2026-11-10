@@ -72,8 +72,8 @@ fun LoyaltyService.resolveProfileCorrection(tenant: String, requestId: String, i
 }
 fun LoyaltyService.createSimplePromotion(s: Staff, input: SimplePromotionSetup, key: String): JsonObject {
     s.owner(); input.validate()
-    return db.tx { c -> once(c,s.tenant,"simple-promotion",key,json.encodeToString(input)) {
-        commercial.requireActive(c,s.tenant)
+    return db.tx { c -> authorizeStaff(c,s); once(c,s.tenant,"simple-promotion",key,json.encodeToString(input)) {
+        authorizeStaff(c,s); commercial.requireActive(c,s.tenant)
         (input.program.branchIds + input.program.bonuses.flatMap { it.branchIds }).forEach { branch(c,s.tenant,it) }
         val pid=id();val rid=id();val reward=Reward(pid,input.rewardName.trim(),input.rewardCost)
         c.exec("INSERT INTO programs(tenant_id,id,kind,current_version) VALUES(?,?,?,1)",s.tenant,pid,input.program.kind.name)

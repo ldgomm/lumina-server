@@ -1,0 +1,41 @@
+package com.premierdarkcoffee.loyalty
+
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import kotlinx.serialization.json.*
+
+private fun ApplicationCall.managementNumber(name: String, default: Int): Int = request.queryParameters[name]?.let { it.toIntOrNull() ?: throw Problem(400,"INVALID_FILTER","Filtro numérico inválido.") } ?: default
+private fun ApplicationCall.managementQuery() = ManagementQuery(managementNumber("days",30),request.queryParameters["kind"]?:"ALL",request.queryParameters["branchId"]?.takeIf(String::isNotBlank),request.queryParameters["actorId"]?.takeIf(String::isNotBlank),request.queryParameters["q"]?:"",managementNumber("offset",0),request.queryParameters["asOf"])
+
+fun Route.managementRoutes(service: LoyaltyService, platformToken: String) {
+    route("/api/staff") {
+        get("/team") { val s=io { service.staff(call.bearer()) };call.respond(io { service.team(s) }) }
+        put("/team/{id}") { val s=io { service.staff(call.bearer()) };val input=call.body<TeamChange>();call.respond(io { service.editTeamUser(s,call.parameters["id"]!!,input) }) }
+        post("/team/{id}/actions") { val s=io { service.staff(call.bearer()) };val input=call.body<TeamAction>();call.respond(io { service.teamAction(s,call.parameters["id"]!!,input) }) }
+        get("/activity") { val s=io { service.staff(call.bearer()).also { it.owner() } };val q=call.managementQuery();call.respond(io { service.managementActivity(s.tenant,q) }) }
+    }
+    route("/api/platform") {
+        intercept(ApplicationCallPipeline.Call) { need(Security.equal(Security.hash(call.bearer()),Security.hash(platformToken)),"UNAUTHORIZED","Acceso no autorizado.",401) }
+        get("/overview") { call.respond(io { service.platformOverview(call.managementNumber("days",30),call.request.queryParameters["q"]?:"",call.managementNumber("offset",0)) }) }
+        route("/tenants/{tenant}") {
+            fun ApplicationCall.owner() = Staff(uuid(parameters["tenant"]!!),"platform","OWNER",null)
+            get("/activity") { val q=call.managementQuery();call.respond(io { service.managementActivity(call.owner().tenant,q) }) }
+            get("/team") { call.respond(io { service.team(call.owner()) }) }
+            put("/team/{id}") { val input=call.body<TeamChange>();call.respond(io { service.editTeamUser(call.owner(),call.parameters["id"]!!,input) }) }
+            post("/team/{id}/actions") { val input=call.body<TeamAction>();call.respond(io { service.teamAction(call.owner(),call.parameters["id"]!!,input) }) }
+            get("/customer-activity") {
+                val p=call.request.queryParameters
+                val q=CustomerActivityQuery(call.managementNumber("days",30),call.managementNumber("inactiveDays",30),p["segment"]?:"ALL",p["q"]?:"",call.managementNumber("offset",0),p["sort"]?:"RECENT")
+                call.respond(io { service.customerActivity(call.owner(),q) })
+            }
+            get("/customer-workspace/{id}") {
+                val q=CustomerTimelineQuery(call.request.queryParameters["kind"]?:"ALL",call.request.queryParameters["branchId"]?.takeIf(String::isNotBlank),call.managementNumber("offset",0))
+                val result=io { service.customerWorkspace(call.owner(),call.parameters["id"]!!,q) }
+                // Reports never expose a scannable card or customer authentication material.
+                call.respond(JsonObject(result + ("member" to JsonObject(result.getValue("member").jsonObject.filterKeys { it != "cardCode" }))))
+            }
+        }
+    }
+}

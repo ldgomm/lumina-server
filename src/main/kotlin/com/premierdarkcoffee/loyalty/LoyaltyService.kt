@@ -25,7 +25,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         need(count <= limit,"RATE_LIMITED","Demasiados intentos. Vuelve a intentarlo en un minuto.",429)
     }
     fun staff(token: String): Staff = db.tx { c ->
-        c.one("SELECT * FROM staff_tokens WHERE token_hash=? AND revoked_at IS NULL",Security.hash(token)) { Staff(it.getString("tenant_id"),it.getString("id"),it.getString("role"),it.getString("branch_id")) }
+        c.one("SELECT * FROM staff_tokens WHERE token_hash=? AND revoked_at IS NULL AND archived_at IS NULL",Security.hash(token)) { Staff(it.getString("tenant_id"),it.getString("id"),it.getString("role"),it.getString("branch_id"),it.getInt("version")) }
             ?: throw Problem(401,"UNAUTHORIZED","Acceso no autorizado.")
     }
     fun member(token: String): Member = db.tx { c ->
@@ -61,27 +61,16 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             obj("tenantId" to tenant,"ownerToken" to token,"staffId" to staffId,"enrollmentPath" to "/join/${input.slug}", "firstBranchId" to firstBranchId)
         }
     }
-    fun newStaff(s: Staff, input: NewStaff): JsonObject { s.owner(); need(input.role in setOf("OWNER","CASHIER"),"INVALID_ROLE","Rol inválido.")
-        return db.tx { c ->
-        commercial.requireActive(c, s.tenant);
-        
-            input.branchId?.let { branch(c,s.tenant,it) }
-            need(input.role != "CASHIER" || input.branchId != null,"BRANCH_REQUIRED","Asigna una sucursal al cajero.")
-            val token = Security.token(); val staffId = id()
-            c.exec("INSERT INTO staff_tokens(tenant_id,id,token_hash,role,branch_id) VALUES(?,?,?,?,?)",s.tenant,staffId,Security.hash(token),input.role,input.branchId)
-            audit(c,s.tenant,s.id,"CREATE_STAFF",staffId)
-            obj("id" to staffId,"token" to token)
-        }
-    }
-    fun revokeStaff(s: Staff, staffId: String): JsonObject { s.owner(); need(staffId != s.id,"SELF_REVOKE","No puedes revocar tu propia credencial.")
-        return db.tx { c ->
-            need(c.exec("UPDATE staff_tokens SET revoked_at=now() WHERE tenant_id=? AND id=? AND revoked_at IS NULL",s.tenant,uuid(staffId)) == 1,"NOT_FOUND","Credencial no encontrada.",404)
-            audit(c,s.tenant,s.id,"REVOKE_STAFF",staffId); obj("ok" to true)
-        }
+    fun newStaff(s: Staff, input: NewStaff): JsonObject = createTeamUser(s,input)
+    fun revokeStaff(s: Staff, staffId: String): JsonObject {
+        s.owner(); need(staffId != s.id,"SELF_REVOKE","No puedes revocar tu propia credencial.")
+        val user = team(s).getValue("users").jsonArray.map { it.jsonObject }.find { it["id"] == JsonPrimitive(uuid(staffId)) }
+            ?: throw Problem(404,"NOT_FOUND","Credencial no encontrada.")
+        return teamAction(s,staffId,TeamAction(user.getValue("version").jsonPrimitive.int,"DEACTIVATE","Revocación desde acceso anterior",true))
     }
     fun newBranch(s: Staff, input: NewBranch): JsonObject { s.owner(); text(input.name); text(input.code,40)
         return db.tx { c ->
-        commercial.requireActive(c, s.tenant);
+        authorizeStaff(c,s); commercial.requireActive(c, s.tenant);
          val branchId = id()
             c.exec("INSERT INTO branches(tenant_id,id,name,code) VALUES(?,?,?,?)",s.tenant,branchId,input.name.trim(),input.code.trim())
             audit(c,s.tenant,s.id,"CREATE_BRANCH",branchId); obj("id" to branchId,"name" to input.name)
@@ -96,7 +85,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     }
     fun newProgram(s: Staff, program: Program): JsonObject { s.owner(); program.validate()
         return db.tx { c ->
-        commercial.requireActive(c, s.tenant);
+        authorizeStaff(c,s); commercial.requireActive(c, s.tenant);
          validateBranches(c,s.tenant,program); val programId = id()
             c.exec("INSERT INTO programs(tenant_id,id,kind,current_version) VALUES(?,?,?,1)",s.tenant,programId,program.kind.name)
             c.exec("INSERT INTO program_versions(tenant_id,program_id,version,config) VALUES(?,?,1,?::jsonb)",s.tenant,programId,json.encodeToString(program))
@@ -105,7 +94,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     }
     fun editProgram(s: Staff, programId: String, input: ProgramChange): JsonObject { s.owner(); uuid(programId); input.program.validate()
         return db.tx { c ->
-        commercial.requireActive(c, s.tenant);
+        authorizeStaff(c,s); commercial.requireActive(c, s.tenant);
          validateBranches(c,s.tenant,input.program)
             val current = c.one("SELECT kind,current_version FROM programs WHERE tenant_id=? AND id=? AND deleted_at IS NULL FOR UPDATE",s.tenant,programId) { it.getString(1) to it.getInt(2) } ?: throw Problem(404,"NOT_FOUND","Programa no encontrado.")
             need(current.second == input.expectedVersion,"VERSION_CONFLICT","La promoción cambió; recarga antes de guardar.",409)
@@ -121,7 +110,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     fun saveReward(s: Staff, input: Reward, rewardId: String? = null, expectedVersion: Int? = null): JsonObject { s.owner(); uuid(input.programId); text(input.name); need(input.cost in 1..1_000_000_000,"INVALID_COST","Costo inválido.")
         input.benefit?.validate()
         return db.tx { c ->
-        commercial.requireActive(c, s.tenant);
+        authorizeStaff(c,s); commercial.requireActive(c, s.tenant);
         
             need(c.one("SELECT id FROM programs WHERE tenant_id=? AND id=? AND deleted_at IS NULL",s.tenant,input.programId) { it.getString(1) } != null,"NOT_FOUND","Programa no encontrado.",404)
             val target = rewardId?.let(::uuid) ?: id()
@@ -198,8 +187,8 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         uuid(input.memberId); uuid(input.branchId); s.at(input.branchId); text(input.receipt,100)
         need(input.amountMinor in 0..1_000_000_000,"INVALID_AMOUNT","Monto de compra inválido.")
         val normalized = input.copy(receipt=input.receipt.trim().uppercase(Locale.ROOT))
-        return db.tx { c -> once(c,s.tenant,"purchase:${s.id}",key,normalized.idempotencyPayload()) {
-        commercial.requireActive(c, s.tenant);
+        return db.tx { c -> authorizeStaff(c,s); once(c,s.tenant,"purchase:${s.id}",key,normalized.idempotencyPayload()) {
+        authorizeStaff(c,s); commercial.requireActive(c, s.tenant);
         
             branch(c,s.tenant,input.branchId); lockMember(c,s.tenant,input.memberId)
             if (input.expectedEarningReview == null) releaseExpired(c,s.tenant,input.memberId)
@@ -304,8 +293,8 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         obj("id" to redemptionId,"status" to if (hold.third == "RESERVED") "CANCELLED" else hold.third)
     } }
     fun confirm(s: Staff, input: Confirm, key: String): JsonObject { s.at(input.branchId); need(input.token.length in 32..128,"INVALID_TOKEN","Código inválido.")
-        return db.tx { c -> once(c,s.tenant,"confirm:${s.id}",key,json.encodeToString(input)) {
-        commercial.requireActive(c, s.tenant);
+        return db.tx { c -> authorizeStaff(c,s); once(c,s.tenant,"confirm:${s.id}",key,json.encodeToString(input)) {
+        authorizeStaff(c,s); commercial.requireActive(c, s.tenant);
         
             branch(c,s.tenant,input.branchId)
             val member = c.one("SELECT member_id FROM redemptions WHERE tenant_id=? AND token_hash=?",s.tenant,Security.hash(input.token)) { it.getString(1) } ?: throw Problem(404,"NOT_FOUND","Código no encontrado.")

@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v036 requiere 478 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v037 requiere 500 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -310,3 +310,15 @@ WalletDesign.automaticPriority admite ORDER (compatible por defecto) y PROGRESS 
 Informes añade lectura del período y cobertura de compras con productos usando detailedPurchases calculado en el mismo snapshot y negocio. No llamar nuevos clientes a compradores de una sola compra en ese intervalo ni confundir repetición con retención. No inferir ventas fuera de las registradas.
 
 Gate del Mac: 256 unitarias/HTTP + 222 PostgreSQL (478), 128 Python, Docker y 88 comprobaciones gateway antes del auto commit local, sin push. integral-experience.spec.cjs usa datos ficticios y red interceptada en 320/390/1024/1440; cubre revisión de beneficios, conflicto, borradores, catálogo, resumen, informes y guardado explícito de prioridad. Mantener regresión de caja, metas y estudio de tarjetas. HTTPS y recepción en iPhone/Android se verifican por separado; no renovar túneles automáticamente. V001–V009 inmutables.
+
+## Administración, equipo y actividad v037
+
+V010 añade nombres, contacto, revisión y baja definitiva a staff_tokens y atribución histórica en compras, canjes y auditoría. No modificar V001–V009. Las credenciales anteriores conservan su hash; no generar credenciales de reemplazo durante la migración. La baja es de acceso, no de historial. Reactivar y renovar generan una credencial nueva y conservan id; archivar es definitivo. El alta admite requestId con huella semántica sin almacenar la credencial para replay.
+
+Todo cambio de equipo se serializa por business_access FOR UPDATE y compara expectedVersion. Las operaciones autorizadas toman primero negocio FOR SHARE y revalidan id, rol, sucursal, revisión y estado antes de mutar o devolver una repetición idempotente. Mantener orden negocio → miembro → pase. Impedir baja propia, cambio de alcance propio y retirada del último dueño activo. No permitir actores de otro negocio. OWNER administra todas las sucursales; CASHIER requiere una sucursal del mismo negocio. El administrador usa su autenticación propia y nunca un token del dueño.
+
+Los informes de plataforma y actividad son de lectura, con snapshots consistentes y consultas acotadas. Separar montos por moneda. Llamar inscripciones a la suma de registros entre negocios, no personas únicas. Capturar actor_name al registrar nuevas operaciones; nunca actualizar eventos antiguos al renombrar un usuario. Para eventos anteriores a V010, indicar que el nombre es el actual. Las fichas de clientes de plataforma no incluyen cardCode. Los períodos respetan zona horaria y la actividad conserva asOf en la paginación. El historial y las rutas de equipo permanecen privados tras el gateway.
+
+La UI muestra credenciales una sola vez, evita localStorage, documenta motivos y confirma bajas/rotaciones. Un conflicto preserva el formulario. Ignorar respuestas tardías de vistas o sesiones anteriores. Navegación de equipo y actividad solo para dueños; los permisos se verifican también en el servidor.
+
+Gate: 260 unitarias/HTTP + 240 PostgreSQL = 500; 128 Python, Docker y 97 comprobaciones gateway antes del auto commit. management.spec.cjs cubre CRUD, ramas, credenciales, conflictos, historial, plataforma, fichas y móvil con datos ficticios. Conservar la regresión de caja e informes. HTTPS y validación física de Apple/Google se informan aparte.

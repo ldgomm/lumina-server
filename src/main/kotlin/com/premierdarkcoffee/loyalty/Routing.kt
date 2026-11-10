@@ -93,6 +93,7 @@ fun Application.loyaltyRoutes(service: LoyaltyService, platformToken: String, pu
     }
     routing {
         commercialRoutes(service, platformToken)
+        managementRoutes(service, platformToken)
                 walletRoutes(service, platformToken)
         walletFirstRoutes(service, publicUrl)
         engagementRoutes(service)

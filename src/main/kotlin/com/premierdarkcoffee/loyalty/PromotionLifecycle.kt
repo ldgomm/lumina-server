@@ -59,7 +59,7 @@ fun LoyaltyService.deletePromotion(s: Staff, program: String, input: DeletePromo
     need(input.acknowledged && input.confirmation=="ELIMINAR","DELETION_CONFIRMATION_REQUIRED","Revisa los saldos afectados, acepta la pérdida definitiva y escribe ELIMINAR.")
     need(input.expectedImpact.matches(Regex("[a-f0-9]{64}")),"INVALID_REVIEW","Revisa el impacto antes de eliminar.")
     return db.tx { c -> once(c,s.tenant,"delete-promotion:$program",key,json.encodeToString(input)) {
-        lockPromotionBusiness(c,s.tenant);commercial.requireActive(c,s.tenant)
+        lockPromotionBusiness(c,s.tenant);authorizeStaff(c,s);commercial.requireActive(c,s.tenant)
         // Expiry and cancellation also lock the member. Lock affected members before examining balances.
         val members=c.rows("SELECT m.id FROM members m WHERE m.tenant_id=? AND (EXISTS(SELECT 1 FROM balances b WHERE b.tenant_id=m.tenant_id AND b.member_id=m.id AND b.program_id=?) OR EXISTS(SELECT 1 FROM redemptions r WHERE r.tenant_id=m.tenant_id AND r.member_id=m.id AND r.program_id=? AND r.status='RESERVED')) ORDER BY m.id FOR UPDATE OF m",s.tenant,program,program){it.getString(1)}
         c.rows("SELECT id FROM programs WHERE tenant_id=? AND id=? FOR UPDATE",s.tenant,program){it.getString(1)}

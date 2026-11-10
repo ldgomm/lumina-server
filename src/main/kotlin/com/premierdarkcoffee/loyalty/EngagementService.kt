@@ -49,7 +49,7 @@ fun LoyaltyService.prepareReceipt(c:Connection,s:Staff,p:Purchase):ReceiptCalcul
 fun LoyaltyService.receiptQuote(s:Staff,p:Purchase):JsonObject {
     uuid(p.memberId); uuid(p.branchId); text(p.receipt,100); s.at(p.branchId)
     need(p.amountMinor in 0..1_000_000_000, "INVALID_AMOUNT", "Monto de compra inválido.")
-    return db.tx { c ->commercial.requireActive(c,s.tenant);branch(c,s.tenant,p.branchId);lockMember(c,s.tenant,p.memberId)
+    return db.tx { c ->authorizeStaff(c,s); commercial.requireActive(c,s.tenant);branch(c,s.tenant,p.branchId);lockMember(c,s.tenant,p.memberId)
         val tenant = c.one("SELECT currency,timezone FROM tenants WHERE id=?",s.tenant) { it.getString(1) to ZoneId.of(it.getString(2)) }!!
         need(p.currency == tenant.first, "CURRENCY_MISMATCH", "La moneda debe coincidir con la del negocio.")
         val calculated = prepareReceipt(c,s,p)
@@ -85,8 +85,8 @@ fun requireCounterReward(c:Connection,tenant:String,reward:String) {
 
 fun LoyaltyService.createPromotion(s:Staff,input:PromotionTemplate,key:String):JsonObject {
     s.owner();input.validate()
-    return db.tx{c->once(c,s.tenant,"promotion-template",key,json.encodeToString(input)){
-        commercial.requireActive(c,s.tenant);input.branchIds.forEach{branch(c,s.tenant,it)}
+    return db.tx{c->authorizeStaff(c,s); once(c,s.tenant,"promotion-template",key,json.encodeToString(input)){
+        authorizeStaff(c,s); commercial.requireActive(c,s.tenant);input.branchIds.forEach{branch(c,s.tenant,it)}
         val pid=id();val rid=id();val group=input.group.trim()
         val program=Program(input.name.trim(),Kind.STAMPS,productGroup=group,countUnits=input.countUnits,window=input.window,branchIds=input.branchIds)
         val benefit=Benefit(input.percentBps,group,if(input.countUnits)"ITEM" else "BASKET")
@@ -103,7 +103,7 @@ fun LoyaltyService.createPromotion(s:Staff,input:PromotionTemplate,key:String):J
 
 fun LoyaltyService.design(s:Staff)=db.tx{c->s.owner();c.one("SELECT version,config::text FROM wallet_designs WHERE tenant_id=?",s.tenant){obj("version" to it.getInt(1),"design" to json.parseToJsonElement(it.getString(2)))}?:obj("version" to 0,"design" to json.parseToJsonElement(json.encodeToString(WalletDesign())))}
 fun LoyaltyService.saveDesign(s:Staff,input:WalletDesignChange):JsonObject {s.owner();input.design.validate();return db.tx{c->
-    commercial.requireActive(c,s.tenant)
+    authorizeStaff(c,s); commercial.requireActive(c,s.tenant)
     input.design.featuredProgramId?.let{pid->need(c.one("SELECT id FROM programs WHERE tenant_id=? AND id=? AND deleted_at IS NULL",s.tenant,pid){it.getString(1)}!=null,"NOT_FOUND","Promoción no encontrada.",404)}
     input.design.featuredRewardId?.let { rid ->
         need(c.one("SELECT id FROM rewards WHERE tenant_id=? AND program_id=? AND id=?", s.tenant, input.design.featuredProgramId, rid) { it.getString(1) } != null,
@@ -117,18 +117,18 @@ fun LoyaltyService.saveDesign(s:Staff,input:WalletDesignChange):JsonObject {s.ow
     audit(c,s.tenant,s.id,"WALLET_DESIGN_UPDATED",s.tenant);obj("version" to version+1)
 }}
 fun LoyaltyService.savePreferences(s:Staff,memberId:String,input:CustomerPreferencesChange):JsonObject {s.owner();need(input.customerConfirmed,"CONSENT_REQUIRED","Confirma que el cliente autorizó estas preferencias.");input.preferences.validate();return db.tx{c->
-    commercial.requireActive(c,s.tenant);lockMember(c,s.tenant,memberId);writePreferences(c,Member(s.tenant,memberId),input.preferences)
+    authorizeStaff(c,s); commercial.requireActive(c,s.tenant);lockMember(c,s.tenant,memberId);writePreferences(c,Member(s.tenant,memberId),input.preferences)
     changed(c,s.tenant,memberId);audit(c,s.tenant,s.id,"CUSTOMER_PREFERENCES_CONFIRMED",memberId);obj("saved" to true)
 }}
 fun LoyaltyService.writePreferences(c:Connection,m:Member,p:CustomerPreferences) {
     p.validate();c.exec("INSERT INTO member_preferences(tenant_id,member_id,birthday,marketing_consent,consent_at) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,member_id) DO UPDATE SET birthday=excluded.birthday,marketing_consent=excluded.marketing_consent,consent_at=excluded.consent_at",m.tenant,m.id,p.birthday,p.marketingConsent,Timestamp.from(clock.instant()))
 }
-fun LoyaltyService.createCustomerEvent(s:Staff,e:CustomerEvent,key:String):JsonObject {s.owner();e.validate();return db.tx{c->once(c,s.tenant,"customer-event",key,json.encodeToString(e)){
-    commercial.requireActive(c,s.tenant);val event=id();c.exec("INSERT INTO customer_events(tenant_id,id,title,body,starts_at,ends_at) VALUES(?,?,?,?,?,?)",s.tenant,event,e.title,e.body,Timestamp.from(Instant.parse(e.startsAt)),Timestamp.from(Instant.parse(e.endsAt)))
+fun LoyaltyService.createCustomerEvent(s:Staff,e:CustomerEvent,key:String):JsonObject {s.owner();e.validate();return db.tx{c->authorizeStaff(c,s); once(c,s.tenant,"customer-event",key,json.encodeToString(e)){
+    authorizeStaff(c,s); commercial.requireActive(c,s.tenant);val event=id();c.exec("INSERT INTO customer_events(tenant_id,id,title,body,starts_at,ends_at) VALUES(?,?,?,?,?,?)",s.tenant,event,e.title,e.body,Timestamp.from(Instant.parse(e.startsAt)),Timestamp.from(Instant.parse(e.endsAt)))
     audit(c,s.tenant,s.id,"CUSTOMER_EVENT_CREATED",event);obj("id" to event)
 }}}
 fun LoyaltyService.customerEvents(s:Staff)=db.tx{c->s.owner();obj("events" to c.rows("SELECT * FROM customer_events WHERE tenant_id=? ORDER BY starts_at DESC,id LIMIT 100",s.tenant){obj("id" to it.getString("id"),"title" to it.getString("title"),"body" to it.getString("body"),"startsAt" to it.instant("starts_at"),"endsAt" to it.instant("ends_at"),"active" to it.getBoolean("active"))})}
-fun LoyaltyService.cancelCustomerEvent(s:Staff,eventId:String)=db.tx{c->s.owner();commercial.requireActive(c,s.tenant);need(c.exec("UPDATE customer_events SET active=false WHERE tenant_id=? AND id=?",s.tenant,uuid(eventId))==1,"NOT_FOUND","Evento no encontrado.",404);audit(c,s.tenant,s.id,"CUSTOMER_EVENT_CANCELLED",eventId);obj("saved" to true)}
+fun LoyaltyService.cancelCustomerEvent(s:Staff,eventId:String)=db.tx{c->s.owner();authorizeStaff(c,s); commercial.requireActive(c,s.tenant);need(c.exec("UPDATE customer_events SET active=false WHERE tenant_id=? AND id=?",s.tenant,uuid(eventId))==1,"NOT_FOUND","Evento no encontrado.",404);audit(c,s.tenant,s.id,"CUSTOMER_EVENT_CANCELLED",eventId);obj("saved" to true)}
 
 fun LoyaltyService.customerInsights(s:Staff,offset:Int=0):JsonObject {s.owner();need(offset in 0..1000000,"INVALID_PAGE","Página inválida.");return db.tx{c->obj("offset" to offset,"customers" to c.rows("""
     SELECT m.id,m.name,m.created_at,p.visits,p.spent,p.last_at,p.first_at,r.claims

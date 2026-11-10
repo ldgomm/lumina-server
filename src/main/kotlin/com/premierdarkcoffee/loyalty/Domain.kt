@@ -76,7 +76,7 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
 @Serializable data class NewTenant(val name: String, val slug: String, val currency: String = "USD", val timezone: String = "America/Guayaquil", val firstBranch: NewBranch? = null, val profile: BusinessProfile? = null)
 
 @Serializable data class NewBranch(val name: String, val code: String)
-@Serializable data class NewStaff(val role: String, val branchId: String? = null)
+@Serializable data class NewStaff(val role: String, val branchId: String? = null, val name: String? = null, val contact: String = "", val requestId: String? = null)
 @Serializable data class Enrollment(val name: String, val document: String, val password: String, val acceptedTerms: Boolean)
 @Serializable data class Login(val document: String, val password: String)
 @Serializable data class ProgramChange(val expectedVersion: Int, val program: Program)

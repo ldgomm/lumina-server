@@ -43,7 +43,7 @@ fun LoyaltyService.birthdayConfiguration(s: Staff): JsonObject {
 fun LoyaltyService.saveBirthdayConfiguration(s: Staff, input: BirthdaySettingsChange): JsonObject {
     s.owner(); input.settings.validate(); need(input.expectedVersion >= 0,"INVALID_VERSION","Versión de cumpleaños inválida.")
     return db.tx { c ->
-        commercial.requireActive(c,s.tenant)
+        authorizeStaff(c,s); commercial.requireActive(c,s.tenant)
         c.one("SELECT id FROM tenants WHERE id=? FOR UPDATE",s.tenant) { it.getString(1) }
         val version = c.one("SELECT version FROM birthday_settings WHERE tenant_id=?",s.tenant) { it.getInt(1) } ?: 0
         need(version == input.expectedVersion,"VERSION_CONFLICT","Otra persona cambió los cumpleaños. Recarga antes de guardar.",409)
