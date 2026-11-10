@@ -54,7 +54,7 @@ class WalletCompositionTest {
         for(c in walletCompositions) {
             for(total in listOf(5,20,100)) {val images=listOf(0,total/2,total).map { WalletArtwork("GRADIENT",5,"0b1f3a",it,total,c).png().contentHashCode() };assertEquals(3,images.distinct().size,c)}
             val p=pass(c,"CASHBACK",499,500);assertEquals(99,p.artwork().filled);assertEquals(100,p.artwork().total)
-            assertContains(p.artwork().path(),"/v30/$c/");assertFalse(p.artwork().path().contains("same-"))
+            assertContains(p.artwork().path(),"/v32/$c/");assertFalse(p.artwork().path().contains("same-"))
             assertContains(p.applePosterFields().toString(),"4.99 de 5.00 USD");assertContains(p.googleExperienceFields().toString(),"0.01 USD")
         }
     }

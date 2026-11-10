@@ -19,7 +19,7 @@ const compositions=['PANORAMA','PRECISION','ATELIER','EDITORIAL','STAMPBOOK','TI
  w.eval(`state.data=${JSON.stringify(staff)};state.token='fake';state.tab='design';renderMerchant();`);await settle(()=>q('#composition'));
  assert.equal(q('#composition').value,'SIGNATURE');assert.equal(all('button[data-composition]').length,10);assert.equal(all('[data-wallet-style]').length,32);
  assert.match(q('#walletStyleResults').textContent,/paletas/);assert.match(q('#walletStylesMore').textContent,/32 paletas/);
- const thumbnails=all('button[data-composition] img').map(i=>i.getAttribute('src'));assert.equal(new Set(thumbnails).size,10);thumbnails.forEach(s=>assert.match(s,/\/GRADIENT\/5\/0b1f3a\/50\/100.png$/));
+ const thumbnails=all('button[data-composition] img').map(i=>i.getAttribute('src'));assert.equal(new Set(thumbnails).size,10);thumbnails.forEach(s=>assert.match(s,/\/GRADIENT\/5\/0b1f3a\/auto\/50\/100.png$/));
  assert.ok(q('#saveDesign').disabled);assert.equal(q('#designChangeStatus').textContent,'Diseño guardado');
  assert.equal(all('button[data-composition]').filter(b=>!b.hidden).length,4);
  q('#compositionMore').click();assert.equal(all('button[data-composition]').filter(b=>!b.hidden).length,10);assert.equal(q('#compositionMore').getAttribute('aria-expanded'),'true');
@@ -44,7 +44,7 @@ const compositions=['PANORAMA','PRECISION','ATELIER','EDITORIAL','STAMPBOOK','TI
  for(const c of compositions){
   q(`[data-composition=${c}]`).click();assert.equal(q('#composition').value,c);assert.equal(all('button[data-composition][aria-pressed=true]').length,1);
   assert.equal(q('#background').value,'#0b1f3a');assert.equal(q('#stampSymbol').value,'☕');assert.equal(q('#featuredProgramId').value,'points');
-  for(const provider of ['apple','google']){q(`[data-preview-provider=${provider}]`).click();const img=q(provider==='apple'?'#appleStampArtwork':'#googleStampArtwork');assert.match(img.getAttribute('src'),new RegExp('/v30/'+c+'/GRADIENT/5/0b1f3a/50/100.png'));}
+  for(const provider of ['apple','google']){q(`[data-preview-provider=${provider}]`).click();const img=q(provider==='apple'?'#appleStampArtwork':'#googleStampArtwork');assert.match(img.getAttribute('src'),new RegExp('/v32/'+c+'/GRADIENT/5/0b1f3a/auto/50/100.png'));}
   assert.equal(q('#appleJourneyValue').textContent,'50 de 100 puntos');assert.equal(q('#googleJourneyValue').textContent,'50 de 100 puntos');assert.ok(!q(`[data-composition=${c}]`).hidden);
   for(const id of ['googlePreviewMain','googlePreviewStatus','googlePreviewReward','googleJourney'])assert.equal(all('#'+id).length,1);
   if(['EDITORIAL','TICKET','RIBBON','PANORAMA','ATELIER'].includes(c))assert.equal(q('.signature-copy').firstElementChild.id,'previewPrizeWrap');else assert.equal(q('.signature-copy').firstElementChild.id,'appleJourney');

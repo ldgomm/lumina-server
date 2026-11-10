@@ -46,6 +46,23 @@ class EngagementPostgresTest {
     private fun count(table:String,f:F)=db.tx{c->c.one("SELECT count(*) FROM $table WHERE tenant_id=?",f.owner.tenant){it.getLong(1)}!!}
     private fun wallet(f:F)=WalletService(service,"https://example.com",WalletCipher(Base64.getEncoder().encodeToString(ByteArray(32){5}))).materialize(f.member)
     private fun parallel(work:()->JsonObject):List<Any>{val executor=Executors.newFixedThreadPool(4);val barrier=CyclicBarrier(4);return try{(1..4).map{executor.submit<Any>{barrier.await();try{work()}catch(e:Problem){e}}}.map{it.get(40,TimeUnit.SECONDS)}}finally{executor.shutdownNow()}}
+    @Test fun `artwork accent persists with optimistic versioning and updates the same card in both providers`() {
+        val f=fixture();val other=fixture();service.purchase(f.owner,purchase(f,4),id())
+        val before=wallet(f);val balances=service.card(f.member).getValue("balances");val ledger=count("ledger",f)
+        val design=WalletDesign(composition="ATELIER",artworkAccent="#204e41",featuredProgramId=f.program)
+        service.saveDesign(f.owner,WalletDesignChange(0,design))
+        val changed=wallet(f)
+        assertEquals(design,changed.design());assertEquals(before.serial,changed.serial);assertEquals(before.token,changed.token)
+        assertEquals(before.googleId,changed.googleId);assertEquals(before.snapshot["cardCode"],changed.snapshot["cardCode"])
+        assertTrue(changed.tag>before.tag);assertContains(changed.googleArtwork("https://example.com").toString(),"/204e41/")
+        assertFalse(before.artwork().png(1).contentEquals(changed.artwork().png(1)))
+        assertFailsWith<Problem>{service.saveDesign(f.owner,WalletDesignChange(0,design.copy(artworkAccent="#ffbb55")))}
+        assertEquals("#204e41",wallet(f).design().artworkAccent);assertNull(wallet(other).design().artworkAccent)
+        service.saveDesign(f.owner,WalletDesignChange(1,design.copy(artworkAccent=null)))
+        assertNull(wallet(f).design().artworkAccent)
+        assertEquals(before.serial,wallet(f).serial);assertEquals(balances,service.card(f.member).getValue("balances"))
+        assertEquals(ledger,count("ledger",f));assertEquals(0,count("redemptions",f))
+    }
     @Test fun `composition persists with version guard and updates the same pass without changing balances or another tenant`() {
         val f=fixture();val other=fixture();service.purchase(f.owner,purchase(f,4),id())
         val before=wallet(f);val balances=service.card(f.member).getValue("balances");val ledger=count("ledger",f);val receipts=count("purchases",f)

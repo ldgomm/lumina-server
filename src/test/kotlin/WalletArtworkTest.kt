@@ -63,7 +63,7 @@ class WalletArtworkTest {
     @Test fun `image URLs change with progress but contain no customer or security identifiers`() {
         val p=pass();val native=p.googleJson("issuer.object","issuer.class","https://example.com")
         val uri=native.getValue("heroImage").jsonObject.getValue("sourceUri").jsonObject.getValue("uri").jsonPrimitive.content
-        assertEquals("https://example.com/wallet/art/v30/SIGNATURE/GRADIENT/6/204e41/4/5.png",uri)
+        assertEquals("https://example.com/wallet/art/v32/SIGNATURE/GRADIENT/6/204e41/auto/4/5.png",uri)
         for(secret in listOf("member","PRIVATE-QR","serial","token"))assertFalse(uri.contains(secret))
         assertNotEquals(uri,pass(5).googleArtwork("https://example.com").getValue("sourceUri").jsonObject.getValue("uri").jsonPrimitive.content)
         assertEquals("PRIVATE-QR",native.getValue("barcode").jsonObject.getValue("value").jsonPrimitive.content)

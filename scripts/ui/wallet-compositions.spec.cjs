@@ -13,7 +13,7 @@ const data={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currency
   const req=route.request(),u=new URL(req.url());assert.equal(u.origin,'https://loyalty.test');
   if(u.pathname.startsWith('/wallet/art/')){
     if(await require('./wallet-artwork-fixture.cjs')(route,u))return;
-   const match=u.pathname.match(/^\/wallet\/art\/v30\/(\w+)\/GRADIENT\/5\/0b1f3a\/(\d+)\/(\d+)\.png$/);assert.ok(match,u.pathname);
+   const match=u.pathname.match(/^\/wallet\/art\/v32\/(\w+)\/GRADIENT\/5\/0b1f3a\/auto\/(\d+)\/(\d+)\.png$/);assert.ok(match,u.pathname);
    const file=path.join(artifacts,`${match[1]}-${match[2]}-${match[3]}-${u.searchParams.get('layout')||'google'}.png`);
    return route.fulfill({body:fs.readFileSync(file),contentType:'image/png'});
   }

@@ -27,7 +27,8 @@ class WalletArtworkGatewayTests(unittest.TestCase):
             calls.append((url,method))
             path=url.removeprefix('http://local')
             if '/wallet/art/v29/PANORAMA/' in path:return 404,b''
-            if '/wallet/art/v29/' in path or '/wallet/art/v30/' in path:
+            if '/ffffff00/' in path or '/GRADIENT/33/' in path or '/v30/ATELIER/GRADIENT/5/0b1f3a/ffbb55/' in path:return 404,b''
+            if '/wallet/art/v29/' in path or '/wallet/art/v30/' in path or '/wallet/art/v32/' in path:
                 if method != 'GET' or '/CUSTOM/' in path:return 404,b''
                 if '/6/5.png' in path or '?layout=html' in path:return 400,b''
                 return 200,b''
@@ -37,8 +38,8 @@ class WalletArtworkGatewayTests(unittest.TestCase):
             if path in ['/api/me/wallet-status','/api/me/access']:return 401,b''
             if path=='/api/public/demo/join':return 400,b''
             return 404,b''
-        with patch.object(w,'request',side_effect=respond):self.assertEqual(76,w.verify_gateway('http://local','demo'))
-        self.assertEqual(76,len(calls))
+        with patch.object(w,'request',side_effect=respond):self.assertEqual(88,w.verify_gateway('http://local','demo'))
+        self.assertEqual(88,len(calls))
         with patch.object(w,'request',return_value=(503,b'')):
             with self.assertRaises(RuntimeError):w.verify_gateway('http://local','demo')
 
@@ -90,3 +91,14 @@ class WalletArtworkGatewayTests(unittest.TestCase):
             for method in ['POST','PUT','DELETE']:self.assertFalse(allowed(method,path))
         for c in ['CUSTOM','../','%2e%2e','panorama']:
             self.assertFalse(allowed('GET','/wallet/art/v30/'+c+'/GRADIENT/5/0b1f3a/4/5.png'))
+
+    def test_accent_routes_are_bounded_and_legacy_urls_do_not_accept_custom_color(self):
+        rules=re.findall(r'"~\^(.+?)\$" 1;',w.gateway_config('a'*32))
+        allowed=lambda method,path:any(re.fullmatch(rule,method+' '+path) for rule in rules)
+        for accent in ['auto','ffbb55','000000','FFFFFF']:
+            path='/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/'+accent+'/4/5.png'
+            for suffix in ['', '?layout=apple', '?layout=poster']:self.assertTrue(allowed('GET',path+suffix))
+            self.assertFalse(allowed('GET',path.replace('/v32/','/v30/')))
+            for method in ['POST','PUT','DELETE']:self.assertFalse(allowed(method,path))
+        for bad in ['red','AUTO','fff','ffffff00','%23ffffff','%2e%2e','../.env']:
+            self.assertFalse(allowed('GET','/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/'+bad+'/4/5.png'))

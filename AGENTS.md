@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v031 requiere 411 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v032 requiere 422 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -252,3 +252,15 @@ Un borrador permanece en memoria. Proteger navegación lateral, búsqueda de sec
 Guardar es explícito, conserva el control de expectedVersion, bloquea cambios concurrentes de la UI y mantiene el paso y la simulación. La respuesta del servidor confirma la nueva versión y establece la nueva base de Restaurar guardado; un error conserva el borrador. Un error de contraste ofrece un acceso visible a la corrección y un campo inválido oculto abre su paso antes de recibir foco.
 
 Mantener 207 pruebas unitarias/HTTP y 204 de PostgreSQL, 127 Python y 76 comprobaciones del gateway. Las pruebas de scripts/ui/wallet-studio-flow.dom.cjs y wallet-studio-flow.spec.cjs verifican navegación, pérdida de borrador, guardado versionado, campos ocultos, comparación y anchos 320/390/1024/1440 con datos ficticios. La validación del teléfono sigue siendo independiente.
+
+## Identidad visual v032
+
+WalletDesign.artworkAccent es opcional: null mantiene el acento automático de versiones anteriores; un #RRGGBB válido personaliza únicamente la ilustración de Apple y Google. Persistir el color elegido, no el ajustado. El renderer y el editor ajustan el acento por mezcla sRGB entera hacia negro o blanco hasta alcanzar 3:1 contra el fondo. No convertir este cálculo en una afirmación de accesibilidad para todos los píxeles, los reflejos o los campos nativos. No tintar logos ni alterar textos, QR, saldos o premios.
+
+presentationVersion=32 actualiza los pases existentes conservando serial, token, googleId, registro y saldos. Incluir 30 en la prueba de actualización histórica. /wallet/art/v32 añade un segmento auto o seis dígitos hexadecimales y conserva los límites de composición, símbolo, progreso, formato y GET. Las rutas v20/v22/v24/v27/v29/v30 mantienen sus contratos y sus bytes. V001–V009 inmutables.
+
+El editor ofrece tres combinaciones de apariencia basadas en promotionSuggestions.category, incluida la resolución exacta de actividad del servidor. Cubrir las 42 categorías conocidas; no inferir la categoría a partir del nombre ni inventar una promoción. Las combinaciones reutilizan las diez composiciones y las paletas disponibles: no presentarlas como nuevos renderers. Aplicar solo tras selección explícita; conservar nombre, logo, textos, cumpleaños y promoción. Deshacer combinación restaura solo la apariencia anterior del borrador, no operaciones del negocio. Los cambios posteriores de apariencia o un guardado correcto limpian ese deshacer.
+
+El acento tiene modo Automático, selector propio, muestra del color aplicado y explicación del ajuste. Cambiar el fondo recalcula la muestra. No persistir modo de vista previa, categoría sugerida, historial de deshacer ni controles del simulador. Mantener el guardado versionado, la protección del borrador y la recuperación ante 409.
+
+Gate completo: 217 unitarias/HTTP + 205 PostgreSQL = 422, 128 Python, Docker y 88 controles del gateway antes de auto commit local; sin push. HTTPS y recepción en teléfonos se informan aparte, sin renovar automáticamente el túnel. Las pruebas wallet-identity.dom.cjs y wallet-identity.spec.cjs usan datos ficticios y red interceptada; las imágenes de la verificación visual provienen del renderer compilado. Validar las 42 categorías y anchos 320/390/1024/1440, tanto Apple como Google.

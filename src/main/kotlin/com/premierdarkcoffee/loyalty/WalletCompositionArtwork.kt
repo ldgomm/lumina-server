@@ -45,12 +45,12 @@ internal class CompositionCanvas(val g: Graphics2D, val art: WalletArtwork, val 
     val base = Color.decode("#${art.background}")
     val light = luminance(base) > .179
     val ink = if (light) Color(13, 30, 51) else Color(249, 246, 237)
-    val accent = when (art.style) {
+    val accent = walletArtworkAccent(art.accent, base, when (art.style) {
         "SOLID" -> ink
         "AURORA" -> if (light) Color(24, 86, 129) else Color(139, 224, 239)
         else -> if (light) Color(127, 78, 25) else Color(238, 195, 137)
-    }
-    val edge = if (art.style == "AURORA") Color(156, 161, 240) else accent
+    })
+    val edge = if (art.accent == null && art.style == "AURORA") Color(156, 161, 240) else accent
     val margin = min(w * .055, h * .10)
     val p = if (art.total == 0) 0.0 else art.filled.toDouble() / art.total
     val stamps = art.total in 1..20

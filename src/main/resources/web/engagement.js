@@ -209,6 +209,18 @@
         return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
     }
 
+    function illustrationColor(requested, background, fallback) {
+        if (!requested) return fallback;
+        if (walletColorContrast(background,requested) >= 3) return requested;
+        const target = walletColorContrast(background,'#000000') >= walletColorContrast(background,'#ffffff') ? 0 : 255;
+        const rgb = [1,3,5].map(i => parseInt(requested.slice(i,i+2),16));
+        for (let step=1; step<=100; step++) {
+            const color = '#' + rgb.map(v => Math.round(v+(target-v)*step/100).toString(16).padStart(2,'0')).join('');
+            if (walletColorContrast(background,color) >= 3) return color;
+        }
+        return target ? '#ffffff' : '#000000';
+    }
+
     async function designPage() {
         const root = document.querySelector('#content'); const data = await api('/api/staff/wallet-design');
         if (!root.isConnected || state.tab !== 'design') return;
@@ -548,13 +560,47 @@
             ['PATH','Recorrido','Una ruta hacia la meta y avance como protagonista.'],
             ['SIGNATURE','Medallón original','Conserva la composición de tus tarjetas anteriores.']
         ];
+        // Only the authoritative category (or its exact activity fallback) selects suggestions.
+        const category = state.data.promotionSuggestions?.category;
+        const categoryPalettes = {
+            CAFE:'coffee', PIZZERIA:'pizza', RESTAURANT:'restaurant', BAKERY:'bakery', PASTRY:'cake', ICE_CREAM:'icecream', BURGERS:'burger', FAST_FOOD:'burger', DRINKS:'coffee',
+            BARBER:'barber', HAIR:'salon', BEAUTY:'salon', NAILS:'salon', SPA:'spa', COSMETICS:'salon', CLOTHING:'shop', SHOES:'shoes', ACCESSORIES:'jewelry', JEWELRY:'jewelry', OPTICS:'optics',
+            ELECTRONICS:'electronics', PHONES:'phone', COMPUTERS:'electronics', APPLIANCES:'electronics', HOME:'home', PET_SHOP:'pet', PET_GROOMING:'pet', GARAGE:'auto', OIL:'auto', TIRES:'tires', CAR_WASH:'auto', FUEL:'fuel',
+            HARDWARE:'hardware', GROCERY:'grocery', STATIONERY:'books', BOOKS:'books', FLOWERS:'florist', GIFTS:'gifts', LAUNDRY:'laundry', FITNESS:'gym', HOTEL:'hotel', GENERAL:'navy'
+        };
+        const categoryId = category && Object.hasOwn(categoryPalettes,category.id) ? category.id : 'GENERAL';
+        const businessPalette = presets.find(p => p.id === categoryPalettes[categoryId]) || presets[0];
+        const layoutSets = {
+            coffee:['STAMPBOOK','EDITORIAL','PATH'], pizza:['TICKET','MOSAIC','ATELIER'], restaurant:['EDITORIAL','PANORAMA','RIBBON'], bakery:['STAMPBOOK','ATELIER','TICKET'], cake:['ATELIER','STAMPBOOK','RIBBON'], icecream:['MOSAIC','ATELIER','PATH'], burger:['TICKET','MOSAIC','RIBBON'],
+            barber:['PRECISION','TICKET','EDITORIAL'], salon:['ATELIER','EDITORIAL','RIBBON'], spa:['PANORAMA','EDITORIAL','PATH'], shop:['ATELIER','EDITORIAL','RIBBON'], shoes:['PATH','MOSAIC','EDITORIAL'], jewelry:['EDITORIAL','ATELIER','PRECISION'],
+            pet:['PATH','STAMPBOOK','PANORAMA'], auto:['PRECISION','PATH','MOSAIC'], tires:['PRECISION','MOSAIC','TICKET'], carwash:['PANORAMA','PRECISION','PATH'], fuel:['PRECISION','PATH','TICKET'],
+            electronics:['PRECISION','MOSAIC','RIBBON'], phone:['MOSAIC','PRECISION','EDITORIAL'], books:['STAMPBOOK','EDITORIAL','ATELIER'], florist:['ATELIER','PANORAMA','EDITORIAL'], grocery:['TICKET','STAMPBOOK','MOSAIC'], hotel:['PANORAMA','EDITORIAL','TICKET']
+        };
+        const lookLayouts = layoutSets[businessPalette.id] || ['PANORAMA','EDITORIAL','MOSAIC'];
+        const appearanceFields = ['composition','background','foreground','label','stampSymbol','artworkStyle','artworkAccent'];
+        const lightPalette = '#' + [1,3,5].map(i => Math.round(parseInt(businessPalette.background.slice(i,i+2),16)*.12+255*.88).toString(16).padStart(2,'0')).join('');
+        const looks = lookLayouts.map((composition,i) => ({
+            id:String(i), name:compositions.find(c => c[0]===composition)[1],
+            composition, stampSymbol:categoryId==='CAR_WASH' ? '🚗' : categoryId==='DRINKS' ? '●' : businessPalette.symbol,
+            background:i===1 ? lightPalette : i===2 ? '#101c2d' : businessPalette.background,
+            foreground:i===1 ? '#102038' : businessPalette.foreground,
+            label:i===1 ? '#33475c' : i===2 ? '#e4ebf5' : businessPalette.label,
+            artworkStyle:i===1 ? 'SOLID' : i===2 ? 'AURORA' : 'GRADIENT',
+            artworkAccent:i===1 ? businessPalette.background : i===2 ? '#80d9dc' : '#e9b774'
+        }));
+        // A pale business palette needs light native text on the third (dark) suggestion.
+        looks[2].foreground='#ffffff';
+        const lookPath = look => `/wallet/art/v32/${look.composition}/${look.artworkStyle}/${stampOptions.findIndex(v=>v[0]===look.stampSymbol)}/${look.background.slice(1)}/${look.artworkAccent.slice(1)}/50/100.png`;
+        let previousLook = null;
         const d = data.design; let logo = d.logoPng, saving = false, loadingLogo = false, logoRevision = 0, example = 'progress', previewProvider = 'apple', appleLayout = 'poster', samplePercent = 50, galleryBrand = false, galleryExpanded = false, progressTimer = null, studioStep = 0, showAllSteps = false;
                 root.innerHTML = `<section class="panel wallet-design-panel"><div class="wallet-studio-heading"><div><span class="eyebrow">ESTUDIO DE TARJETAS</span><h2>Diseña tu tarjeta</h2><p>Elige su estructura, dale tu identidad y revisa Apple y Google antes de guardar.</p></div><div class="wallet-studio-navigation"><button type="button" class="quiet" id="jumpToDesign">Diseñar</button><button type="button" class="quiet" id="jumpToPreview">Ver tarjeta</button></div></div><div class="wallet-design-layout"><form id="walletDesign" novalidate><div class="studio-steps" role="group" aria-label="Pasos para diseñar la tarjeta">${['Diseño','Marca','Promoción y textos'].map((name,i) => `<button type="button" data-studio-step="${i}" aria-controls="studioStep${i}" aria-expanded="${i===0}"><span aria-hidden="true">${i+1}</span><strong>${name}</strong></button>`).join('')}</div><div class="studio-step-toolbar"><p id="studioStepStatus" role="status">Paso 1 de 3 · Elige una estructura</p><button type="button" id="studioShowAll" class="text-button" aria-expanded="false">Ver todo</button></div><fieldset id="designFields"><section class="studio-step-panel" id="studioStep0" aria-labelledby="studioStep0Title">
             <h3 class="design-colors-heading" id="studioStep0Title" tabindex="-1">Elige una estructura</h3>
+            <section class="studio-looks" aria-labelledby="studioLooksTitle"><div class="studio-looks-intro"><span class="eyebrow">UN PUNTO DE PARTIDA</span><h4 id="studioLooksTitle">${categoryId==='GENERAL' ? 'Tres formas de empezar' : 'Ideas para '+esc(category.name)}</h4><p>Combinaciones de composición, colores, símbolo y acabado. Elige una y ajústala a tu marca.</p></div><div class="studio-look-grid">${looks.map(look => `<button type="button" class="studio-look" data-wallet-look="${look.id}" aria-pressed="false"><img loading="lazy" width="516" height="406" src="${lookPath(look)}" alt=""><span><strong>${look.name}</strong><small>${look.id==='0' ? 'Con carácter' : look.id==='1' ? 'Clara y ligera' : 'Contraste nocturno'}</small><span class="studio-look-colors" aria-hidden="true">${[look.background,look.artworkAccent,look.foreground].map(color=>`<i style="background:${color}"></i>`).join('')}</span></span></button>`).join('')}</div><p class="design-help">Solo cambia la apariencia del borrador. Tu logo, nombre, textos y promociones se conservan.</p><div class="studio-look-feedback"><p id="studioLookStatus" role="status"></p><button type="button" class="quiet" id="undoWalletLook" hidden>Deshacer combinación</button></div></section>
+            <h4>O elige solo la composición</h4>
             <p class="design-help">Nueve composiciones y el medallón original. Empieza por Panorama, Precisión y Atelier o explora toda la colección.</p>
             <input type="hidden" id="composition" name="composition" value="${esc(d.composition || 'SIGNATURE')}">
             <div class="studio-gallery-toolbar"><button type="button" id="galleryBrand" class="quiet" aria-pressed="false">Comparar con mis colores y símbolo</button><p id="galleryHint" class="design-help">Mismo azul, mismo símbolo y mismo avance para comparar estructuras.</p></div>
-            <div class="wallet-compositions" role="group" aria-label="Composición de la tarjeta">${compositions.map(([id,name,description],i) => `<button type="button" data-composition="${id}" aria-pressed="false"><img loading="lazy" width="516" height="406" src="/wallet/art/v30/${id}/GRADIENT/5/0b1f3a/50/100.png" alt=""><span class="composition-caption"><small>${i < 3 ? 'NUEVO' : id === 'SIGNATURE' ? 'ORIGINAL' : 'DISEÑO '+String(i+1).padStart(2,'0')}</small><strong>${name}</strong><span>${description}</span></span><span class="composition-check" aria-hidden="true">✓</span></button>`).join('')}</div>
+            <div class="wallet-compositions" role="group" aria-label="Composición de la tarjeta">${compositions.map(([id,name,description],i) => `<button type="button" data-composition="${id}" aria-pressed="false"><img loading="lazy" width="516" height="406" src="/wallet/art/v32/${id}/GRADIENT/5/0b1f3a/auto/50/100.png" alt=""><span class="composition-caption"><small>${i < 3 ? 'NUEVO' : id === 'SIGNATURE' ? 'ORIGINAL' : 'DISEÑO '+String(i+1).padStart(2,'0')}</small><strong>${name}</strong><span>${description}</span></span><span class="composition-check" aria-hidden="true">✓</span></button>`).join('')}</div>
             <button type="button" id="compositionMore" class="quiet" aria-expanded="false">Explorar todas las composiciones</button>
             <p id="compositionStatus" class="design-help" aria-live="polite"></p>
             </section><section class="studio-step-panel" id="studioStep1" aria-labelledby="studioStep1Title" hidden><h3 class="design-colors-heading" id="studioStep1Title" tabindex="-1">Hazla tuya</h3>${field('displayName', 'Nombre en la tarjeta', 'text', d.displayName, 'maxlength="80"')}<h4>Colores y símbolo de tu negocio</h4><p class="design-help">Estas 32 paletas cambian colores y símbolo. La composición que elegiste se conserva. Todo se guarda al pulsar Guardar diseño.</p><div class="wallet-style-search"><label for="walletStyleSearch">Busca tu tipo de negocio<input id="walletStyleSearch" type="search" placeholder="Ej. zapatos, mascotas, pasteles…" maxlength="60" autocomplete="off"></label><label for="walletStyleGroup">Categoría<select id="walletStyleGroup"><option value="">Todas las categorías</option>${[...new Set(presets.map(p => p.group))].map(group => `<option value="${group}">${group}</option>`).join('')}</select></label></div><p id="walletStyleResults" class="design-help" aria-live="polite"></p><div class="wallet-style-presets" role="group" aria-label="Paletas por tipo de negocio">${presets.map(p => `<button type="button" data-wallet-style="${p.id}" aria-pressed="false"><span class="wallet-style-swatch" style="--swatch:${p.background};--swatch-ink:${p.foreground}" aria-hidden="true"><span>${p.symbol}</span></span><strong>${p.name}</strong><small>${p.group}</small></button>`).join('')}</div><button type="button" class="quiet" id="walletStylesMore" aria-expanded="false">Ver todas las paletas</button><p id="presetStatus" class="design-help" aria-live="polite"></p><h3 class="design-colors-heading">Colores</h3>
@@ -569,6 +615,7 @@
             
             ${select('stampSymbol', 'Símbolo de tu negocio', stampOptions, d.stampSymbol)}
             ${select('artworkStyle', 'Acabado de la ilustración', [['GRADIENT','Cálido · luz y profundidad'],['AURORA','Aurora · reflejos fríos'],['SOLID','Plano · sin degradados']], d.artworkStyle || 'GRADIENT')}
+            <section class="studio-accent" aria-labelledby="studioAccentTitle"><h4 id="studioAccentTitle">Color de la ilustración</h4><p class="design-help">Personaliza los trazos y el avance en ambas Wallet. El logo y los colores del texto tienen sus propios ajustes.</p><label class="check"><input id="autoArtworkAccent" type="checkbox" ${d.artworkAccent ? '' : 'checked'}>Automático según el acabado</label><div class="studio-accent-controls"><div>${field('artworkAccent','Mi color de acento','color',d.artworkAccent || d.label,'aria-describedby="artworkAccentStatus"')}</div><div class="studio-accent-applied"><span>COLOR APLICADO</span><span id="artworkAccentSwatch" aria-hidden="true"></span><strong id="artworkAccentApplied"></strong></div></div><p id="artworkAccentStatus" class="design-help" role="status"></p></section>
             <p class="design-help">Cada composición representa el avance de forma propia. Hasta 20 sellos se muestran por unidad; puntos, cashback y metas mayores se representan proporcionalmente. El saldo exacto siempre aparece en texto. La tipografía de los campos la controla cada Wallet.</p>
             </section><section class="studio-step-panel" id="studioStep2" aria-labelledby="studioStep2Title" hidden><h3 class="design-colors-heading" id="studioStep2Title" tabindex="-1">Qué verá tu cliente</h3>${select('featuredProgramId', 'Promoción destacada en Wallet', [['', 'Primera promoción activa'], ...state.data.programs.filter(p => p.config.active !== false).map(p => [p.id, p.config.name])], d.featuredProgramId || '')}<p class="design-help">Apple y Google destacarán esta promoción y su premio de menor costo. Los demás saldos y premios siguen disponibles en los detalles de la tarjeta.</p><div class="studio-featured-summary"><span class="eyebrow">EN PRIMER PLANO</span><strong id="studioFeaturedName"></strong><p id="studioFeaturedRule"></p><p id="studioFeaturedHint" class="design-help"></p></div>${field('welcome', 'Texto de bienvenida', 'text', d.welcome, 'required maxlength="80"')}
             ${field('usage', 'Cómo usar la tarjeta', 'text', d.usage, 'required maxlength="350"')}
@@ -610,10 +657,10 @@
             headline: root.querySelector('#googlePreviewReward').parentElement,
             journey: root.querySelector('#googleJourney'), hero: root.querySelector('#googleStampArtwork')
         };
-        const persistedFields = ['displayName','composition','background','foreground','label','featuredProgramId','stampSymbol','artworkStyle','welcome','usage'];
+        const persistedFields = ['displayName','composition','background','foreground','label','featuredProgramId','stampSymbol','artworkStyle','artworkAccent','welcome','usage'];
         const designValues = () => {
             const values = Object.fromEntries(persistedFields.map(name => [name, f.elements[name].value]));
-            return {...d, ...values, featuredProgramId: values.featuredProgramId || null, logoPng: logo};
+            return {...d, ...values, featuredProgramId: values.featuredProgramId || null, artworkAccent: root.querySelector('#autoArtworkAccent').checked ? null : values.artworkAccent, logoPng: logo};
         };
         let savedDesign = designValues(), savedFingerprint = JSON.stringify(savedDesign);
         const hasChanges = () => JSON.stringify(designValues()) !== savedFingerprint;
@@ -693,6 +740,20 @@
         function update() {
             syncSteps();
             const failed = invalidColors();
+            const accentInput = f.elements.artworkAccent, automaticAccent = root.querySelector('#autoArtworkAccent').checked;
+            accentInput.disabled = automaticAccent || saving || loadingLogo;
+            const light = walletColorContrast(background.value,'#000000')*.05-.05 > .179;
+            const signature = f.elements.composition.value === 'SIGNATURE', style = f.elements.artworkStyle.value;
+            const fallback = style === 'SOLID' ? (light ? (signature ? '#0c1c30' : '#0d1e33') : signature ? '#f7f6f0' : '#f9f6ed') : style === 'AURORA' ? (light ? (signature ? '#186088' : '#185681') : signature ? '#86deeb' : '#8be0ef') : light ? (signature ? '#895b2a' : '#7f4e19') : signature ? '#e8c189' : '#eec389';
+            const appliedAccent = illustrationColor(automaticAccent ? null : accentInput.value,background.value,fallback);
+            root.querySelector('#artworkAccentSwatch').style.backgroundColor=appliedAccent;
+            root.querySelector('#artworkAccentApplied').textContent=appliedAccent.toUpperCase();
+            root.querySelector('#artworkAccentStatus').textContent = automaticAccent ? 'El acabado elige el acento. Desactiva Automático para usar tu color.' : appliedAccent!==accentInput.value ? `Tu color ${accentInput.value.toUpperCase()} se ajusta a ${appliedAccent.toUpperCase()} para distinguirse del fondo. Se conserva tu elección y el ajuste se recalcula si cambias el fondo.` : 'Tu color se distingue del fondo y se aplica sin ajustes.';
+            root.querySelectorAll('[data-wallet-look]').forEach(button => {
+                const look=looks.find(x=>x.id===button.dataset.walletLook), current=designValues();
+                button.setAttribute('aria-pressed',String(appearanceFields.every(key=>look[key]===current[key]))); button.disabled=saving || loadingLogo;
+            });
+            const undoLook=root.querySelector('#undoWalletLook');undoLook.hidden=!previousLook;undoLook.disabled=saving || loadingLogo;
             for (const s of specs) {
                 const valid = !failed.includes(s), hint = root.querySelector('#' + s.input.name + 'Status');
                 s.input.setAttribute('aria-invalid', String(!valid));
@@ -747,7 +808,7 @@
             const artworkTotal = !artworkGoal ? 0 : individual ? artworkGoal : 100;
             const artworkFilled = !artworkGoal ? 0 : individual ? Math.min(amount, artworkGoal) : Number.isSafeInteger(artworkGoal) && Number.isSafeInteger(amount) ? Number(BigInt(Math.min(amount,artworkGoal))*100n/BigInt(artworkGoal)) : Math.floor(Math.min(amount, artworkGoal) * 100 / artworkGoal);
             const symbol = stampOptions.findIndex(option => option[0] === f.elements.stampSymbol.value);;
-            const artworkPath = `/wallet/art/v30/${f.elements.composition.value}/${f.elements.artworkStyle.value}/${Math.max(0, symbol)}/${background.value.slice(1)}/${artworkFilled}/${artworkTotal}.png`;;
+            const artworkPath = `/wallet/art/v32/${f.elements.composition.value}/${f.elements.artworkStyle.value}/${Math.max(0, symbol)}/${background.value.slice(1)}/${automaticAccent ? 'auto' : accentInput.value.slice(1)}/${artworkFilled}/${artworkTotal}.png`;;
             for (const [id, suffix] of [['appleStampArtwork', appleLayout === 'poster' ? '?layout=poster' : '?layout=apple'], ['googleStampArtwork', '']]) {
                 const art = root.querySelector('#' + id); art.hidden = false;
                 { art.src = artworkPath + suffix; art.alt = artworkGoal ? `Ejemplo: ${unit(amount)} de ${unit(artworkGoal)}. Caja confirma el canje.` : 'Diseño sin meta activa.'; }
@@ -763,7 +824,7 @@
                 button.setAttribute('aria-pressed',String(button.dataset.composition === composition)); button.disabled = saving || loadingLogo;
                 button.hidden = !galleryExpanded && index >= 3 && button.dataset.composition !== composition;
                 const image = button.querySelector('img');
-                const url = galleryBrand ? artworkPath.replace('/'+composition+'/', '/'+button.dataset.composition+'/') : `/wallet/art/v30/${button.dataset.composition}/GRADIENT/5/0b1f3a/50/100.png`;
+                const url = galleryBrand ? artworkPath.replace('/'+composition+'/', '/'+button.dataset.composition+'/') : `/wallet/art/v32/${button.dataset.composition}/GRADIENT/5/0b1f3a/auto/50/100.png`;
                 if(image.getAttribute('src') !== url) image.setAttribute('src',url);
             });
             root.querySelector('#compositionMore').textContent = galleryExpanded ? 'Ver solo novedades y mi selección' : `Explorar las ${compositions.length} composiciones`;
@@ -880,6 +941,8 @@
         root.querySelector('#restoreDesign').onclick = () => {
             if(saving || loadingLogo)return;
             for(const name of persistedFields) f.elements[name].value = savedDesign[name] || '';
+            f.elements.artworkAccent.value=savedDesign.artworkAccent || savedDesign.label;root.querySelector('#autoArtworkAccent').checked=!savedDesign.artworkAccent;
+            previousLook=null;root.querySelector('#studioLookStatus').textContent='';
             logoRevision++;logo=savedDesign.logoPng;root.querySelector('#designLogo').value='';
             root.querySelector('#logoStatus').textContent = logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.';
             adjustment.textContent='';root.querySelector('#presetStatus').textContent='Se restauró el diseño guardado. No se envió ningún cambio.';
@@ -895,6 +958,7 @@
             if (saving) return;
             if(e.target === f.elements.featuredProgramId) { clearTimeout(progressTimer);example='progress';samplePercent=50; }
             clearError();
+            if(appearanceFields.includes(e.target.name) || e.target.id==='autoArtworkAccent') { previousLook=null;root.querySelector('#studioLookStatus').textContent=''; }
             if (e.target === background || e.target === foreground || e.target === labels) {
                 // Browsers can emit both input and change for one color selection.
                 const palette = [background.value, foreground.value, labels.value].join('/');
@@ -911,6 +975,7 @@
         root.querySelectorAll('[data-wallet-style]').forEach(button => button.onclick = () => {
             if (saving || loadingLogo) return;
             const preset = presets.find(p => p.id === button.dataset.walletStyle);
+            previousLook=null;root.querySelector('#studioLookStatus').textContent='';
             background.value = preset.background; foreground.value = preset.foreground; labels.value = preset.label;
             f.elements.stampSymbol.value = preset.symbol;
             clearError(); correctColors(); update();
@@ -918,8 +983,27 @@
         });
         root.querySelectorAll('button[data-composition]').forEach(button => button.onclick = () => {
             if (saving || loadingLogo) return;
+            previousLook=null;root.querySelector('#studioLookStatus').textContent='';
             f.elements.composition.value = button.dataset.composition; clearError(); update();
         });
+        function setAppearance(values) {
+            for (const key of appearanceFields) f.elements[key].value=values[key] || '';
+            f.elements.artworkAccent.value=values.artworkAccent || values.label;
+            root.querySelector('#autoArtworkAccent').checked=!values.artworkAccent;
+            f.dataset.palette=[background.value,foreground.value,labels.value].join('/');
+        }
+        root.querySelectorAll('[data-wallet-look]').forEach(button => { button.onclick=()=>{
+            if(saving || loadingLogo)return;
+            const look=looks.find(x=>x.id===button.dataset.walletLook);
+            previousLook=Object.fromEntries(appearanceFields.map(key=>[key,designValues()[key]]));
+            setAppearance(look);clearError();correctColors();update();
+            root.querySelector('#studioLookStatus').textContent=`${look.name} aplicado al borrador. Revisa ambas Wallet antes de guardar.`;
+        }; });
+        root.querySelector('#undoWalletLook').onclick=()=>{
+            if(saving || loadingLogo || !previousLook)return;
+            setAppearance(previousLook);previousLook=null;clearError();update();
+            root.querySelector('#studioLookStatus').textContent='Combinación deshecha. Recuperaste la apariencia anterior del borrador.';
+        };
         f.addEventListener('input', edited); f.addEventListener('change', edited);
         fix.onclick = () => { clearError(); correctColors(); f.dataset.palette = [background.value, foreground.value, labels.value].join('/'); update(); };
         root.querySelector('#removeLogo').onclick = () => {
@@ -962,7 +1046,7 @@
                 const result = await api('/api/staff/wallet-design', payload, 'PUT');
                 if (!editorActive()) return;
                 if (!Number.isSafeInteger(result.version) || result.version <= payload.expectedVersion) throw new Error('No pudimos comprobar la versión guardada. Conserva tu borrador y vuelve a cargar antes de guardar otra vez.');
-                data.version = result.version; savedDesign = {...payload.design}; savedFingerprint = JSON.stringify(savedDesign);
+                data.version = result.version; savedDesign = {...payload.design}; savedFingerprint = JSON.stringify(savedDesign); previousLook=null;
                 root.querySelector('#logoStatus').textContent = logo ? 'Logo personalizado guardado.' : 'Se usa el logo predeterminado.';
                 notice('Diseño guardado para Apple y Google. Las tarjetas se actualizarán cuando Wallet reciba el cambio.');
             } catch (issue) {

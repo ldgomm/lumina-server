@@ -138,6 +138,7 @@ def gateway_config(nonce, upstream='loyalty-server:8080', resolver=True):
         ('GET', r'/wallet/art/v24/(?:SOLID|GRADIENT)/(?:[0-9]|[12][0-9]|3[0-2])/[a-fA-F0-9]{6}/[0-9]{1,3}/[0-9]{1,3}\.png'),
         ('GET', r'/wallet/art/v29/(?:SIGNATURE|EDITORIAL|STAMPBOOK|TICKET|MOSAIC|RIBBON|PATH)/(?:SOLID|GRADIENT|AURORA)/(?:[0-9]|[12][0-9]|3[0-2])/[a-fA-F0-9]{6}/[0-9]{1,3}/[0-9]{1,3}\.png'),
         ('GET', r'/wallet/art/v30/(?:SIGNATURE|EDITORIAL|STAMPBOOK|TICKET|MOSAIC|RIBBON|PATH|PANORAMA|PRECISION|ATELIER)/(?:SOLID|GRADIENT|AURORA)/(?:[0-9]|[12][0-9]|3[0-2])/[a-fA-F0-9]{6}/[0-9]{1,3}/[0-9]{1,3}\.png'),
+        ('GET', r'/wallet/art/v32/(?:SIGNATURE|EDITORIAL|STAMPBOOK|TICKET|MOSAIC|RIBBON|PATH|PANORAMA|PRECISION|ATELIER)/(?:SOLID|GRADIENT|AURORA)/(?:[0-9]|[12][0-9]|3[0-2])/[a-fA-F0-9]{6}/(?:auto|[a-fA-F0-9]{6})/[0-9]{1,3}/[0-9]{1,3}\.png'),
         ('GET', r'/wallet/art/v27/(?:SOLID|GRADIENT|AURORA)/(?:[0-9]|[12][0-9]|3[0-2])/[a-fA-F0-9]{6}/[0-9]{1,3}/[0-9]{1,3}\.png'),
         ('GET', r'/wallet/logo\.png'),
         ('GET', r'/wallet/brand/[a-z0-9][a-z0-9-]{1,60}/logo\.png'),
@@ -358,7 +359,19 @@ def probe(url, nonce, attempts=60, diagnostics=None, maximum_seconds=120):
 
 
 def verify_gateway(url, slug):
-    checks = [('GET', '/wallet/art/v30/PANORAMA/GRADIENT/5/0b1f3a/4/5.png', None, 200),
+    checks = [('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/auto/4/5.png', None, 200),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/auto/4/5.png?layout=apple', None, 200),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/auto/4/5.png?layout=poster', None, 200),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/ffbb55/4/5.png', None, 200),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/ffbb55/4/5.png?layout=apple', None, 200),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/ffbb55/4/5.png?layout=poster', None, 200),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/ffffff00/4/5.png', None, 404),
+              ('POST', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/ffbb55/4/5.png', {}, 404),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/ffbb55/6/5.png', None, 400),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/5/0b1f3a/ffbb55/4/5.png?layout=html', None, 400),
+              ('GET', '/wallet/art/v30/ATELIER/GRADIENT/5/0b1f3a/ffbb55/4/5.png', None, 404),
+              ('GET', '/wallet/art/v32/ATELIER/GRADIENT/33/0b1f3a/ffbb55/4/5.png', None, 404),
+              ('GET', '/wallet/art/v30/PANORAMA/GRADIENT/5/0b1f3a/4/5.png', None, 200),
               ('GET', '/wallet/art/v30/PANORAMA/GRADIENT/5/0b1f3a/4/5.png?layout=apple', None, 200),
               ('GET', '/wallet/art/v30/PANORAMA/GRADIENT/5/0b1f3a/4/5.png?layout=poster', None, 200),
               ('GET', '/wallet/art/v30/PRECISION/GRADIENT/5/0b1f3a/4/5.png', None, 200),

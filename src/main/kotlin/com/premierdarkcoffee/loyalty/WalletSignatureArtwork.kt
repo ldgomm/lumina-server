@@ -21,11 +21,11 @@ internal fun WalletArtwork.signaturePng(appleScale: Int?, poster: Boolean = fals
         val base = Color.decode("#$background")
         val light = signatureLuminance(base) > .179
         val ink = if (light) Color(12, 28, 48) else Color(247, 246, 240)
-        val accent = when {
+        val accent = walletArtworkAccent(this.accent, base, when {
             style == "AURORA" -> if (light) Color(24, 96, 136) else Color(134, 222, 235)
             style == "SOLID" -> ink
             else -> if (light) Color(137, 91, 42) else Color(232, 193, 137)
-        }
+        })
         val compact = !poster && appleScale != null
         val cx = w / 2.0
         val cy = if (poster) 148.0 else if (compact) 64.0 else 176.0
@@ -67,7 +67,7 @@ internal fun WalletArtwork.signaturePng(appleScale: Int?, poster: Boolean = fals
             g.stroke = BasicStroke(if (compact) 3.2f else 4.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
             g.color = alpha(ink, 35); g.draw(ring)
             if (filled > 0) {
-                g.paint = if(style=="SOLID") ink else LinearGradientPaint((cx-radius).toFloat(),(cy-radius).toFloat(),
+                g.paint = if(style=="SOLID") accent else LinearGradientPaint((cx-radius).toFloat(),(cy-radius).toFloat(),
                     (cx+radius).toFloat(),(cy+radius).toFloat(),floatArrayOf(0f,.48f,1f),
                     arrayOf(accent, if(light) accent.darker() else Color(255,242,218),accent))
                 g.draw(Arc2D.Double(cx-radius,cy-radius,radius*2,radius*2,90.0,-filled*3.6,Arc2D.OPEN))

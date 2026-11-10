@@ -18,13 +18,13 @@ class WalletStudioTest {
             val art=WalletArtwork("GRADIENT",5,"0b1f3a",4,5,c)
             assertContentEquals(art.png(version=29),art.png(version=30))
             assertContentEquals(art.posterPng(1,29),art.posterPng(1,30))
-            assertEquals(HttpStatusCode.OK,client.get(art.path().replace("/v30/","/v29/")).status)
+            assertEquals(HttpStatusCode.OK,client.get("/wallet/art/v29/$c/GRADIENT/5/0b1f3a/4/5.png").status)
         }
         for (c in listOf("PANORAMA","PRECISION","ATELIER")) {
             val art=WalletArtwork("GRADIENT",5,"0b1f3a",4,5,c)
             assertFailsWith<IllegalArgumentException>{art.png(version=29)}
             assertFailsWith<IllegalArgumentException>{art.posterPng(1,29)}
-            assertEquals(HttpStatusCode.NotFound,client.get(art.path().replace("/v30/","/v29/")).status)
+            assertEquals(HttpStatusCode.NotFound,client.get("/wallet/art/v29/$c/GRADIENT/5/0b1f3a/4/5.png").status)
             for (suffix in listOf("","?layout=apple","?layout=poster")) assertEquals(HttpStatusCode.OK,client.get(art.path()+suffix).status)
         }
     }
