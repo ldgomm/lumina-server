@@ -46,7 +46,7 @@ class BusinessProfilePostgresTest {
         db.migrate();val saved=service.businessProfile(tenant)
         assertEquals(1,saved.getValue("version").jsonPrimitive.int);assertEquals("NOT_VERIFIED",saved.str("rucVerification"));assertEquals(p,json.decodeFromJsonElement<BusinessProfile>(saved.getValue("profile")))
         assertEquals(1,service.platformBranches(tenant).getValue("branches").jsonArray.size);assertEquals(tenant,service.staff(t.str("ownerToken")).tenant)
-        assertEquals(11,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getInt(1)}})
+        assertEquals(12,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getInt(1)}})
     }
     @Test fun `invalid profile or branch creates no tenant or orphan profile`() {
         for(input in listOf(NewTenant("Inválido","invalid-"+id().take(12),profile=profile().copy(ruc="wrong")),NewTenant("Inválido","invalid-"+id().take(12),firstBranch=NewBranch(" ","MAIN"),profile=profile()))) {

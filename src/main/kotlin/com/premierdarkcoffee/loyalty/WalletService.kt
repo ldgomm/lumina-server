@@ -178,13 +178,13 @@ class WalletService(
                         if (!valid) c.exec("DELETE FROM wallet_apple_registrations WHERE device_hash=? AND serial=? AND push_hash=? AND registered_at<=?", r[0], serial, r[2], Timestamp.from(Instant.parse(r[3])))
                     }
                 }
-                c.exec("UPDATE wallet_delivery SET sent_tag=?,attempts=0,last_error=NULL,next_attempt_at=? WHERE serial=? AND provider=? AND wake_revision=?", pass.tag, Timestamp.from(now().plusSeconds(300)), serial, provider, delivery.third)
+                c.exec("UPDATE wallet_delivery SET sent_tag=?,attempts=0,last_error=NULL,next_attempt_at=?,last_success_at=? WHERE serial=? AND provider=? AND wake_revision=?", pass.tag, Timestamp.from(now().plusSeconds(300)), stamp(), serial, provider, delivery.third)
                 c.exec("UPDATE wallet_outbox SET state='SENT' WHERE tenant_id=? AND member_id=? AND materialized_at IS NOT NULL AND revision<=? AND NOT EXISTS(SELECT 1 FROM wallet_delivery d WHERE d.serial=? AND d.sent_tag<?)", pass.tenant, pass.member, pass.snapshot.getValue("revision").jsonPrimitive.long, serial, pass.tag)
                 true
             } catch (e: Exception) {
                 if (e is SQLException) throw e
                 val reason = walletDeliveryDiagnosticCode(provider, (e as? WalletDeliveryFailure)?.reason)
-                c.exec("UPDATE wallet_delivery SET attempts=attempts+1,last_error=?,next_attempt_at=?::timestamptz + (LEAST(3600,30*power(2,LEAST(attempts,7))) * interval '1 second') WHERE serial=? AND provider=?", reason, stamp(), serial, provider)
+                c.exec("UPDATE wallet_delivery SET attempts=attempts+1,last_error=?,next_attempt_at=?::timestamptz + (LEAST(3600,30*power(2,LEAST(attempts,7))) * interval '1 second') WHERE serial=? AND provider=? AND wake_revision=?", reason, stamp(), serial, provider, delivery.third)
                 false
             }
         }

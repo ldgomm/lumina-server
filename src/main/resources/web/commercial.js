@@ -175,7 +175,7 @@
             action('backBusinesses',platformHome);
                 }
         const root=document.querySelector(platform?'#commercialRoot':'#content');if(!root)return null;
-        root.innerHTML=`<nav aria-label="Administración de cuenta">${[['account','Estado de cuenta'],['profile','Datos del negocio'],...(platform?[['clients','Clientes'],['activity','Actividad'],['operations','Operación y equipo'],['team','Equipo'],['branches','Sucursales'],['membership','Membresía'],['access','Estado del negocio']]:[]),['notices','Avisos'],['metrics','Informes']].map(([key,label])=>`<button data-commercial-pane="${key}" class="${pane===key?'active':''}">${label}</button>`).join('')}</nav><div id="commercialPane"></div>`;
+        root.innerHTML=`<nav aria-label="Administración de cuenta">${[['account','Estado de cuenta'],['profile','Datos del negocio'],...(platform?[['clients','Clientes'],['activity','Actividad'],['operations','Operación y equipo'],['walletHealth','Estado de tarjetas'],['team','Equipo'],['branches','Sucursales'],['membership','Membresía'],['access','Estado del negocio']]:[]),['notices','Avisos'],['metrics','Informes']].map(([key,label])=>`<button data-commercial-pane="${key}" class="${pane===key?'active':''}">${label}</button>`).join('')}</nav><div id="commercialPane"></div>`;
         root.querySelectorAll('[data-commercial-pane]').forEach(b=>b.onclick=handle(async()=>{pane=b.dataset.commercialPane;renderAccount()}));
         return document.querySelector('#commercialPane');
 ;
@@ -184,7 +184,7 @@
         const root=shell();if(!root)return;
         if(pane==='account'){renderStatement(root);}
         else if(pane==='profile'){renderBusinessProfile(root).catch(e=>notice(e.message));}
-        else if(['team','activity','clients','operations'].includes(pane)){const methods={team:'team',activity:'activity',clients:'customers',operations:'operations'};window.LoyaltyManagement[methods[pane]](root,{path:endpoint(),business:accountData.business}).catch(e=>notice(e.message));}
+        else if(['team','activity','clients','operations','walletHealth'].includes(pane)){const methods={team:'team',activity:'activity',clients:'customers',operations:'operations',walletHealth:'walletHealth'};window.LoyaltyManagement[methods[pane]](root,{path:endpoint(),business:accountData.business}).catch(e=>notice(e.message));}
         else if(pane==='branches'){renderLocations(root).catch(e=>notice(e.message));}
         else if(pane==='membership'){renderMembership(root);}
         else if(pane==='access'){renderAccess(root);}
@@ -347,7 +347,7 @@
     const stamp=(s,z='America/Guayaquil')=>s?new Intl.DateTimeFormat('es-EC',{dateStyle:'medium',timeStyle:'short',timeZone:z}).format(new Date(s)):'Sin fecha histórica';
     const roles={OWNER:'Dueño · todas las sucursales',CASHIER:'Caja · sucursal asignada'};
     const states={ACTIVE:'Activo',INACTIVE:'Desactivado',ARCHIVED:'Eliminado'};
-    const actions={CREATE_STAFF:'Usuario creado',EDIT_STAFF:'Usuario actualizado',STAFF_DEACTIVATE:'Acceso desactivado',STAFF_REACTIVATE:'Acceso reactivado',STAFF_ROTATE:'Credencial renovada',STAFF_ARCHIVE:'Acceso eliminado',REVOKE_STAFF:'Credencial revocada',CREATE_PROGRAM:'Promoción creada',EDIT_PROGRAM:'Promoción editada',DELETE_PROGRAM:'Promoción eliminada',SAVE_REWARD:'Premio guardado',WALLET_DESIGN_UPDATED:'Diseño de tarjeta actualizado',LOOKUP_MEMBER:'Cliente consultado',CREATE_BRANCH:'Sucursal creada',CREATE_TENANT:'Negocio creado',CUSTOMER_PREFERENCES_CONFIRMED:'Preferencias autorizadas',COUNTER_CONSUME_VERIFIED:'Premio entregado',SIMPLE_PROMOTION_CREATED:'Promoción creada con el asistente',CREATE_PROMOTION_TEMPLATE:'Promoción creada desde un ejemplo',CANCEL_FOR_PROGRAM_DELETION:'Reserva cancelada por eliminación de promoción',CUSTOMER_EVENT_CREATED:'Evento creado',CUSTOMER_EVENT_CANCELLED:'Evento cancelado',BUSINESS_PROFILE_CORRECTION_REQUESTED:'Corrección de datos solicitada',BUSINESS_PROFILE_CORRECTION_RESOLVED:'Solicitud de corrección resuelta',BILLING_PLAN:'Membresía actualizada',BILLING_CHARGE:'Cargo creado',BILLING_PAYMENT:'Pago registrado',BILLING_REVERSAL:'Pago revertido',BILLING_VOID:'Cargo anulado',BUSINESS_ACTIVE:'Negocio activado',BUSINESS_SUSPENDED:'Negocio suspendido',BUSINESS_CLOSED:'Negocio cerrado',BUSINESS_NOTICE:'Aviso publicado',ISSUE_RESTORE_CONNECTION_REPAIR:'Actualización de conexión autorizada',ISSUE_RESTORE_DEVICE_REPLACEMENT:'Recuperación de tarjeta autorizada'};
+    const actions={WALLET_RETRY:'Reintento de Wallet solicitado',CREATE_STAFF:'Usuario creado',EDIT_STAFF:'Usuario actualizado',STAFF_DEACTIVATE:'Acceso desactivado',STAFF_REACTIVATE:'Acceso reactivado',STAFF_ROTATE:'Credencial renovada',STAFF_ARCHIVE:'Acceso eliminado',REVOKE_STAFF:'Credencial revocada',CREATE_PROGRAM:'Promoción creada',EDIT_PROGRAM:'Promoción editada',DELETE_PROGRAM:'Promoción eliminada',SAVE_REWARD:'Premio guardado',WALLET_DESIGN_UPDATED:'Diseño de tarjeta actualizado',LOOKUP_MEMBER:'Cliente consultado',CREATE_BRANCH:'Sucursal creada',CREATE_TENANT:'Negocio creado',CUSTOMER_PREFERENCES_CONFIRMED:'Preferencias autorizadas',COUNTER_CONSUME_VERIFIED:'Premio entregado',SIMPLE_PROMOTION_CREATED:'Promoción creada con el asistente',CREATE_PROMOTION_TEMPLATE:'Promoción creada desde un ejemplo',CANCEL_FOR_PROGRAM_DELETION:'Reserva cancelada por eliminación de promoción',CUSTOMER_EVENT_CREATED:'Evento creado',CUSTOMER_EVENT_CANCELLED:'Evento cancelado',BUSINESS_PROFILE_CORRECTION_REQUESTED:'Corrección de datos solicitada',BUSINESS_PROFILE_CORRECTION_RESOLVED:'Solicitud de corrección resuelta',BILLING_PLAN:'Membresía actualizada',BILLING_CHARGE:'Cargo creado',BILLING_PAYMENT:'Pago registrado',BILLING_REVERSAL:'Pago revertido',BILLING_VOID:'Cargo anulado',BUSINESS_ACTIVE:'Negocio activado',BUSINESS_SUSPENDED:'Negocio suspendido',BUSINESS_CLOSED:'Negocio cerrado',BUSINESS_NOTICE:'Aviso publicado',ISSUE_RESTORE_CONNECTION_REPAIR:'Actualización de conexión autorizada',ISSUE_RESTORE_DEVICE_REPLACEMENT:'Recuperación de tarjeta autorizada'};
     const labels={PURCHASE:'Compra registrada',REWARD:'Premio entregado',ADMIN:'Cambio o consulta'};
     const metric=(label,value,note='')=>`<div class="commercial-stat"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`;
     const select=(name,label,choices,current='')=>`<label>${esc(label)}<select name="${name}">${choices.map(([v,t])=>`<option value="${esc(v)}" ${String(current)===String(v)?'selected':''}>${esc(t)}</option>`).join('')}</select></label>`;
@@ -499,5 +499,68 @@
         root.querySelectorAll('[data-hour]').forEach(b=>b.onclick=()=>{const [day,hour]=b.dataset.hour.split('-').map(Number),v=hours.get(b.dataset.hour);root.querySelector('#opsHourText').textContent=`${weekdays[day-1]}, ${String(hour).padStart(2,'0')}:00–${String(hour).padStart(2,'0')}:59 · ${v?.purchases||0} compras · ${money(v?.paidMinor||0,c)} pagados. Acumulado del período.`;});
     }
     window.LoyaltyManagement.operations=operations;
+})();
+;
+
+/* Wallet operations v039: private owner/platform view, shared by both providers. */
+(() => {
+    const labels={NOT_ISSUED:'Sin preparar',NOT_CONFIGURED:'Revisar configuración',NEEDS_CONNECTION:'Conectar la tarjeta',RETRYING:'En espera de reintento',PENDING:'Actualización pendiente',PROVIDER_ACCEPTED:'Solicitud procesada'};
+    const platformName=p=>p==='APPLE'?'Apple Wallet':'Google Wallet';
+    const help=row=>{
+        if(row.state==='NOT_ISSUED')return 'Todavía no se ha preparado esta tarjeta para '+platformName(row.provider)+'. El registro no confirma que esté guardada en el teléfono.';
+        if(row.state==='NOT_CONFIGURED')return 'El administrador debe revisar las credenciales y la configuración del servidor. Un reintento no corrige esa configuración.';
+        if(row.state==='NEEDS_CONNECTION')return 'Apple no tiene una conexión registrada para esta tarjeta. Revisa la misma tarjeta con el cliente desde su ficha.';
+        if(row.state==='RETRYING'){
+            if(/_(401|403)$/.test(row.errorCode||''))return 'El proveedor rechazó el acceso. Pide al administrador revisar credenciales y permisos antes de reintentar.';
+            if(/_429$/.test(row.errorCode||''))return 'El proveedor limitó las solicitudes. El servidor volverá a intentarlo; evita repetir la acción.';
+            if(/_(400|404)$/.test(row.errorCode||''))return 'El proveedor rechazó los datos o no encontró el recurso. El administrador debe revisar la integración.';
+            return 'El último envío falló. El servidor conserva la actualización y volverá a intentarlo automáticamente.';
+        }
+        if(row.state==='PENDING')return 'Hay contenido por preparar o enviar. El servidor lo procesa en segundo plano mientras esté funcionando.';
+        return row.provider==='APPLE'?'Se procesó el aviso a Apple. El iPhone debe consultar el servidor para descargar el contenido; su recepción no está confirmada.':'Google aceptó la actualización del objeto. Eso no confirma que el cliente la haya guardado o visto en su teléfono.';
+    };
+    let sequence=0;
+    async function walletHealth(root,opt,f={provider:'ALL',state:'ALL',q:'',offset:0}) {
+        const session=state.token,ticket=String(++sequence);root.dataset.walletRequest=ticket;
+        const valid=()=>root.isConnected&&state.token===session&&root.dataset.walletRequest===ticket;
+        root.innerHTML='<section class="panel" role="status">Consultando las tarjetas y sus actualizaciones…</section>';
+        let d;
+        try{d=await api(opt.path+'/wallet-health?'+new URLSearchParams(f));}
+        catch(e){if(valid()){root.innerHTML=`<section class="panel"><h2>No pudimos consultar las tarjetas</h2><p role="alert">${esc(e.message)}</p><button type="button" data-wallet-reload>Reintentar consulta</button></section>`;root.querySelector('[data-wallet-reload]').onclick=()=>walletHealth(root,opt,f);}return;}
+        if(!valid())return;
+        const fmt=value=>value?new Intl.DateTimeFormat('es-EC',{dateStyle:'medium',timeStyle:'short',timeZone:d.business.timezone}).format(new Date(value)):'Sin registro de fecha';
+        const total=d.summary.total, attention=d.summary.attention, owner=opt.path==='/api/staff';
+        const options=(name,label,items,value)=>`<label>${label}<select name="${name}">${items.map(([id,title])=>`<option value="${id}" ${id===value?'selected':''}>${title}</option>`).join('')}</select></label>`;
+        root.innerHTML=`<div class="wallet-health">
+            <section class="wh-intro"><div><span class="eyebrow">Centro de tarjetas</span><h2>El siguiente paso,<br>siempre claro.</h2><p>Comprueba qué necesita cada tarjeta sin alterar los saldos de tus clientes.</p></div><div class="wh-platforms">${['APPLE','GOOGLE'].map(p=>`<div><strong>${platformName(p)}</strong><span>${d.configuration[p.toLowerCase()]?'Configuración disponible':'Requiere configuración'}</span></div>`).join('')}</div></section>
+            <div class="wh-summary" aria-label="Resumen de los filtros actuales">${[['Por revisar',attention,'attention'],['Pendientes',d.summary.pending,'pending'],['Procesadas',d.summary.accepted,'accepted'],['Sin preparar',d.summary.unissued,'unissued']].map(([name,value,kind])=>`<article class="wh-metric ${kind}"><span>${name}</span><strong>${value}</strong><small>registros por proveedor</small></article>`).join('')}</div>
+            <section class="panel"><form id="walletHealthFilters" class="wh-filters"><label>Buscar cliente<input name="q" type="search" maxlength="100" value="${esc(f.q)}" placeholder="Nombre del cliente" autocomplete="off"></label>${options('provider','Wallet',[['ALL','Ambas'],['APPLE','Apple'],['GOOGLE','Google']],f.provider)}${options('state','Estado',[['ALL','Todos'],['ATTENTION','Necesitan atención'],['PENDING','Pendientes'],['PROVIDER_ACCEPTED','Procesadas'],['NOT_ISSUED','Sin preparar']],f.state)}<button type="submit">Consultar</button></form><p class="small">${total} registros con estos filtros. Cada cliente puede aparecer una vez por proveedor; no es un conteo de personas ni de instalaciones.</p><div class="wh-list">${d.items.map((r,i)=>`<article class="wh-card"><div class="wh-card-head"><div><span class="wh-provider">${platformName(r.provider)}</span><h3>${esc(r.name)}</h3></div><span class="wh-state ${r.state==='PROVIDER_ACCEPTED'?'processed':r.state==='NOT_ISSUED'?'neutral':'pending'}">${labels[r.state]||'Estado desconocido'}</span></div><p>${esc(help(r))}</p><dl class="wh-dates"><div><dt>Contenido preparado</dt><dd>${esc(fmt(r.snapshotAt))}</dd></div><div><dt>Último envío procesado</dt><dd>${esc(fmt(r.lastAcceptedAt))}</dd></div>${r.state==='RETRYING'||r.state==='PENDING'?`<div><dt>Próximo intento programado</dt><dd>${esc(fmt(r.nextAttemptAt))}</dd></div>`:''}</dl>${r.lastRequestedAt?`<p class="small">Reintento solicitado: ${esc(fmt(r.lastRequestedAt))}.</p>`:''}${r.errorCode?`<details class="wh-diagnostic"><summary>Detalle para soporte</summary><p>Código: <code>${esc(r.errorCode)}</code> · ${Number(r.attempts)} intentos consecutivos con error.</p></details>`:''}<div class="wh-actions">${r.state!=='NOT_ISSUED'?`<button type="button" data-wallet-retry="${i}" ${r.canRetry?'':'disabled'}>Solicitar reintento</button>`:''}${owner?`<button type="button" class="quiet" data-wallet-customer="${i}">Ficha y recuperación</button>`:''}</div>${!r.canRetry&&r.retryAfter&&Date.parse(r.retryAfter)>Date.parse(d.asOf)?'<p class="small">Ya se solicitó un reintento. Espera un minuto y vuelve a consultar.</p>':''}</article>`).join('')||'<div class="wh-empty"><h3>No hay tarjetas con estos filtros.</h3><p>Prueba otro nombre o selecciona Todos.</p></div>'}</div><div class="commercial-pager"><button type="button" class="quiet" data-wallet-prev ${f.offset===0?'disabled':''}>Anterior</button><span>${total?f.offset+1:0}–${f.offset+d.items.length} de ${total}</span><button type="button" class="quiet" data-wallet-next ${d.hasMore?'':'disabled'}>Siguiente</button></div><div class="wh-refresh"><p class="small">Consulta del ${esc(fmt(d.asOf))}. Las fechas usan la zona horaria del negocio.</p><button type="button" class="quiet" data-wallet-reload>Actualizar estado</button></div></section>
+            <section class="panel wh-connection"><span class="eyebrow">Si la tarjeta sigue sin cambiar</span><h3>Revisa la conexión antes de repetir.</h3><ol><li>Consulta el estado y resuelve el error que indique el proveedor.</li><li>Si cambió la dirección HTTPS del servidor, el dueño debe actualizar la conexión de la misma tarjeta desde la ficha del cliente.</li><li>Comprueba el resultado abriendo la tarjeta en el teléfono. La recepción no se confirma desde este panel.</li></ol><p class="small">No elimines la tarjeta ni registres al cliente de nuevo. Este panel no comprueba la disponibilidad pública de HTTPS y no renueva túneles. Las fechas de envío anteriores a esta versión pueden aparecer sin registro.</p></section>
+            <details class="panel wh-history"><summary>Últimos reintentos solicitados en este negocio</summary><p class="small">Hasta 8 solicitudes manuales, independientemente de los filtros. El historial de Actividad conserva el registro completo.</p>${d.recentRequests.map(r=>`<article><strong>${esc(r.customer)} · ${platformName(r.provider)}</strong><p>${esc(r.reason)}</p><small>${esc(r.actor||'Responsable no registrado')} · ${esc(fmt(r.at))}</small></article>`).join('')||'<p>Todavía no hay solicitudes manuales.</p>'}</details>
+        </div>`;
+        root.querySelector('#walletHealthFilters').onsubmit=e=>{e.preventDefault();if(valid())walletHealth(root,opt,{...Object.fromEntries(new FormData(e.currentTarget)),offset:0});};
+        root.querySelector('[data-wallet-reload]').onclick=()=>{if(valid())walletHealth(root,opt,f);};
+        root.querySelector('[data-wallet-prev]').onclick=()=>{if(valid())walletHealth(root,opt,{...f,offset:Math.max(0,Number(f.offset)-25)});};
+        root.querySelector('[data-wallet-next]').onclick=()=>{if(valid())walletHealth(root,opt,{...f,offset:Number(f.offset)+25});};
+        root.querySelectorAll('[data-wallet-customer]').forEach(b=>b.onclick=()=>{if(valid())window.openCustomerWorkspace(d.items[Number(b.dataset.walletCustomer)].memberId,b);});
+        root.querySelectorAll('[data-wallet-retry]').forEach(b=>b.onclick=()=>{
+            if(!valid()||document.querySelector('#walletRetryDialog'))return;
+            const row=d.items[Number(b.dataset.walletRetry)],dialog=document.createElement('dialog');dialog.id='walletRetryDialog';dialog.className='commercial-dialog';
+            dialog.innerHTML=`<h2>Reintentar ${platformName(row.provider)}</h2><p><strong>${esc(row.name)}</strong></p><p>Se solicitará un nuevo envío de la misma tarjeta. Conserva su saldo e identidad. El servidor debe estar funcionando para procesarlo.</p><form id="walletRetryForm"><label>Motivo<input name="reason" minlength="5" maxlength="500" required value="El cliente no ve la actualización" autocomplete="off"></label><p class="small">Quedará registrado quién lo solicitó, cuándo y por qué. No confirma la recepción en el teléfono.</p><div class="row"><button type="button" class="quiet" data-close>Cancelar</button><button type="submit">Solicitar reintento</button></div></form>`;
+            document.body.append(dialog);dialog.showModal();
+            const observer=new MutationObserver(()=>{if(!valid()){observer.disconnect();dialog.close();dialog.remove();}});observer.observe(app,{childList:true,subtree:true});
+            dialog.addEventListener('close',()=>observer.disconnect());
+            const busy=()=>dialog.querySelector('form')?.getAttribute('aria-busy')==='true';
+            dialog.querySelector('[data-close]').onclick=()=>{if(!busy())dialog.close();};dialog.addEventListener('cancel',e=>{if(busy())e.preventDefault();});dialog.addEventListener('close',()=>{dialog.remove();if(b.isConnected)b.focus();});
+            form('walletRetryForm',async(v,formNode)=>{
+                if(!valid()){dialog.close();return;}
+                const payload={expectedTag:row.tag,reason:v.reason.trim()};
+                await api(`${opt.path}/wallet-health/${encodeURIComponent(row.memberId)}/${row.provider}/retry`,payload,'POST',operationKey(formNode,payload));
+                if(!valid()){dialog.close();return;}
+                dialog.close();await walletHealth(root,opt,f);if(state.token===session)notice('Reintento programado. Consulta el estado y comprueba la tarjeta en el teléfono.');
+            });
+        });
+    }
+    window.LoyaltyManagement.walletHealth=walletHealth;
 })();
 ;

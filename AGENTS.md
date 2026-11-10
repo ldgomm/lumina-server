@@ -6,7 +6,7 @@ El usuario autoriza commits locales automáticos después de aprobar la validaci
 
 ## Comprobaciones
 
-La entrega v038 requiere 528 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
+La entrega v039 requiere 550 pruebas Kotlin/HTTP/PostgreSQL, incluidas las de concurrencia, todas las pruebas Python del instalador, LOCAL_STAGING_PASS y LOCAL_GATEWAY_PASS antes del commit. Verificar el código actual guardado; si cambia durante las pruebas, repetir una vez con el estado nuevo. La fase HTTPS se verifica después y se informa por separado. No reutilizar el PASS de Comeback para declarar Loyalty aprobado.
 
 ## Docker y configuración
 
@@ -334,3 +334,15 @@ Activity CSV reutiliza la consulta autorizada con todos los filtros y corte, exp
 La interfaz conserva permisos tras errores, oculta acciones no autorizadas, rechaza respuestas tardías y usa memoria de sesión. Un cambio de permisos invalida el contexto anterior, incluida una operación pendiente. Ambos roles de administración disponen del informe con acceso a comprobantes filtrados. No guardar credenciales o historial en localStorage. Se mantienen las identidades y el diseño actual de Apple y Google; no declarar validación física de Wallet por pruebas de informes.
 
 Gate: 268 unitarias/HTTP + 260 PostgreSQL = 528; 128 Python, Docker y 101 comprobaciones gateway antes del auto commit. operations.spec.cjs cubre permisos, fechas, filtros, gráficos, historial, CSV, reintento y móvil en 320/390/1024/1440 px; conservar management.spec.cjs y counter-rewards.spec.cjs. El instalador debe verificarse con código original, reformateado y segunda ejecución, sin escrituras parciales ante conflictos. HTTPS se informa aparte, sin renovación automática. Guía: docs/operacion-permisos-v038.md.
+
+## Centro de tarjetas y reintentos v039
+
+V012 añade last_success_at y last_manual_retry_at por proveedor e índice de registros Apple por serial. No modificar V001–V011 ni inventar fechas históricas. Mantener saldos, seriales, identificadores, tokens, QR, registros, presentationVersion=34 y arte v32.
+
+Estado de tarjetas es privado del dueño y administrador, aislado por negocio. Consultar con REPEATABLE READ READ ONLY, sin llamadas externas, escrituras, desencriptado, códigos QR, cédulas ni tokens. Dos filas posibles por cliente (Apple/Google), no personas únicas ni instalaciones. Hasta 25 registros por página, búsqueda literal por nombre, filtros acotados y orden estable; totales con los mismos filtros. Distinguir sin preparar, falta de configuración, Apple sin registro, error/reintento, actualización pendiente y solicitud procesada. No inferir recepción en el teléfono, instalación ni disponibilidad HTTPS.
+
+Reintento explícito por cliente y proveedor: dueño vigente o administrador, Idempotency-Key, expectedTag, motivo documentado, intervalo mínimo de 60 segundos por proveedor. Autorización vigente antes de replay; bloqueo negocio → miembro → pase → entrega. Encolar la misma identidad sin llamar proveedores, regenerar secretos ni cambiar contenido financiero. El worker mantiene la actualización automática. Un resultado tardío de éxito o fallo usa wake_revision; no debe consumir ni retrasar un despertar nuevo. No enviar campañas ni mensajes de marketing como efecto del reintento. Apple necesita conexión registrada; la recuperación existente sigue exigiendo verificación del titular.
+
+UI Navy compartida entre dueño y plataforma, acceso directo a ficha y recuperación para dueño, códigos de soporte saneados, historial con responsable/motivo. Mantener motivo y clave tras error; descartar respuestas tardías o de otra sesión; no almacenar credenciales ni datos de clientes en el navegador. El administrador consulta por negocio con su propia credencial.
+
+Gate del Mac: 272 unitarias/HTTP + 278 PostgreSQL = 550; 128 Python, Docker local y 105 comprobaciones gateway antes del commit local, sin push. wallet-health.spec.cjs verifica dueño, plataforma, filtros, reintento, claves, errores, aislamiento, HTML y 320/390/1024/1440 px. Mantener regresión de operaciones, equipo y caja. HTTPS se informa aparte; nunca renovar túneles automáticamente. Una solicitud procesada no equivale a APPLE_DEVICE_VALIDATION ni GOOGLE_DEVICE_VALIDATION.

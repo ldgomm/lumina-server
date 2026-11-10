@@ -264,6 +264,151 @@ class WalletPostgresTest {
         assertTrue(json.parseToJsonElement(response.bodyAsText()).jsonObject.containsKey("deliveryErrors"))
     }
 
+    private fun health(f:Fixture,provider:String="ALL",state:String="ALL",search:String="")=service.walletHealth(f.staff,WalletHealthQuery(provider,state,search))
+    private fun healthRows(f:Fixture,provider:String="ALL")=health(f,provider).getValue("items").jsonArray.map{it.jsonObject}
+    private fun retry(f:Fixture,p:WalletPass,provider:String="GOOGLE",key:String=id())=service.retryWallet(f.staff,f.member.id,provider,WalletRetry(p.tag,"El cliente no ve cambios"),key)
+
+    @Test fun `health report is read only and includes both unprepared provider slots`() {
+        val f=fixture();val audit=count("SELECT count(*) FROM audit_events WHERE tenant_id=?",f.staff.tenant)
+        val a=health(f);assertEquals(2,a.getValue("summary").jsonObject.getValue("total").jsonPrimitive.int)
+        assertTrue(healthRows(f).all{it.str("state")=="NOT_ISSUED"})
+        assertEquals(a,health(f));assertEquals(0,count("SELECT count(*) FROM wallet_passes WHERE tenant_id=?",f.staff.tenant))
+        assertEquals(audit,count("SELECT count(*) FROM audit_events WHERE tenant_id=?",f.staff.tenant))
+    }
+    @Test fun `health separates apple connection google delivery and unobserved device receipt`() {
+        val f=fixture();wallet.materialize(f.member,"apple");val p=wallet.materialize(f.member,"google")
+        assertEquals("NEEDS_CONNECTION",healthRows(f,"APPLE").single().str("state"))
+        assertEquals("PENDING",healthRows(f,"GOOGLE").single().str("state"))
+        register(p);wallet.deliver(p.serial,"APPLE",true);wallet.deliver(p.serial,"GOOGLE",true)
+        assertTrue(healthRows(f).all{it.str("state")=="PROVIDER_ACCEPTED" && it["lastAcceptedAt"]!=JsonNull})
+        assertEquals("NOT_OBSERVED",health(f).str("deviceVerification"));assertEquals("NOT_CHECKED",health(f).str("httpsVerification"))
+    }
+    @Test fun `health filters stay inside business and treat search characters literally`() {
+        val f=fixture();val foreign=fixture();wallet.materialize(foreign.member,"google")
+        db.tx{c->c.exec("UPDATE members SET name=? WHERE tenant_id=?","Carla 50%_club",f.staff.tenant)}
+        assertEquals(1,health(f,"GOOGLE",search="50%_").getValue("items").jsonArray.size)
+        assertEquals(0,health(f,search="does-not-exist").getValue("items").jsonArray.size)
+        assertFalse(health(f).toString().contains(foreign.member.id));assertEquals(0,health(f,state="ATTENTION").getValue("items").jsonArray.size)
+    }
+    @Test fun `health never exposes card codes secrets or raw provider error messages`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google")
+        db.tx{c->c.exec("UPDATE wallet_delivery SET last_error=?,attempts=2 WHERE serial=?","secret-raw-provider-body",p.serial)}
+        val data=health(f).toString()
+        for(value in listOf(p.serial,p.token,p.googleId!!,p.snapshot.str("cardCode"),"ID123456","secret-raw-provider-body",encryptionKey))assertFalse(data.contains(value))
+        assertEquals("GOOGLE_DELIVERY_FAILED",healthRows(f,"GOOGLE").single().str("errorCode"))
+        assertEquals(1,health(f,state="ATTENTION").getValue("summary").jsonObject.getValue("total").jsonPrimitive.int)
+    }
+    @Test fun `new purchase becomes pending before materialization and no read alters money`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google");wallet.deliver(p.serial,"GOOGLE",true);earn(f)
+        val balances=service.card(f.member).getValue("balances");assertEquals("PENDING",healthRows(f,"GOOGLE").single().str("state"))
+        assertEquals(balances,service.card(f.member).getValue("balances"));assertEquals(p.tag,count("SELECT update_tag FROM wallet_passes WHERE serial=?",p.serial))
+    }
+    @Test fun `existing provider with missing configuration is distinguished from unissued cards`() {
+        val f=fixture();wallet.materialize(f.member,"google");service.wallets=WalletService(service)
+        assertEquals("NOT_CONFIGURED",healthRows(f,"GOOGLE").single().str("state"))
+        assertEquals("NOT_ISSUED",healthRows(f,"APPLE").single().str("state"))
+        assertFalse(healthRows(f,"GOOGLE").single().getValue("canRetry").jsonPrimitive.boolean)
+    }
+    @Test fun `manual retry is idempotent audited and preserves identity and balances`() {
+        val f=fixture();earn(f);val p=wallet.materialize(f.member,"google");wallet.deliver(p.serial,"GOOGLE",true)
+        val balances=service.card(f.member).getValue("balances");val key=id();val first=retry(f,p,key=key);val second=retry(f,p,key=key)
+        assertEquals("QUEUED",first.str("status"));assertTrue(second.getValue("replayed").jsonPrimitive.boolean)
+        assertEquals(1,count("SELECT count(*) FROM audit_events WHERE tenant_id=? AND action='WALLET_RETRY'",f.staff.tenant))
+        assertEquals(0,count("SELECT sent_tag FROM wallet_delivery WHERE serial=? AND provider='GOOGLE'",p.serial))
+        val same=wallet.materialize(f.member);assertEquals(p.serial,same.serial);assertEquals(p.googleId,same.googleId);assertEquals(p.token,same.token);assertEquals(p.tag,same.tag)
+        assertEquals(balances,service.card(f.member).getValue("balances"))
+        assertEquals(409,assertFailsWith<Problem>{service.retryWallet(f.staff,f.member.id,"GOOGLE",WalletRetry(p.tag,"Otro motivo documentado"),key)}.status)
+    }
+    @Test fun `retry cooldown is per existing provider and server enforced`() {
+        val f=fixture();wallet.materialize(f.member,"apple");val p=wallet.materialize(f.member,"google");register(p)
+        retry(f,p);assertEquals(429,assertFailsWith<Problem>{retry(f,p)}.status)
+        assertFalse(healthRows(f,"GOOGLE").single().getValue("canRetry").jsonPrimitive.boolean)
+        retry(f,p,"APPLE");time.value=time.value.plusSeconds(60);retry(f,p)
+        assertEquals(3,count("SELECT count(*) FROM audit_events WHERE tenant_id=? AND action='WALLET_RETRY'",f.staff.tenant))
+    }
+    @Test fun `retry rejects changed tags and members from another business atomically`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google");earn(f);wallet.materialize(f.member)
+        assertEquals(409,assertFailsWith<Problem>{retry(f,p)}.status)
+        val foreign=fixture();assertEquals(404,assertFailsWith<Problem>{service.retryWallet(f.staff,foreign.member.id,"GOOGLE",WalletRetry(p.tag,"Revisión solicitada"),id())}.status)
+        assertEquals(0,count("SELECT count(*) FROM audit_events WHERE tenant_id=? AND action='WALLET_RETRY'",f.staff.tenant))
+    }
+    @Test fun `cashier cannot read or retry wallet delivery`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google");val token=service.newStaff(f.staff,NewStaff("CASHIER",f.branch,"Caja Principal")).str("token");val cashier=service.staff(token)
+        assertEquals(403,assertFailsWith<Problem>{service.walletHealth(cashier)}.status)
+        assertEquals(403,assertFailsWith<Problem>{service.retryWallet(cashier,f.member.id,"GOOGLE",WalletRetry(p.tag,"Revisión solicitada"),id())}.status)
+    }
+    @Test fun `revoked owner is rejected even for an idempotent replay`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google");val key=id();retry(f,p,key=key)
+        db.tx{c->c.exec("UPDATE staff_tokens SET revoked_at=now(),version=version+1 WHERE tenant_id=? AND id=?",f.staff.tenant,f.staff.id)}
+        assertEquals(401,assertFailsWith<Problem>{retry(f,p,key=key)}.status)
+        assertEquals(401,assertFailsWith<Problem>{health(f)}.status)
+    }
+    @Test fun `retry refuses unissued unconfigured and disconnected apple cards`() {
+        val f=fixture();val p=wallet.materialize(f.member,"apple")
+        assertEquals("WALLET_CONNECTION_REQUIRED",assertFailsWith<Problem>{retry(f,p,"APPLE")}.code)
+        assertEquals("WALLET_NOT_ISSUED",assertFailsWith<Problem>{retry(f,p,"GOOGLE")}.code)
+        service.wallets=WalletService(service)
+        assertEquals("WALLET_NOT_CONFIGURED",assertFailsWith<Problem>{retry(f,p,"APPLE")}.code)
+        assertEquals(0,count("SELECT count(*) FROM audit_events WHERE tenant_id=? AND action='WALLET_RETRY'",f.staff.tenant))
+    }
+    @Test fun `simultaneous distinct requests schedule only one manual retry`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google");val pool=Executors.newFixedThreadPool(4);val barrier=CyclicBarrier(4)
+        try{
+            val results=(1..4).map{pool.submit<Int>{barrier.await(5,TimeUnit.SECONDS);try{retry(f,p);200}catch(e:Problem){e.status}}}.map{it.get(15,TimeUnit.SECONDS)}
+            assertEquals(1,results.count{it==200});assertEquals(3,results.count{it==429})
+        }finally{pool.shutdownNow()}
+        assertEquals(1,count("SELECT count(*) FROM audit_events WHERE tenant_id=? AND action='WALLET_RETRY'",f.staff.tenant))
+    }
+    @Test fun `simultaneous repeated request replays without duplicate audit`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google");val key=id();val pool=Executors.newFixedThreadPool(4);val barrier=CyclicBarrier(4)
+        try{
+            val results=(1..4).map{pool.submit<JsonObject>{barrier.await(5,TimeUnit.SECONDS);retry(f,p,key=key)}}.map{it.get(15,TimeUnit.SECONDS)}
+            assertEquals(1,results.count{!it.getValue("replayed").jsonPrimitive.boolean})
+        }finally{pool.shutdownNow()}
+        assertEquals(1,count("SELECT count(*) FROM audit_events WHERE tenant_id=? AND action='WALLET_RETRY'",f.staff.tenant))
+    }
+    @Test fun `in flight provider failure cannot delay a newly requested retry`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google");val entered=CountDownLatch(1);val release=CountDownLatch(1);val pool=Executors.newSingleThreadExecutor()
+        google.callback={entered.countDown();check(release.await(10,TimeUnit.SECONDS))};google.fail=true
+        try{
+            val running=pool.submit<Boolean>{wallet.deliver(p.serial,"GOOGLE",true)};assertTrue(entered.await(5,TimeUnit.SECONDS));retry(f,p);release.countDown();assertFalse(running.get(10,TimeUnit.SECONDS))
+            assertEquals(0,count("SELECT attempts FROM wallet_delivery WHERE serial=? AND provider='GOOGLE'",p.serial))
+            assertEquals(time.value,db.tx{c->c.one("SELECT next_attempt_at FROM wallet_delivery WHERE serial=? AND provider='GOOGLE'",p.serial){it.getTimestamp(1).toInstant()}})
+        }finally{release.countDown();pool.shutdownNow();google.callback=null}
+        google.fail=false;assertTrue(wallet.deliver(p.serial,"GOOGLE"))
+    }
+    @Test fun `in flight failure cannot overwrite a newer purchase wakeup`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google");val entered=CountDownLatch(1);val release=CountDownLatch(1);val pool=Executors.newSingleThreadExecutor()
+        google.callback={entered.countDown();check(release.await(10,TimeUnit.SECONDS))};google.fail=true
+        try{
+            val running=pool.submit<Boolean>{wallet.deliver(p.serial,"GOOGLE",true)};assertTrue(entered.await(5,TimeUnit.SECONDS));earn(f);val newer=wallet.materialize(f.member);release.countDown();assertFalse(running.get(10,TimeUnit.SECONDS))
+            assertTrue(newer.tag>p.tag);assertEquals(0,count("SELECT attempts FROM wallet_delivery WHERE serial=? AND provider='GOOGLE'",p.serial))
+        }finally{release.countDown();pool.shutdownNow();google.callback=null}
+    }
+    @Test fun `wallet center routes authenticate both administration scopes and reject client access`() = testApplication {
+        val f=fixture();val p=wallet.materialize(f.member,"google");val token="platform-wallet-health-token-32-characters"
+        application{loyaltyRoutes(service,token,origin)}
+        val own="/api/staff/wallet-health";val platform="/api/platform/tenants/${f.staff.tenant}/wallet-health"
+        assertEquals(HttpStatusCode.Unauthorized,client.get(own).status)
+        assertEquals(HttpStatusCode.Unauthorized,client.get(own){bearerAuth(f.token)}.status)
+        assertEquals(HttpStatusCode.OK,client.get(own){bearerAuth(f.owner)}.status)
+        assertEquals(HttpStatusCode.BadRequest,client.get("$own?offset=1"){bearerAuth(f.owner)}.status)
+        assertEquals(HttpStatusCode.Unauthorized,client.get(platform){bearerAuth(f.owner)}.status)
+        assertEquals(HttpStatusCode.OK,client.get(platform){bearerAuth(token)}.status)
+        val response=client.post("$platform/${f.member.id}/GOOGLE/retry"){bearerAuth(token);header("Idempotency-Key",id());contentType(ContentType.Application.Json);setBody("""{"expectedTag":${p.tag},"reason":"Revisión desde soporte"}""")}
+        assertEquals(HttpStatusCode.OK,response.status)
+        assertEquals("Administrador de plataforma",health(f).getValue("recentRequests").jsonArray.first().jsonObject.str("actor"))
+    }
+    @Test fun `health pagination is bounded and unknown historical timestamps remain unknown`() {
+        val f=fixture();val p=wallet.materialize(f.member,"google")
+        db.tx{c->c.exec("UPDATE wallet_delivery SET sent_tag=? WHERE serial=? AND provider='GOOGLE'",p.tag,p.serial)
+            (1..14).forEach{i->val member=id();c.exec("INSERT INTO members(tenant_id,id,name,identity_hash,card_code,password_hash,terms_version) SELECT tenant_id,?,? ,?,? ,password_hash,terms_version FROM members WHERE tenant_id=? AND id=?",member,"Extra $i",Security.hash(id()),Security.token(),f.staff.tenant,f.member.id)}
+        }
+        assertEquals(JsonNull,healthRows(f,"GOOGLE").first{it.str("memberId")==f.member.id}["lastAcceptedAt"])
+        val first=health(f);val second=service.walletHealth(f.staff,WalletHealthQuery(offset=25));assertEquals(25,first.getValue("items").jsonArray.size);assertEquals(5,second.getValue("items").jsonArray.size)
+        assertTrue(first.getValue("hasMore").jsonPrimitive.boolean);assertFalse(second.getValue("hasMore").jsonPrimitive.boolean)
+    }
+
     private class TestApple:AppleWalletProvider {
         override val passType="pass.com.example.loyalty";override val team="ABCDEFGHIJ";var invalid:String?=null
         override fun sign(manifest:ByteArray)=byteArrayOf(1,2,3)

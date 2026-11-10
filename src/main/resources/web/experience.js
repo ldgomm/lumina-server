@@ -11,6 +11,7 @@
         design: ['Mi tarjeta', 'Tu marca, en su Wallet.', 'Personaliza el diseño y comprueba los colores antes de guardar.', 'card'],
         events: ['Eventos y cumpleaños', 'Mantén la conversación.', 'Organiza mensajes y eventos para tus clientes.', 'calendar'],
         qr: ['QR de registro', 'La primera visita cuenta.', 'Un registro, una tarjeta y todas tus sucursales.', 'scan'],
+        walletHealth: ['Estado de tarjetas', 'Tus tarjetas, bajo control.', 'Apple y Google: pendientes, conexión y reintentos con historial.', 'card'],
         team: ['Equipo y accesos', 'Tu equipo, bien organizado.', 'Personas, permisos y credenciales de cada sucursal.', 'people'],
         operations: ['Operación y equipo', 'Decide con datos de cada sucursal.', 'Compras, horarios y premios por responsable, con filtros y comprobantes.', 'chart'],
         activity: ['Actividad', 'Cada movimiento tiene un responsable.', 'Consulta compras, premios entregados y cambios del negocio.', 'chart'],
@@ -51,7 +52,7 @@
             const home = document.createElement('button'); home.dataset.tab = 'overview'; home.textContent = 'Resumen'; home.onclick = () => go('overview'); nav.prepend(home);
             const radar=document.createElement('button');radar.dataset.tab='radar';radar.textContent='Radar de regreso';radar.onclick=()=>go('radar');nav.append(radar);;
         }
-        if(state.data.role==='OWNER'){for(const tab of ['team','activity','operations']){const b=document.createElement('button');b.dataset.tab=tab;b.onclick=()=>go(tab);nav.append(b);}}
+        if(state.data.role==='OWNER'){for(const tab of ['team','activity','operations','walletHealth']){const b=document.createElement('button');b.dataset.tab=tab;b.onclick=()=>go(tab);nav.append(b);}}
         const buttons = [...nav.querySelectorAll('button')];
         for (const button of buttons) {
             const tab = button.dataset.tab || Object.keys(pages).find(key => pages[key][0] === button.textContent);
@@ -61,7 +62,7 @@
             button.innerHTML = icon(pages[tab][3]) + `<span>${pages[tab][0]}</span>`;
         }
         nav.replaceChildren();
-        const groups = [['Día a día', ['overview', 'sales', 'customers', 'radar']], ['Fidelización', ['programs', 'rewards', 'design', 'events', 'qr']], ['Administración', ['business', 'branches', 'team', 'activity', 'operations', 'account', 'reports']]];
+        const groups = [['Día a día', ['overview', 'sales', 'customers', 'radar']], ['Fidelización', ['programs', 'rewards', 'design', 'walletHealth', 'events', 'qr']], ['Administración', ['business', 'branches', 'team', 'activity', 'operations', 'account', 'reports']]];
         for (const [label, keys] of groups) {
             const items = keys.map(key => buttons.find(b => b.dataset.tab === key)).filter(Boolean);
             if (!items.length) continue;
@@ -89,7 +90,7 @@
         }, true);
         shell.querySelector('#quickCounter')?.addEventListener('click', () => go('sales'));
         if (state.tab === 'overview' && state.data.role === 'OWNER') overview(content);
-        if (['team','activity','operations'].includes(state.tab) && state.data.role === 'OWNER') window.LoyaltyManagement[state.tab](content,{path:'/api/staff',business:state.data.business});
+        if (['team','activity','operations','walletHealth'].includes(state.tab) && state.data.role === 'OWNER') window.LoyaltyManagement[state.tab](content,{path:'/api/staff',business:state.data.business});
         if (state.tab === 'radar' && state.data.role === 'OWNER') window.renderReturnRadar(content,{path:'/api/staff/return-radar',valid:()=>state.tab==='radar'&&state.data?.role==='OWNER',owner:true});;
     };;
 

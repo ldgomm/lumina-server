@@ -411,6 +411,8 @@ def verify_gateway(url, slug):
               ('GET', '/wallet/art/v24/GRADIENT/33/0b1f3a/4/5.png', None, 404),
               ('GET', '/wallet/art/v22/GRADIENT/32/0b1f3a/4/5.png', None, 404),
               ('GET', '/api/staff/return-radar', None, 404),
+              ('GET', '/api/staff/wallet-health', None, 404), ('POST', '/api/staff/wallet-health/example/APPLE/retry', {}, 404),
+              ('GET', '/api/platform/tenants/example/wallet-health', None, 404), ('POST', '/api/platform/tenants/example/wallet-health/example/GOOGLE/retry', {}, 404),
               ('GET', '/api/staff/operations', None, 404), ('GET', '/api/staff/activity.csv', None, 404),
               ('GET', '/api/platform/tenants/example/operations', None, 404), ('GET', '/api/platform/tenants/example/activity.csv', None, 404),
               ('GET', '/api/staff/team', None, 404), ('PUT', '/api/staff/team/example', {}, 404),
