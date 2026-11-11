@@ -167,6 +167,6 @@ class OperationsPostgresTest {
         assertEquals(HttpStatusCode.BadRequest,client.get("/api/staff/operations?fromDate=2026-11-02"){bearerAuth(f.token)}.status)
     }
     @Test fun `migration reruns preserve credentials grants and ledger`() {
-        val f=fixture();val h=hire(f,StaffPermissions(false,true));buy(f);db.migrate();assertEquals(StaffPermissions(false,true),service.staff(h.str("token")).permissions);assertEquals(f.owner,service.staff(f.token));assertEquals(1,count(f,"purchases"));assertEquals(13,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getLong(1)}})
+        val f=fixture();val h=hire(f,StaffPermissions(false,true));buy(f);db.migrate();assertEquals(StaffPermissions(false,true),service.staff(h.str("token")).permissions);assertEquals(f.owner,service.staff(f.token));assertEquals(1,count(f,"purchases"));assertEquals(14L,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getLong(1)}})
     }
 }

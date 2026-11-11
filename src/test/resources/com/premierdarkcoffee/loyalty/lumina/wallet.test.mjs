@@ -4,9 +4,11 @@ import { agency, colleague, owner, portal, password } from './helpers.mjs';
 import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { walletRouteAllowed } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/wallet/wallet.mjs';
 async function context(t,link=true){
- const loyalty=await fakeLoyalty(t),world=await portal(t,loyalty.origin,{platformToken:loyalty.platformToken}),admin=await agency(world);
+ const loyalty=await fakeLoyalty(t),integration={},world=await portal(t,loyalty.origin,integration),admin=await agency(world);
  const {client,id}=await owner(world,'Negocio Wallet','5');await admin.post('/clientes/verificar?empresa='+id);
- if(link)assert.equal((await admin.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,303);
+ // Existing businesses from previous versions retain their exact binding.
+ if(link)world.db.run('UPDATE companies SET loyalty_tenant=?,loyalty_name=? WHERE id=?',loyalty.business.id,loyalty.business.name,id);
+ integration.platformToken=loyalty.platformToken;
  return {loyalty,world,admin,client,id};
 }
 test('navegación unifica redes y mantiene servicios, cartera, agenda y Wallet',async t=>{
@@ -38,17 +40,16 @@ test('las escrituras de Wallet exigen origen y CSRF, incluido PUT',async t=>{
  assert.equal((await put({Origin:'https://foreign.test','X-Lumina-CSRF':client.csrf})).status,403);
  const result=await put({Origin:world.origin,'X-Lumina-CSRF':client.csrf});assert.equal(result.status,200);assert.equal((await result.json()).version,9);
 });
-test('la asociación del negocio requiere agencia, verificación y selección explícita; no se reasigna',async t=>{
+test('alta automática usa un negocio propio y retira la asociación manual al demo',async t=>{
  const {client,loyalty,world,admin,id}=await context(t,false);
- assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,409);
- assert.equal((await client.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,403);
- assert.equal((await admin.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id})).status,400);
- assert.equal((await admin.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,303);
- const other=await owner(world,'Otro negocio','6');await admin.post('/clientes/verificar?empresa='+other.id);
- assert.equal((await admin.post('/wallet/vincular?empresa='+other.id,{tenant:loyalty.business.id,confirm:'yes'})).status,409);
- const tenant=[...loyalty.staff.values()].find(p=>p.token===loyalty.foreignToken).company.id;
- assert.equal((await admin.post('/wallet/vincular?empresa='+id,{tenant,confirm:'yes'})).status,409);
- assert.equal((await other.client.get('/wallet-api/api/staff/dashboard')).status,409);
+ assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,200);
+ const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant;
+ assert.notEqual(tenant,loyalty.business.id);
+ for(const session of [client,admin])assert.equal((await session.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,410);
+ assert.equal(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant,tenant);
+ const other=await owner(world,'Otro negocio','6');
+ assert.equal((await other.client.get('/wallet-api/api/staff/dashboard')).status,200);
+ assert.notEqual(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',other.id).loyalty_tenant,tenant);
 });
 test('colaborador solo ve áreas asignadas y no hereda edición, Caja ni administración',async t=>{
  const {client,world}=await context(t);
@@ -97,8 +98,9 @@ test('alta de acceso único recupera respuesta perdida de forma idempotente',asy
 });
 test('agencia entra directamente con configuración interna y sin secretos en HTML',async t=>{
  const {admin,loyalty}=await context(t);
- for(const path of ['/wallet','/platform']){const response=await admin.get(path);assert.equal(response.status,200);assert.doesNotMatch(response.body,/name="credential"/);assert.ok(!response.body.includes(loyalty.platformToken));}
- assert.equal((await admin.get('/wallet-api/api/platform/overview')).status,200);
+ for(const path of ['/wallet']){const response=await admin.get(path);assert.equal(response.status,200);assert.doesNotMatch(response.body,/name="credential"/);assert.ok(!response.body.includes(loyalty.platformToken));}
+ assert.equal((await admin.get('/wallet-api/api/platform/overview')).status,403);
+ assert.equal((await admin.get('/platform')).location,'/wallet');
  assert.equal((await admin.get('/wallet-api/api/staff/dashboard')).status,403);
  assert.equal((await admin.post('/wallet/conectar',{credential:loyalty.ownerToken})).status,410);
 });
@@ -136,8 +138,7 @@ test('informes delegados se abren sin consultar ni mostrar la cuenta comercial',
 test('una pestaña anterior no mezcla datos Wallet después de cambiar de cuenta',async t=>{
  const {client,world,admin,loyalty,id}=await context(t);await client.get('/wallet');const oldCsrf=client.csrf;
  await client.post('/salir');const other=await owner(world,'Otro titular','6');await admin.post('/clientes/verificar?empresa='+other.id);
- const tenant=[...loyalty.staff.values()].find(p=>p.token===loyalty.foreignToken).company.id;
- await admin.post('/wallet/vincular?empresa='+other.id,{tenant,confirm:'yes'});
+ const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',other.id).loyalty_tenant;
  const stale=await fetch(world.origin+'/wallet-api/api/staff/dashboard',{headers:{Cookie:other.client.cookie,'X-Lumina-CSRF':oldCsrf}});assert.equal(stale.status,403);
  const valid=await other.client.get('/wallet-api/api/staff/dashboard');assert.equal(valid.status,200);assert.equal(JSON.parse(valid.body).business.id,tenant);
  assert.equal(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant,loyalty.business.id);

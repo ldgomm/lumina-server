@@ -62,16 +62,16 @@ export function teamPage(actor,company,members) {
     badge(!member.active ? 'INACTIVE' : member.activated ? 'ACTIVE' : 'PENDING'),
   ]),'Crea un acceso para la primera persona de tu equipo.');
   return `${card('Personas del negocio',list)}
-    ${card('Fidelización digital',company.loyalty_tenant?`<p><strong>${esc(company.loyalty_name)}</strong> está asociado a este negocio. Tu equipo usa su misma cuenta de Lúmina.</p>`:'<p>Lúmina debe activar la fidelización y asociar el registro existente del negocio. Después podrás asignar Caja y las demás áreas desde aquí.</p>')}
-    ${company.approved ? card('Añadir colaborador',form('/equipo',actor,`<div class="fields two">
+    ${card('Fidelización digital',company.loyalty_tenant?`<p><strong>${esc(company.loyalty_name)}</strong> tiene Wallet activa. Tu equipo usa su misma cuenta de Lúmina.</p>`:'<p>Tu Wallet se prepara automáticamente. Puedes crear tu equipo y asignar sus permisos desde aquí.</p>')}
+    ${card('Añadir colaborador',form('/equipo',actor,`<div class="fields two">
       ${input('name','Nombre','text','required maxlength="100" autocomplete="off"')}
       ${input('email','Correo del colaborador','email','required maxlength="180" autocomplete="off"')}</div>
       <p class="muted">Puedes combinar áreas y tareas. Deja todos vacíos para configurar únicamente Caja en el siguiente paso.</p>
-      ${matrix()}${button('Crear acceso')}`)) : card('Añadir colaborador',message('La agencia debe verificar tu negocio antes de habilitar los accesos del equipo.'))}`;
+      ${matrix()}${button('Crear acceso')}`))}`;
 }
 export function memberPage(actor,company,member,branches = null) {
   const base = '/equipo/' + member.id;
-  let cash = message('La agencia debe activar la fidelización del negocio.');
+  let cash = message('Abre Wallet para completar su preparación automática y después asigna Caja.');
   if (company.loyalty_tenant) {
     cash = `${member.cash_status ? `<p>${badge(member.cash_status)} <strong>${esc(member.branch_name)}</strong> ·
       ${member.purchases ? 'Compras' : ''}${member.purchases && member.rewards ? ' y ' : ''}${member.rewards ? 'canjes' : ''}</p>` : ''}

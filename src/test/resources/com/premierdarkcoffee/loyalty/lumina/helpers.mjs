@@ -26,8 +26,8 @@ export function browser(origin) {
   return {
     get cookie() { return cookie; },
     get csrf() { return csrf; },
-    async get(path) {
-      const res = await fetch(origin+path,{headers:{Cookie:cookie,'X-Lumina-CSRF':csrf},redirect:'manual'});
+    async get(path,options={}) {
+      const res = await fetch(origin+path,{headers:{Cookie:cookie,'X-Lumina-CSRF':csrf,...options.headers},redirect:'manual'});
       const body = await res.text();
       const match = body.match(/name="_csrf" value="([^"]+)"/);
       if (match) csrf = match[1];

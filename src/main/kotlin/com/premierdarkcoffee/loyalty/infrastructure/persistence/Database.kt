@@ -2,6 +2,7 @@ package com.premierdarkcoffee.loyalty.infrastructure.persistence
 
 import com.premierdarkcoffee.loyalty.access.TeamManagementMigration
 import com.premierdarkcoffee.loyalty.billing.CommercialMigration
+import com.premierdarkcoffee.loyalty.businesses.LuminaRegistrationMigration
 import com.premierdarkcoffee.loyalty.businesses.AdministrationMigration
 import com.premierdarkcoffee.loyalty.businesses.BusinessProfileMigration
 import com.premierdarkcoffee.loyalty.businesses.OwnerExperienceMigration
@@ -59,6 +60,7 @@ class Database(val source: DataSource) : AutoCloseable {
         StaffOperationsMigration.apply(c)
         WalletHealthMigration.apply(c)
         AdministrationMigration.apply(c)
+        LuminaRegistrationMigration.apply(c)
         
     }
     override fun close() { (source as? AutoCloseable)?.close() }

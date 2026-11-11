@@ -48,7 +48,7 @@ class StagingTests(unittest.TestCase):
         command=s.compose(self.root,'up','-d');self.assertIn('loyalty-staging',command);self.assertIn(str(self.root/'docker-compose.staging.yml'),command)
     def test_private_access_page_is_excluded_from_evidence_and_logs_redact_credentials(self):
         values=self.config();file=s.write_access(self.root,values)
-        self.assertEqual(0o600,file.stat().st_mode&0o777);self.assertIn(values['STAGING_OWNER_TOKEN'],file.read_text())
+        self.assertEqual(0o600,file.stat().st_mode&0o777);self.assertTrue(all(value not in file.read_text() for value in [values[k] for k in s.SECRET_NAMES]));self.assertIn('Abrir Lúmina Digital',file.read_text());self.assertNotIn('Demo',file.read_text())
         self.assertFalse(c.allowed('.env'));self.assertFalse(c.allowed('.local-staging/access.html'))
         raw=' '.join(values[k] for k in s.SECRET_NAMES)+' Bearer abcdef123456 token=abcdef123456'
         cleaned=s.clean(raw,[values[k] for k in s.SECRET_NAMES]);self.assertTrue(all(values[k] not in cleaned for k in s.SECRET_NAMES));self.assertNotIn('abcdef123456',cleaned)

@@ -19,7 +19,7 @@ export function openDatabase(path) {
   const db = new DatabaseSync(path, { timeout: 5000 });
   db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (version > 2) { db.close(); throw new Error('Esta versión de Lúmina no reconoce el esquema de datos.'); }
+  if (version > 3) { db.close(); throw new Error('Esta versión de Lúmina no reconoce el esquema de datos.'); }
   const transaction = work => {
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -37,21 +37,21 @@ export function openDatabase(path) {
       db.exec('PRAGMA user_version=1');
     });
   }
-  if (version < 2) {
-    // An online SQLite snapshot includes the WAL. Private backup precedes the atomic migration.
-    if (version === 1 && path !== ':memory:') {
-      const folder = join(dirname(resolve(path)), 'migrations');
+  for (const [target,file] of [[2,'002_unified.sql'],[3,'003_onboarding.sql']]) {
+    if (db.prepare('PRAGMA user_version').get().user_version >= target) continue;
+    // One coherent private snapshot of the original database precedes all pending migrations.
+    if (version > 0 && path !== ':memory:' && target===version+1) {
+      const folder=join(dirname(resolve(path)),'migrations');
       mkdirSync(folder,{recursive:true,mode:0o700});
       const stat=lstatSync(folder);
-      if (!stat.isDirectory() || stat.isSymbolicLink()) { db.close(); throw new Error('Carpeta de respaldo inválida.'); }
+      if(!stat.isDirectory()||stat.isSymbolicLink()){db.close();throw new Error('Carpeta de respaldo inválida.');}
       chmodSync(folder,0o700);
-      const backup=join(folder,'before-v2-'+randomUUID()+'.sqlite');
-      db.exec("VACUUM INTO '"+backup.replaceAll("'","''")+"'");
-      chmodSync(backup,0o600);
+      const backup=join(folder,'before-v'+target+'-'+randomUUID()+'.sqlite');
+      db.exec("VACUUM INTO '"+backup.replaceAll("'","''")+"'");chmodSync(backup,0o600);
     }
-    transaction(() => {
-      db.exec(readFileSync(new URL('./migrations/002_unified.sql',import.meta.url),'utf8'));
-      db.exec('PRAGMA user_version=2');
+    transaction(()=>{
+      db.exec(readFileSync(new URL('./migrations/'+file,import.meta.url),'utf8'));
+      db.exec('PRAGMA user_version='+target);
     });
   }
   return {

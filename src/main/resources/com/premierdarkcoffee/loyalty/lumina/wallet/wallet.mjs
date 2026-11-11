@@ -1,3 +1,4 @@
+import { createWalletOnboarding } from './onboarding.mjs';
 import { can, requireAgency, requireOwner } from '../access/accounts.mjs';
 import { seal, unseal } from '../access/security.mjs';
 import { event, isId, now, Problem, requireThat, uuid } from '../shared/domain.mjs';
@@ -31,6 +32,14 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
       WHERE a.id=? AND a.active=1 AND s.digest=? AND s.expires_at>?`,actor?.id||'',actor?.session_id||'',now());
     requireThat(fresh,'Tu sesión terminó. Ingresa nuevamente.',401);
     requireThat(fresh.kind===actor.kind && fresh.company_id===actor.company_id,message,403);
+    if(actor.wallet_company){
+      requireThat(isId(actor.wallet_company) && (fresh.kind==='AGENCY'||fresh.company_id===actor.wallet_company),message,403);
+      if(fresh.kind==='AGENCY'){
+        const selected=db.get('SELECT id,approved,loyalty_tenant,loyalty_name FROM companies WHERE id=?',actor.wallet_company);
+        requireThat(selected,'Negocio no encontrado.',404);
+        Object.assign(fresh,selected,{id:actor.id,company_id:selected.id});
+      }
+    }
     fresh.grants=db.all('SELECT scope,action FROM grants WHERE account_id=?',fresh.id);
     if(fresh.kind!=='AGENCY')requireThat(can(fresh,'WALLET') || fresh.kind==='OWNER',message,403);
     return fresh;
@@ -44,7 +53,7 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     try { response=await fetch(origin+path,{method,redirect:'error',signal:AbortSignal.timeout(10000),
       headers:{...(token?{Authorization:'Bearer '+token}:{}),...(body!==undefined?{'Content-Type':'application/json'}:{}),...(key?{'Idempotency-Key':key}:{})},
       body:body===undefined?undefined:JSON.stringify(body)}); }
-    catch {throw new Problem('Loyalty no está disponible. Inicia su servidor y vuelve a intentar.',503);}
+    catch {throw new Problem('El servicio de fidelización no está disponible en este momento. Tu cuenta se conserva; vuelve a abrir Wallet para reintentar.',503);}
     const chunks=[];let length=0;
     for await(const chunk of response.body||[]){length+=chunk.byteLength;requireThat(length<=2_000_000,'La respuesta de Loyalty es demasiado grande.',502);chunks.push(chunk);}
     const bytes=Buffer.concat(chunks);
@@ -55,16 +64,17 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
       [400,401,403,404,409,422,429].includes(response.status)?response.status:503);
     return value;
   }
+  const ensureCompany=createWalletOnboarding({db,remote,configured});
   async function provision(actor) {
-    const fresh=current(actor);
-    if(fresh.kind==='AGENCY')return {token:configured(),role:'AGENCY'};
-    requireThat(fresh.approved && fresh.loyalty_tenant,'Lúmina debe activar la fidelización y asociar este negocio con su registro de Loyalty.',409);
-    requireThat(fresh.kind==='OWNER'||walletSections(fresh).length,'El dueño todavía no te ha asignado áreas de Wallet.',403);
-    let row=db.get('SELECT * FROM wallet_access WHERE account_id=?',fresh.id);
+    let fresh=current(actor);
+    if(fresh.kind==='AGENCY'&&!fresh.company_id)return {token:configured(),role:'AGENCY'};
+    requireThat(fresh.kind!=='COLLABORATOR'||walletSections(fresh).length,'El dueño todavía no te ha asignado áreas de Wallet.',403);
+    await ensureCompany(fresh.company_id);fresh=current(actor);
+    let row=db.get('SELECT * FROM wallet_access WHERE account_id=? AND company_id=?',fresh.id,fresh.company_id);
     if(!row) {
       db.run("INSERT INTO wallet_access(account_id,company_id,tenant_id,request_id,staff_name,status,created_at) VALUES(?,?,?,?,?,'PENDING',?)",
-        fresh.id,fresh.company_id,fresh.loyalty_tenant,uuid(),('Lúmina · '+fresh.name).slice(0,80),now());
-      row=db.get('SELECT * FROM wallet_access WHERE account_id=?',fresh.id);
+        fresh.id,fresh.company_id,fresh.loyalty_tenant,uuid(),('Lúmina · '+(fresh.kind==='AGENCY'?'Agencia · ':'')+fresh.name).slice(0,80),now());
+      row=db.get('SELECT * FROM wallet_access WHERE account_id=? AND company_id=?',fresh.id,fresh.company_id);
     }
     requireThat(row.tenant_id===fresh.loyalty_tenant && row.company_id===fresh.company_id,'La asociación del negocio cambió. Contacta a la agencia.',409);
     requireThat(row.status!=='BLOCKED','Este acceso fue retirado en Loyalty. La agencia debe revisarlo.',403);
@@ -81,69 +91,55 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
       requireThat(issued.credentialIssued===true && /^[A-Za-z0-9_-]{43}$/.test(issued.token||''),'No se pudo preparar el acceso interno.',502);
       row.staff_id=issued.id;
       db.transaction(()=>{
-        db.run("UPDATE wallet_access SET staff_id=?,sealed_token=?,status='ACTIVE' WHERE account_id=? AND status='PENDING'",row.staff_id,seal(key,context(row),issued.token),row.account_id);
+        db.run("UPDATE wallet_access SET staff_id=?,sealed_token=?,status='ACTIVE' WHERE account_id=? AND company_id=? AND status='PENDING'",row.staff_id,seal(key,context(row),issued.token),row.account_id,row.company_id);
         event(db,actor,row.company_id,'ACCOUNT',row.account_id,'ACCESO_WALLET_PREPARADO','Acceso interno por cuenta.','WALLET');
       });
-      row=db.get('SELECT * FROM wallet_access WHERE account_id=?',fresh.id);
+      row=db.get('SELECT * FROM wallet_access WHERE account_id=? AND company_id=?',fresh.id,fresh.company_id);
     }
     const latest=current(actor);
-    requireThat(latest.loyalty_tenant===row.tenant_id && latest.approved && (latest.kind==='OWNER'||walletSections(latest).length),message,403);
-    return {...row,role:actor.kind,token:unseal(key,context(row),row.sealed_token)};
+    requireThat(latest.loyalty_tenant===row.tenant_id && latest.company_id===row.company_id && (latest.kind!=='COLLABORATOR'||walletSections(latest).length),message,403);
+    return {...row,role:fresh.kind==='AGENCY'?'OWNER':fresh.kind,token:unseal(key,context(row),row.sealed_token)};
   }
   async function credential(actor) {
-    current(actor);
-    if(!busy.has(actor.id))busy.set(actor.id,provision(actor).finally(()=>busy.delete(actor.id)));
-    return busy.get(actor.id);
+    const fresh=current(actor),slot=fresh.id+':'+(fresh.company_id||'');
+    if(!busy.has(slot))busy.set(slot,provision(actor).finally(()=>busy.delete(slot)));
+    return busy.get(slot);
   }
   async function validated(actor) {
     const item=await credential(actor);
     let data;
-    try{data=await remote(actor.kind==='AGENCY'?'/api/platform/wallet/status':'/api/staff/dashboard',{token:item.token});}
-    catch(error){if(item.account_id && [401,403].includes(error.status))db.run("UPDATE wallet_access SET status='BLOCKED',sealed_token=NULL WHERE account_id=?",item.account_id);throw error;}
+    try{data=await remote(item.role==='AGENCY'?'/api/platform/wallet/status':'/api/staff/dashboard',{token:item.token});}
+    catch(error){if(item.account_id && [401,403].includes(error.status))db.run("UPDATE wallet_access SET status='BLOCKED',sealed_token=NULL WHERE account_id=? AND company_id=?",item.account_id,item.company_id);throw error;}
     const fresh=current(actor);
-    if(actor.kind!=='AGENCY')requireThat(fresh.approved && data.role==='OWNER' && isId(data.business?.id) && data.business.id===fresh.loyalty_tenant && item.tenant_id===fresh.loyalty_tenant,message,403);
+    if(item.role!=='AGENCY')requireThat(data.role==='OWNER' && isId(data.business?.id) && data.business.id===fresh.loyalty_tenant && item.tenant_id===fresh.loyalty_tenant,message,403);
     return {item,data,fresh};
   }
   async function summary(actor) {
     const {item,data,fresh}=await validated(actor);
-    const result=actor.kind==='AGENCY'?{configuration:data,overview:await remote('/api/platform/overview',{token:item.token})}:
-      {dashboard:data,...(fresh.kind==='OWNER'||can(fresh,'WALLET_REPORTS')?{health:await remote('/api/staff/wallet-health',{token:item.token})}:{})};
+    const result=item.role==='AGENCY'?{configuration:data}:
+      {dashboard:data,...(fresh.kind!=='COLLABORATOR'||can(fresh,'WALLET_REPORTS')?{health:await remote('/api/staff/wallet-health',{token:item.token})}:{})};
     const latest=current(actor);requireThat(latest.revision===fresh.revision,message,403);return result;
   }
   async function proxy(actor,path,{method='GET',query='',body,key}={}) {
     let fresh=current(actor);
-    requireThat(walletRouteAllowed(fresh.kind==='COLLABORATOR'?'OWNER':fresh.kind,method,path)&&delegatedRouteAllowed(fresh,method,path),message,403);
+    const global=fresh.kind==='AGENCY'&&!fresh.company_id;
+    const profileRequest=fresh.kind==='AGENCY'&&fresh.company_id&&method==='PUT'&&new RegExp('^/api/platform/tenants/'+fresh.loyalty_tenant+'/profile-requests/[0-9a-f-]{36}$').test(path);
+    requireThat((global ? method==='GET'&&path==='/api/platform/wallet/status' : (profileRequest||walletRouteAllowed('OWNER',method,path)))&&delegatedRouteAllowed(fresh,method,path),message,403);
+    requireThat(!/^\/api\/staff\/(team(?:\/|$)|credentials(?:\/|$))/.test(path),'Administra las personas y sus permisos desde Equipo y permisos de Lúmina.',403);
     const {item}=await validated(actor);
     fresh=current(actor);
     requireThat(delegatedRouteAllowed(fresh,method,path),message,403);
     requireThat(!query||(query.startsWith('?')&&query.length<=3000),'Filtro inválido.');
     requireThat(!key||/^[A-Za-z0-9_:-]{8,128}$/.test(key),'Referencia de operación inválida.');
-    const result=await remote(path+query,{method,body,key,token:item.token,raw:true});
+    const profileEdit=fresh.kind==='AGENCY'&&fresh.company_id&&method==='PUT'&&path==='/api/staff/business-profile';
+    const destination=profileEdit?'/api/platform/tenants/'+fresh.loyalty_tenant+'/profile':path;
+    const result=await remote(destination+query,{method,body,key,token:profileEdit||profileRequest?configured():item.token,raw:true});
     const latest=current(actor);
     requireThat(latest.revision===fresh.revision && latest.approved===fresh.approved && latest.loyalty_tenant===fresh.loyalty_tenant && delegatedRouteAllowed(latest,method,path),message,403);
     requireThat(/^(application\/json|text\/csv)/i.test(result.type),'Formato de respuesta no permitido.',502);
-    if(item.account_id && result.status===401)db.run("UPDATE wallet_access SET status='BLOCKED',sealed_token=NULL WHERE account_id=?",item.account_id);
-    if(method!=='GET')event(db,actor,actor.company_id,'WALLET_ACCESS',item.staff_id||actor.id,'WALLET_'+method,`${path} · HTTP ${result.status}`,'WALLET');
+    if(item.account_id && result.status===401)db.run("UPDATE wallet_access SET status='BLOCKED',sealed_token=NULL WHERE account_id=? AND company_id=?",item.account_id,item.company_id);
+    if(method!=='GET')event(db,actor,fresh.company_id,'WALLET_ACCESS',item.staff_id||actor.id,'WALLET_'+method,`${path} · HTTP ${result.status}`,'WALLET');
     return result;
-  }
-  async function candidates(actor,query='') {
-    requireAgency(current(actor));
-    const result=await remote('/api/platform/tenants?q='+encodeURIComponent(query),{token:configured()});
-    current(actor);return (result.items||[]).filter(item=>isId(item.id)).slice(0,100);
-  }
-  async function bind(actor,company,input) {
-    requireAgency(current(actor));
-    requireThat(input.confirm==='yes' && isId(input.tenant),'Selecciona y confirma el negocio de Loyalty.');
-    const result=await remote('/api/platform/tenants/'+input.tenant+'/branches',{token:configured()});
-    requireThat(result.business?.id===input.tenant && typeof result.business.name==='string','Respuesta de negocio inválida.',502);
-    requireAgency(current(actor));
-    db.transaction(()=>{
-      const row=db.get('SELECT * FROM companies WHERE id=?',company.id);
-      requireThat(row?.approved,'Verifica primero el negocio en Clientes.',409);
-      requireThat(!row.loyalty_tenant || row.loyalty_tenant===input.tenant,'Este negocio ya tiene una asociación permanente. No se reemplaza desde aquí.',409);
-      requireThat(!db.get('SELECT id FROM companies WHERE loyalty_tenant=? AND id<>?',input.tenant,row.id),'Ese negocio ya está asociado a otra cuenta de empresa.',409);
-      if(!row.loyalty_tenant){db.run('UPDATE companies SET loyalty_tenant=?,loyalty_name=? WHERE id=?',input.tenant,result.business.name,row.id);event(db,actor,row.id,'COMPANY',row.id,'LOYALTY_VINCULADO',result.business.name,'WALLET');}
-    });
   }
   async function repair(actor,company,input) {
     requireAgency(current(actor));
@@ -162,7 +158,7 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     requireAgency(current(actor));
     requireThat(db.get('SELECT active FROM accounts WHERE id=?',row.account_id)?.active,'El usuario fue desactivado.',409);
     db.transaction(()=>{
-      requireThat(db.run("UPDATE wallet_access SET sealed_token=?,status='ACTIVE' WHERE account_id=? AND status='BLOCKED'",seal(key,context(row),result.token),row.account_id).changes===1,'El acceso cambió durante la reparación.',409);
+      requireThat(db.run("UPDATE wallet_access SET sealed_token=?,status='ACTIVE' WHERE account_id=? AND company_id=? AND status='BLOCKED'",seal(key,context(row),result.token),row.account_id,row.company_id).changes===1,'El acceso cambió durante la reparación.',409);
       event(db,actor,company.id,'ACCOUNT',row.account_id,'ACCESO_WALLET_REPARADO',reason,'WALLET');
     });
   }
@@ -175,10 +171,10 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     const {data,fresh}=await validated(actor);
     requireThat(fresh.kind!=='COLLABORATOR'||can(fresh,'WALLET_DESIGN'),message,403);
     requireThat(/^\/wallet\/art\/v\d+\/[A-Za-z0-9/_.-]+$/.test(path)||/^\/wallet\/brand\/[a-z0-9-]+\/logo\.png$/.test(path)||
-      (fresh.kind!=='AGENCY'&&path==='/api/public/'+data.business.slug+'/qr'),'Imagen no disponible.',403);
+      (fresh.company_id&&path==='/api/public/'+data.business.slug+'/qr'),'Imagen no disponible.',403);
     requireThat(!path.includes('..')&&query.length<=5000,'Imagen no disponible.');
     const result=await remote(path+query,{raw:true});requireThat(result.status===200&&result.type.startsWith('image/'),'No se pudo cargar la imagen.',502);current(actor);return result;
   }
-  return {summary,proxy,asset,artwork,candidates,bind,repair,validate:async actor=>(await validated(actor)).data,
+  return {ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
     forget:()=>{},ownerCredential:async actor=>{requireOwner(actor);const {item}=await validated(actor);return item.token;}};
 }

@@ -30,8 +30,9 @@ class WalletFirstWorkflowTest(unittest.TestCase):
             content=staging.write_access(root,values).read_text()
             self.assertNotIn(values['STAGING_ALICE_PASSWORD'],content)
             self.assertNotIn(values['STAGING_BOB_PASSWORD'],content)
-            self.assertIn('DEMO10001',content)
-            self.assertIn('no necesitan contraseña',content)
+            self.assertNotIn('DEMO10001',content)
+            self.assertNotIn('Tus accesos de prueba',content)
+            self.assertIn('Abrir Lúmina Digital',content)
     def test_javascript_changes_are_preflighted_before_any_write(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:

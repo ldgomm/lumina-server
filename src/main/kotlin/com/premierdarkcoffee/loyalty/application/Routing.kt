@@ -1,5 +1,8 @@
 package com.premierdarkcoffee.loyalty.application
 
+import com.premierdarkcoffee.loyalty.businesses.LuminaRegistration
+import com.premierdarkcoffee.loyalty.businesses.registerLuminaBusiness
+
 import com.premierdarkcoffee.loyalty.access.Security
 import com.premierdarkcoffee.loyalty.analytics.managementRoutes
 import com.premierdarkcoffee.loyalty.billing.commercialRoutes
@@ -154,6 +157,11 @@ fun Application.loyaltyRoutes(service: LoyaltyService, platformToken: String, pu
             val slug = call.parameters["slug"]!!
             io { service.publicTenant(slug) }
             call.respondBytes(qr("$publicUrl/join/$slug"),ContentType.Image.PNG)
+        }
+        post("/api/platform/lumina/businesses") {
+            need(Security.equal(Security.hash(call.bearer()), Security.hash(platformToken)), "UNAUTHORIZED", "Acceso no autorizado.", 401)
+            val input = call.body<LuminaRegistration>()
+            call.respond(HttpStatusCode.Created, io { service.registerLuminaBusiness(input) })
         }
         post("/api/platform/tenants") {
             need(

@@ -181,7 +181,7 @@ test('acceso único persiste cifrado al reiniciar servidor y no crea otro emplea
  let db=openDatabase(path),server=createPortal({db,key,loyaltyUrl:loyalty.origin,integration}),origin=await listen(server);
  try{
   const world={db,session:()=>browser(origin)};const admin=await agency(world),{client,id}=await owner(world,'Persistencia Wallet','2');
-  await admin.post('/clientes/verificar?empresa='+id);await admin.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'});await client.get('/wallet');
+  await admin.post('/clientes/verificar?empresa='+id);await client.get('/wallet');
   const original={...db.get('SELECT * FROM wallet_access')};await close(server);db.close();
   db=openDatabase(path);server=createPortal({db,key,loyaltyUrl:loyalty.origin,integration});origin=await listen(server);
   const session=browser(origin);await session.post('/entrar',{email:'negocio2@example.test',password});await session.get('/inicio');

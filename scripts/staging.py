@@ -122,12 +122,13 @@ def urls(values):
 
 
 def write_access(root, values):
-    links=urls(values)
-    rows=[('Admin','Token de plataforma',values['STAGING_ADMIN_TOKEN'],links['admin']),('Store · dueño','Credencial del negocio',values['STAGING_OWNER_TOKEN'],links['store']),('Store · caja Centro','Credencial del cajero',values['STAGING_CASHIER_TOKEN'],links['store']),('Ana Demo · cliente','Busca esta cédula desde caja','DEMO10001',links['clients']),('Luis Demo · cliente','Busca esta cédula desde caja','DEMO10002',links['clients'])]
-    cards=''.join('<section><h2>'+html.escape(role)+'</h2><p>'+html.escape(label)+'</p><code tabindex="0">'+html.escape(value)+'</code><p><a href="'+html.escape(link,quote=True)+'" target="_blank" rel="noreferrer">Abrir acceso</a></p></section>' for role,label,value,link in rows)
-    page='''<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Loyalty · accesos privados</title><style>body{font:17px system-ui;margin:0;background:#f5f5ee;color:#173e34}main{max-width:950px;margin:auto;padding:32px}h1{font-size:40px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}section{background:white;border:1px solid #d8ded4;border-radius:18px;padding:24px}code{display:block;overflow-wrap:anywhere;user-select:all;background:#eef2e7;padding:16px;border-radius:10px}a{color:#175840}p{line-height:1.6}</style><main><p>LOYALTY · SOLO EN TU MAC</p><h1>Tus accesos de prueba.</h1><p>Este archivo contiene credenciales privadas. Selecciona y copia el valor completo. Admin y Store usan una credencial. Los clientes no necesitan contraseña: se registran una vez y usan su tarjeta en Wallet. Para probar compras y canjes, busca a Ana o Luis por cédula desde caja. Para probar el alta, usa otra cédula ficticia.</p><p><a href="'''+html.escape(links['preview'],quote=True)+'''" target="_blank" rel="noreferrer">Ver los avances del proyecto →</a></p><div class="grid">'''+cards+'''</div><p>Ana empieza con 120 puntos, 6 USD promocionales y 6 sellos; Luis con 30 puntos, 1,50 USD y 3 sellos. Tus pruebas posteriores pueden cambiar esos saldos. Las sucursales Centro y Norte comparten la tarjeta del negocio.</p><p>Los datos se conservan al reiniciar y reconstruir. No compartas este archivo ni .env.</p></main></html>'''
+    port=os.environ.get('LUMINA_PORT','8099')
+    expect(port.isdigit() and 1024<=int(port)<=65535,'Puerto de Lúmina inválido.')
+    link='http://127.0.0.1:'+port+'/'
+    page='<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lúmina Digital</title><style>body{font:18px system-ui;background:#f3f6fa;color:#0b1f3a;max-width:720px;margin:12vh auto;padding:24px}a{display:inline-block;padding:16px 24px;background:#0b1f3a;color:white;border-radius:12px;text-decoration:none}</style><h1>Tu negocio, en Lúmina Digital.</h1><p>Accede con tu cuenta para gestionar contenido, fidelización y equipo. Wallet se prepara al registrar tu negocio.</p><a href="'+html.escape(link,quote=True)+'">Abrir Lúmina Digital</a></html>'
     destination=root/'.local-staging/access.html';private_write(destination,page)
     return destination
+
 
 
 class Runner:
@@ -252,12 +253,7 @@ def main(argv=None):
     args=parser.parse_args(argv);root=args.project.expanduser().resolve();report=args.report.resolve() if args.report else None
     if args.action=='credentials':
         values=read_config(root);path=write_access(root,values)
-        if not args.quiet:
-            print('Accesos privados — no compartir:')
-            for k in ('STAGING_ADMIN_TOKEN','STAGING_OWNER_TOKEN','STAGING_CASHIER_TOKEN'):
-                print(k+'='+values[k])
-            print('Ana: DEMO10001 · Luis: DEMO10002 · Clientes: '+urls(values)['clients'])
-        print('Accesos locales: '+str(path))
+        print('Lúmina Digital: '+str(path))
         if args.open_browser:
             webbrowser.open(path.as_uri())
         return 0
@@ -289,8 +285,7 @@ def main(argv=None):
         if source_fingerprint(root)!=source:
             raise RuntimeError('El código cambió mientras se construía la imagen. Ejecuta de nuevo para validar y levantar esa versión.')
         path=write_access(root,values)
-        print('Vista de avances: '+urls(values)['preview'])
-        print('Accesos privados: '+str(path))
+        print('Acceso a Lúmina Digital: '+str(path))
         if not args.no_browser:
             webbrowser.open(path.as_uri())
         return 0

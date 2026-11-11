@@ -86,8 +86,7 @@ export function createLoyaltyBridge({ db, key, origin }) {
     requireOwner(actor);
     currentSession(db,actor);
     const company = db.get('SELECT * FROM companies WHERE id=?',actor.company_id);
-    requireThat(company.approved,'Lúmina debe verificar el negocio antes de vincular Loyalty.',409);
-    if (bound) requireThat(company.loyalty_tenant,'Primero vincula tu negocio de Loyalty.',409);
+    if (bound) requireThat(company.loyalty_tenant,'Tu Wallet se está preparando. Abre Fidelización digital para completar la preparación.',409);
     requireThat(tokenPattern.test(credential || ''),'Ingresa tu credencial vigente de dueño de Loyalty.',403);
     const dashboard = await request(dashboardRoute,{token:credential});
     requireThat(dashboard.role === 'OWNER','Usa la credencial de un dueño de Loyalty.',403);
@@ -236,7 +235,7 @@ export function createLoyaltyBridge({ db, key, origin }) {
     });
   }
   function activeGrant(actor) {
-    requireThat(actor.kind === 'COLLABORATOR' && actor.approved,'Este acceso de Caja requiere una asignación del dueño.',403);
+    requireThat(actor.kind === 'COLLABORATOR','Este acceso de Caja requiere una asignación del dueño.',403);
     currentSession(db,actor);
     const grant = db.get(`SELECT g.*,c.loyalty_tenant FROM cash_grants g JOIN companies c ON c.id=g.company_id
       WHERE g.company_id=? AND g.account_id=? AND g.status='ACTIVE'`,actor.company_id,actor.id);

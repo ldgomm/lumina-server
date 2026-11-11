@@ -79,7 +79,7 @@ internal fun businessProfileView(c: Connection, tenant: String): JsonObject {
         obj("version" to it.getInt(1), "profile" to json.parseToJsonElement(it.getString(2)), "updatedAt" to it.getTimestamp(3).toInstant())
     } ?: obj("version" to 0, "profile" to null, "updatedAt" to null)
         val profile=row["profile"]?.takeIf{it!=JsonNull}?.let{json.decodeFromJsonElement<BusinessProfile>(it)}
-    return JsonObject(row + obj("business" to business, "rucVerification" to "NOT_VERIFIED", "protectedFields" to protectedBusinessFields,
+    return JsonObject(row + obj("business" to business, "registration" to luminaContact(c,tenant), "rucVerification" to "NOT_VERIFIED", "protectedFields" to protectedBusinessFields,
         "categoryContext" to BusinessCategories.context(profile), "categoryOptions" to BusinessCategories.options().getValue("categories"), "requests" to profileRequests(c,tenant)))
 }
 fun LoyaltyService.businessProfile(tenant: String): JsonObject = db.tx { businessProfileView(it,tenant) }

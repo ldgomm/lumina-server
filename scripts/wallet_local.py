@@ -445,6 +445,7 @@ def verify_gateway(url, slug):
               ('POST', '/api/public/' + slug + '/join', {}, 400),
               ('GET', '/platform', None, 404), ('GET', '/preview', None, 404),
               ('GET', '/api/staging/info', None, 404), ('GET', '/api/platform/tenants', None, 404),
+              ('POST', '/api/platform/lumina/businesses', {}, 404),
               ('POST', '/api/staff/wallet/restore', {}, 404), ('POST', '/api/me/redemptions', {}, 404),
               ('POST', '/api/public/' + slug + '/login', {}, 404), ('GET', '/.env.wallet', None, 404),
               ('GET', '/join/../platform', None, 404), ('GET', '/join/%2e%2e/platform', None, 404),

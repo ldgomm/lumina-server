@@ -407,3 +407,25 @@ Elegir la plataforma únicamente al registrar la publicación de una pieza aprob
 Conservar request_platforms históricos y sus límites de acceso, publicaciones, métricas, evidencias y permisos sin alterar el esquema SQLite v2. Para solicitudes nuevas comunes, un permiso social VIEW/REQUEST permite consultar/solicitar; aprobar la pieza completa requiere SOCIAL.APPROVE. La lectura de publicaciones y métricas mantiene el filtro por plataforma autorizado. Toda autorización sigue en el servidor y dentro del negocio.
 
 Exigir 36 pruebas completas del portal, además de los gates de Kotlin, PostgreSQL, Python, Docker y gateway antes del commit local. Mantener la reparación de arranque v042r1 y el acceso único de Wallet. No modificar claves, vínculos, SQL, URLs públicas ni identidades Apple/Google. Guía: docs/lumina-solicitudes-sin-red-v043.md.
+
+
+## Registro integrado y Wallet automática v044
+
+Al registrar un negocio en Lúmina, el servidor prepara un tenant propio y una sucursal Principal con los datos conocidos. No exigir asociación manual, credencial Loyalty ni aprobación administrativa para Wallet y equipo. La validación comercial del registro sigue siendo independiente de la activación del espacio. Los permisos de colaboradores siguen siendo explícitos por área y sucursal.
+
+POST /api/platform/lumina/businesses es privado de plataforma e idempotente por UUID de company. V014 añade su relación persistente y contacto. La transacción y el bloqueo resuelven reintentos/concurrencia sin duplicar tenant. No inventar RUC, actividad, ubicación, promociones, clientes ni saldos. No buscar coincidencias por nombre, cédula o RUC para asociar demos. Mantener intactos los vínculos previos. Ante caída del motor, conservar la cuenta y reintentar al abrir Wallet.
+
+SQLite v3 cambia wallet_access a clave compuesta cuenta+negocio para permitir acceso separado de la agencia a cada cliente. Respaldar de forma privada antes de migrar y copiar ciphertext, staff_id, request_id y estado sin rotarlos. Mantener las claves existentes. El contexto elegido se valida en cada operación y pertenece a la agencia o al negocio autenticado; no guardarlo como selección global de sesión. El QR queda limitado al mismo negocio. La interfaz de personal se administra desde Lúmina; el proxy no expone emisión de credenciales al navegador.
+
+El recorrido normal no abre el panel nativo de plataforma ni el archivo de credenciales demo. access.html se reemplaza por un enlace a Lúmina sin secretos; la actualización conserva los datos de prueba históricos que puedan tener tarjetas. Los endpoints públicos de tarjetas siguen funcionando sin cambios. V001–V013, SQLite schema.sql/002, claves, túneles, seriales, Google class/object IDs, tokens, QR, saldos y presentationVersion=34 permanecen intactos.
+
+Gate Mac: 43 contratos portal, 280 unitarias/HTTP + 300 PostgreSQL = 580, 128 Python, Docker y 114 rutas gateway antes de commit local; sin push. Compilación nativa, validación visual y teléfonos se informan por separado. Guía: docs/lumina-wallet-automatica-v044.md.
+
+
+## Corrección de expectativas PostgreSQL v044r1
+
+La evidencia de v044 confirmó 280 unitarias aprobadas, 294/300 PostgreSQL aprobadas y las seis pruebas nuevas de LuminaRegistrationPostgresTest aprobadas. Seis pruebas heredadas todavía esperaban 13 filas en comeback_migrations aunque V014 ya se aplica correctamente.
+
+Actualizar solo la expectativa a 14 (14L para getLong) en ManagementPostgresTest, OperationsPostgresTest, CommercialPostgresTest, PromotionLifecyclePostgresTest, EngagementPostgresTest y WalletFirstPostgresTest. No eliminar aserciones, saltar pruebas, reducir conteos ni cambiar migraciones para satisfacer una expectativa antigua. Conservar todas las comprobaciones posteriores de credenciales, permisos, datos, promociones y saldos. Buscar referencias a comeback_migrations en todos los paquetes de pruebas cuando se añada una migración; no limitar la búsqueda a businesses.
+
+La revisión no cambia código de producción ni SQL respecto de v044. El instalador es acumulativo y admite el estado anterior restaurado por el fallo. Mantener los 580 casos nativos, 43 del portal, 128 Python y gates Docker/gateway antes del commit local. El resultado previo no constituye un PASS completo.

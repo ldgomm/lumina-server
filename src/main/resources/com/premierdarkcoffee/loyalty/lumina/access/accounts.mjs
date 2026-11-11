@@ -174,7 +174,6 @@ function issueActivation(db, accountId) {
 }
 export function createTeamMember(db, actor, input) {
   requireOwner(actor);
-  requireThat(actor.approved, 'Lúmina debe verificar el negocio antes de crear accesos.', 409);
   const name = text(input.name,'nombre',2,100);
   const email = emailAddress(input.email);
   return db.transaction(() => {

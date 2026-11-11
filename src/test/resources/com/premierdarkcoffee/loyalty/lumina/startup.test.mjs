@@ -59,8 +59,8 @@ test('arranque real con .env generado por staging conserva clave, sesión y cred
     const luminaPort=await freePort();process=launch(f,luminaPort,port);await process.ready;
     const origin='http://127.0.0.1:'+luminaPort;
     assert.equal((await fetch(origin+'/salud')).status,200);
-    const response=await fetch(origin+'/wallet-api/api/platform/overview',{headers:{Cookie:'lumina_session='+session,'X-Lumina-CSRF':csrf}});
-    assert.equal(response.status,200);assert.equal((await response.json()).businesses[0].id,loyalty.business.id);
+    const response=await fetch(origin+'/wallet-api/api/platform/wallet/status',{headers:{Cookie:'lumina_session='+session,'X-Lumina-CSRF':csrf}});
+    assert.equal(response.status,200);assert.equal((await response.json()).configuration.apple,'CONFIGURED_DEVICE_TEST_REQUIRED');
     assert.ok(loyalty.calls.some(call=>call.role==='PLATFORM'));
     assert.ok(!process.output().includes(token),'La credencial no se imprime.');
     await stop(process);process=null;

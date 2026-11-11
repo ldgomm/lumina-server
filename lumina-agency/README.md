@@ -18,3 +18,5 @@ Wallet está en /wallet y usa la sesión de Lúmina y los permisos asignados. El
 Las solicitudes y la cortesía no eligen redes sociales. La plataforma se registra junto con la publicación y sus métricas. Consulta docs/lumina-solicitudes-sin-red-v043.md.
 
 Consulta docs/arquitectura-modular.md para el mapa del proyecto y sus límites.
+
+El alta crea automáticamente el Wallet del negocio y su sucursal principal. La agencia abre cada cliente desde Lúmina; no se ofrecen demos ni se solicitan otras credenciales. Guía: docs/lumina-wallet-automatica-v044.md.

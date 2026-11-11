@@ -7,12 +7,14 @@ import { cashierAssets } from '../../../../../../main/resources/com/premierdarkc
 import { close, listen } from './helpers.mjs';
 
 export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
-  const business = {id:uuid(),name:'Negocio conectado',slug:'negocio-conectado',timezone:'America/Guayaquil',currency:'USD'};
+  const business = {id:uuid(),name:'Café Loyalty · Demo',slug:'negocio-conectado',timezone:'America/Guayaquil',currency:'USD'};
   const other = {id:uuid(),name:'Otro Loyalty',slug:'otro-loyalty',timezone:'America/Guayaquil',currency:'USD'};
   const branch = {id:uuid(),name:'Sucursal Centro',code:'CENTRO'};
   const secondBranch = {id:uuid(),name:'Sucursal Norte',code:'NORTE'};
   const foreignBranch = {id:uuid(),name:'Otra sucursal',code:'OTRA'};
   const branches = new Map([[business.id,[branch,secondBranch]],[other.id,[foreignBranch]]]);
+  const businesses=new Map([[business.id,business],[other.id,other]]),registrations=new Map();
+  let dropRegistration=false,unavailable=false;
   const staff = new Map();
   const tokens = new Map();
   const calls = [];
@@ -41,18 +43,34 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
   const server = createServer(async (req,res)=>{
     const path = new URL(req.url,'http://127.0.0.1').pathname;
     const asset = path.slice(1);
+    if(req.method==='GET' && /^\/api\/public\/[a-z0-9-]+\/qr$/.test(path)){
+      const slug=path.split('/')[3];if(![...businesses.values()].some(b=>b.slug===slug))return fail(res,404,'NOT_FOUND');
+      res.writeHead(200,{'Content-Type':'image/png'});return res.end('fixture QR '+slug);
+    }
     if (req.method==='GET' && webFolder && Object.hasOwn(cashierAssets,asset)) {
       res.writeHead(200,{'Content-Type':cashierAssets[asset]});
       return res.end(readFileSync(join(webFolder,asset)));
     }
     if(req.headers.authorization==='Bearer '+platformToken && path.startsWith('/api/platform/')) {
       calls.push({path,method:req.method,role:'PLATFORM'});
+      if(path==='/api/platform/lumina/businesses'&&req.method==='POST'){
+        let body='';for await(const chunk of req)body+=chunk;const data=JSON.parse(body);
+        if(unavailable)return fail(res,503,'UNAVAILABLE');
+        let entry=registrations.get(data.companyId);const replayed=Boolean(entry);
+        if(!entry){
+          entry={id:uuid(),name:data.name,slug:'lumina-'+data.companyId.replaceAll('-',''),currency:'USD',timezone:'America/Guayaquil'};
+          businesses.set(entry.id,entry);registrations.set(data.companyId,entry);
+          branches.set(entry.id,[{id:uuid(),name:'Principal',code:'PRINCIPAL'}]);
+        }
+        if(dropRegistration){dropRegistration=false;return res.destroy();}
+        return json(res,201,{companyId:data.companyId,business:entry,replayed});
+      }
       if(path==='/api/platform/wallet/status')return json(res,200,{configuration:{apple:'CONFIGURED_DEVICE_TEST_REQUIRED',google:'CONFIGURED_DEVICE_TEST_REQUIRED'},passes:1});
       if(path==='/api/platform/overview')return json(res,200,{businesses:[{...business,clients:1,branches:2,state:'ACTIVE'}],summary:{businesses:1}});
       if(path==='/api/platform/tenants')return json(res,200,{items:[business,other]});
       const match=path.match(/^\/api\/platform\/tenants\/([^/]+)\/(branches|credentials|team)(?:\/([^/]+)\/actions)?$/);
       if(match) {
-        const company=[business,other].find(b=>b.id===match[1]);if(!company)return fail(res,404,'NOT_FOUND');
+        const company=businesses.get(match[1]);if(!company)return fail(res,404,'NOT_FOUND');
         if(match[2]==='branches')return json(res,200,{business:company,branches:branches.get(company.id)});
         if(req.method==='GET'&&match[2]==='team')return json(res,200,{users:[...staff.values()].filter(u=>u.company.id===company.id).map(({token,company,requestId,...row})=>row)});
         let body='';for await(const chunk of req)body+=chunk;const data=JSON.parse(body);
@@ -138,6 +156,7 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
   });
   const origin = await listen(server);
   t.after(()=>close(server));
-  return {origin,ownerToken,foreignToken,platformToken,branch,secondBranch,foreignBranch,staff,calls,business,
+  return {origin,ownerToken,foreignToken,platformToken,branch,secondBranch,foreignBranch,staff,calls,business,businesses,branches,registrations,
+    loseRegistrationResponse:()=>{dropRegistration=true;},registrationUnavailable:value=>{unavailable=value;},
     loseCreateResponse:()=>{dropNextCreate = true;}};
 }

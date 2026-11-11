@@ -123,7 +123,12 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         limit(db,path+':'+req.socket.remoteAddress,path==='/entrar' ? 50 : 16);
         const data = await readForm(req);
         if (path==='/entrar') return startSession(await authenticate(db,data));
-        if (path==='/registro') return startSession(await register(db,key,data));
+        if (path==='/registro') {
+          const account=await register(db,key,data);
+          const created=db.get('SELECT company_id FROM accounts WHERE id=?',account);
+          try{await wallets.ensureCompany(created.company_id);}catch{} // Account survives an outage; opening Wallet retries the durable registration.
+          return startSession(account);
+        }
         if (path==='/activar') return startSession(await activate(db,data));
         return startSession(await createAgency(db,data));
       }
@@ -138,19 +143,23 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         actor=getSession(db,cookie);
         requireThat(actor,'Tu sesión terminó. Ingresa nuevamente.',401);
         requireThat(equal(actor.csrf,req.headers['x-lumina-csrf']),'Tu sesión de Wallet cambió. Abre de nuevo Wallet.',403);
+        if(req.headers['x-lumina-company'])actor={...actor,wallet_company:req.headers['x-lumina-company']};
         const result=await wallets.proxy(actor,path.slice('/wallet-api'.length),{method,body,query:target.search,key:req.headers['idempotency-key']});
         return send(res,result.status,result.bytes,result.type);
       }
       if (method==='GET' && (path.startsWith('/wallet/art/') || path.startsWith('/wallet/brand/') || /^\/api\/public\/[a-z0-9-]+\/qr$/.test(path))) {
+        if(target.searchParams.has('empresa')){actor={...actor,wallet_company:target.searchParams.get('empresa')};target.searchParams.delete('empresa');}
         const result=await wallets.artwork(actor,path,target.search);return send(res,200,result.bytes,result.type);
       }
       if (method==='GET' && path.startsWith('/loyalty-assets/')) {
         const name=path.slice('/loyalty-assets/'.length);
         return send(res,200,await wallets.asset(actor,name),cashierAssets[name]);
       }
-      if (method==='GET' && ['/platform','/wallet/gestion'].includes(path)) {
-        requireThat(path==='/platform'?actor.kind==='AGENCY':actor.kind!=='AGENCY','Este acceso corresponde a otra área.',403);
-        const sections=walletSections(actor);
+      if(method==='GET' && path==='/platform')return redirect(res,'/wallet');
+      if (method==='GET' && path==='/wallet/gestion') {
+        company=companyFor(db,actor,target.searchParams.get('empresa'));
+        actor={...actor,wallet_company:company.id};
+        const sections=walletSections(actor.kind==='AGENCY'?{...actor,kind:'OWNER'}:actor);
         requireThat(actor.kind!=='COLLABORATOR'||sections.length,'Tu cuenta no tiene áreas operativas de Wallet.',403);
         const section=target.searchParams.get('seccion')||(actor.kind==='COLLABORATOR'?sections[0]:'design');
         requireThat(actor.kind!=='COLLABORATOR'||sections.includes(section),'No tienes acceso a esta área de Wallet.',403);
@@ -162,11 +171,12 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return render({title:'Informes de fidelización',body:walletReportPage(JSON.parse(result.bytes))});
         }
         await wallets.validate(actor);
-        return send(res,200,loyaltyWorkspaceHtml(actor,section,actor.kind==='COLLABORATOR'?sections:null));
+        return send(res,200,loyaltyWorkspaceHtml(actor,section,actor.kind==='COLLABORATOR'?sections:null,company));
       }
       if (method==='GET' && /^\/join\/[a-z0-9-]+$/.test(path)) {
+        if(target.searchParams.has('empresa')){actor={...actor,wallet_company:target.searchParams.get('empresa')};target.searchParams.delete('empresa');}
         const dashboard=await wallets.validate(actor);
-        requireThat((actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&(can(actor,'WALLET_CUSTOMERS','EDIT')||!target.search&&can(actor,'WALLET_DESIGN'))) && path==='/join/'+dashboard.business.slug,'Negocio no encontrado.',404);
+        requireThat((actor.kind==='AGENCY'&&actor.wallet_company||actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&(can(actor,'WALLET_CUSTOMERS','EDIT')||!target.search&&can(actor,'WALLET_DESIGN'))) && path==='/join/'+dashboard.business?.slug,'Negocio no encontrado.',404);
         return redirect(res,loyaltyUrl+path+target.search);
       }
       if (api) {
@@ -196,23 +206,21 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         res.setHeader('Set-Cookie',sessionCookie('',trusted.protocol==='https:'));
         return redirect(res,'/');
       }
-      if (['/wallet/conectar','/wallet/desconectar','/equipo/loyalty/vincular'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
+      if (['/wallet/conectar','/wallet/desconectar','/equipo/loyalty/vincular','/wallet/vincular'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
       if(path==='/wallet/reparar'&&method==='POST'){requireAgency(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));await wallets.repair(actor,company,data);return redirect(res,'/wallet?empresa='+company.id);}
-      if(path==='/wallet/vincular'&&method==='POST') {
-        requireAgency(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));
-        await wallets.bind(actor,company,data);return redirect(res,'/wallet?empresa='+company.id);
-      }
       if (path==='/wallet' && method==='GET') {
         requireThat(can(actor,'WALLET'),'No tienes permiso para consultar Wallet.',403);
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
-        let information=null,error='',candidates=[];
-        const search=text(target.searchParams.get('buscar')||'','búsqueda',0,100);
+        let information=null,error='';
+        if(company)actor={...actor,wallet_company:company.id};
         if(actor.kind==='AGENCY'||actor.kind==='OWNER'||walletSections(actor).length)try{
           information=await wallets.summary(actor);
-          if(actor.kind==='AGENCY'&&company&&!company.loyalty_tenant)candidates=await wallets.candidates(actor,search);
+          if(company)company=companyFor(db,actor,company.id);
         }catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
-        return render({title:'Fidelización digital',description:'Apple Wallet, Google Wallet y Loyalty, con tu misma cuenta.',
-          body:walletPage({actor,company,data:information,error,candidates,search,blocked:actor.kind==='AGENCY'&&company?db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1",company.id):[]})});
+        const companies=actor.kind==='AGENCY'&&!company?db.all('SELECT id,name FROM companies ORDER BY name,id'):[];
+        const contact=company?db.get("SELECT a.name,a.email,c.phone FROM accounts a JOIN companies c ON c.id=a.company_id WHERE c.id=? AND a.kind='OWNER'",company.id):null;
+        return render({title:'Fidelización digital',description:'Wallet de tu negocio, integrado en Lúmina.',
+          body:walletPage({actor,company,contact,companies,data:information,error,blocked:actor.kind==='AGENCY'&&company?db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1",company.id):[]})});
       }
       if(path==='/proximamente'&&method==='GET') {
         requireThat(actor.kind!=='COLLABORATOR','Área no asignada.',403);
@@ -276,6 +284,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (actor.kind!=='AGENCY' || companyId) company = companyFor(db,actor,companyId);
       const url = pathFor(actor,company);
       if (path==='/inicio' && method==='GET') {
+        if(actor.kind==='OWNER'&&!company.loyalty_tenant){try{company=await wallets.ensureCompany(company.id);}catch{}}
         const groups = requestCounts(db,actor,company.id);
         const policy=requestAccessSql(actor);
         const videos=db.all(`SELECT r.quantity,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
