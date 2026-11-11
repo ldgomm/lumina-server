@@ -47,3 +47,9 @@ for(const form of document.querySelectorAll('form:has([name="term"])')) {
   const sync=()=>{for(const code of ['LOGO','IDENTITY','BRAND_GUIDE']){const field=form.elements[code];if(field){field.disabled=term.value==='MONTHLY';field.closest('label').hidden=field.disabled;}}};
   term.addEventListener('change',sync);sync();
 }
+
+for(const form of document.querySelectorAll('form:has([name="individual_service"])')) {
+  const service=form.querySelector('[name=individual_service]'),term=form.querySelector('[name=term]');
+  const sync=()=>{const brand=['LOGO','IDENTITY','BRAND_GUIDE'].includes(service.value);const monthly=term.querySelector('option[value=MONTHLY]');monthly.disabled=brand;if(brand)term.value='ONE_OFF';};
+  service.addEventListener('change',sync);sync();
+}

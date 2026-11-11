@@ -1,3 +1,4 @@
+import { priceGuide } from './request-composer.mjs';
 import { contentName } from '../../content/service-options.mjs';
 import { recordingForm } from './content-forms.mjs';
 import { can } from '../../access/accounts.mjs';
@@ -9,7 +10,7 @@ export function contentNav(url,view='resumen') {
   return `<nav class="module-tabs" aria-label="Módulo de contenido">${Object.entries(contentViews).map(([key,title])=>
     `<a href="${esc(url('/contenido',{vista:key}))}"${key===view?' aria-current="page"':''}>${title}</a>`).join('')}</nav>`;
 }
-export function contentPage({actor,company,url,data,metricsHtml=''}) {
+export function contentPage({actor,company,url,data,metricsHtml='',plans=[],contracts=[]}) {
   const {view,counts,rows}=data;
   const scope=actor.kind==='AGENCY'&&!company?'todos los negocios':'este negocio';
   const requestLink=row=>actor.kind==='AGENCY'?(actor.agencyWork||!company?'/agencia':'')+'/solicitudes/'+(row.request_id||row.id)+'?empresa='+row.company_id:'/solicitudes/'+(row.request_id||row.id);
@@ -38,7 +39,7 @@ export function contentPage({actor,company,url,data,metricsHtml=''}) {
   const stats=view==='resumen'?`<div class="metric-grid">${[['Solicitudes abiertas',counts.open,'solicitudes'],['En producción',counts.production,'produccion'],['Por aprobar',counts.review,'revisiones'],['Piezas entregadas',counts.delivered,'entregas']].map(([caption,value,target])=>
     `<a class="metric-card" href="${esc(url('/contenido',{vista:target,q:data.q}))}"><span>${caption}</span><strong>${value}</strong></a>`).join('')}</div>
     <p class="muted">Conteos de todas las solicitudes visibles de ${scope}${data.q?' que coinciden con la búsqueda':''}. ${counts.publications} publicaciones registradas; una pieza puede tener varias.</p>`:'';
-  const create=view==='solicitudes'&&company&&can(actor,'SOCIAL','REQUEST')?'<div class="content-form-wrap">'+card('Nueva solicitud de contenido',requestForm(actor,url,false,'SOCIAL',true),'Cuéntanos qué necesitas. Lúmina te ayuda a darle forma.')+'</div>' : '';
+  const create=view==='solicitudes'&&company&&can(actor,'SOCIAL','REQUEST')?'<div class="request-workspace">'+card('Nueva solicitud de contenido',requestForm(actor,url,false,'SOCIAL',true),'Cuéntanos qué necesitas. Lúmina te ayuda a darle forma.')+priceGuide(actor,url,'SOCIAL',plans,contracts)+'</div>' : '';
   const hero=view==='resumen'?`<section class="module-lead content-lead"><div><p class="eyebrow">MÓDULO DE CONTENIDO</p><h2>De la idea a la entrega.</h2><p>Una pieza, un historial. Coordina la producción, revisa los archivos y consulta el resultado de cada publicación.</p>
     ${company&&can(actor,'SOCIAL','REQUEST')?localLink(url('/contenido',{vista:'solicitudes'}),'Solicitar contenido','btn'):''}</div><ol class="content-flow"><li>Solicitud</li><li>Producción</li><li>Revisión</li><li>Entrega y resultados</li></ol></section>`:'';
   const recording=view==='agenda'&&company&&can(actor,'SOCIAL','REQUEST')?`<div class="actions">${localLink(url('/contenido/grabacion'),'Solicitar una grabación','btn')}</div>`:'';

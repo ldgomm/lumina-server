@@ -1,3 +1,4 @@
+import { composer, serviceChoices, requestCards } from './request-composer.mjs';
 import { contentOptions, contentName, compatibleContentQuota } from '../../content/service-options.mjs';
 import { canRequest } from '../../access/content-policy.mjs';
 import { can } from '../../access/accounts.mjs';
@@ -24,29 +25,8 @@ export function requestForm(actor,url,courtesy = false,selected='',onlySocial=fa
     ${input('title','¿Qué quieres mostrar en tu video?','text','required maxlength="150"')}
     ${textarea('brief','Cuéntanos tu idea','maxlength="4000" rows="3"')}
     ${button('Solicitar mi video gratis')}`);
-  if (onlySocial && !can(actor,'SOCIAL','REQUEST')) return '';
-  if (onlySocial) return form(url('/solicitudes'),actor,`
-    ${hidden('type','CONTENT')}${hidden('channel','SOCIAL')}
-    ${select('service','¿Qué necesitas?',contentOptions)}
-    ${input('title','¿Qué quieres mostrar o comunicar?','text','required maxlength="150" placeholder="Por ejemplo: presentar nuestro nuevo menú"')}
-    ${textarea('brief','Cuéntanos tu idea','maxlength="4000" rows="4" placeholder="Puedes describirlo con tus propias palabras."')}
-    <details class="request-extra"><summary>Necesito más de una pieza</summary>${input('quantity','Cantidad de piezas','number','min="1" max="100" required','1')}</details>
-    ${button('Enviar solicitud')}`);
-  const scopes = Object.keys(areas).filter(channel=>(!onlySocial||channel==='SOCIAL')&&can(actor,channel,'REQUEST'));
-  if (!scopes.length) return '';
-  const initial=scopes.includes(selected)?selected:scopes[0];
-  const serviceList = Object.fromEntries(scopes.map(channel=>[channel,channel==='SOCIAL'?contentOptions:formats[channel].map(service=>[service,services[service]])]));
-  const typeOptions = ['CONTENT',...(actor.kind==='COLLABORATOR' ? [] : ['QUOTE']),
-    ...(scopes.includes('SOCIAL') ? ['VISIT'] : [])];
-  return form(url('/solicitudes'),actor,`<div data-request-form data-formats="${esc(JSON.stringify(serviceList))}">
-    ${select('type','¿Qué necesitas?',by(typeOptions))}
-    <div class="fields two">${select('channel','Área del servicio',by(scopes),initial)}
-    ${select('service','Servicio',serviceList[initial])}</div>
-    <div class="fields two">${input('title','Título de la solicitud','text','required maxlength="150"')}
-    <div data-quantity>${input('quantity','Cantidad','number','min="1" max="100" required','1')}</div></div>
-    <div data-visit>${scheduleDate('preferred','Horario sugerido para la visita','')}</div>
-    ${textarea('brief','Indicaciones para Lúmina','maxlength="4000" rows="3"')}
-    ${button('Enviar solicitud')}</div>`);
+  if(onlySocial)return composer(actor,url,{area:'SOCIAL',onlySocial:true});
+  return Object.hasOwn(areas,selected)?composer(actor,url,{area:selected}):serviceChoices(actor,url);
 }
 export function homePage({actor,company,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash}) {
   const hasScopes = Object.keys(channels).some(channel=>can(actor,channel));
@@ -72,19 +52,17 @@ export function homePage({actor,company,url,groups,videoRequested,videoDelivered
       ${localLink(url('/planes'),'Ver paquetes','btn secondary')}`) : ''}
     ${!hasScopes && !cash ? card('Acceso pendiente',message('El dueño del negocio debe asignarte al menos un área.')) : ''}</div>`;
 }
-export function requestsPage({actor,url,rows,channel,page,more}) {
-  const filters = [['','Todas las áreas'],...Object.keys(areas).filter(key=>can(actor,key)).map(key=>[key,channels[key]])];
-  const list = table(['Solicitud','Área','Formato','Estado','Registro'],rows.map(row=>[
-    `${localLink(url('/solicitudes/'+row.id),row.title)}<div class="muted">${esc(label(row.type))}</div>`,
-    esc(label(row.channel)),`${esc(label(row.service))} · ${row.quantity}`,
-    badge(row.status,row.status==='DELIVERED' ? 'success' : ''),esc(timestamp(row.created_at)),
-  ]),'Todavía no hay solicitudes para este filtro.');
-  const pages = `<div class="actions">${page>0 ? localLink(url('/solicitudes',{canal:channel,pagina:page-1}),'← Anterior','btn secondary') : ''}
-    ${more ? localLink(url('/solicitudes',{canal:channel,pagina:page+1}),'Siguiente →','btn secondary') : ''}</div>`;
-  const create = requestForm(actor,url,false,socialChannels.includes(channel)?'SOCIAL':channel);
-  return `${create ? disclosure('Nueva solicitud',create) : ''}${card('Registro de solicitudes',
-    `<form action="${esc(url('/solicitudes').split('?')[0])}" class="filter">${actor.kind==='AGENCY' ? hidden('empresa',new URL(url('/solicitudes'),'http://localhost').searchParams.get('empresa')) : ''}
-    ${select('canal','Filtrar por área',filters,channel)}${button('Aplicar','secondary')}</form>${list}${pages}`)}`;
+export function requestsPage({actor,url,rows,channel,page,more,q='',state=''}) {
+  const filters=[['','Todas las áreas'],...Object.keys(areas).filter(key=>can(actor,key)).map(key=>[key,areas[key]])];
+  const states=[['','Todos los estados'],...['NEW','REVIEW','QUOTED','APPROVED','SCHEDULED','PRODUCTION','DELIVERED','CANCELLED'].map(key=>[key,label(key)])];
+  const query={canal:channel,q,estado:state};
+  const create=actor.kind!=='AGENCY'&&Object.keys(areas).some(key=>can(actor,key,'REQUEST'));
+  return `<section class="request-hub"><div><p class="eyebrow">TUS IDEAS EN MARCHA</p><h2>¿Qué hacemos hoy por tu negocio?</h2><p>Solicita un servicio y sigue cada avance, desde la idea hasta la entrega.</p></div>${create?localLink(url('/solicitudes/nueva'),'Nueva solicitud','btn'):''}</section>
+    ${create?`<details class="disclosure request-quick"><summary>Explorar servicios</summary><div>${serviceChoices(actor,url)}</div></details>`:''}
+    <section class="card"><div class="split"><h2>Tus solicitudes</h2><span class="muted">Hasta 30 por página</span></div>
+    <form action="${esc(url('/solicitudes').split('?')[0])}" class="request-filter">${actor.kind==='AGENCY'?hidden('empresa',new URL(url('/solicitudes'),'http://localhost').searchParams.get('empresa')):''}
+    ${input('q','Buscar solicitud','search','maxlength="100" placeholder="Nombre o idea…"',q)}${select('canal','Servicio',filters,channel)}${select('estado','Estado',states,state)}${button('Buscar','secondary')}</form>
+    ${requestCards(rows,url)}<div class="actions">${page>0?localLink(url('/solicitudes',{...query,pagina:page-1}),'← Anterior','btn secondary'):''}${more?localLink(url('/solicitudes',{...query,pagina:page+1}),'Siguiente →','btn secondary'):''}</div></section>`;
 }
 export function agendaPage(rows,url) {
   return card('Agenda de grabaciones',table(['Fecha y hora','Solicitud','Lugar','Estado','Grabación real'],rows.map(visit=>[
@@ -182,7 +160,9 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
   const admin = actor.kind==='AGENCY' && !actor.readOnlyCompany;
   const stateOptions = available[request.status].filter(state=>state!=='APPROVED' ||
     (company.approved && (!plan || plan.price_minor!==null)));
-  const details = card('Ficha de la solicitud',`<div class="tags">${badge(request.type)}${badge(request.channel)}${badge(request.status)}</div>
+  const step=({NEW:0,REVIEW:1,QUOTED:1,APPROVED:1,SCHEDULED:1,PRODUCTION:2,DELIVERED:3})[request.status];
+  const timeline=step===undefined||request.type==='VISIT'?'':`<ol class="request-timeline" aria-label="Avance de la solicitud">${['Recibida','Coordinación','Producción','Entrega'].map((name,index)=>`<li${index===step?' aria-current="step"':''}><span>${index<step?'✓':index+1}</span>${name}</li>`).join('')}</ol>`;
+  const details = timeline+card('Ficha de la solicitud',`<div class="tags">${badge(request.type)}${badge(request.channel)}${badge(request.status)}</div>
     <p>${esc(request.channel==='SOCIAL'&&actor.kind!=='AGENCY'?contentName(request.service):label(request.service))} · Cantidad ${request.quantity} · Recibida ${esc(timestamp(request.created_at))}</p>
     <p class="prewrap">${esc(request.brief)}</p>
     ${admin && stateOptions.length ? disclosure('Cambiar estado',form(base('/estado'),actor,

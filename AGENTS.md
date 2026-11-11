@@ -456,3 +456,16 @@ Las instrucciones de esta sección sustituyen los permisos administrativos de Wa
 - La Terminal del instalador/checkpoint imprime únicamente RESULTADO=... una vez. Detalles en evidencia; log de arranque privado y excluido del ZIP. No inferir PASS de reportes ausentes ni omitir gates para silenciar salida.
 - Gate del portal: diez suites, al menos 68 pruebas sin omisiones. Gate Python: al menos 130. Se mantienen 580 casos nativos y 114 checks del gateway. Commit local solo tras PASS completo; nunca push.
 - Ver docs/lumina-contenido-accesos-v046.md. No cambiar migraciones SQLite/PostgreSQL ni archivos privados por esta actualización.
+
+
+## Lúmina v008 / Loyalty v047 — recorrido del cliente
+
+- `/wallet` abre directamente el módulo operativo para el dueño, o la primera sección autorizada del colaborador. Caja sin otras áreas abre `/caja`. La agencia mantiene su consulta de solo lectura. No mostrar una página de presentación antes del módulo.
+- Volver a Lúmina regresa a `/inicio`. Recuperación de accesos bloqueados disponible en `/wallet/accesos` desde Equipo, solo para el dueño. Un error al abrir Wallet muestra reintento y reparación explícita; nunca reinicia claves, vínculos o tarjetas.
+- Contenido conserva su módulo propio y comparte estilos de navegación con el portal en `experience.css`. Los selectores de la barra lateral deben estar acotados; no ocultar la navegación interior de las páginas en móvil.
+- Catálogo con individuales, paquetes, mensual y pago único. Cantidades combinables. Cada precio procede de una oferta publicada; no sembrar tarifas comerciales ficticias. `null` significa por cotizar, no gratis. Precio promedio por unidad solo como referencia aproximada en paquetes de un único servicio; nunca repartir arbitrariamente el precio de un paquete mixto.
+- Publicación individual guarda exactamente una unidad del servicio. Una nueva tarifa crea una oferta nueva; no reescribir propuestas ni acuerdos históricos. Marca sigue siendo ONE_OFF. Wallet de cortesía describe trabajo comercial, no activación del tenant.
+- Solicitud guiada por servicio, tres formatos sociales, sin redes. Precio y cupos solo para dueño, sin filtrar contratos al colaborador. Error de validación conserva campos escapados. Búsqueda/estado se aplican antes de paginación y dentro de permisos/negocio.
+- Gate: once suites del portal, al menos 80 pruebas sin omisiones; 130 Python; 580 nativas; Docker y 114 comprobaciones gateway. Commit local solo con PASS completo, sin push. Terminal: una línea RESULTADO.
+- `scripts/ui/lumina-experience.spec.mjs` verifica 320/390/1024/1440 px, filtros, selección combinada, formularios y menú con datos ficticios. No equiparar pruebas HTTP con revisión visual real. Informar navegador/dispositivos por separado.
+- SQLite v4 y todas las migraciones se conservan. Guía: `docs/lumina-experiencia-v047.md`.

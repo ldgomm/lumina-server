@@ -16,7 +16,8 @@ test('registrar negocio prepara Wallet propio y contacto sin verificación manua
  const {loyalty,world}=await setup(t);const {client,id}=await owner(world,'Panadería Sol','1');
  const company=world.db.get('SELECT * FROM companies WHERE id=?',id);assert.equal(company.approved,0);assert.ok(company.loyalty_tenant);assert.notEqual(company.loyalty_tenant,loyalty.business.id);
  assert.equal(loyalty.registrations.size,1);assert.equal(loyalty.branches.get(company.loyalty_tenant).length,1);
- const view=await client.get('/wallet');assert.equal(view.status,200);assert.match(view.body,/Wallet activa/);assert.match(view.body,/negocio1@example.test/);assert.match(view.body,/0991234567/);
+ const view=await client.get('/wallet');assert.equal(view.status,200);assert.match(view.body,/<body class="lumina-loyalty">/);assert.match(view.body,/Panadería Sol/);assert.match(view.body,/name="lumina-wallet-back" content="\/inicio"/);
+ assert.equal(world.db.get("SELECT email FROM accounts WHERE company_id=? AND kind='OWNER'",id).email,'negocio1@example.test');assert.equal(world.db.get('SELECT phone FROM companies WHERE id=?',id).phone,'0991234567');
  assert.doesNotMatch(view.body,/Asociar negocio|Café Loyalty|Registro de Loyalty|name="credential"/);
  const dashboard=JSON.parse((await client.get('/wallet-api/api/staff/dashboard')).body);assert.equal(dashboard.business.name,'Panadería Sol');assert.deepEqual(dashboard.programs,[]);assert.deepEqual(dashboard.rewards,[]);
  const member=await colleague(world,client,{name:'Caja principal',email:'caja-auto@example.test'});
@@ -38,7 +39,7 @@ test('la caída del servicio conserva la cuenta y reintenta sin pedir asociació
  const {loyalty,world}=await setup(t);loyalty.registrationUnavailable(true);
  const {client,id}=await owner(world,'Registro pendiente','3');
  assert.equal(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant,null);
- const pending=await client.get('/wallet');assert.match(pending.body,/Preparando tu Wallet/);assert.doesNotMatch(pending.body,/Wallet activa|Asociar negocio/);
+ const pending=await client.get('/wallet');assert.equal(pending.status,503);assert.match(pending.body,/No pudimos abrir Wallet/);assert.match(pending.body,/Volver a intentar/);assert.doesNotMatch(pending.body,/Wallet activa|Asociar negocio/);
  loyalty.registrationUnavailable(false);assert.equal((await client.get('/wallet')).status,200);
  assert.ok(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant);assert.equal(loyalty.registrations.size,1);
 });

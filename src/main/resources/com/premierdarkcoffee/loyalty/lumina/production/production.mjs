@@ -7,12 +7,13 @@ import { channels, areas, choice, event, formats, httpsUrl, integer, localInstan
 const productionStates = ['APPROVED','SCHEDULED','PRODUCTION'];
 const finalStates = ['DELIVERED','CANCELLED'];
 
-export function visibleRequests(db, actor, companyId, channel, page = 0) {
+export function visibleRequests(db, actor, companyId, channel, page = 0, {q='',state=''} = {}) {
   if (channel) requireThat(Object.hasOwn(channels,channel) && can(actor,channel),'Tu acceso no incluye esa área.',403);
   const policy=requestAccessSql(actor);
   const area=socialChannels.includes(channel)?'SOCIAL':channel;
-  const filter="(?='' OR r.channel=?)";
-  const values=[area||'',area||''];
+  requireThat(!state||['NEW','REVIEW','QUOTED','APPROVED','SCHEDULED','PRODUCTION','DELIVERED','CANCELLED'].includes(state),'Estado inválido.');
+  const filter="(?='' OR r.channel=?) AND (?='' OR r.status=?) AND (?='' OR instr(lower(r.title||' '||r.brief),lower(?))>0)";
+  const values=[area||'',area||'',state,state,q,q];
   const rows=db.all(`SELECT r.*,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
     FROM requests r WHERE r.company_id=? AND ${policy.sql} AND ${filter}
     ORDER BY r.created_at DESC,r.id LIMIT 31 OFFSET ?`,companyId,...policy.params,...values,page*30);

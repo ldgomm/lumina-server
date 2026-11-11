@@ -21,7 +21,7 @@ test('navegación unifica redes y mantiene servicios, cartera, agenda y Wallet',
 });
 test('dueño accede sin credenciales y mantiene el mismo acceso después de cerrar y volver a ingresar',async t=>{
  const {client,loyalty,world}=await context(t);
- const page=await client.get('/wallet');assert.equal(page.status,200);assert.match(page.body,/Diseño de tarjetas/);assert.doesNotMatch(page.body,/name="credential"|Conecta el Wallet/);
+ const page=await client.get('/wallet');assert.equal(page.status,200);assert.match(page.body,/<body class="lumina-loyalty">/);assert.doesNotMatch(page.body,/name="credential"|Conecta el Wallet/);
  const row=world.db.get('SELECT * FROM wallet_access');assert.equal(row.status,'ACTIVE');const token=loyalty.staff.get(row.staff_id).token;
  for(const path of ['/wallet','/wallet/gestion?seccion=design','/equipo']){const view=await client.get(path);assert.equal(view.status,200);assert.ok(!view.body.includes(token));assert.ok(!view.body.includes(loyalty.platformToken));assert.doesNotMatch(view.body,/name="credential"/);}
  assert.ok(!JSON.stringify(world.db.all('SELECT * FROM wallet_access')).includes(token));
@@ -54,7 +54,7 @@ test('alta automática usa un negocio propio y retira la asociación manual al d
 test('colaborador solo ve áreas asignadas y no hereda edición, Caja ni administración',async t=>{
  const {client,world}=await context(t);
  const member=await colleague(world,client,{name:'Diseño',email:'design@example.test','WALLET.VIEW':'yes','WALLET_DESIGN.VIEW':'yes'});
- const page=await member.session.get('/wallet');assert.match(page.body,/Diseño de tarjetas/);assert.doesNotMatch(page.body,/href="\/wallet\/gestion\?seccion=(customers|programs|reports)"/);
+ const page=await member.session.get('/wallet');assert.match(page.body,/name="lumina-wallet-section" content="design"/);assert.match(page.body,/content="\[&quot;design&quot;,&quot;qr&quot;\]"/);assert.doesNotMatch(page.body,/href="\/wallet\/gestion\?seccion=(customers|programs|reports)"/);
  assert.equal((await member.session.get('/wallet/gestion?seccion=design')).status,200);
  assert.equal((await member.session.get('/wallet/gestion?seccion=customers')).status,403);
  assert.equal((await member.session.get('/wallet-api/api/staff/wallet-design')).status,200);

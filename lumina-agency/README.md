@@ -22,3 +22,5 @@ Consulta docs/arquitectura-modular.md para el mapa del proyecto y sus límites.
 El alta crea automáticamente el Wallet del negocio y su sucursal principal. La agencia abre cada cliente desde Lúmina; no se ofrecen demos ni se solicitan otras credenciales. Guía: docs/lumina-wallet-automatica-v044.md.
 
 Contenido abre su módulo en `/contenido`: solicitudes, producción, aprobación, entregas, publicaciones, métricas y grabaciones. `/planes` permite combinar paquetes mensuales y trabajos puntuales en una sola propuesta con precios y cupos separados. El dueño acepta la versión vigente y la agencia activa los acuerdos; la renovación es explícita, sin cobro automático. Guía actual: docs/lumina-contenido-paquetes-v045.md.
+
+Wallet abre directamente su módulo. Catálogo y solicitudes usan el recorrido v047: consulta docs/lumina-experiencia-v047.md. Los precios deben publicarse por la agencia, individualmente o en paquetes; nunca se inventan tarifas.

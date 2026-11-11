@@ -23,11 +23,14 @@ import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace, comin
 import { contentData } from '../content/workspace.mjs';
 import { contentShell } from '../presentation/pages/content-shell.mjs';
 import { recordingForm } from '../presentation/pages/content-forms.mjs';
+import { newRequestPage } from '../presentation/pages/request-composer.mjs';
 import { contentPage } from '../presentation/pages/content-pages.mjs';
 import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs';
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/experience.css': ['experience.css','text/css; charset=utf-8'],
+  '/assets/requests.js': ['requests.js','text/javascript; charset=utf-8'],
   '/assets/content.css': ['content.css','text/css; charset=utf-8'],
   '/assets/modules.css': ['modules.css','text/css; charset=utf-8'],
   '/assets/packages.js': ['packages.js','text/javascript; charset=utf-8'],
@@ -111,7 +114,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       path = target.pathname;
       const method = req.method;
       api = path.startsWith('/api/') || path.startsWith('/wallet-api/');
-      securityHeaders(res,['/caja','/platform','/wallet/gestion'].includes(path));
+      securityHeaders(res,['/caja','/platform','/wallet','/wallet/gestion'].includes(path));
       requireThat(['GET','POST'].includes(method) || path.startsWith('/wallet-api/') && ['PUT','DELETE'].includes(method),'Método no permitido.',405);
       if (method!=='GET') requireThat(req.headers.origin === origin,'Esta acción requiere el formulario del portal.',403);
       if (method==='GET' && Object.hasOwn(sourceAssets,path)) {
@@ -177,13 +180,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return send(res,200,await wallets.asset(actor,name),cashierAssets[name]);
       }
       if(method==='GET' && path==='/platform')return redirect(res,'/wallet');
-      if (method==='GET' && path==='/wallet/gestion') {
+      if (method==='GET' && (path==='/wallet/gestion' || path==='/wallet' && actor.kind!=='AGENCY' && (walletSections(actor).length || cash))) {
+        if(actor.kind==='COLLABORATOR'&&!walletSections(actor).length&&cash)return redirect(res,'/caja');
         requireThat(actor.kind!=='AGENCY','La agencia solo puede consultar Wallet desde la ficha del negocio.',403);
         company=companyFor(db,actor,target.searchParams.get('empresa'));
         actor={...actor,wallet_company:company.id};
         const sections=walletSections(actor);
         requireThat(actor.kind!=='COLLABORATOR'||sections.length,'Tu cuenta no tiene áreas operativas de Wallet.',403);
-        const section=target.searchParams.get('seccion')||(actor.kind==='COLLABORATOR'?sections[0]:'design');
+        const section=target.searchParams.get('seccion')||(actor.kind==='COLLABORATOR'?sections[0]:path==='/wallet'?'overview':'design');
         requireThat(actor.kind!=='COLLABORATOR'||sections.includes(section),'No tienes acceso a esta área de Wallet.',403);
         if(actor.kind==='COLLABORATOR'&&section==='reports') {
           const days=target.searchParams.get('dias')||'30';requireThat(['7','30','90','365'].includes(days),'Período inválido.');
@@ -192,7 +196,13 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           requireThat(result.status===200,'No se pudo consultar el informe.',result.status);
           return render({title:'Informes de fidelización',body:walletReportPage(JSON.parse(result.bytes))});
         }
-        await wallets.validate(actor);
+        try { await wallets.validate(actor); }
+        catch(issue) {
+          if(!(issue instanceof Problem))throw issue;
+          const blocked=actor.kind==='OWNER'?db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[];
+          return render({title:'Abrir Wallet',body:walletPage({actor,company,error:issue.status>=500?'Wallet no está disponible en este momento. Tu cuenta y tus tarjetas se conservan. Vuelve a intentarlo en unos minutos.':issue.message,blocked})},issue.status);
+        }
+        company=companyFor(db,actor,company.id);
         return send(res,200,loyaltyWorkspaceHtml(actor,section,actor.kind==='COLLABORATOR'?sections:null,company));
       }
       if (method==='GET' && /^\/join\/[a-z0-9-]+$/.test(path)) {
@@ -233,6 +243,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return redirect(res,'/');
       }
       if (['/wallet/conectar','/wallet/desconectar','/equipo/loyalty/vincular','/wallet/vincular'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
+      if(path==='/wallet/accesos'&&method==='GET') {
+        requireOwner(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));
+        const blocked=db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id);
+        return render({title:'Accesos de Wallet',body:walletPage({actor,company,blocked})});
+      }
       if(path==='/wallet/reparar'&&method==='POST'){requireOwner(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));await wallets.repair(actor,company,data);return redirect(res,'/wallet');}
       if (path==='/wallet' && method==='GET') {
         requireThat(can(actor,'WALLET'),'No tienes permiso para consultar Wallet.',403);
@@ -289,7 +304,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const data=contentData(db,actor,company,target.searchParams);
         const metricsHtml=data.view==='metricas'&&company?metricsPage(actor,url,analytics(db,actor,company.id,
           {from:target.searchParams.get('desde'),to:target.searchParams.get('hasta')}),'/contenido'):'';
-        return render({layout:'content',contentView:data.view,title:data.view==='resumen'?'Tu espacio de contenido':data.title,description:'De la idea a la entrega, en un solo lugar.',body:contentPage({actor,company,url,data,metricsHtml})});
+        return render({layout:'content',contentView:data.view,title:data.view==='resumen'?'Tu espacio de contenido':data.title,description:'De la idea a la entrega, en un solo lugar.',body:contentPage({actor,company,url,data,metricsHtml,plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'&&company?contractsFor(db,company.id):[]})});
       }
       if(method==='GET'&&path.startsWith('/servicios/')) {
         const channel=path==='/contenido'?'SOCIAL':path.slice('/servicios/'.length).toUpperCase();
@@ -342,7 +357,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (path==='/equipo' && method==='GET') {
         return render({title:'Equipo y accesos',description:'Asigna áreas, tareas y permisos de Caja por persona.',
-          body:teamPage(actor,company,teamList(db,actor))});
+          body:teamPage(actor,company,teamList(db,actor))+card('Accesos internos de Wallet',localLink('/wallet/accesos','Revisar accesos bloqueados','btn secondary'))});
       }
       if (path==='/equipo' && method==='POST') {
         const result = createTeamMember(db,actor,data);
@@ -371,17 +386,30 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return redirect(res,'/equipo/'+id);
         }
       }
+      if(path==='/solicitudes/nueva'&&method==='GET') {
+        requireThat(actor.kind!=='AGENCY','Las solicitudes las realiza el negocio.',403);
+        const area=target.searchParams.get('area')||'';
+        requireThat(!area||Object.hasOwn(areas,area),'Servicio no disponible.',404);
+        if(area)requireAccess(actor,area,'REQUEST');
+        return render({layout:area==='SOCIAL'?'content':undefined,contentView:'solicitudes',title:'Nueva solicitud',description:'Elige un servicio y cuéntanos tu idea.',body:newRequestPage({actor,url,area,plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'?contractsFor(db,company.id):[]})});
+      }
       if (path==='/solicitudes') {
         if (method==='POST') {
-          const id = createRequest(db,actor,company,data);
-          return redirect(res,url('/solicitudes/'+id));
+          try {
+            const id = createRequest(db,actor,company,data);
+            return redirect(res,url('/solicitudes/'+id));
+          } catch(issue) {
+            if(!(issue instanceof Problem)||![400,409].includes(issue.status)||actor.kind==='AGENCY'||!Object.hasOwn(areas,data.channel)||!can(actor,data.channel,'REQUEST')||['COURTESY','PLAN'].includes(data.type))throw issue;
+            return render({layout:data.channel==='SOCIAL'?'content':undefined,contentView:'solicitudes',title:'Revisa tu solicitud',body:newRequestPage({actor,url,area:data.channel,plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'?contractsFor(db,company.id):[],values:data,error:issue.message})},issue.status);
+          }
         }
         requireThat(Object.keys(channels).some(key=>can(actor,key)),'Tu acceso no incluye solicitudes de marketing.',403);
         const channel = target.searchParams.get('canal') || '';
         const currentPage = integer(target.searchParams.get('pagina') || '0','página',{max:10000});
-        const items = visibleRequests(db,actor,company.id,channel,currentPage);
+        const q=text(target.searchParams.get('q')||'','búsqueda',0,100),state=target.searchParams.get('estado')||'';
+        const items = visibleRequests(db,actor,company.id,channel,currentPage,{q,state});
         return render({title:'Solicitudes',description:'Cotizaciones, contenido y visitas de tu negocio.',
-          body:requestsPage({actor,url,...items,channel,page:currentPage})});
+          body:requestsPage({actor,url,...items,channel,page:currentPage,q,state})});
       }
       const requestMatch = path.match(/^\/solicitudes\/([^/]+)(.*)$/);
       if (requestMatch && isId(requestMatch[1])) {

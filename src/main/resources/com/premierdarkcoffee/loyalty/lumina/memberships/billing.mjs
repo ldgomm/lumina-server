@@ -12,6 +12,10 @@ export function getPlan(db, id) {
 }
 export function createPlan(db, actor, data) {
   requireAgency(actor);
+  if(data.offer_kind==='INDIVIDUAL') {
+    const selected=choice(data.individual_service,Object.keys(services),'servicio individual');
+    data={...data,...Object.fromEntries(Object.keys(services).map(service=>[service,'0'])),[selected]:'1',wallet:selected==='WALLET'?'INCLUDED':'NONE'};
+  } else if(data.offer_kind)choice(data.offer_kind,['BUNDLE'],'tipo de oferta');
   const name = text(data.name, 'nombre del plan', 2, 100);
   const term = choice(data.term, ['MONTHLY','ONE_OFF'], 'tipo de plan');
   const wallet = choice(data.wallet, ['NONE','INCLUDED','GIFT'], 'inclusión de Wallet');

@@ -1,28 +1,48 @@
 'use strict';
-for(const form of document.querySelectorAll('.package-selection')) {
-  const summary=form.querySelector('[data-package-totals]');
+for(const catalog of document.querySelectorAll('.catalog-layout')) {
+  const cards=[...catalog.querySelectorAll('[data-package]')];
+  const filters=catalog.querySelector('[data-catalog-filters]');
+  if(filters){
+    filters.hidden=false;
+    const filter=()=>{
+      let count=0;
+      for(const card of cards){
+        card.hidden=!!(filters.querySelector('[name=catalog_kind]').value&&card.dataset.kind!==filters.querySelector('[name=catalog_kind]').value||filters.querySelector('[name=catalog_area]').value&&!card.dataset.areas.split(' ').includes(filters.querySelector('[name=catalog_area]').value)||filters.querySelector('[name=catalog_term]').value&&card.dataset.term!==filters.querySelector('[name=catalog_term]').value);
+        if(!card.hidden)count++;
+      }
+      catalog.querySelector('[data-catalog-empty]').hidden=count!==0;
+      catalog.querySelector('[data-catalog-count]').textContent=`${count} oferta(s) disponibles. Los filtros conservan tu selección.`;
+    };
+    filters.addEventListener('change',filter);filter();
+  }
+  if(!catalog.matches('form'))continue;
+  const summary=catalog.querySelector('[data-package-totals]'),lines=catalog.querySelector('[data-package-lines]'),submit=catalog.querySelector('button[type=submit]');
   const format=value=>new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(value/100);
-  const update=()=>{
-    const totals={MONTHLY:0,ONE_OFF:0},pending={MONTHLY:0,ONE_OFF:0};
-    let selected=0;
-    for(const card of form.querySelectorAll('[data-package]')) {
-      const field=card.querySelector('[data-package-quantity]');
-      const units=field.validity.valid?Number(field.value||0):0;
+  function update(){
+    const totals={MONTHLY:0,ONE_OFF:0},pending={MONTHLY:0,ONE_OFF:0},known={MONTHLY:0,ONE_OFF:0};let selected=0;lines.replaceChildren();
+    for(const card of cards){
+      const field=card.querySelector('[data-package-quantity]');const units=field.validity.valid?Number(field.value||0):0;
       card.classList.toggle('selected',units>0);
-      if(!units)continue;
-      selected+=units;
-      if(card.dataset.price==='')pending[card.dataset.term]++;
-      else totals[card.dataset.term]+=Number(card.dataset.price)*units;
+      for(const b of card.querySelectorAll('[data-quantity-change]')){b.hidden=false;b.disabled=Number(b.dataset.quantityChange)<0?units<=0:units>=10;}
+      if(!units)continue;selected+=units;
+      const row=document.createElement('div');row.className='basket-line';
+      const name=document.createElement('span');name.textContent=`${units} × ${card.dataset.name}`;
+      const amount=document.createElement('strong');amount.textContent=card.dataset.price===''?'Por cotizar':format(Number(card.dataset.price)*units)+(card.dataset.term==='MONTHLY'?' / mes':'');
+      const remove=document.createElement('button');remove.type='button';remove.className='basket-remove';remove.textContent='Quitar';remove.setAttribute('aria-label','Quitar '+card.dataset.name);remove.addEventListener('click',()=>{field.value='0';update();});
+      row.append(name,amount,remove);lines.append(row);
+      if(card.dataset.price==='')pending[card.dataset.term]++;else{totals[card.dataset.term]+=Number(card.dataset.price)*units;known[card.dataset.term]++;}
     }
-    const container=document.createElement('div');container.className='commercial-totals';
-    for(const [term,title] of [['MONTHLY','Por mes'],['ONE_OFF','Una sola vez']]) {
+    summary.replaceChildren();const container=document.createElement('div');container.className='commercial-totals';
+    for(const [term,title] of [['MONTHLY','Por mes'],['ONE_OFF','Pago único']]){
       const block=document.createElement('div'),caption=document.createElement('span'),amount=document.createElement('strong'),note=document.createElement('small');
-      caption.textContent=title;amount.textContent=format(totals[term]);
-      note.textContent=pending[term]?`${pending[term]} oferta(s) por cotizar; falta el total definitivo.`:'Importe de referencia de tu selección.';
+      caption.textContent=title;amount.textContent=pending[term]&&!known[term]?'Por cotizar':format(totals[term]);
+      note.textContent=pending[term]?`${pending[term]} oferta(s) pendientes de precio. ${known[term]?'Subtotal conocido, no total final.':''}`:known[term]?'Precio de referencia de lo seleccionado.':'Sin servicios de esta modalidad.';
       block.append(caption,amount,note);container.append(block);
     }
-    summary.replaceChildren(container);
-    const count=document.createElement('p');count.textContent=`${selected} paquete(s) seleccionados.`;summary.append(count);
-  };
-  form.addEventListener('input',update);window.addEventListener('pageshow',update);update();
+    summary.append(container);
+    if(!selected){const empty=document.createElement('p');empty.textContent='Elige una o varias ofertas para comenzar.';lines.append(empty);}
+    if(submit&&!catalog.dataset.busy)submit.disabled=!selected;
+  }
+  for(const card of cards)for(const b of card.querySelectorAll('[data-quantity-change]'))b.addEventListener('click',()=>{const field=card.querySelector('[data-package-quantity]');field.value=String(Math.max(0,Math.min(10,Number(field.value||0)+Number(b.dataset.quantityChange))));update();});
+  catalog.addEventListener('input',update);window.addEventListener('pageshow',update);update();
 }

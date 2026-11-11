@@ -33,7 +33,7 @@ test('Contenido tiene interfaz propia, salida a Lúmina y navegación completa t
 test('el cliente solo elige Video, Fotografías o Diseño; la cortesía y grabación no piden formato ni plataforma',async t=>{
   const w=await setup(t),r=await w.client.get('/contenido?vista=solicitudes');
   const form=r.body.match(/<form method="post" action="\/solicitudes"[\s\S]+?<\/form>/)[0];
-  const choices=[...form.matchAll(/<option value="([^"]+)"[^>]*>([^<]+)<\/option>/g)].map(m=>[m[1],m[2]]);
+  const choices=[...form.matchAll(/type="radio" name="service" value="([^"]+)"[^>]*><span><strong>([^<]+)<\/strong>/g)].map(m=>[m[1],m[2]]);
   assert.deepEqual(choices,[['VIDEO','Video'],['PHOTO','Fotografías'],['GRAPHIC','Diseño para redes']]);
   assert.doesNotMatch(form,/Story|Reel|Short|Carrusel|Publicación|name="platform|<select name="channel"|<select name="type"/);
   assert.match(form,/name="type" value="CONTENT"/);assert.match(form,/name="channel" value="SOCIAL"/);
@@ -42,7 +42,7 @@ test('el cliente solo elige Video, Fotografías o Diseño; la cortesía y grabac
     const page=(await w.client.get(path)).body;
     assert.doesNotMatch(page,/<select name="service"|name="platform|Publicar la misma pieza/);
   }
-  const general=(await w.client.get('/solicitudes')).body;
+  const general=(await w.client.get('/solicitudes/nueva?area=SOCIAL')).body;
   assert.match(general,/Diseño para redes/);assert.doesNotMatch(general,/<option value="(REEL|STORY|SHORT|CAROUSEL|EDITING|COPY|PUBLICATION)"/);
   assert.equal(w.db.get('SELECT count(*) n FROM request_platforms').n,0);
 });
