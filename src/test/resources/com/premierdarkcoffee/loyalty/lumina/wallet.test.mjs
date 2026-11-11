@@ -14,7 +14,7 @@ test('navegación unifica redes y mantiene servicios, cartera, agenda y Wallet',
  for(const path of ['/resumen','/produccion','/agenda-general','/wallet','/contenido','/servicios/maps','/servicios/web','/servicios/brand','/proximamente'])assert.equal((await admin.get(path)).status,200,path);
  const page=await client.get('/inicio');assert.match(page.body,/Contenido para redes/);assert.match(page.body,/Diseño de marca/);assert.match(page.body,/Próximamente/);assert.doesNotMatch(page.body,/href="\/canales\/(instagram|tiktok|youtube|facebook)"/);
  assert.equal((await client.get('/produccion')).status,403);
- const old=await client.get('/canales/instagram');assert.equal(old.status,303);assert.equal(old.location,'/contenido?plataforma=INSTAGRAM');
+ const old=await client.get('/canales/instagram');assert.equal(old.status,303);assert.equal(old.location,'/contenido');
  assert.equal(world.db.get('SELECT count(*) AS n FROM requests').n,0);
 });
 test('dueño accede sin credenciales y mantiene el mismo acceso después de cerrar y volver a ingresar',async t=>{

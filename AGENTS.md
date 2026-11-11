@@ -396,3 +396,14 @@ SQLite v2 se aplica con migración nueva y respaldo privado coherente de v1; no 
 La credencial de plataforma es opaca: usar el contrato de staging.read_config, base64url de 32 a 128 caracteres. init_config genera 36 bytes, que producen 48 caracteres; no aplicar el tamaño de 43 de las sesiones o de los empleados creados por Kotlin a esta credencial. Conservar el valor original, los controles de permisos y el destino privado. La corrección no modifica .env, claves, tarjetas ni esquemas.
 
 El gate del portal ahora requiere 32 pruebas completas. Las nuevas pruebas arrancan el lanzador real en otro proceso con un .env generado por staging.init_config y comprueban salud, sesión persistente y acceso autenticado de plataforma. Una configuración inválida falla antes de crear/migrar SQLite. El instalador comprueba la configuración existente con el lector corregido antes de aplicar archivos y ejecutar el checkpoint. Mantener todos los gates existentes para el commit local, sin push.
+
+
+## Solicitudes sin plataforma v043
+
+Solicitar contenido y el video de cortesía no requiere ni muestra destinos sociales. Las solicitudes nuevas usan SOCIAL y no crean request_platforms, incluso si reciben casillas antiguas. No asignar las cuatro redes implícitamente. La cortesía es un video común, único por negocio, sin consumo de plan. El área general de contenido no tiene filtros por red.
+
+Elegir la plataforma únicamente al registrar la publicación de una pieza aprobada o consultar sus métricas. Se admite cualquier red social válida sin un paso previo de añadir destinos. Cada publicación conserva enlace, fecha y mediciones; múltiples publicaciones no crean piezas ni consumen más cupos. Retirar POST /plataformas.
+
+Conservar request_platforms históricos y sus límites de acceso, publicaciones, métricas, evidencias y permisos sin alterar el esquema SQLite v2. Para solicitudes nuevas comunes, un permiso social VIEW/REQUEST permite consultar/solicitar; aprobar la pieza completa requiere SOCIAL.APPROVE. La lectura de publicaciones y métricas mantiene el filtro por plataforma autorizado. Toda autorización sigue en el servidor y dentro del negocio.
+
+Exigir 36 pruebas completas del portal, además de los gates de Kotlin, PostgreSQL, Python, Docker y gateway antes del commit local. Mantener la reparación de arranque v042r1 y el acceso único de Wallet. No modificar claves, vínculos, SQL, URLs públicas ni identidades Apple/Google. Guía: docs/lumina-solicitudes-sin-red-v043.md.

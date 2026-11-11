@@ -9,9 +9,9 @@ const finalStates = ['DELIVERED','CANCELLED'];
 export function visibleRequests(db, actor, companyId, channel, page = 0) {
   if (channel) requireThat(Object.hasOwn(channels,channel) && can(actor,channel),'Tu acceso no incluye esa área.',403);
   const policy=requestAccessSql(actor);
-  const platform=socialChannels.includes(channel);
-  const filter=platform?'EXISTS(SELECT 1 FROM request_platforms fp WHERE fp.company_id=r.company_id AND fp.request_id=r.id AND fp.platform=?)':"(?='' OR r.channel=?)";
-  const values=platform?[channel]:[channel||'',channel||''];
+  const area=socialChannels.includes(channel)?'SOCIAL':channel;
+  const filter="(?='' OR r.channel=?)";
+  const values=[area||'',area||''];
   const rows=db.all(`SELECT r.*,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
     FROM requests r WHERE r.company_id=? AND ${policy.sql} AND ${filter}
     ORDER BY r.created_at DESC,r.id LIMIT 31 OFFSET ?`,companyId,...policy.params,...values,page*30);
@@ -33,11 +33,9 @@ export function createRequest(db, actor, company, data) {
   if (type === 'QUOTE') requireThat(actor.kind !== 'COLLABORATOR','Solo el dueño puede solicitar cotizaciones.',403);
   const original=type==='PLAN'?'GENERAL':choice(data.channel,Object.keys(channels),'área');
   const channel=socialChannels.includes(original)?'SOCIAL':original;
-  const platforms=channel==='SOCIAL'?(socialChannels.includes(original)?[original]:socialChannels.filter(p=>data['platform.'+p]==='yes')):[];
-  if(channel==='SOCIAL') {
-    requireThat(platforms.length,'Selecciona al menos una plataforma de publicación.');
-    requireThat(platforms.every(p=>can(actor,p,'REQUEST')),'Tu acceso no incluye todas las plataformas seleccionadas.',403);
-  }
+  // Accept old area URLs/forms without turning a request into a publication plan.
+  // Keep the original scope check so legacy clients cannot bypass permissions.
+  if(socialChannels.includes(original)) requireAccess(actor,original,'REQUEST');
   const service = type === 'PLAN' ? 'PLAN' : choice(data.service,formats[channel],'servicio del canal');
   requireAccess(actor,channel,'REQUEST');
   if (type === 'COURTESY') {
@@ -60,7 +58,6 @@ export function createRequest(db, actor, company, data) {
     const id = uuid();
     db.run(`INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,plan_id,requested_at,created_at)
       VALUES(?,?,?,?,?,?,?,?,?,'NEW',?,?,?)`,id,company.id,actor.id,type,channel,service,quantity,title,brief,plan?.id ?? null,preferred,now());
-    for (const platform of platforms) db.run('INSERT INTO request_platforms VALUES(?,?,?)',company.id,id,platform);
     event(db,actor,company.id,'REQUEST',id,'SOLICITUD_RECIBIDA',title,channel);
     return id;
   });
@@ -177,7 +174,7 @@ export function editPiece(db, actor, company, request, piece, data) {
 }
 export function reviewPiece(db, actor, company, request, piece, data) {
   requireThat(actor.kind !== 'AGENCY','La aprobación corresponde al cliente.',403);
-  requireThat(canRequest(actor,request,'APPROVE'),'Tu acceso no permite aprobar la pieza común para todas sus plataformas.',403);
+  requireThat(canRequest(actor,request,'APPROVE'),'Necesitas permiso de aprobación de Contenido para redes para revisar esta pieza común.',403);
   requireThat(piece.status === 'REVIEW' && request.status === 'PRODUCTION' && String(piece.revision) === data.revision,
     'La pieza cambió. Revisa su versión vigente.',409);
   const status = choice(data.status,['APPROVED','PRODUCTION'],'decisión');
@@ -203,7 +200,6 @@ export function addPublication(db, actor, company, request, piece, data) {
     'Registra la publicación después de la aprobación.',409);
   requireThat(request.channel==='SOCIAL','Las publicaciones sociales corresponden a Contenido para redes.');
   const channel = choice(data.channel,socialChannels,'red social');
-  requireThat(platformTargets(db,request).includes(channel),'Añade primero esta plataforma a la ficha común de contenido.');
   const url = httpsUrl(data.url);
   const published = localInstant(data.published,'fecha de publicación');
   requireThat(published <= now(),'La publicación registrada no puede estar en el futuro.');

@@ -13,8 +13,6 @@ for (const panel of document.querySelectorAll('[data-request-form]')) {
     if (channel.options.length !== allowed.length) {
       channel.replaceChildren(...allowed.map(([key,title])=>new Option(title,key,false,key===previousChannel)));
     }
-    const platforms=panel.querySelector('[data-platforms]');
-    if(platforms){platforms.hidden=channel.value!=='SOCIAL';for(const field of platforms.querySelectorAll('input'))field.disabled=platforms.hidden;}
     const previous = service.value;
     const choices = formats[channel.value] || [];
     service.replaceChildren(...choices.map(([key,title]) => new Option(title,key,false,key === previous)));

@@ -1,5 +1,4 @@
-import { requestAccessSql, platformTargets } from '../access/content-policy.mjs';
-import { addTargets } from '../production/platforms.mjs';
+import { requestAccessSql } from '../access/content-policy.mjs';
 import { walletSections } from '../wallet/access-policy.mjs';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -33,7 +32,7 @@ const assets = {
 const sourceAssets = Object.fromEntries(Object.entries(assets).map(([path,[file,type]]) =>
   [path,{body:readFileSync(new URL('../presentation/assets/'+file,import.meta.url)),type}]));
 const operations = {
-  '/plataformas':addTargets, '/estado':updateRequest, '/cotizar':offerQuote,
+  '/estado':updateRequest, '/cotizar':offerQuote,
   '/aceptar':(db,actor,company,request,data)=>acceptQuote(db,actor,company,request,data.quote),
   '/visitas':addVisit, '/visitas/cerrar':finishVisit, '/piezas':addPiece,
 };
@@ -242,20 +241,19 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const channel=path.slice('/canales/'.length).toUpperCase();requireThat(Object.hasOwn(channels,channel),'Área no encontrada.',404);
         requireThat(can(actor,channel),'No tienes acceso a esta área.',403);
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
-        return redirect(res,pathFor(actor,company)(socialChannels.includes(channel)?'/contenido':channel==='WALLET'?'/wallet':'/servicios/'+channel.toLowerCase(),socialChannels.includes(channel)?{plataforma:channel}:{}));
+        return redirect(res,pathFor(actor,company)(socialChannels.includes(channel)?'/contenido':channel==='WALLET'?'/wallet':'/servicios/'+channel.toLowerCase()));
       }
       if(method==='GET'&&(path==='/contenido'||path.startsWith('/servicios/'))) {
         const channel=path==='/contenido'?'SOCIAL':path.slice('/servicios/'.length).toUpperCase();
         requireThat(['SOCIAL','MAPS','WEB','BRAND'].includes(channel),'Área no encontrada.',404);requireAccess(actor,channel);
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
-        const platform=channel==='SOCIAL'?(target.searchParams.get('plataforma')||''):'';
-        requireThat(!platform||socialChannels.includes(platform)&&can(actor,platform),'Plataforma no autorizada.',403);
+        if(channel==='SOCIAL' && target.searchParams.has('plataforma')) return redirect(res,pathFor(actor,company)('/contenido'));
         const policy=requestAccessSql(actor);
         const rows=db.all(`SELECT r.*,c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id WHERE r.channel=? AND ${policy.sql}
-          AND (? IS NULL OR r.company_id=?) AND (?='' OR EXISTS(SELECT 1 FROM request_platforms rp WHERE rp.company_id=r.company_id AND rp.request_id=r.id AND rp.platform=?))
-          ORDER BY r.created_at DESC,r.id LIMIT 100`,channel,...policy.params,company?.id||null,company?.id||null,platform,platform);
-        return render({title:areas[channel],description:channel==='SOCIAL'?'Contenido común y publicaciones por plataforma.':'Servicios, proyectos y seguimiento.',
-          body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'),socialChannels.filter(p=>can(actor,p)),platform)});
+          AND (? IS NULL OR r.company_id=?)
+          ORDER BY r.created_at DESC,r.id LIMIT 100`,channel,...policy.params,company?.id||null,company?.id||null);
+        return render({title:areas[channel],description:channel==='SOCIAL'?'Solicitudes, producción y entregas en un solo lugar.':'Servicios, proyectos y seguimiento.',
+          body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'))});
       }
       if (path==='/cuenta' && method==='GET') return render({title:'Mi cuenta',body:accountPage(actor)});
       if (path==='/cuenta/clave' && method==='POST') {

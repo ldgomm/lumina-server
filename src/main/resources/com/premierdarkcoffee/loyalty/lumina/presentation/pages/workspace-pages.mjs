@@ -1,4 +1,4 @@
-import { areas, channels, services, formats, socialChannels } from '../../shared/domain.mjs';
+import { areas, channels } from '../../shared/domain.mjs';
 import { badge, card, esc, hidden, select, button, localLink, number, table, timestamp } from './components.mjs';
 import { icon } from './icons.mjs';
 
@@ -37,14 +37,13 @@ const descriptions={
  MAPS:'Gestión del Perfil de Empresa, datos actualizados, fotografías, respuestas a reseñas y seguimiento del rendimiento.',
  BRAND:'Logo, identidad visual y manual de marca. Trabajos individuales con propuesta, revisión, entrega y cierre.',
 };
-export function channelWorkspace(channel,rows,url,canCreate,platforms=socialChannels,selected='') {
+export function channelWorkspace(channel,rows,url,canCreate) {
   const open=rows.filter(r=>!['DELIVERED','CANCELLED'].includes(r.status)).length;
   const social=channel==='SOCIAL';
-  const choices=social?`<nav class="content-platform-tabs" aria-label="Plataformas de publicación">${[['','Todas'],...platforms.map(p=>[p,channels[p]])].map(([key,name])=>localLink(url('/contenido',key?{plataforma:key}:{}),name,key===selected?'btn':'btn secondary')).join('')}</nav>`:'';
   return `<section class="service-intro"><span class="eyebrow">${channel==='BRAND'?'PROYECTOS / CONTRATACIÓN INDIVIDUAL':'SERVICIOS DE LÚMINA'}</span><h2>${social?'Una pieza. Todas tus redes.':esc(areas[channel])}</h2><p>${esc(descriptions[channel]||'')}</p>
     <div class="actions">${canCreate?localLink(url('/solicitudes',{canal:channel}),channel==='BRAND'?'Solicitar un proyecto':'Nueva solicitud','btn'):''}
     ${channel==='MAPS'?localLink(url('/mapas'),'Reseñas y rendimiento','btn secondary'):''}
-    ${social?localLink(url('/reportes'),'Ver métricas por plataforma','btn secondary'):''}</div></section>${choices}
+    ${social?localLink(url('/reportes'),'Ver métricas por plataforma','btn secondary'):''}</div></section>
     <div class="metric-grid compact"><div class="metric-card"><span>Solicitudes en esta vista</span><strong>${number(rows.length)}</strong></div><div class="metric-card"><span>Trabajos abiertos</span><strong>${number(open)}</strong></div></div>
     ${card(social?'Contenido y entregables':'Proyectos y servicios',table(['Trabajo','Negocio','Estado','Cantidad','Registro'],rows.map(r=>[
       localLink(url('/solicitudes/'+r.id,{empresa:r.company_id}),r.title),esc(r.company_name),badge(r.status),number(r.quantity),esc(timestamp(r.created_at))])), 'Hasta 100 solicitudes visibles según tus permisos. Abre el trabajo para consultar los archivos, las revisiones y las evidencias.')}`;
