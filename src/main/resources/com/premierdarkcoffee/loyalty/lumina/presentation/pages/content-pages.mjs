@@ -1,0 +1,43 @@
+import { can } from '../../access/accounts.mjs';
+import { contentViews } from '../../content/workspace.mjs';
+import { badge, button, card, esc, external, hidden, input, label, localLink, message, select, table, timestamp } from './components.mjs';
+import { requestForm } from './production-pages.mjs';
+
+export function contentNav(url,view='resumen') {
+  return `<nav class="module-tabs" aria-label="Módulo de contenido">${Object.entries(contentViews).map(([key,title])=>
+    `<a href="${esc(url('/contenido',{vista:key}))}"${key===view?' aria-current="page"':''}>${title}</a>`).join('')}</nav>`;
+}
+export function contentPage({actor,company,url,data,metricsHtml=''}) {
+  const {view,counts,rows}=data;
+  const scope=actor.kind==='AGENCY'&&!company?'todos los negocios':'este negocio';
+  const requestLink=row=>actor.kind==='AGENCY'?'/solicitudes/'+(row.request_id||row.id)+'?empresa='+row.company_id:'/solicitudes/'+(row.request_id||row.id);
+  const context=company?hidden('empresa',company.id):'';
+  const filter=`<form action="/contenido" class="workspace-filter content-filter">${context}${hidden('vista',view)}
+    ${input('q','Buscar por solicitud, indicaciones o negocio','search','maxlength="100"',data.q)}
+    ${view==='publicaciones'?select('red','Plataforma',[['','Todas las autorizadas'],...data.platforms.map(p=>[p,label(p)])],data.platform):''}
+    ${button('Buscar','secondary')}</form>`;
+  const pagination=`<div class="actions">${data.page>0?localLink(url('/contenido',{vista:view,q:data.q,red:data.platform,pagina:data.page-1}),'← Anterior','btn secondary'):''}
+    ${data.more?localLink(url('/contenido',{vista:view,q:data.q,red:data.platform,pagina:data.page+1}),'Siguiente →','btn secondary'):''}</div>`;
+  let body='';
+  if(view==='metricas')body=metricsHtml||card('Elige un negocio',`<p>Abre su espacio para consultar las métricas de sus publicaciones.</p>${localLink('/clientes','Ver clientes','btn')}`);
+  else if(['produccion','revisiones','entregas'].includes(view))body=card(data.title,table(['Pieza','Negocio','Estado','Grabación','Acción'],rows.map(row=>[
+    `${esc(row.title)}<small class="cell-heading">${esc(row.request_title)}</small>`,esc(row.company_name),badge(row.status),esc(timestamp(row.recorded_at)),
+    localLink(requestLink(row),view==='revisiones'?'Revisar pieza →':view==='entregas'?'Ver archivos y evidencias →':'Abrir producción →'),
+  ])),view==='revisiones'?'Las aprobaciones y ajustes se registran dentro de cada pieza según los permisos del equipo.':'Una ficha común reúne archivos, observaciones, grabaciones e historial.')+pagination;
+  else if(view==='publicaciones')body=card(data.title,table(['Pieza','Negocio','Red','Publicación','Última medición','Registro'],rows.map(row=>[
+    esc(row.title),esc(row.company_name),esc(label(row.channel)),external(row.url,timestamp(row.published_at)),esc(timestamp(row.measured_at)),localLink(requestLink(row),'Abrir publicaciones y métricas →'),
+  ]))) + pagination;
+  else if(view==='agenda')body=card(data.title,table(['Fecha programada','Solicitud','Negocio','Lugar','Estado','Grabación real'],rows.map(row=>[
+    esc(timestamp(row.starts_at)),localLink(requestLink(row),row.title),esc(row.company_name),esc(row.place),badge(row.status),esc(timestamp(row.recorded_at)),
+  ])),'Solo aparecen visitas registradas. Las sugerencias del cliente se revisan dentro de la solicitud.')+pagination;
+  else body=card(view==='resumen'?'Solicitudes recientes':'Solicitudes de contenido',table(['Solicitud','Negocio','Formato','Cantidad','Estado','Registro'],rows.map(row=>[
+    localLink(requestLink(row),row.title),esc(row.company_name),esc(label(row.service)),row.quantity,badge(row.status),esc(timestamp(row.created_at)),
+  ])))+pagination;
+  const stats=view==='resumen'?`<div class="metric-grid">${[['Solicitudes abiertas',counts.open,'solicitudes'],['En producción',counts.production,'produccion'],['Por aprobar',counts.review,'revisiones'],['Piezas entregadas',counts.delivered,'entregas']].map(([caption,value,target])=>
+    `<a class="metric-card" href="${esc(url('/contenido',{vista:target,q:data.q}))}"><span>${caption}</span><strong>${value}</strong></a>`).join('')}</div>
+    <p class="muted">Conteos de todas las solicitudes visibles de ${scope}${data.q?' que coinciden con la búsqueda':''}. ${counts.publications} publicaciones registradas; una pieza puede tener varias.</p>`:'';
+  const create=view==='solicitudes'&&company&&can(actor,'SOCIAL','REQUEST')?card('Nueva solicitud de contenido',requestForm(actor,url,false,'SOCIAL',true),'Describe la pieza que necesitas. Las redes se registran después, junto con las publicaciones y sus resultados.') : '';
+  const hero=view==='resumen'?`<section class="module-lead content-lead"><div><p class="eyebrow">MÓDULO DE CONTENIDO</p><h2>De la idea a la entrega.</h2><p>Una pieza, un historial. Coordina la producción, revisa los archivos y consulta el resultado de cada publicación.</p>
+    ${company&&can(actor,'SOCIAL','REQUEST')?localLink(url('/contenido',{vista:'solicitudes'}),'Solicitar contenido','btn'):''}</div><ol class="content-flow"><li>Solicitud</li><li>Producción</li><li>Revisión</li><li>Entrega y resultados</li></ol></section>`:'';
+  return contentNav(url,view)+hero+(view==='metricas'?'':filter)+stats+create+body;
+}

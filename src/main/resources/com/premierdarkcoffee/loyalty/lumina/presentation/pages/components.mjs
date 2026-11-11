@@ -55,7 +55,7 @@ function navLinks(actor,company,url,cash) {
   if(can(actor,'WALLET'))items.push([url('/wallet'),'Fidelización digital · Wallet','wallet','Servicios']);
   for(const [scope,route,mark] of [['SOCIAL','/contenido','social'],['MAPS','/servicios/maps','maps'],['WEB','/servicios/web','web'],['BRAND','/servicios/brand','content']])if(can(actor,scope))items.push([url(route),areas[scope],mark]);
   if(actor.kind!=='COLLABORATOR')items.push([url('/proximamente'),'WhatsApp Business e IA · Próximamente','social']);
-  if(actor.kind!=='COLLABORATOR')items.push([url('/planes'),'Membresías y servicios','plans','Gestión']);
+  if(actor.kind!=='COLLABORATOR')items.push([url('/planes'),'Paquetes y servicios','plans','Gestión']);
   if((actor.kind!=='AGENCY'||company)&&socialChannels.some(scope=>can(actor,scope)))items.push([url('/reportes'),'Estadísticas','metrics']);
   if((actor.kind!=='AGENCY'||company)&&can(actor,'MAPS'))items.push([url('/mapas'),'Reseñas y ubicaciones','maps']);
   if(actor.kind==='OWNER')items.push(['/equipo','Equipo y permisos','clients']);
@@ -71,7 +71,7 @@ export function page({actor,company,path='/',title,description='',body,cash=fals
     return `${group?`<p class="nav-label">${esc(group)}</p>`:''}<a href="${esc(href)}"${active?' aria-current="page"':''}>${icon(mark)}<span>${esc(name)}</span>${mark==='wallet'?'<span class="nav-dot" aria-hidden="true"></span>':''}</a>`;
   }).join(''):'';
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1f3a">
-    <title>${esc(title)} · Lúmina Digital</title><link rel="stylesheet" href="/assets/lumina.css"><link rel="stylesheet" href="/assets/workspace.css"><script defer src="/assets/lumina.js"></script></head>
+    <title>${esc(title)} · Lúmina Digital</title><link rel="stylesheet" href="/assets/lumina.css"><link rel="stylesheet" href="/assets/workspace.css"><link rel="stylesheet" href="/assets/modules.css"><script defer src="/assets/lumina.js"></script><script defer src="/assets/packages.js"></script></head>
     <body class="${actor?'signed-in':'signed-out'}"><a class="skip" href="#contenido">Saltar al contenido</a>
     <header class="site-header"><div class="top"><a class="brand" href="${actor?esc(actor.kind==='AGENCY'?'/resumen':'/inicio'):'/'}">${mark}</a>
     ${actor?`<button class="menu-toggle quiet" type="button" aria-label="Abrir navegación" aria-controls="workspace-nav" aria-expanded="false">${icon('menu')}</button>`:`<div class="top-links">${localLink('/','Ingresar')}${localLink('/registro','Registrar negocio cliente')}</div>`}</div>

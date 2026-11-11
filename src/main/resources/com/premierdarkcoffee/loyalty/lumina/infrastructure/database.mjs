@@ -19,7 +19,7 @@ export function openDatabase(path) {
   const db = new DatabaseSync(path, { timeout: 5000 });
   db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (version > 3) { db.close(); throw new Error('Esta versión de Lúmina no reconoce el esquema de datos.'); }
+  if (version > 4) { db.close(); throw new Error('Esta versión de Lúmina no reconoce el esquema de datos.'); }
   const transaction = work => {
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -37,7 +37,7 @@ export function openDatabase(path) {
       db.exec('PRAGMA user_version=1');
     });
   }
-  for (const [target,file] of [[2,'002_unified.sql'],[3,'003_onboarding.sql']]) {
+  for (const [target,file] of [[2,'002_unified.sql'],[3,'003_onboarding.sql'],[4,'004_packages.sql']]) {
     if (db.prepare('PRAGMA user_version').get().user_version >= target) continue;
     // One coherent private snapshot of the original database precedes all pending migrations.
     if (version > 0 && path !== ':memory:' && target===version+1) {

@@ -44,11 +44,11 @@ export function contractsFor(db, companyId) {
   return db.all(`SELECT c.*,p.name,p.term,p.wallet FROM contracts c JOIN plans p ON p.id=c.plan_id
     WHERE c.company_id=? ORDER BY starts_on DESC,created_at DESC`,companyId).map(contract => ({
     ...contract,
-    items: db.all(`SELECT i.service,i.quantity,
+    items: db.all(`SELECT i.service,i.quantity * ? AS quantity,
       (SELECT count(*) FROM pieces x WHERE x.company_id=? AND x.contract_id=? AND x.service=i.service AND x.status='DELIVERED') AS used,
       (SELECT count(*) FROM pieces x WHERE x.company_id=? AND x.contract_id=? AND x.service=i.service AND x.status NOT IN ('DELIVERED','CANCELLED')) AS reserved
       FROM plan_items i WHERE i.plan_id=? ORDER BY i.service`,
-    companyId,contract.id,companyId,contract.id,contract.plan_id),
+    contract.units,companyId,contract.id,companyId,contract.id,contract.plan_id),
   }));
 }
 export function activateContract(db, actor, company, data) {
@@ -94,7 +94,7 @@ export function cancelContract(db, actor, company, id, reason) {
 }
 export function checkCapacity(db, companyId, contractId, service) {
   const today = localDay();
-  const item = db.get(`SELECT i.quantity FROM contracts c JOIN plan_items i ON i.plan_id=c.plan_id AND i.service=?
+  const item = db.get(`SELECT i.quantity * c.units AS quantity FROM contracts c JOIN plan_items i ON i.plan_id=c.plan_id AND i.service=?
     WHERE c.id=? AND c.company_id=? AND c.cancelled_at IS NULL AND c.starts_on<=? AND c.ends_before>?`,
   service,contractId,companyId,today,today);
   requireThat(item, 'El contrato vigente no incluye este servicio.',409);

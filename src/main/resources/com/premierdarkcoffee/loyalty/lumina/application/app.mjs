@@ -16,11 +16,18 @@ import { accountPage, invitePage, memberPage, publicPage, teamPage } from '../pr
 import { card, esc, localLink, page, pathFor } from '../presentation/pages/components.mjs';
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
 import { agendaPage, companiesPage, homePage, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
-import { mapsPage, metricsPage, plansPage } from '../presentation/pages/service-pages.mjs';
+import { mapsPage, metricsPage } from '../presentation/pages/service-pages.mjs';
 import { loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
 import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
 
+import { contentData } from '../content/workspace.mjs';
+import { contentNav, contentPage } from '../presentation/pages/content-pages.mjs';
+import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs';
+import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
+
 const assets = {
+  '/assets/modules.css': ['modules.css','text/css; charset=utf-8'],
+  '/assets/packages.js': ['packages.js','text/javascript; charset=utf-8'],
   '/assets/lumina.css': ['lumina.css','text/css; charset=utf-8'],
   '/assets/lumina.js': ['lumina.js','text/javascript; charset=utf-8'],
   '/assets/caja.js': ['caja.js','text/javascript; charset=utf-8'],
@@ -73,7 +80,7 @@ function getRequestPage(db,actor,company,url,request) {
   const plan = request.plan_id ? getPlan(db,request.plan_id) : null;
   const contracts = actor.kind === 'AGENCY' ? contractsFor(db,company.id) : [];
   return {title:request.title,description:'Solicitud, visitas, piezas e historial del negocio.',
-    body:requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan})};
+    body:(request.channel==='SOCIAL'?contentNav(url,'solicitudes'):'')+requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan})};
 }
 
 export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {} }) {
@@ -251,11 +258,21 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
         return redirect(res,pathFor(actor,company)(socialChannels.includes(channel)?'/contenido':channel==='WALLET'?'/wallet':'/servicios/'+channel.toLowerCase()));
       }
-      if(method==='GET'&&(path==='/contenido'||path.startsWith('/servicios/'))) {
+      if(method==='GET'&&path==='/contenido') {
+        requireAccess(actor,'SOCIAL');
+        if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
+        const url=pathFor(actor,company);
+        if(target.searchParams.has('plataforma'))return redirect(res,url('/contenido'));
+        const data=contentData(db,actor,company,target.searchParams);
+        const metricsHtml=data.view==='metricas'&&company?metricsPage(actor,url,analytics(db,actor,company.id,
+          {from:target.searchParams.get('desde'),to:target.searchParams.get('hasta')}),'/contenido'):'';
+        return render({title:'Contenido para redes',description:'Solicitudes, producción, aprobaciones, entregas y resultados.',body:contentPage({actor,company,url,data,metricsHtml})});
+      }
+      if(method==='GET'&&path.startsWith('/servicios/')) {
         const channel=path==='/contenido'?'SOCIAL':path.slice('/servicios/'.length).toUpperCase();
         requireThat(['SOCIAL','MAPS','WEB','BRAND'].includes(channel),'Área no encontrada.',404);requireAccess(actor,channel);
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
-        if(channel==='SOCIAL' && target.searchParams.has('plataforma')) return redirect(res,pathFor(actor,company)('/contenido'));
+        if(channel==='SOCIAL') return redirect(res,pathFor(actor,company)('/contenido'));
         const policy=requestAccessSql(actor);
         const rows=db.all(`SELECT r.*,c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id WHERE r.channel=? AND ${policy.sql}
           AND (? IS NULL OR r.company_id=?)
@@ -368,8 +385,26 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if (method==='GET' && path==='/planes') {
           const plans = listPlans(db,actor.kind==='AGENCY');
           const contracts = company ? contractsFor(db,company.id) : [];
-          return render({title:'Planes y servicios',description:'Membresías, acuerdos a medida y servicios individuales.',
-            body:plansPage({actor,company,url,plans,contracts})});
+          const view=target.searchParams.get('vista')||'catalogo';
+          requireThat(['catalogo','acuerdos','contrataciones'].includes(view),'Vista no encontrada.',404);
+          const orders=ordersFor(db,actor,company,integer(target.searchParams.get('pagina')||'0','página',{min:0,max:100000}));
+          return render({title:'Paquetes y servicios',description:'Combina servicios mensuales y trabajos puntuales, con cada precio y cupo claro.',
+            body:packagesPage({actor,company,url,plans,contracts,orders,view})});
+        }
+        if(method==='POST'&&path==='/planes/solicitar') {
+          const id=submitOrder(db,actor,company,data);
+          return redirect(res,url('/planes/pedidos/'+id));
+        }
+        const orderMatch=path.match(/^\/planes\/pedidos\/([^/]+)(?:\/(cotizar|aceptar|activar|cancelar))?$/);
+        if(orderMatch&&isId(orderMatch[1])) {
+          const [,id,action]=orderMatch;
+          const order=getOrder(db,actor,company,id);
+          if(method==='GET'&&!action)return render({title:'Tu combinación de servicios',description:company.name,
+            body:orderPage({actor,company,url,order,audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})});
+          if(method==='POST'&&action) {
+            ({cotizar:offerOrder,aceptar:acceptOrder,activar:activateOrder,cancelar:cancelOrder})[action](db,actor,company,id,data);
+            return redirect(res,url('/planes/pedidos/'+id));
+          }
         }
         if (method==='POST') {
           requireAgency(actor);
@@ -384,7 +419,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (path==='/reportes' && method==='GET') {
         requireThat(socialChannels.some(key=>can(actor,key)),'Tu acceso no incluye métricas de redes.',403);
         const report = analytics(db,actor,company.id,{from:target.searchParams.get('desde'),to:target.searchParams.get('hasta')});
-        return render({title:'Métricas',description:'Seguimiento por canal y cobertura de las mediciones.',body:metricsPage(actor,url,report)});
+        return render({title:'Métricas',description:'Seguimiento por canal y cobertura de las mediciones.',body:contentNav(url,'metricas')+metricsPage(actor,url,report)});
       }
       if (path.startsWith('/mapas')) {
         requireAccess(actor,'MAPS');

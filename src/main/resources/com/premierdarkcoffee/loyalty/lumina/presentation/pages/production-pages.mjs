@@ -15,13 +15,13 @@ export function companiesPage(companies, q) {
     esc(company.phone),esc(timestamp(company.created_at)),
   ]),'Los negocios que se registren aparecerán aquí.'));
 }
-function requestForm(actor,url,courtesy = false,selected='') {
+export function requestForm(actor,url,courtesy = false,selected='',onlySocial=false) {
   if (courtesy) return form(url('/solicitudes'),actor,`
     ${hidden('type','COURTESY')}${hidden('channel','SOCIAL')}${hidden('service','VIDEO')}
     ${input('title','¿Qué quieres mostrar en tu video?','text','required maxlength="150"')}
     ${textarea('brief','Cuéntanos tu idea','maxlength="4000" rows="3"')}
     ${button('Solicitar mi video gratis')}`);
-  const scopes = Object.keys(areas).filter(channel=>can(actor,channel,'REQUEST'));
+  const scopes = Object.keys(areas).filter(channel=>(!onlySocial||channel==='SOCIAL')&&can(actor,channel,'REQUEST'));
   if (!scopes.length) return '';
   const initial=scopes.includes(selected)?selected:scopes[0];
   const serviceList = Object.fromEntries(scopes.map(channel=>[channel,formats[channel].map(service=>[service,services[service]])]));
@@ -52,12 +52,13 @@ export function homePage({actor,company,url,groups,videoRequested,videoDelivered
       ${stat('Solicitudes abiertas',open)}${stat('Videos solicitados',videoRequested)}
       ${stat('Videos entregados',videoDelivered)}${stat('Próximas visitas',upcoming)}</section>` : ''}
     ${can(actor,'WALLET')?`<a class="wallet-entry-banner" href="${url('/wallet')}"><div><span class="eyebrow">LOYALTY / APPLE + GOOGLE</span><h2>Wallet, siempre a mano.</h2><p>Tarjetas, promociones y comunidad en un solo espacio.</p></div><span class="btn">Abrir Wallet →</span></a>`:''}
+    ${can(actor,'SOCIAL')?`<a class="content-entry" href="${esc(url('/contenido'))}"><div><span class="eyebrow">MÓDULO DE CONTENIDO</span><h2>Tu producción, en un solo lugar.</h2><p>Solicitudes, grabaciones, aprobaciones, entregas y métricas.</p></div><span class="btn">Abrir Contenido →</span></a>`:''}
     ${gift}
     <div class="card-grid">${hasScopes ? card('Producción y entregas',`<p>Consulta solicitudes, visitas, grabaciones, revisiones y enlaces de entrega.</p>
       <div class="actions">${localLink(url('/solicitudes'),'Abrir solicitudes','btn')}${localLink(url('/agenda'),'Ver agenda','btn secondary')}</div>`) : ''}
     ${cash ? card('Loyalty · Caja',`<p>Sucursal asignada <strong>${esc(cash.branch_name)}</strong></p>${localLink('/caja','Abrir Caja','btn')}`) : ''}
-    ${actor.kind !== 'COLLABORATOR' ? card('Planes y servicios',`<p>Revisa la membresía, servicios individuales, cupos reservados y entregados.</p>
-      ${localLink(url('/planes'),'Ver planes','btn secondary')}`) : ''}
+    ${actor.kind !== 'COLLABORATOR' ? card('Paquetes y servicios',`<p>Combina paquetes mensuales y trabajos puntuales. Consulta precios, fechas y cupos.</p>
+      ${localLink(url('/planes'),'Ver paquetes','btn secondary')}`) : ''}
     ${!hasScopes && !cash ? card('Acceso pendiente',message('El dueño del negocio debe asignarte al menos un área.')) : ''}</div>`;
 }
 export function requestsPage({actor,url,rows,channel,page,more}) {

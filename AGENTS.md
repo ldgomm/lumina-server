@@ -429,3 +429,15 @@ La evidencia de v044 confirmó 280 unitarias aprobadas, 294/300 PostgreSQL aprob
 Actualizar solo la expectativa a 14 (14L para getLong) en ManagementPostgresTest, OperationsPostgresTest, CommercialPostgresTest, PromotionLifecyclePostgresTest, EngagementPostgresTest y WalletFirstPostgresTest. No eliminar aserciones, saltar pruebas, reducir conteos ni cambiar migraciones para satisfacer una expectativa antigua. Conservar todas las comprobaciones posteriores de credenciales, permisos, datos, promociones y saldos. Buscar referencias a comeback_migrations en todos los paquetes de pruebas cuando se añada una migración; no limitar la búsqueda a businesses.
 
 La revisión no cambia código de producción ni SQL respecto de v044. El instalador es acumulativo y admite el estado anterior restaurado por el fallo. Mantener los 580 casos nativos, 43 del portal, 128 Python y gates Docker/gateway antes del commit local. El resultado previo no constituye un PASS completo.
+
+## Contenido y contrataciones combinadas v045
+
+Contenido tiene módulo propio en lumina/content con vistas de resumen, solicitudes, producción, revisión, entregas, publicaciones, métricas y agenda. Reutiliza production y analytics; no duplica piezas, cupos ni autenticación. Aplicar requestAccessSql y filtro de plataformas también a conteos y paginación. Solicitud/cortesía sin redes; plataforma solo en publicación/métrica. Consultas de 20 filas con conteos completos y permisos vigentes.
+
+Paquetes y servicios reemplaza la terminología ambigua de membresías/suscripciones en el catálogo. Oferta individual o combinada, MONTHLY o ONE_OFF, selección conjunta y cantidad por oferta. Precios en centavos, totales separados mensual/puntual; null es por cotizar, nunca cero. Propuesta con precio y fechas por línea, aceptación expresa de versión actual y activación conjunta transaccional/idempotente. No hay cobros bancarios, envíos de correo ni renovaciones automáticas. Preservar propuestas retiradas, contratos anteriores, cuotas y auditoría. Una pieza en cuatro redes consume un cupo.
+
+Renovación manual de cada período mensual, con día de corte anclado, sin acumulación automática de cupos. No duplicar siguiente período ni alterar contratos aceptados. Cancelar propuesta pendiente o acuerdo activo conserva historial y no cambia otras contrataciones. Wallet incluido/de cortesía es servicio comercial de configuración/gestión, no activación ni recreación de tenant o tarjetas.
+
+SQLite v4 se aplica con 004_packages.sql nueva y respaldo privado coherente. schema.sql, 002, 003 y PostgreSQL V001–V014 son inmutables. Contratos anteriores reciben units=1 y conservan sus valores. Mantener agency.key, datos, ciphertext, vínculos, identidad Apple/Google y URLs públicas. Código anterior a v4 requiere recuperación explícita coherente; el instalador no borra ni restaura automáticamente datos reales.
+
+Gate: 56 pruebas del portal en nueve suites, 128 Python, 280 unitarias/HTTP + 300 PostgreSQL, Docker y 114 comprobaciones gateway antes del commit local; sin push. Revisión visual, HTTPS y teléfonos se reportan por separado. Guía: docs/lumina-contenido-paquetes-v045.md.
