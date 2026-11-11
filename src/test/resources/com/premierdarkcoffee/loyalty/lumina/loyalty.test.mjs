@@ -6,14 +6,13 @@ import { fakeLoyalty } from './loyalty-fixture.mjs';
 
 async function linked(t) {
   const loyalty = await fakeLoyalty(t);
-  const world = await portal(t,loyalty.origin);
+  const world = await portal(t,loyalty.origin,{platformToken:loyalty.platformToken});
   const admin = await agency(world);
   const {client,id} = await owner(world,'Restaurante de prueba','7');
   await admin.post('/clientes/verificar?empresa='+id);
-  const link = await client.post('/equipo/loyalty/vincular',{
-    credential:loyalty.ownerToken,slug:loyalty.business.slug,confirm:'yes',
-  });
+  const link = await admin.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'});
   assert.equal(link.status,303);
+  await client.get('/wallet');
   return {loyalty,world,client,id};
 }
 test('una cuenta combina TikTok, Instagram y Caja, con compras y canjes independientes',async t=>{
@@ -23,7 +22,8 @@ test('una cuenta combina TikTok, Instagram y Caja, con compras y canjes independ
   const path = '/equipo/'+member.id+'/caja';
   const input = {credential:loyalty.ownerToken,branch:loyalty.branch.id,purchases:'yes'};
   assert.equal((await client.post(path+'/sucursales',{credential:loyalty.ownerToken})).status,200);
-  assert.equal((await client.post(path+'/guardar',{...input,credential:loyalty.foreignToken})).status,403);
+  // Extra client-supplied secrets cannot change which tenant the backend operates on.
+  assert.equal((await client.post(path+'/guardar',{...input,credential:loyalty.foreignToken})).status,303);
   assert.equal((await client.post(path+'/guardar',{...input,branch:loyalty.foreignBranch.id})).status,400);
   assert.equal((await client.post(path+'/guardar',input)).status,303);
   const original = world.db.get('SELECT * FROM cash_grants WHERE account_id=?',member.id);
@@ -62,7 +62,7 @@ test('una cuenta combina TikTok, Instagram y Caja, con compras y canjes independ
   assert.equal((await member.session.get('/caja')).status,403);
   assert.equal((await member.session.get('/solicitudes?canal=TIKTOK')).status,200);
   assert.equal(loyalty.staff.get(original.staff_id).state,'INACTIVE');
-  assert.ok(!loyalty.calls.some(call=>call.path.includes('/wallet') || call.path.startsWith('/api/platform')));
+  assert.ok(!loyalty.calls.some(call=>call.role==='CASHIER'&&call.path.startsWith('/api/platform')));
 });
 test('Caja sola funciona y recupera un alta de respuesta perdida sin duplicar el acceso',async t=>{
   const {loyalty,world,client} = await linked(t);

@@ -13,9 +13,9 @@ export async function listen(server) {
 export function close(server) {
   return new Promise((resolve,reject)=>server.close(error=>error ? reject(error) : resolve()));
 }
-export async function portal(t, loyaltyUrl = 'http://127.0.0.1:65533') {
+export async function portal(t, loyaltyUrl = 'http://127.0.0.1:65533', integration = {}) {
   const db = openDatabase(':memory:');
-  const server = createPortal({db,key:randomBytes(32),loyaltyUrl});
+  const server = createPortal({db,key:randomBytes(32),loyaltyUrl,integration});
   const origin = await listen(server);
   t.after(async()=>{ await close(server); db.close(); });
   return {db,origin,session:()=>browser(origin)};
@@ -27,7 +27,7 @@ export function browser(origin) {
     get cookie() { return cookie; },
     get csrf() { return csrf; },
     async get(path) {
-      const res = await fetch(origin+path,{headers:{Cookie:cookie},redirect:'manual'});
+      const res = await fetch(origin+path,{headers:{Cookie:cookie,'X-Lumina-CSRF':csrf},redirect:'manual'});
       const body = await res.text();
       const match = body.match(/name="_csrf" value="([^"]+)"/);
       if (match) csrf = match[1];

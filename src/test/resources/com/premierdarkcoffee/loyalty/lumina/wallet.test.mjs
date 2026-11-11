@@ -1,92 +1,106 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFileSync } from 'node:fs';
-import { agency, colleague, owner, portal } from './helpers.mjs';
+import { agency, colleague, owner, portal, password } from './helpers.mjs';
 import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { walletRouteAllowed } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/wallet/wallet.mjs';
-
-async function context(t){
-  const loyalty=await fakeLoyalty(t),world=await portal(t,loyalty.origin),admin=await agency(world);
-  const {client,id}=await owner(world,'Negocio Wallet','5');
-  await admin.post('/clientes/verificar?empresa='+id);
-  return {loyalty,world,admin,client,id};
+async function context(t,link=true){
+ const loyalty=await fakeLoyalty(t),world=await portal(t,loyalty.origin,{platformToken:loyalty.platformToken}),admin=await agency(world);
+ const {client,id}=await owner(world,'Negocio Wallet','5');await admin.post('/clientes/verificar?empresa='+id);
+ if(link)assert.equal((await admin.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,303);
+ return {loyalty,world,admin,client,id};
 }
-const connect=(client,loyalty)=>client.post('/wallet/conectar',{credential:loyalty.ownerToken,slug:loyalty.business.slug,confirm:'yes'});
-test('Wallet visible para agencia y dueño; resumen, producción, agenda y canales usan datos reales',async t=>{
-  const {admin,client,world,id}=await context(t);
-  const before=world.db.get('SELECT count(*) AS n FROM requests').n;
-  for(const route of ['/resumen','/produccion','/agenda-general','/wallet','/canales/instagram','/canales/maps','/canales/web']){
-    const res=await admin.get(route);assert.equal(res.status,200,route);assert.match(res.body,/href="\/wallet"/);
-  }
-  assert.match((await client.get('/inicio')).body,/Wallet, siempre a mano/);
-  const view=await admin.get('/resumen');assert.match(view.body,/Negocios/);assert.match(view.body,/Pendientes|pendientes/);
-  assert.equal((await client.get('/produccion')).status,403);
-  assert.equal((await client.get('/agenda-general')).status,403);
-  assert.equal((await client.get('/canales/web')).status,200);
-  assert.equal((await client.get('/wallet?empresa='+id)).status,200);
-  assert.equal(world.db.get('SELECT count(*) AS n FROM requests').n,before);
+test('navegación unifica redes y mantiene servicios, cartera, agenda y Wallet',async t=>{
+ const {admin,client,world}=await context(t);
+ for(const path of ['/resumen','/produccion','/agenda-general','/wallet','/contenido','/servicios/maps','/servicios/web','/servicios/brand','/proximamente'])assert.equal((await admin.get(path)).status,200,path);
+ const page=await client.get('/inicio');assert.match(page.body,/Contenido para redes/);assert.match(page.body,/Diseño de marca/);assert.match(page.body,/Próximamente/);assert.doesNotMatch(page.body,/href="\/canales\/(instagram|tiktok|youtube|facebook)"/);
+ assert.equal((await client.get('/produccion')).status,403);
+ const old=await client.get('/canales/instagram');assert.equal(old.status,303);assert.equal(old.location,'/contenido?plataforma=INSTAGRAM');
+ assert.equal(world.db.get('SELECT count(*) AS n FROM requests').n,0);
 });
-test('dueño abre Wallet con su identidad existente y no expone su credencial al navegador',async t=>{
-  const {client,loyalty,world,id}=await context(t);
-  assert.equal((await client.get('/wallet-api/api/staff/wallet-design')).status,409);
-  assert.equal((await connect(client,loyalty)).status,303);
-  assert.equal(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant,loyalty.business.id);
-  const page=await client.get('/wallet');assert.equal(page.status,200);assert.match(page.body,/Estudio de tarjetas/);assert.match(page.body,/Configurado/);assert.ok(!page.body.includes(loyalty.ownerToken));
-  const shell=await client.get('/wallet/gestion?seccion=design');assert.equal(shell.status,200);assert.match(shell.body,/loyalty-context.js/);assert.ok(!shell.body.includes(loyalty.ownerToken));
-  assert.match(shell.headers.get('content-security-policy'),/style-src 'self' 'unsafe-inline'/);
-  const design=await client.get('/wallet-api/api/staff/wallet-design');assert.equal(design.status,200);assert.equal(JSON.parse(design.body).company,loyalty.business.id);
-  assert.equal((await client.get('/wallet-api/api/platform/overview')).status,403);
-  assert.equal((await client.get('/wallet-api/api/me')).status,403);
-  assert.equal((await client.get('/platform')).status,403);
-  const restore=await client.post('/wallet-api/api/staff/wallet/restore',{confirmed:true},{json:true,headers:{'X-Lumina-CSRF':client.csrf}});assert.equal(restore.status,200);
-  const join=await client.get(JSON.parse(restore.body).path);assert.equal(join.status,303);assert.equal(join.location,loyalty.origin+'/join/'+loyalty.business.slug+'?restore=ficticio');
-  assert.equal((await client.get('/api/staff/wallet-health')).status,404);
-  for(const table of ['companies','accounts','sessions','audit'])assert.ok(!JSON.stringify(world.db.all('SELECT * FROM '+table)).includes(loyalty.ownerToken));
-  const index=loyalty.calls.length;
-  assert.equal((await client.post('/wallet/desconectar')).status,303);
-  assert.equal((await client.get('/wallet-api/api/staff/wallet-design')).status,409);
-  assert.equal(loyalty.calls.length,index);
+test('dueño accede sin credenciales y mantiene el mismo acceso después de cerrar y volver a ingresar',async t=>{
+ const {client,loyalty,world}=await context(t);
+ const page=await client.get('/wallet');assert.equal(page.status,200);assert.match(page.body,/Diseño de tarjetas/);assert.doesNotMatch(page.body,/name="credential"|Conecta el Wallet/);
+ const row=world.db.get('SELECT * FROM wallet_access');assert.equal(row.status,'ACTIVE');const token=loyalty.staff.get(row.staff_id).token;
+ for(const path of ['/wallet','/wallet/gestion?seccion=design','/equipo']){const view=await client.get(path);assert.equal(view.status,200);assert.ok(!view.body.includes(token));assert.ok(!view.body.includes(loyalty.platformToken));assert.doesNotMatch(view.body,/name="credential"/);}
+ assert.ok(!JSON.stringify(world.db.all('SELECT * FROM wallet_access')).includes(token));
+ assert.equal(JSON.parse((await client.get('/wallet-api/api/staff/wallet-design')).body).company,loyalty.business.id);
+ assert.equal((await client.get('/wallet-api/api/platform/overview')).status,403);
+ const restore=await client.post('/wallet-api/api/staff/wallet/restore',{confirmed:true},{json:true,headers:{'X-Lumina-CSRF':client.csrf}});assert.equal(restore.status,200);
+ const join=await client.get(JSON.parse(restore.body).path);assert.equal(join.location,loyalty.origin+'/join/'+loyalty.business.slug+'?restore=ficticio');
+ await client.post('/salir');assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,401);
+ await client.post('/entrar',{email:'negocio5@example.test',password});await client.get('/wallet');
+ assert.equal(world.db.get('SELECT staff_id FROM wallet_access').staff_id,row.staff_id);assert.equal(loyalty.staff.get(row.staff_id).token,token);
 });
-test('Wallet exige CSRF y origen en escrituras, conserva PUT y rechaza otra cuenta de negocio',async t=>{
-  const {client,loyalty,world,admin}=await context(t);
-  await connect(client,loyalty);await client.get('/wallet');
-  async function put(headers){return fetch(world.origin+'/wallet-api/api/staff/wallet-design',{method:'PUT',headers:{Cookie:client.cookie,'Content-Type':'application/json',...headers},body:JSON.stringify({version:9})});}
-  assert.equal((await put({Origin:world.origin})).status,403);
-  assert.equal((await put({Origin:'https://foreign.test','X-Lumina-CSRF':client.csrf})).status,403);
-  const result=await put({Origin:world.origin,'X-Lumina-CSRF':client.csrf});assert.equal(result.status,200);assert.equal((await result.json()).version,9);
-  const other=await owner(world,'Otro negocio','6');await admin.post('/clientes/verificar?empresa='+other.id);
-  assert.equal((await connect(other.client,loyalty)).status,409);
-  assert.equal((await other.client.get('/wallet-api/api/staff/wallet-design')).status,409);
+test('las escrituras de Wallet exigen origen y CSRF, incluido PUT',async t=>{
+ const {client,world}=await context(t);await client.get('/wallet');
+ const put=headers=>fetch(world.origin+'/wallet-api/api/staff/wallet-design',{method:'PUT',headers:{Cookie:client.cookie,'Content-Type':'application/json',...headers},body:JSON.stringify({version:9})});
+ assert.equal((await put({Origin:world.origin})).status,403);
+ assert.equal((await put({Origin:'https://foreign.test','X-Lumina-CSRF':client.csrf})).status,403);
+ const result=await put({Origin:world.origin,'X-Lumina-CSRF':client.csrf});assert.equal(result.status,200);assert.equal((await result.json()).version,9);
 });
-test('permisos Wallet de colaborador no conceden credenciales de dueño o de plataforma',async t=>{
-  const {client,loyalty,world}=await context(t);
-  const member=await colleague(world,client,{name:'Solo contenido',email:'wallet-team@example.test','WALLET.VIEW':'yes','WALLET.REQUEST':'yes'});
-  const page=await member.session.get('/wallet');assert.equal(page.status,200);assert.match(page.body,/Servicios de Wallet/);assert.doesNotMatch(page.body,/name="credential"/);
-  assert.equal((await connect(member.session,loyalty)).status,403);
-  assert.equal((await member.session.get('/wallet/gestion')).status,403);
-  assert.equal((await member.session.get('/wallet-api/api/staff/dashboard')).status,403);
-  assert.equal((await member.session.get('/wallet-api/api/platform/overview')).status,403);
-  assert.equal((await member.session.get('/caja')).status,403);
-  assert.equal((await client.post('/equipo/'+member.id+'/permisos',{'INSTAGRAM.VIEW':'yes',revision:String(world.db.get('SELECT revision FROM accounts WHERE id=?',member.id).revision)})).status,303);
-  assert.equal((await member.session.get('/wallet')).status,403);
+test('la asociación del negocio requiere agencia, verificación y selección explícita; no se reasigna',async t=>{
+ const {client,loyalty,world,admin,id}=await context(t,false);
+ assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,409);
+ assert.equal((await client.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,403);
+ assert.equal((await admin.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id})).status,400);
+ assert.equal((await admin.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,303);
+ const other=await owner(world,'Otro negocio','6');await admin.post('/clientes/verificar?empresa='+other.id);
+ assert.equal((await admin.post('/wallet/vincular?empresa='+other.id,{tenant:loyalty.business.id,confirm:'yes'})).status,409);
+ const tenant=[...loyalty.staff.values()].find(p=>p.token===loyalty.foreignToken).company.id;
+ assert.equal((await admin.post('/wallet/vincular?empresa='+id,{tenant,confirm:'yes'})).status,409);
+ assert.equal((await other.client.get('/wallet-api/api/staff/dashboard')).status,409);
 });
-test('revocación de Loyalty y cierre de sesión bloquean el acceso delegado inmediatamente',async t=>{
-  const {client,loyalty,world}=await context(t);await connect(client,loyalty);
-  const remote=[...loyalty.staff.values()].find(p=>p.token===loyalty.ownerToken);remote.state='INACTIVE';
-  assert.equal((await client.get('/wallet-api/api/staff/wallet-health')).status,401);
-  assert.equal((await client.get('/wallet-api/api/staff/wallet-health')).status,409);
-  remote.state='ACTIVE';await connect(client,loyalty);await client.get('/wallet');await client.post('/salir');
-  assert.equal((await client.get('/wallet-api/api/staff/wallet-health')).status,401);
-  assert.equal(world.db.get('SELECT count(*) AS n FROM sessions WHERE account_id=?',world.db.get("SELECT id FROM accounts WHERE kind='OWNER'").id).n,0);
+test('colaborador solo ve áreas asignadas y no hereda edición, Caja ni administración',async t=>{
+ const {client,world}=await context(t);
+ const member=await colleague(world,client,{name:'Diseño',email:'design@example.test','WALLET.VIEW':'yes','WALLET_DESIGN.VIEW':'yes'});
+ const page=await member.session.get('/wallet');assert.match(page.body,/Diseño de tarjetas/);assert.doesNotMatch(page.body,/href="\/wallet\/gestion\?seccion=(customers|programs|reports)"/);
+ assert.equal((await member.session.get('/wallet/gestion?seccion=design')).status,200);
+ assert.equal((await member.session.get('/wallet/gestion?seccion=customers')).status,403);
+ assert.equal((await member.session.get('/wallet-api/api/staff/wallet-design')).status,200);
+ for(const path of ['/wallet-api/api/platform/overview','/wallet-api/api/staff/team','/wallet-api/api/staff/customer-activity','/caja','/equipo'])assert.equal((await member.session.get(path)).status,403,path);
+ const put=()=>fetch(world.origin+'/wallet-api/api/staff/wallet-design',{method:'PUT',headers:{Cookie:member.session.cookie,Origin:world.origin,'Content-Type':'application/json','X-Lumina-CSRF':member.session.csrf},body:'{"version":9}'});
+ assert.equal((await put()).status,403);
+ let rev=world.db.get('SELECT revision FROM accounts WHERE id=?',member.id).revision;
+ await client.post('/equipo/'+member.id+'/permisos',{revision:String(rev),'WALLET.VIEW':'yes','WALLET_DESIGN.VIEW':'yes','WALLET_DESIGN.EDIT':'yes'});
+ assert.equal((await put()).status,200);
+ rev=world.db.get('SELECT revision FROM accounts WHERE id=?',member.id).revision;
+ await client.post('/equipo/'+member.id+'/permisos',{revision:String(rev),'SOCIAL.VIEW':'yes'});
+ assert.equal((await member.session.get('/wallet-api/api/staff/wallet-design')).status,403);
+ assert.equal((await member.session.get('/wallet')).status,403);
 });
-test('agencia administra Loyalty y ambas plataformas con el acceso de plataforma existente',async t=>{
-  const {admin,loyalty}=await context(t);
-  const result=await admin.post('/wallet/conectar',{credential:loyalty.platformToken,confirm:'yes'});assert.equal(result.status,303);
-  const page=await admin.get('/wallet');assert.equal(page.status,200);assert.match(page.body,/Apple Wallet/);assert.match(page.body,/Google Wallet/);assert.match(page.body,/Configurado/);assert.match(page.body,/Negocio conectado/);assert.ok(!page.body.includes(loyalty.platformToken));
-  assert.equal((await admin.get('/platform')).status,200);
-  assert.equal((await admin.get('/wallet-api/api/platform/overview')).status,200);
-  assert.equal((await admin.get('/wallet-api/api/staff/dashboard')).status,403);
-  assert.equal((await admin.get('/wallet-api/api/platform/tenants/'+loyalty.business.id+'/customer-activity')).status,200);
+test('permisos de servicios no crean acceso operativo y baja de persona cierra Wallet',async t=>{
+ const {client,world}=await context(t);
+ const member=await colleague(world,client,{name:'Servicios',email:'services@example.test','WALLET.VIEW':'yes','WALLET.REQUEST':'yes'});
+ assert.equal((await member.session.get('/wallet')).status,200);
+ assert.equal((await member.session.get('/wallet-api/api/staff/dashboard')).status,403);
+ assert.equal(world.db.get('SELECT count(*) AS n FROM wallet_access').n,0);
+ await client.post('/equipo/'+member.id+'/permisos',{revision:String(world.db.get('SELECT revision FROM accounts WHERE id=?',member.id).revision),'WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
+ assert.equal((await member.session.get('/wallet-api/api/staff/wallet-health')).status,200);
+ await client.post('/equipo/'+member.id+'/desactivar',{confirm:'yes'});
+ assert.equal((await member.session.get('/wallet-api/api/staff/wallet-health')).status,401);
+});
+test('revocación en Loyalty queda bloqueada; no se genera otra credencial ni se reactiva silenciosamente',async t=>{
+ const {client,world,loyalty}=await context(t);await client.get('/wallet');
+ const row=world.db.get('SELECT * FROM wallet_access');loyalty.staff.get(row.staff_id).state='INACTIVE';
+ assert.equal((await client.get('/wallet-api/api/staff/wallet-health')).status,401);
+ assert.equal((await client.get('/wallet-api/api/staff/wallet-health')).status,403);
+ assert.equal(world.db.get('SELECT status FROM wallet_access').status,'BLOCKED');
+ assert.equal([...loyalty.staff.values()].filter(p=>p.requestId===row.request_id).length,1);
+});
+test('alta de acceso único recupera respuesta perdida de forma idempotente',async t=>{
+ const {client,world,loyalty}=await context(t);loyalty.loseCreateResponse();
+ assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,503);
+ assert.equal(world.db.get('SELECT status FROM wallet_access').status,'PENDING');
+ assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,200);
+ const row=world.db.get('SELECT * FROM wallet_access');assert.equal(row.status,'ACTIVE');
+ assert.equal([...loyalty.staff.values()].filter(p=>p.requestId===row.request_id).length,1);
+});
+test('agencia entra directamente con configuración interna y sin secretos en HTML',async t=>{
+ const {admin,loyalty}=await context(t);
+ for(const path of ['/wallet','/platform']){const response=await admin.get(path);assert.equal(response.status,200);assert.doesNotMatch(response.body,/name="credential"/);assert.ok(!response.body.includes(loyalty.platformToken));}
+ assert.equal((await admin.get('/wallet-api/api/platform/overview')).status,200);
+ assert.equal((await admin.get('/wallet-api/api/staff/dashboard')).status,403);
+ assert.equal((await admin.post('/wallet/conectar',{credential:loyalty.ownerToken})).status,410);
 });
 test('rutas delegadas limitadas; métodos, rutas públicas y roles desconocidos no se elevan',()=>{
   const id='00000000-0000-0000-0000-000000000001';
@@ -96,4 +110,35 @@ test('rutas delegadas limitadas; métodos, rutas públicas y roles desconocidos 
   assert.equal(walletRouteAllowed('OWNER','DELETE','/api/staff/programs/'+id),true);
   for(const role of ['AGENCY','OWNER','COLLABORATOR','anything'])for(const path of ['/api/me','/api/public/demo/enroll','/api/platform/wallet/reset','/api/staff/wallet-design/extra','/api/staff/../platform/overview'])for(const method of ['GET','POST','PUT','DELETE'])assert.equal(walletRouteAllowed(role,method,path),false);
   assert.equal(walletRouteAllowed('COLLABORATOR','GET','/api/staff/dashboard'),false);
+});
+
+test('reparar un acceso bloqueado exige agencia y confirmación, conserva el empleado y no toca tarjetas',async t=>{
+ const {client,world,loyalty,admin,id}=await context(t);await client.get('/wallet');
+ const row=world.db.get('SELECT * FROM wallet_access');loyalty.staff.get(row.staff_id).state='INACTIVE';
+ await client.get('/wallet-api/api/staff/dashboard');
+ const path='/wallet/reparar?empresa='+id,input={account:row.account_id,reason:'El dueño confirmó su acceso.',confirm:'yes'};
+ assert.equal((await client.post(path,input)).status,403);
+ assert.equal((await admin.post(path,{...input,confirm:''})).status,400);
+ assert.equal((await admin.post(path,input)).status,303);
+ assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,200);
+ assert.equal(world.db.get('SELECT staff_id FROM wallet_access').staff_id,row.staff_id);
+ assert.ok(!loyalty.calls.some(call=>call.path.includes('/wallet/reset')));
+});
+test('informes delegados se abren sin consultar ni mostrar la cuenta comercial',async t=>{
+ const {client,world,loyalty}=await context(t);
+ const member=await colleague(world,client,{name:'Analista',email:'reports@example.test','WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
+ const start=loyalty.calls.length;
+ const view=await member.session.get('/wallet/gestion?seccion=reports');assert.equal(view.status,200);assert.match(view.body,/Resultados por sucursal/);assert.match(view.body,/105/);
+ assert.ok(!loyalty.calls.slice(start).some(c=>c.path.endsWith('/account')));
+ assert.equal((await member.session.get('/wallet-api/api/staff/account')).status,403);
+});
+
+test('una pestaña anterior no mezcla datos Wallet después de cambiar de cuenta',async t=>{
+ const {client,world,admin,loyalty,id}=await context(t);await client.get('/wallet');const oldCsrf=client.csrf;
+ await client.post('/salir');const other=await owner(world,'Otro titular','6');await admin.post('/clientes/verificar?empresa='+other.id);
+ const tenant=[...loyalty.staff.values()].find(p=>p.token===loyalty.foreignToken).company.id;
+ await admin.post('/wallet/vincular?empresa='+other.id,{tenant,confirm:'yes'});
+ const stale=await fetch(world.origin+'/wallet-api/api/staff/dashboard',{headers:{Cookie:other.client.cookie,'X-Lumina-CSRF':oldCsrf}});assert.equal(stale.status,403);
+ const valid=await other.client.get('/wallet-api/api/staff/dashboard');assert.equal(valid.status,200);assert.equal(JSON.parse(valid.body).business.id,tenant);
+ assert.equal(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant,loyalty.business.id);
 });

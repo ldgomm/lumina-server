@@ -19,6 +19,7 @@ export function createPlan(db, actor, data) {
   const description = text(data.description || '', 'descripción', 0, 1200);
   const items = Object.keys(services).filter(key => key !== 'WALLET')
     .map(key => [key, integer(data[key] || '0',services[key],{ max:100 })]).filter(([,n]) => n > 0);
+  requireThat(term!=='MONTHLY'||!items.some(([service])=>['LOGO','IDENTITY','BRAND_GUIDE'].includes(service)),'Diseño de marca se contrata como trabajo individual, con entrega y cierre.');
   if (wallet !== 'NONE') items.push(['WALLET',1]);
   requireThat(items.length, 'Agrega al menos un servicio al plan.');
   return db.transaction(() => {

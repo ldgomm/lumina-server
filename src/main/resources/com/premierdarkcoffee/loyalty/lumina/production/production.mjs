@@ -1,49 +1,50 @@
+import { canRequest, platformTargets, requestAccessSql } from '../access/content-policy.mjs';
 import { can, requireAccess, requireAgency, requireOwner } from '../access/accounts.mjs';
 import { checkCapacity, getPlan } from '../memberships/billing.mjs';
-import { channels, choice, event, formats, httpsUrl, integer, localInstant, now, requireThat, socialChannels, text, uuid } from '../shared/domain.mjs';
+import { channels, areas, choice, event, formats, httpsUrl, integer, localInstant, now, requireThat, socialChannels, text, uuid } from '../shared/domain.mjs';
 
 const productionStates = ['APPROVED','SCHEDULED','PRODUCTION'];
 const finalStates = ['DELIVERED','CANCELLED'];
 
 export function visibleRequests(db, actor, companyId, channel, page = 0) {
-  const scopes = Object.keys(channels).filter(key => can(actor,key));
-  if (actor.kind !== 'COLLABORATOR') scopes.push('GENERAL');
-  if (channel) requireThat(scopes.includes(channel),'Tu acceso no incluye ese canal.',403);
-  const allowed = channel ? [channel] : scopes;
-  if (!allowed.length) return { rows: [], more: false };
-  const placeholders = allowed.map(() => '?').join(',');
-  const rows = db.all(`SELECT r.*,
-    (SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
-    FROM requests r WHERE r.company_id=? AND r.channel IN (${placeholders})
-    AND (r.type NOT IN ('PLAN','QUOTE','COURTESY') OR ?=0)
-    ORDER BY r.created_at DESC,r.id LIMIT 31 OFFSET ?`,companyId,...allowed,Number(actor.kind === 'COLLABORATOR'),page * 30);
-  return { rows: rows.slice(0,30), more: rows.length > 30 };
+  if (channel) requireThat(Object.hasOwn(channels,channel) && can(actor,channel),'Tu acceso no incluye esa área.',403);
+  const policy=requestAccessSql(actor);
+  const platform=socialChannels.includes(channel);
+  const filter=platform?'EXISTS(SELECT 1 FROM request_platforms fp WHERE fp.company_id=r.company_id AND fp.request_id=r.id AND fp.platform=?)':"(?='' OR r.channel=?)";
+  const values=platform?[channel]:[channel||'',channel||''];
+  const rows=db.all(`SELECT r.*,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
+    FROM requests r WHERE r.company_id=? AND ${policy.sql} AND ${filter}
+    ORDER BY r.created_at DESC,r.id LIMIT 31 OFFSET ?`,companyId,...policy.params,...values,page*30);
+  return {rows:rows.slice(0,30).map(row=>({...row,platforms:platformTargets(db,row)})),more:rows.length>30};
 }
 export function requestCounts(db, actor, companyId) {
-  const groups = db.all(`SELECT channel,type,status,count(*) AS count,sum(quantity) AS pieces
-    FROM requests WHERE company_id=? GROUP BY channel,type,status`,companyId);
-  return groups.filter(row => can(actor,row.channel) &&
-    (actor.kind !== 'COLLABORATOR' || !['PLAN','QUOTE','COURTESY'].includes(row.type)));
+  const policy=requestAccessSql(actor);
+  return db.all(`SELECT channel,type,status,count(*) AS count,sum(quantity) AS pieces FROM requests r WHERE company_id=? AND ${policy.sql} GROUP BY channel,type,status`,companyId,...policy.params);
 }
 export function getRequest(db, actor, companyId, id) {
-  const request = db.get('SELECT * FROM requests WHERE company_id=? AND id=?',companyId,id || '');
-  requireThat(request && can(actor,request.channel) &&
-    (actor.kind !== 'COLLABORATOR' || !['PLAN','QUOTE','COURTESY'].includes(request.type)),
-  'Solicitud no encontrada.',404);
+  const request=db.get('SELECT * FROM requests WHERE company_id=? AND id=?',companyId,id||'');
+  if(request)request.platforms=platformTargets(db,request);
+  requireThat(request && canRequest(actor,request),'Solicitud no encontrada.',404);
   return request;
 }
 export function createRequest(db, actor, company, data) {
   const type = choice(data.type,['CONTENT','QUOTE','VISIT','COURTESY','PLAN'],'tipo de solicitud');
   if (['COURTESY','PLAN'].includes(type)) requireOwner(actor);
   if (type === 'QUOTE') requireThat(actor.kind !== 'COLLABORATOR','Solo el dueño puede solicitar cotizaciones.',403);
-  const channel = type === 'PLAN' ? 'GENERAL' : choice(data.channel,Object.keys(channels),'canal');
+  const original=type==='PLAN'?'GENERAL':choice(data.channel,Object.keys(channels),'área');
+  const channel=socialChannels.includes(original)?'SOCIAL':original;
+  const platforms=channel==='SOCIAL'?(socialChannels.includes(original)?[original]:socialChannels.filter(p=>data['platform.'+p]==='yes')):[];
+  if(channel==='SOCIAL') {
+    requireThat(platforms.length,'Selecciona al menos una plataforma de publicación.');
+    requireThat(platforms.every(p=>can(actor,p,'REQUEST')),'Tu acceso no incluye todas las plataformas seleccionadas.',403);
+  }
   const service = type === 'PLAN' ? 'PLAN' : choice(data.service,formats[channel],'servicio del canal');
   requireAccess(actor,channel,'REQUEST');
   if (type === 'COURTESY') {
-    requireThat(socialChannels.includes(channel) && ['VIDEO','REEL','SHORT'].includes(service),
+    requireThat(channel==='SOCIAL' && ['VIDEO','REEL','SHORT'].includes(service),
       'Elige un formato de video para la cortesía.');
   }
-  if (type === 'VISIT') requireThat(socialChannels.includes(channel),'Elige un canal de video para la visita.');
+  if (type === 'VISIT') requireThat(channel==='SOCIAL','Elige un canal de video para la visita.');
   const plan = type === 'PLAN' ? getPlan(db,data.plan) : null;
   requireThat(!plan || plan.published,'El plan ya no se ofrece.',409);
   const quantity = ['COURTESY','PLAN','VISIT'].includes(type) ? 1 :
@@ -59,6 +60,7 @@ export function createRequest(db, actor, company, data) {
     const id = uuid();
     db.run(`INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,plan_id,requested_at,created_at)
       VALUES(?,?,?,?,?,?,?,?,?,'NEW',?,?,?)`,id,company.id,actor.id,type,channel,service,quantity,title,brief,plan?.id ?? null,preferred,now());
+    for (const platform of platforms) db.run('INSERT INTO request_platforms VALUES(?,?,?)',company.id,id,platform);
     event(db,actor,company.id,'REQUEST',id,'SOLICITUD_RECIBIDA',title,channel);
     return id;
   });
@@ -175,7 +177,7 @@ export function editPiece(db, actor, company, request, piece, data) {
 }
 export function reviewPiece(db, actor, company, request, piece, data) {
   requireThat(actor.kind !== 'AGENCY','La aprobación corresponde al cliente.',403);
-  requireAccess(actor,request.channel,'APPROVE');
+  requireThat(canRequest(actor,request,'APPROVE'),'Tu acceso no permite aprobar la pieza común para todas sus plataformas.',403);
   requireThat(piece.status === 'REVIEW' && request.status === 'PRODUCTION' && String(piece.revision) === data.revision,
     'La pieza cambió. Revisa su versión vigente.',409);
   const status = choice(data.status,['APPROVED','PRODUCTION'],'decisión');
@@ -199,7 +201,9 @@ export function addPublication(db, actor, company, request, piece, data) {
   requireAgency(actor);
   requireThat(piece.status === 'APPROVED' || piece.status === 'DELIVERED',
     'Registra la publicación después de la aprobación.',409);
+  requireThat(request.channel==='SOCIAL','Las publicaciones sociales corresponden a Contenido para redes.');
   const channel = choice(data.channel,socialChannels,'red social');
+  requireThat(platformTargets(db,request).includes(channel),'Añade primero esta plataforma a la ficha común de contenido.');
   const url = httpsUrl(data.url);
   const published = localInstant(data.published,'fecha de publicación');
   requireThat(published <= now(),'La publicación registrada no puede estar en el futuro.');

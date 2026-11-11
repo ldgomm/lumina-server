@@ -37,14 +37,14 @@ export function plansPage({actor,company,url,plans,contracts}) {
     ${select('term','Modalidad',labels(['MONTHLY','ONE_OFF']))}
     ${input('price','Precio en USD (vacío para a medida)','text','inputmode="decimal"')}</div>
     ${textarea('description','Descripción','maxlength="1200"')}
-    <div class="fields three">${Object.entries(services).filter(([key])=>key!=='WALLET').map(([key,name])=>
+    <p class="muted">El diseño de marca está disponible al elegir modalidad Individual.</p><div class="fields three">${Object.entries(services).filter(([key])=>key!=='WALLET').map(([key,name])=>
       input(key,name,'number','min="0" max="100"','0')).join('')}</div>
     ${select('wallet','Wallet',labels(['NONE','INCLUDED','GIFT']))}
     ${button('Publicar oferta')}`)) : '';
   return `${company ? card('Períodos y cupos',periods || message('Este negocio aún no tiene un plan activo.'),
     'El cupo se reserva cuando la agencia asigna la pieza. Al entregarla pasa a utilizado.') : ''}
     ${agency && company?.approved && active.length ? disclosure('Activar un acuerdo directo',contractForm(actor,url('/planes/activar'),active)) : ''}
-    ${create}${card('Catálogo de servicios',catalog,'Las membresías son mensuales. Los servicios individuales se contratan por separado.')}`;
+    ${create}${card('Catálogo de servicios',catalog,'Membresías mensuales o trabajos individuales. El diseño de marca se contrata por proyecto. Una pieza publicada en varias redes consume un solo cupo.')}`;
 }
 export function metricsPage(actor,url,data) {
   const filters = `<form action="/reportes" class="filter">${actor.kind==='AGENCY' ? hidden('empresa',new URL(url('/reportes'),'http://localhost').searchParams.get('empresa')) : ''}

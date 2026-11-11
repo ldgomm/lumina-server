@@ -1,3 +1,4 @@
+import { requestAccessSql } from '../access/content-policy.mjs';
 import { can, requireAccess, requireAgency } from '../access/accounts.mjs';
 import { choice, dateOnly, event, httpsUrl, integer, localDay, localInstant, money, now, requireThat, socialChannels, text, uuid } from '../shared/domain.mjs';
 
@@ -42,6 +43,7 @@ export function analytics(db, actor, companyId, filters) {
       item.coverage[key] = {observed:0,comparable:0};
     }
   }
+  const policy=requestAccessSql(actor);
   const pairs = db.all(`SELECT b.channel,r.channel AS request_channel,r.type AS request_type,
     m.id AS current_id,m.views,m.likes,m.comments,m.shares,m.reach,m.observed_at,
     p.views AS prev_views,p.likes AS prev_likes,p.comments AS prev_comments,
@@ -52,7 +54,7 @@ export function analytics(db, actor, companyId, filters) {
       AND publication_id=b.id AND source='MANUAL' AND observed_at>=? AND observed_at<? ORDER BY observed_at DESC LIMIT 1)
     LEFT JOIN social_metrics p ON p.id=(SELECT id FROM social_metrics WHERE company_id=b.company_id
       AND publication_id=b.id AND source='MANUAL' AND observed_at<? ORDER BY observed_at DESC LIMIT 1)
-    WHERE b.company_id=? AND b.published_at<? AND x.status<>'CANCELLED'`,start,end,start,companyId,end);
+    WHERE b.company_id=? AND b.published_at<? AND x.status<>'CANCELLED' AND ${policy.sql}`,start,end,start,companyId,end,...policy.params);
   for (const row of pairs) {
     const result = summary.get(row.channel);
     if (!result || !can(actor,row.request_channel) ||

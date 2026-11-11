@@ -1,11 +1,11 @@
 import { icon } from './icons.mjs';
 import { can } from '../../access/accounts.mjs';
-import { channels, labels, services, socialChannels, zone } from '../../shared/domain.mjs';
+import { channels, areas, walletScopes, labels, services, socialChannels, zone } from '../../shared/domain.mjs';
 
 export const esc = value => String(value ?? '').replace(/[&<>"']/g,ch => ({
   '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;',
 })[ch]);
-export const label = value => labels[value] || channels[value] || services[value] || value;
+export const label = value => labels[value] || channels[value] || walletScopes[value] || services[value] || value;
 export const displayAmount = minor => minor == null ? 'A medida' :
   new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(minor / 100);
 export const number = value => new Intl.NumberFormat('es-EC').format(value);
@@ -52,8 +52,9 @@ function navLinks(actor,company,url,cash) {
     items.push([url('/inicio'),company&&actor.kind==='AGENCY'?'Resumen del negocio':'Mi negocio','home',company&&actor.kind==='AGENCY'?'Negocio seleccionado':'Mi espacio']);
     if(Object.keys(channels).some(scope=>can(actor,scope)))items.push([url('/solicitudes'),'Solicitudes','content'],[url('/agenda'),'Grabaciones','calendar']);
   }
-  if(can(actor,'WALLET'))items.push([url('/wallet'),'Wallet · Loyalty','wallet','Servicios']);
-  for(const channel of ['INSTAGRAM','TIKTOK','FACEBOOK','YOUTUBE','MAPS','WEB'])if(can(actor,channel))items.push([url('/canales/'+channel.toLowerCase()),channels[channel],channel==='MAPS'?'maps':channel==='WEB'?'web':'social']);
+  if(can(actor,'WALLET'))items.push([url('/wallet'),'Fidelización digital · Wallet','wallet','Servicios']);
+  for(const [scope,route,mark] of [['SOCIAL','/contenido','social'],['MAPS','/servicios/maps','maps'],['WEB','/servicios/web','web'],['BRAND','/servicios/brand','content']])if(can(actor,scope))items.push([url(route),areas[scope],mark]);
+  if(actor.kind!=='COLLABORATOR')items.push([url('/proximamente'),'WhatsApp Business e IA · Próximamente','social']);
   if(actor.kind!=='COLLABORATOR')items.push([url('/planes'),'Membresías y servicios','plans','Gestión']);
   if((actor.kind!=='AGENCY'||company)&&socialChannels.some(scope=>can(actor,scope)))items.push([url('/reportes'),'Estadísticas','metrics']);
   if((actor.kind!=='AGENCY'||company)&&can(actor,'MAPS'))items.push([url('/mapas'),'Reseñas y ubicaciones','maps']);

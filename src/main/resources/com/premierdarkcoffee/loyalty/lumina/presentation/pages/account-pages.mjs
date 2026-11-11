@@ -1,4 +1,4 @@
-import { channels } from '../../shared/domain.mjs';
+import { channels, areas, walletScopes, socialChannels } from '../../shared/domain.mjs';
 import { permissions } from '../../access/accounts.mjs';
 import { badge, button, card, check, disclosure, esc, form, hidden, input, label, localLink, message, select, table } from './components.mjs';
 
@@ -47,11 +47,12 @@ export function accountPage(actor) {
   'Al guardarla se cierran tus otras sesiones.');
 }
 function matrix(member) {
-  return table(['Área',...Object.values(permissions)], Object.entries(channels).map(([key,name]) => [
-    esc(name),
-    ...Object.entries(permissions).map(([action,caption]) => check(`${key}.${action}`,caption,
-      member?.grants.some(grant=>grant.scope===key && grant.action===action))),
-  ]));
+  const chosen=(scope,action)=>Boolean(member?.grants.some(g=>g.scope===scope&&g.action===action));
+  const rows=Object.entries(areas).map(([scope,name])=>[esc(name),...Object.entries(permissions).map(([action,caption])=>check(`${scope}.${action}`,caption,chosen(scope,action)))]);
+  const granular=Object.entries(walletScopes).map(([scope,name])=>[esc(name),check(scope+'.VIEW','Ver',chosen(scope,'VIEW')),scope==='WALLET_REPORTS'?'—':check(scope+'.EDIT','Modificar',chosen(scope,'EDIT'))]);
+  const legacy=socialChannels.map(scope=>[esc(channels[scope]),...Object.entries(permissions).map(([action,caption])=>check(`${scope}.${action}`,caption,chosen(scope,action)))]);
+  return table(['Área',...Object.values(permissions)],rows)+disclosure('Limitar contenido a ciertas plataformas',`<p class="muted">Si activas Contenido para redes, das acceso a todas las plataformas. Deja esa fila vacía para asignar solamente las redes de abajo. Aprobar una pieza común requiere permiso sobre todas sus plataformas.</p>${table(['Plataforma',...Object.values(permissions)],legacy)}`)+
+    disclosure('Áreas de fidelización digital',`<p class="muted">Activa Ver en Fidelización digital y elige las tareas autorizadas. Caja y su sucursal se asignan en la sección de Caja.</p>${table(['Área de Wallet','Consulta','Cambios'],granular)}`);
 }
 export function teamPage(actor,company,members) {
   const list = table(['Persona','Áreas de Lúmina','Loyalty · Caja','Acceso'],members.map(member=>[
@@ -61,22 +62,16 @@ export function teamPage(actor,company,members) {
     badge(!member.active ? 'INACTIVE' : member.activated ? 'ACTIVE' : 'PENDING'),
   ]),'Crea un acceso para la primera persona de tu equipo.');
   return `${card('Personas del negocio',list)}
-    ${card('Conexión con Loyalty', company.loyalty_tenant ?
-      `<p>Negocio vinculado: <strong>${esc(company.loyalty_name)}</strong>. Las asignaciones de Caja usan las sucursales y permisos de este negocio.</p>` :
-      form('/equipo/loyalty/vincular',actor,`<div class="fields two">
-        ${input('slug','Código de negocio de Loyalty','text','required maxlength="60" autocomplete="off"')}
-        ${ownerCredential()}</div>${check('confirm','Confirmo que es el mismo negocio que administro en Lúmina.',false,true)}${button('Vincular Loyalty')}`),
-    'Para vincular, usa el código del negocio que aparece en su enlace de registro de tarjetas y una credencial vigente de dueño.')}
+    ${card('Fidelización digital',company.loyalty_tenant?`<p><strong>${esc(company.loyalty_name)}</strong> está asociado a este negocio. Tu equipo usa su misma cuenta de Lúmina.</p>`:'<p>Lúmina debe activar la fidelización y asociar el registro existente del negocio. Después podrás asignar Caja y las demás áreas desde aquí.</p>')}
     ${company.approved ? card('Añadir colaborador',form('/equipo',actor,`<div class="fields two">
       ${input('name','Nombre','text','required maxlength="100" autocomplete="off"')}
       ${input('email','Correo del colaborador','email','required maxlength="180" autocomplete="off"')}</div>
-      <p class="muted">Puedes combinar cualquier canal. Deja todos vacíos para configurar únicamente Caja en el siguiente paso.</p>
+      <p class="muted">Puedes combinar áreas y tareas. Deja todos vacíos para configurar únicamente Caja en el siguiente paso.</p>
       ${matrix()}${button('Crear acceso')}`)) : card('Añadir colaborador',message('La agencia debe verificar tu negocio antes de habilitar los accesos del equipo.'))}`;
 }
-const ownerCredential = () => input('credential','Credencial de dueño de Loyalty','password','required minlength="43" maxlength="43" autocomplete="off"');
 export function memberPage(actor,company,member,branches = null) {
   const base = '/equipo/' + member.id;
-  let cash = message('Vincula primero el negocio de Loyalty desde Equipo y accesos.');
+  let cash = message('La agencia debe activar la fidelización del negocio.');
   if (company.loyalty_tenant) {
     cash = `${member.cash_status ? `<p>${badge(member.cash_status)} <strong>${esc(member.branch_name)}</strong> ·
       ${member.purchases ? 'Compras' : ''}${member.purchases && member.rewards ? ' y ' : ''}${member.rewards ? 'canjes' : ''}</p>` : ''}
@@ -85,15 +80,15 @@ export function memberPage(actor,company,member,branches = null) {
           ${select('branch','Sucursal',branches.map(b=>[b.id,b.name]),member.branch_id,'required')}
           <div class="actions">${check('purchases','Registrar compras',Boolean(member.purchases))}
           ${check('rewards','Canjear premios y aplicar descuentos',Boolean(member.rewards))}</div>
-          ${ownerCredential()}${button('Guardar acceso de Caja')}`) :
-        form(base + '/caja/sucursales',actor,`${ownerCredential()}${button('Consultar sucursales','secondary')}`) : ''}
+          ${button('Guardar acceso de Caja')}`) :
+        form(base + '/caja/sucursales',actor,`${button('Consultar sucursales','secondary')}`) : ''}
       ${['ACTIVE','REVOKING'].includes(member.cash_status) ? disclosure('Revocar acceso de Caja',
-        form(base + '/caja/revocar',actor,`${ownerCredential()}${input('reason','Motivo','text','required minlength="5" maxlength="500"')}
+        form(base + '/caja/revocar',actor,`${input('reason','Motivo','text','required minlength="5" maxlength="500"')}
           ${button('Revocar Caja','danger')}`)) : ''}`;
   }
   return `<div class="actions">${localLink('/equipo','← Equipo y accesos')}</div>
     ${card('Permisos de Lúmina',form(base + '/permisos',actor,`${hidden('revision',member.revision)}${matrix(member)}
-      ${button('Guardar permisos')}`),'Activa Ver en cada canal donde la persona pueda solicitar contenido o aprobar entregas.')}
+      ${button('Guardar permisos')}`),'Activa Ver en cada área donde la persona pueda solicitar contenido o aprobar entregas.')}
     ${card('Loyalty · Caja',cash,'La persona entra a Caja con su cuenta de Lúmina y opera en la sucursal asignada. Loyalty conserva la auditoría de sus compras y canjes.')}
     ${card('Credencial de acceso',`<p>${esc(member.email)} · ${badge(!member.active ? 'INACTIVE' : member.activated ? 'ACTIVE' : 'PENDING')}</p>
       <div class="actions">${form(base + '/invitar',actor,button('Emitir nuevo código','secondary'))}

@@ -380,3 +380,12 @@ El checkpoint ejecuta además las 17 pruebas HTTP de Lúmina antes de Kotlin y P
 ## Corrección de imports v041r1
 
 `WalletHttp` es una interfaz funcional. Su método `send` no es una declaración de paquete ni se importa desde `wallet.providers`. La revisión v041r1 retira ese import inválido de CustomerWorkspace, BusinessProfiles, WalletService y ManagementPostgresTest. No cambia cuerpos Kotlin, contratos HTTP, esquemas ni identidades Wallet. Mantener las 570 pruebas y todos los gates; un fallo de compileKotlin no constituye un fallo de Wallet ni permite omitir compileTestKotlin.
+
+
+## Contenido compartido y acceso único v042
+
+Esta revisión reemplaza el modelo de cuatro áreas sociales y el acceso Wallet en memoria de v041. Usar SOCIAL para la ficha común y request_platforms/publications/social_metrics para destinos, enlaces y mediciones. No duplicar piezas ni consumir cupos por red. Conservar permisos heredados por plataforma sin ampliarlos; aplicar autorización de solicitud y publicación en el servidor. Marca es ONE_OFF. WhatsApp Business/IA es Próximamente y no admite órdenes.
+
+Wallet usa la misma cuenta de Lúmina. No pedir credenciales al dueño ni al colaborador para cada módulo o al configurar Caja. El backend obtiene su configuración privada existente y conserva una asociación explícita por tenant. El puente valida sesión, pertenencia y permisos en cada solicitud. Los accesos internos se cifran con la clave existente; nunca exponerlos al cliente. Un acceso revocado queda bloqueado hasta reparación explícita y auditada de la agencia. Conservar las identidades de tarjetas Apple/Google.
+
+SQLite v2 se aplica con migración nueva y respaldo privado coherente de v1; no modificar schema.sql original. Después de migrar no arrancar código v1 sin una recuperación explícita de código/datos. El checkpoint exige 30 contratos Lúmina además de las 570 Kotlin/PostgreSQL, 128 Python y gates locales. Guía: docs/lumina-contenido-acceso-unico-v042.md.

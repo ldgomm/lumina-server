@@ -6,13 +6,15 @@ for (const panel of document.querySelectorAll('[data-request-form]')) {
   const service = panel.querySelector('[name=service]');
   const type = panel.querySelector('[name=type]');
   const allChannels = Array.from(channel.options, option => [option.value,option.textContent]);
-  const videoChannels = ['INSTAGRAM','TIKTOK','FACEBOOK','YOUTUBE'];
+  const videoChannels = ['SOCIAL'];
   const sync = () => {
     const previousChannel = channel.value;
     const allowed = allChannels.filter(([key]) => type.value !== 'VISIT' || videoChannels.includes(key));
     if (channel.options.length !== allowed.length) {
       channel.replaceChildren(...allowed.map(([key,title])=>new Option(title,key,false,key===previousChannel)));
     }
+    const platforms=panel.querySelector('[data-platforms]');
+    if(platforms){platforms.hidden=channel.value!=='SOCIAL';for(const field of platforms.querySelectorAll('input'))field.disabled=platforms.hidden;}
     const previous = service.value;
     const choices = formats[channel.value] || [];
     service.replaceChildren(...choices.map(([key,title]) => new Option(title,key,false,key === previous)));
@@ -41,3 +43,9 @@ for(const form of document.querySelectorAll('form[method="post"]'))form.addEvent
   if(button){button.dataset.caption=button.textContent;button.textContent='Guardando…';button.disabled=true;}
 });
 window.addEventListener('pageshow',()=>{for(const form of document.querySelectorAll('form[data-busy]')){delete form.dataset.busy;form.removeAttribute('aria-busy');for(const button of form.querySelectorAll('button[data-caption]')){button.textContent=button.dataset.caption;button.disabled=false;}}});
+
+for(const form of document.querySelectorAll('form:has([name="term"])')) {
+  const term=form.querySelector('[name="term"]');
+  const sync=()=>{for(const code of ['LOGO','IDENTITY','BRAND_GUIDE']){const field=form.elements[code];if(field){field.disabled=term.value==='MONTHLY';field.closest('label').hidden=field.disabled;}}};
+  term.addEventListener('change',sync);sync();
+}

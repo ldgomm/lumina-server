@@ -1,4 +1,4 @@
-import { channels, event, now, requireThat, text, uuid } from '../shared/domain.mjs';
+import { channels, areas, walletScopes, socialChannels, event, now, requireThat, text, uuid } from '../shared/domain.mjs';
 import { digest, fingerprint, hashPassword, randomCode, verifyPassword } from './security.mjs';
 
 const expires = hours => new Date(Date.now() + hours * 3600000).toISOString();
@@ -117,7 +117,8 @@ export async function changePassword(db, actor, input) {
 }
 export function can(actor, scope, action = 'VIEW') {
   return actor.kind !== 'COLLABORATOR' ||
-    actor.grants.some(grant => grant.scope === scope && grant.action === action);
+    actor.grants.some(grant => grant.action === action && (grant.scope === scope || (socialChannels.includes(scope) && grant.scope === 'SOCIAL'))) ||
+    (scope === 'SOCIAL' && actor.grants.some(grant => socialChannels.includes(grant.scope) && grant.action === action));
 }
 export function requireAccess(actor, scope, action = 'VIEW') {
   requireThat(can(actor,scope,action), 'Tu acceso no incluye esta acción o área.', 403);
@@ -158,9 +159,10 @@ export function teamList(db, actor) {
 }
 function setGrants(db, accountId, values) {
   const actions = Object.keys(permissions);
-  for (const channel of Object.keys(channels)) {
-    const selected = actions.filter(action => values[`${channel}.${action}`] === 'yes');
+  for (const channel of [...Object.keys(channels),...Object.keys(walletScopes)]) {
+    const selected = (Object.hasOwn(walletScopes,channel) ? (channel==='WALLET_REPORTS'?['VIEW']:['VIEW','EDIT']) : actions).filter(action => values[`${channel}.${action}`] === 'yes');
     requireThat(!selected.length || selected.includes('VIEW'), 'Activa Ver para poder asignar Solicitar o Aprobar.');
+    if (Object.hasOwn(walletScopes,channel) && selected.length) requireThat(values['WALLET.VIEW']==='yes','Activa Ver fidelización digital para asignar sus áreas.');
     for (const action of selected) db.run('INSERT INTO grants VALUES(?,?,?)',accountId,channel,action);
   }
 }

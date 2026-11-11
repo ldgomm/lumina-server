@@ -49,6 +49,26 @@ export async function fakeLoyalty(t,webFolder = null) {
       calls.push({path,method:req.method,role:'PLATFORM'});
       if(path==='/api/platform/wallet/status')return json(res,200,{configuration:{apple:'CONFIGURED_DEVICE_TEST_REQUIRED',google:'CONFIGURED_DEVICE_TEST_REQUIRED'},passes:1});
       if(path==='/api/platform/overview')return json(res,200,{businesses:[{...business,clients:1,branches:2,state:'ACTIVE'}],summary:{businesses:1}});
+      if(path==='/api/platform/tenants')return json(res,200,{items:[business,other]});
+      const match=path.match(/^\/api\/platform\/tenants\/([^/]+)\/(branches|credentials|team)(?:\/([^/]+)\/actions)?$/);
+      if(match) {
+        const company=[business,other].find(b=>b.id===match[1]);if(!company)return fail(res,404,'NOT_FOUND');
+        if(match[2]==='branches')return json(res,200,{business:company,branches:branches.get(company.id)});
+        if(req.method==='GET'&&match[2]==='team')return json(res,200,{users:[...staff.values()].filter(u=>u.company.id===company.id).map(({token,company,requestId,...row})=>row)});
+        let body='';for await(const chunk of req)body+=chunk;const data=JSON.parse(body);
+        if(match[2]==='credentials') {
+          const prior=[...staff.values()].find(u=>u.company.id===company.id&&u.requestId===data.requestId);
+          if(prior)return json(res,201,{id:prior.id,replayed:true,credentialIssued:false});
+          if(data.role!=='OWNER')return fail(res,400,'INVALID_ROLE');
+          const entry={id:uuid(),role:'OWNER',name:data.name,branchId:null,contact:'',permissions:{purchases:true,rewards:true},version:1,state:'ACTIVE',company,requestId:data.requestId};
+          staff.set(entry.id,entry);const token=issue(entry);
+          if(dropNextCreate){dropNextCreate=false;return res.destroy();}
+          return json(res,201,{id:entry.id,token,version:1,credentialIssued:true});
+        }
+        const target=staff.get(match[3]);if(!target||target.company.id!==company.id)return fail(res,404,'NOT_FOUND');
+        if(target.version!==data.expectedVersion||!['ACTIVE','INACTIVE'].includes(target.state)||!['ROTATE','REACTIVATE'].includes(data.action))return fail(res,409,'VERSION_CONFLICT');
+        target.state='ACTIVE';return json(res,200,{id:target.id,token:issue(target),version:++target.version,credentialIssued:true});
+      }
       return json(res,200,{items:[]});
     }
     const p = tokens.get((req.headers.authorization || '').replace(/^Bearer /,''));
@@ -59,6 +79,7 @@ export async function fakeLoyalty(t,webFolder = null) {
       business:p.company,role:p.role,branchId:p.branchId,permissions:p.permissions,
       branches:p.branchId ? b.filter(item=>item.id===p.branchId) : b,programs:[],rewards:[],
     });
+    if (req.method==='GET' && path==='/api/staff/metrics' && p.role==='OWNER')return json(res,200,{days:30,fromDate:'2026-10-13',throughDate:'2026-11-11',totalClients:5,newClients:2,activeClients:3,repeatClients:1,purchases:7,redemptions:1,salesMinor:10500,branches:[],daily:[],topRewards:[]});
     if (req.method==='GET' && path==='/api/staff/wallet-health' && p.role==='OWNER')return json(res,200,health);
     if (req.method==='GET' && path==='/api/staff/wallet-design' && p.role==='OWNER')return json(res,200,{version:1,company:p.company.id});
     if (req.method==='GET' && path==='/api/staff/team' && p.role==='OWNER') return json(res,200,{

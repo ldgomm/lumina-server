@@ -63,3 +63,6 @@ La entrega actual incorpora un centro de control para dueño y plataforma, direc
 Desde Downloads: `bash loyalty_administracion_v040.sh`. Requiere v039. Se aplican los cambios sobre el código existente, respetando reformateos equivalentes de IntelliJ; se comprueban pruebas, Docker y gateway antes del commit local. HTTPS se valida aparte. El resultado y el mismo instalador se guardan en un ZIP de Downloads.
 
 Consulta [la guía de Administración v040](docs/administracion-v040.md) para conocer los cambios de cada sección, la validación y los límites de los informes.
+
+
+Lúmina v003 / Loyalty v042: contenido compartido entre plataformas y acceso único a Wallet. Consulta [la guía de actualización](docs/lumina-contenido-acceso-unico-v042.md).

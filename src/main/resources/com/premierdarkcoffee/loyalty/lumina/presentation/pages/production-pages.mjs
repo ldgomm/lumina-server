@@ -1,7 +1,8 @@
+import { canRequest } from '../../access/content-policy.mjs';
 import { can } from '../../access/accounts.mjs';
-import { channels, formats, localDay, services, socialChannels } from '../../shared/domain.mjs';
+import { areas, channels, formats, localDay, services, socialChannels } from '../../shared/domain.mjs';
 import { metrics } from '../../analytics/reporting.mjs';
-import { badge, button, card, disclosure, displayAmount, esc, external, form, hidden, input, label, localLink, localValue, message,
+import { badge, button, card, check, disclosure, displayAmount, esc, external, form, hidden, input, label, localLink, localValue, message,
   number, select, table, textarea, timestamp } from './components.mjs';
 
 const by = keys => keys.map(key=>[key,label(key)]);
@@ -15,17 +16,18 @@ export function companiesPage(companies, q) {
     esc(company.phone),esc(timestamp(company.created_at)),
   ]),'Los negocios que se registren aparecerán aquí.'));
 }
-function requestForm(actor,url,courtesy = false) {
-  const scopes = Object.keys(channels).filter(channel=>can(actor,channel,'REQUEST') && (!courtesy || socialChannels.includes(channel)));
+function requestForm(actor,url,courtesy = false,selected='') {
+  const scopes = Object.keys(areas).filter(channel=>can(actor,channel,'REQUEST') && (!courtesy || channel==='SOCIAL'));
   if (!scopes.length) return '';
   const serviceList = Object.fromEntries(scopes.map(channel=>[channel,formats[channel]
     .filter(service=>!courtesy || videoTypes.includes(service)).map(service=>[service,services[service]])]));
   const typeOptions = ['CONTENT',...(actor.kind==='COLLABORATOR' ? [] : ['QUOTE']),
-    ...(scopes.some(channel=>socialChannels.includes(channel)) ? ['VISIT'] : [])];
+    ...(scopes.includes('SOCIAL') ? ['VISIT'] : [])];
   return form(url('/solicitudes'),actor,`<div data-request-form data-formats="${esc(JSON.stringify(serviceList))}">
     ${courtesy ? hidden('type','COURTESY') : select('type','¿Qué necesitas?',by(typeOptions))}
-    <div class="fields two">${select('channel','Canal',by(scopes))}
+    <div class="fields two">${select('channel','Área del servicio',by(scopes),selected)}
     ${select('service','Formato o servicio',Object.entries(services).filter(([key])=>!courtesy || videoTypes.includes(key)))}</div>
+    <fieldset data-platforms><legend>Publicar la misma pieza en</legend><p class="muted">Una producción y una entrega común. Los enlaces y resultados se registran por plataforma.</p><div class="platform-choices">${socialChannels.filter(p=>can(actor,p,'REQUEST')).map(p=>check('platform.'+p,channels[p],true)).join('')}</div></fieldset>
     <div class="fields two">${input('title','Título de la solicitud','text','required maxlength="150"')}
     ${courtesy ? '' : `<div data-quantity>${input('quantity','Cantidad','number','min="1" max="100" required','1')}</div>`}</div>
     ${courtesy ? '' : `<div data-visit>${scheduleDate('preferred','Horario sugerido para la visita','')}</div>`}
@@ -37,7 +39,7 @@ export function homePage({actor,company,url,groups,videoRequested,videoDelivered
   const open = groups.filter(row=>!['CANCELLED','DELIVERED'].includes(row.status)).reduce((sum,row)=>sum+row.count,0);
   const gift = actor.kind === 'OWNER' ? card('Tu video de cortesía',
     courtesy ? `<p>${badge(courtesy.status)} ${localLink(url('/solicitudes/'+courtesy.id),'Ver solicitud de cortesía')}</p>` : requestForm(actor,url,true),
-    courtesy ? 'Aquí puedes consultar el estado del video que solicitaste.' : '¡Bienvenido a Lúmina Digital! Tu primer video de cortesía es gratis. Elige el canal y cuéntanos qué quieres mostrar.') : '';
+    courtesy ? 'Aquí puedes consultar el estado del video que solicitaste.' : '¡Bienvenido a Lúmina Digital! Tu primer video de cortesía es gratis. Cuéntanos qué quieres mostrar y dónde publicarás el mismo video.') : '';
   const approval = actor.kind === 'AGENCY' && !company.approved ? card('Verifica el registro del negocio',
     `<p>Cédula terminada en <strong>${esc(company.document_hint)}</strong> · ${esc(company.phone)}</p>
     ${form(url('/clientes/verificar'),actor,button('Marcar negocio verificado'))}`,
@@ -56,18 +58,18 @@ export function homePage({actor,company,url,groups,videoRequested,videoDelivered
     ${!hasScopes && !cash ? card('Acceso pendiente',message('El dueño del negocio debe asignarte al menos un área.')) : ''}</div>`;
 }
 export function requestsPage({actor,url,rows,channel,page,more}) {
-  const filters = [['','Todos los canales'],...Object.keys(channels).filter(key=>can(actor,key)).map(key=>[key,channels[key]])];
-  const list = table(['Solicitud','Canal','Formato','Estado','Registro'],rows.map(row=>[
+  const filters = [['','Todas las áreas'],...Object.keys(areas).filter(key=>can(actor,key)).map(key=>[key,channels[key]])];
+  const list = table(['Solicitud','Área','Formato','Estado','Registro'],rows.map(row=>[
     `${localLink(url('/solicitudes/'+row.id),row.title)}<div class="muted">${esc(label(row.type))}</div>`,
     esc(label(row.channel)),`${esc(label(row.service))} · ${row.quantity}`,
     badge(row.status,row.status==='DELIVERED' ? 'success' : ''),esc(timestamp(row.created_at)),
   ]),'Todavía no hay solicitudes para este filtro.');
   const pages = `<div class="actions">${page>0 ? localLink(url('/solicitudes',{canal:channel,pagina:page-1}),'← Anterior','btn secondary') : ''}
     ${more ? localLink(url('/solicitudes',{canal:channel,pagina:page+1}),'Siguiente →','btn secondary') : ''}</div>`;
-  const create = requestForm(actor,url);
+  const create = requestForm(actor,url,false,socialChannels.includes(channel)?'SOCIAL':channel);
   return `${create ? disclosure('Nueva solicitud',create) : ''}${card('Registro de solicitudes',
     `<form action="/solicitudes" class="filter">${actor.kind==='AGENCY' ? hidden('empresa',new URL(url('/solicitudes'),'http://localhost').searchParams.get('empresa')) : ''}
-    ${select('canal','Filtrar por canal',filters,channel)}${button('Aplicar','secondary')}</form>${list}${pages}`)}`;
+    ${select('canal','Filtrar por área',filters,channel)}${button('Aplicar','secondary')}</form>${list}${pages}`)}`;
 }
 export function agendaPage(rows,url) {
   return card('Agenda de grabaciones',table(['Fecha y hora','Solicitud','Lugar','Estado','Grabación real'],rows.map(visit=>[
@@ -89,7 +91,7 @@ function quotePanel({actor,base,quote,request}) {
       textarea('terms','Qué incluye, plazos y condiciones','required maxlength="4000"')+button('Enviar cotización'))) : ''}`);
 }
 function visitsPanel({actor,base,visits,request,company}) {
-  if (request.type==='PLAN') return '';
+  if (request.type==='PLAN' || request.channel!=='SOCIAL') return '';
   const editable = actor.kind==='AGENCY' && company.approved;
   const visitRows = visits.map(visit=>`<article class="subcard">
     <div class="split"><strong>${esc(timestamp(visit.starts_at))}</strong>${badge(visit.status)}</div>
@@ -125,21 +127,27 @@ function pieceView({actor,url,request,piece}) {
     ${hidden('revision',piece.revision)}<div class="fields two">${select('status','Estado',by(actions),piece.status)}
     ${scheduleDate('recorded','Grabado el','',localValue(piece.recorded_at))}</div>
     ${textarea('notes','Observaciones','maxlength="2000"',piece.observations)}${button('Guardar pieza')}`)) : '';
-  const reviewForm = actor.kind!=='AGENCY' && piece.status==='REVIEW' && can(actor,request.channel,'APPROVE') ?
+  const reviewForm = actor.kind!=='AGENCY' && piece.status==='REVIEW' && canRequest(actor,request,'APPROVE') ?
     disclosure('Revisar entregable',form(route('/revisar'),actor,`${hidden('revision',piece.revision)}
     ${select('status','Decisión',[['APPROVED','Aprobar entrega'],['PRODUCTION','Solicitar ajustes']])}
     ${textarea('notes','Observaciones','maxlength="1000"')}${button('Guardar decisión')}`)) : '';
   const attachForm = actor.kind==='AGENCY' && piece.status!=='CANCELLED' ?
     disclosure('Adjuntar evidencia o entrega',form(route('/evidencia'),actor,`${input('label','Nombre del enlace','text','required maxlength="100"')}
       ${input('url','Enlace HTTPS','url','required maxlength="1500"')}${button('Adjuntar enlace')}`)) : '';
-  const publishForm = actor.kind==='AGENCY' && ['APPROVED','DELIVERED'].includes(piece.status) ?
-    disclosure('Registrar publicación',form(route('/publicacion'),actor,`${select('channel','Canal',by(socialChannels),request.channel)}
-      ${input('url','Enlace de la publicación','url','required maxlength="1500"')}${scheduleDate('published','Fecha y hora de publicación')}
-      ${button('Guardar publicación')}`)) : '';
+  const platforms=request.channel==='SOCIAL'?(request.platforms||[]).filter(p=>can(actor,p)):[];
+  const publishable=actor.kind==='AGENCY' && ['APPROVED','DELIVERED'].includes(piece.status);
+  const platformPanels=platforms.map(platform=>{
+    const publications=piece.publications.filter(pub=>pub.channel===platform);
+    const publishForm=publishable?disclosure('Registrar publicación en '+channels[platform],form(route('/publicacion'),actor,`
+      ${hidden('channel',platform)}${input('url','Enlace de la publicación','url','required maxlength="1500"')}
+      ${scheduleDate('published','Fecha y hora de publicación')}${button('Guardar publicación')}`)):'';
+    return `<details class="platform-panel" open><summary><strong>${esc(channels[platform])}</strong>${badge(publications.length?'Publicada':'Sin publicar',publications.length?'success':'')}</summary><div>
+      ${publications.map(pub=>publicationView(actor,route,pub)).join('')||message('Todavía no hay un enlace de publicación en esta plataforma.')}${publishForm}</div></details>`;
+  }).join('');
   return `<article class="subcard"><div class="split"><h3>${esc(piece.title)}</h3>${badge(piece.status)}</div>
-    <p class="muted">Grabado el ${esc(timestamp(piece.recorded_at))}</p><p class="prewrap">${esc(piece.observations)}</p>
+    <p class="piece-common-label">Contenido común · archivos, grabación y revisión</p><p class="muted">Grabado el ${esc(timestamp(piece.recorded_at))}</p><p class="prewrap">${esc(piece.observations)}</p>
     ${piece.evidence.length ? `<ul class="evidence">${piece.evidence.map(item=>`<li>${external(item.url,item.label)}</li>`).join('')}</ul>` : ''}
-    ${editForm}${reviewForm}${attachForm}${publishForm}${piece.publications.map(pub=>publicationView(actor,route,pub)).join('')}</article>`;
+    ${editForm}${reviewForm}${attachForm}${platformPanels?`<section class="piece-platforms"><h4>Publicaciones y métricas</h4><p class="muted">Esta pieza cuenta una sola vez en el plan. Cada plataforma conserva su enlace y sus resultados; las audiencias pueden coincidir.</p><div class="platform-grid">${platformPanels}</div></section>`:''}</article>`;
 }
 export function contractForm(actor,action,plans,plan,requestId) {
   const fields = plan ? hidden('plan',plan.id) : select('plan','Plan',plans.map(p=>[p.id,p.name]));
@@ -158,9 +166,10 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
   const admin = actor.kind==='AGENCY';
   const stateOptions = available[request.status].filter(state=>state!=='APPROVED' ||
     (company.approved && (!plan || plan.price_minor!==null)));
+  const targets=request.channel==='SOCIAL'?`<div class="platform-choices">${(request.platforms||[]).filter(p=>can(actor,p)).map(p=>badge(channels[p])).join('')}</div>${admin?disclosure('Añadir plataformas',form(base('/plataformas'),actor,hidden('revision',request.revision)+socialChannels.filter(p=>!request.platforms.includes(p)).map(p=>check('platform.'+p,channels[p])).join('')+button('Añadir a la misma pieza'))):''}`:'';
   const details = card('Ficha de la solicitud',`<div class="tags">${badge(request.type)}${badge(request.channel)}${badge(request.status)}</div>
     <p>${esc(label(request.service))} · Cantidad ${request.quantity} · Recibida ${esc(timestamp(request.created_at))}</p>
-    <p class="prewrap">${esc(request.brief)}</p>
+    <p class="prewrap">${esc(request.brief)}</p>${targets}
     ${admin && stateOptions.length ? disclosure('Cambiar estado',form(base('/estado'),actor,
       select('status','Estado',by(stateOptions))+textarea('notes','Motivo u observaciones','maxlength="1000"')+button('Guardar estado'))) : ''}
     ${admin && plan && request.status==='APPROVED' ? disclosure('Activar este plan',

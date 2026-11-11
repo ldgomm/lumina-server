@@ -4,6 +4,7 @@ import { setupCode } from '../access/accounts.mjs';
 import { loadKey } from '../access/security.mjs';
 import { createPortal } from './app.mjs';
 import { dataDirectory, openDatabase } from '../infrastructure/database.mjs';
+import { loadIntegration } from '../wallet/integration.mjs';
 import { loyaltyOrigin } from '../wallet/bridge.mjs';
 
 process.umask(0o077);
@@ -16,13 +17,14 @@ if (publicOrigin) {
   const parsed = new URL(publicOrigin);
   if (parsed.protocol !== 'https:' || parsed.origin !== publicOrigin) throw new Error('LUMINA_ORIGIN debe ser un origen HTTPS sin rutas.');
 }
+const integration=loadIntegration(loyaltyUrl);
 const directory = dataDirectory();
 const databasePath = join(directory,'agency.sqlite');
 const exists = existsSync(databasePath);
 if (exists && !lstatSync(databasePath).isFile()) throw new Error('La base de Lúmina debe ser un archivo privado.');
 const key = loadKey(directory,exists);
 const db = openDatabase(databasePath);
-const server = createPortal({db,key,loyaltyUrl,publicOrigin});
+const server = createPortal({db,key,loyaltyUrl,publicOrigin,integration});
 server.on('error',error=>{
   db.close();
   process.stderr.write(error.code==='EADDRINUSE' ? 'El puerto de Lúmina ya está ocupado.\n' : 'No se pudo iniciar Lúmina.\n');

@@ -1,10 +1,13 @@
+import { requestAccessSql, platformTargets } from '../access/content-policy.mjs';
+import { addTargets } from '../production/platforms.mjs';
+import { walletSections } from '../wallet/access-policy.mjs';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { activate, approveCompany, authenticate, can, changePassword, companyFor, createAgency, createSession, createTeamMember,
   getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamList, teamMember, updateGrants } from '../access/accounts.mjs';
 import { equal } from '../access/security.mjs';
 import { activateContract, acceptQuote, cancelContract, contractsFor, createPlan, currentQuote, getPlan, hidePlan, listPlans, offerQuote } from '../memberships/billing.mjs';
-import { channels, integer, isId, now, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
+import { channels, areas, integer, isId, now, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
 import { cashierAssets, createLoyaltyBridge } from '../wallet/bridge.mjs';
 import { createWalletWorkspace } from '../wallet/wallet.mjs';
 import { addEvidence, addPiece, addPublication, addVisit, createRequest, editPiece, finishVisit, getPiece, getRequest,
@@ -15,8 +18,8 @@ import { card, esc, localLink, page, pathFor } from '../presentation/pages/compo
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
 import { agendaPage, companiesPage, homePage, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
 import { mapsPage, metricsPage, plansPage } from '../presentation/pages/service-pages.mjs';
-import { loyaltyWorkspaceHtml, walletPage } from '../presentation/pages/wallet-pages.mjs';
-import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace } from '../presentation/pages/workspace-pages.mjs';
+import { loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
+import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
 
 const assets = {
   '/assets/lumina.css': ['lumina.css','text/css; charset=utf-8'],
@@ -30,7 +33,7 @@ const assets = {
 const sourceAssets = Object.fromEntries(Object.entries(assets).map(([path,[file,type]]) =>
   [path,{body:readFileSync(new URL('../presentation/assets/'+file,import.meta.url)),type}]));
 const operations = {
-  '/estado':updateRequest, '/cotizar':offerQuote,
+  '/plataformas':addTargets, '/estado':updateRequest, '/cotizar':offerQuote,
   '/aceptar':(db,actor,company,request,data)=>acceptQuote(db,actor,company,request,data.quote),
   '/visitas':addVisit, '/visitas/cerrar':finishVisit, '/piezas':addPiece,
 };
@@ -52,18 +55,11 @@ function cajaHtml() {
     <main id="app"><p>Abriendo Caja…</p></main><p id="notice" role="status" aria-live="polite"></p>
     <footer>Operaciones de Loyalty para la sucursal asignada</footer></body></html>`;
 }
-function visibleVisit(actor, row) {
-  return can(actor,row.channel) && (actor.kind!=='COLLABORATOR' || !['QUOTE','COURTESY','PLAN'].includes(row.type));
-}
 function agendaRows(db,actor,companyId) {
-  const scopes = Object.keys(channels).filter(channel=>can(actor,channel));
-  if (!scopes.length) return [];
+  const policy=requestAccessSql(actor);
   return db.all(`SELECT v.*,r.title FROM visits v JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
-    WHERE v.company_id=? AND r.channel IN (${scopes.map(()=>'?').join(',')})
-    AND (?=0 OR r.type NOT IN ('QUOTE','COURTESY','PLAN'))
-    ORDER BY CASE WHEN v.status='SCHEDULED' THEN 0 ELSE 1 END,
-    CASE WHEN v.status='SCHEDULED' THEN v.starts_at END, v.starts_at DESC,v.id LIMIT 100`,
-  companyId,...scopes,Number(actor.kind==='COLLABORATOR'));
+    WHERE v.company_id=? AND ${policy.sql} ORDER BY CASE WHEN v.status='SCHEDULED' THEN 0 ELSE 1 END,
+    CASE WHEN v.status='SCHEDULED' THEN v.starts_at END,v.starts_at DESC,v.id LIMIT 100`,companyId,...policy.params);
 }
 function getRequestPage(db,actor,company,url,request) {
   const pieces = db.all('SELECT * FROM pieces WHERE company_id=? AND request_id=? ORDER BY created_at,id',company.id,request.id)
@@ -81,9 +77,9 @@ function getRequestPage(db,actor,company,url,request) {
     body:requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan})};
 }
 
-export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
+export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {} }) {
   const bridge = createLoyaltyBridge({db,key,origin:loyaltyUrl});
-  const wallets = createWalletWorkspace({db,origin:loyaltyUrl,bridge});
+  const wallets = createWalletWorkspace({db,key,origin:loyaltyUrl,integration});
   return createServer({requestTimeout:20_000,headersTimeout:10_000},async (req,res) => {
     let actor = null;
     let company = null;
@@ -142,7 +138,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
         const body=method==='GET'?undefined:await readJson(req);
         actor=getSession(db,cookie);
         requireThat(actor,'Tu sesión terminó. Ingresa nuevamente.',401);
-        if(method!=='GET')requireThat(equal(actor.csrf,req.headers['x-lumina-csrf']),'El formulario venció. Abre de nuevo Wallet.',403);
+        requireThat(equal(actor.csrf,req.headers['x-lumina-csrf']),'Tu sesión de Wallet cambió. Abre de nuevo Wallet.',403);
         const result=await wallets.proxy(actor,path.slice('/wallet-api'.length),{method,body,query:target.search,key:req.headers['idempotency-key']});
         return send(res,result.status,result.bytes,result.type);
       }
@@ -154,14 +150,24 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
         return send(res,200,await wallets.asset(actor,name),cashierAssets[name]);
       }
       if (method==='GET' && ['/platform','/wallet/gestion'].includes(path)) {
-        requireThat(path==='/platform'?actor.kind==='AGENCY':actor.kind==='OWNER','Este acceso corresponde al administrador o al dueño.',403);
-        if(!wallets.info(actor))return redirect(res,'/wallet');
+        requireThat(path==='/platform'?actor.kind==='AGENCY':actor.kind!=='AGENCY','Este acceso corresponde a otra área.',403);
+        const sections=walletSections(actor);
+        requireThat(actor.kind!=='COLLABORATOR'||sections.length,'Tu cuenta no tiene áreas operativas de Wallet.',403);
+        const section=target.searchParams.get('seccion')||(actor.kind==='COLLABORATOR'?sections[0]:'design');
+        requireThat(actor.kind!=='COLLABORATOR'||sections.includes(section),'No tienes acceso a esta área de Wallet.',403);
+        if(actor.kind==='COLLABORATOR'&&section==='reports') {
+          const days=target.searchParams.get('dias')||'30';requireThat(['7','30','90','365'].includes(days),'Período inválido.');
+          company=companyFor(db,actor);
+          const result=await wallets.proxy(actor,'/api/staff/metrics',{query:'?days='+days});
+          requireThat(result.status===200,'No se pudo consultar el informe.',result.status);
+          return render({title:'Informes de fidelización',body:walletReportPage(JSON.parse(result.bytes))});
+        }
         await wallets.validate(actor);
-        return send(res,200,loyaltyWorkspaceHtml(actor,target.searchParams.get('seccion')||'design'));
+        return send(res,200,loyaltyWorkspaceHtml(actor,section,actor.kind==='COLLABORATOR'?sections:null));
       }
       if (method==='GET' && /^\/join\/[a-z0-9-]+$/.test(path)) {
         const dashboard=await wallets.validate(actor);
-        requireThat(actor.kind==='OWNER' && path==='/join/'+dashboard.business.slug,'Negocio no encontrado.',404);
+        requireThat((actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&(can(actor,'WALLET_CUSTOMERS','EDIT')||!target.search&&can(actor,'WALLET_DESIGN'))) && path==='/join/'+dashboard.business.slug,'Negocio no encontrado.',404);
         return redirect(res,loyaltyUrl+path+target.search);
       }
       if (api) {
@@ -191,20 +197,27 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
         res.setHeader('Set-Cookie',sessionCookie('',trusted.protocol==='https:'));
         return redirect(res,'/');
       }
-      if (path==='/wallet/conectar' && method==='POST') {
-        limit(db,'wallet-connect:'+actor.id,20);
-        await wallets.connect(actor,data);return redirect(res,'/wallet');
-      }
-      if (path==='/wallet/desconectar' && method==='POST') {
-        wallets.disconnect(actor);return redirect(res,'/wallet');
+      if (['/wallet/conectar','/wallet/desconectar','/equipo/loyalty/vincular'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
+      if(path==='/wallet/reparar'&&method==='POST'){requireAgency(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));await wallets.repair(actor,company,data);return redirect(res,'/wallet?empresa='+company.id);}
+      if(path==='/wallet/vincular'&&method==='POST') {
+        requireAgency(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));
+        await wallets.bind(actor,company,data);return redirect(res,'/wallet?empresa='+company.id);
       }
       if (path==='/wallet' && method==='GET') {
         requireThat(can(actor,'WALLET'),'No tienes permiso para consultar Wallet.',403);
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
-        let information=null,error='';
-        if(actor.kind!=='COLLABORATOR' && wallets.info(actor))try{information=await wallets.summary(actor);}catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
-        return render({title:'Wallet',description:'Tu centro de fidelización: Apple Wallet, Google Wallet y Loyalty.',
-          body:walletPage({actor,company,connection:wallets.info(actor),data:information,error})});
+        let information=null,error='',candidates=[];
+        const search=text(target.searchParams.get('buscar')||'','búsqueda',0,100);
+        if(actor.kind==='AGENCY'||actor.kind==='OWNER'||walletSections(actor).length)try{
+          information=await wallets.summary(actor);
+          if(actor.kind==='AGENCY'&&company&&!company.loyalty_tenant)candidates=await wallets.candidates(actor,search);
+        }catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
+        return render({title:'Fidelización digital',description:'Apple Wallet, Google Wallet y Loyalty, con tu misma cuenta.',
+          body:walletPage({actor,company,data:information,error,candidates,search,blocked:actor.kind==='AGENCY'&&company?db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1",company.id):[]})});
+      }
+      if(path==='/proximamente'&&method==='GET') {
+        requireThat(actor.kind!=='COLLABORATOR','Área no asignada.',403);
+        return render({title:'WhatsApp Business y asistentes con IA',body:comingSoonPage()});
       }
       if (method==='GET' && ['/resumen','/produccion','/agenda-general'].includes(path)) {
         if(path==='/resumen'&&actor.kind!=='AGENCY')return redirect(res,'/inicio');
@@ -217,7 +230,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
           ORDER BY r.created_at DESC,r.id LIMIT 100`,q,q,state,state,channel,channel);
         const visits=db.all(`SELECT v.*,r.title,c.name AS company_name FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id
           JOIN companies c ON c.id=v.company_id WHERE v.status='SCHEDULED' AND v.starts_at>=? ORDER BY v.starts_at,v.id LIMIT 100`,now());
-        if(path==='/produccion')return render({title:'Producción',description:'Todos los clientes y canales, con cada trabajo en su etapa.',body:agencyProduction(rows(),{q,state,channel})});
+        if(path==='/produccion')return render({title:'Producción',description:'Todos los clientes y servicios, con cada trabajo en su etapa.',body:agencyProduction(rows(),{q,state,channel})});
         if(path==='/agenda-general')return render({title:'Agenda',description:'Organiza tus visitas y jornadas de grabación.',body:agencyAgenda(visits)});
         const counts=db.get(`SELECT (SELECT count(*) FROM companies) AS companies,(SELECT count(*) FROM companies WHERE approved=0) AS pending,
           (SELECT count(*) FROM requests WHERE status NOT IN ('CANCELLED','DELIVERED')) AS open,(SELECT count(*) FROM pieces WHERE status='DELIVERED') AS delivered,
@@ -225,14 +238,24 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
         const pipeline=db.all('SELECT status,count(*) AS count FROM requests GROUP BY status');
         return render({title:'Vista general',description:'Todo lo que tu agencia tiene en marcha.',body:agencyOverview({counts,pipeline,visits:visits.slice(0,5),recent:rows().slice(0,6)})});
       }
-      if (method==='GET' && path.startsWith('/canales/')) {
-        const channel=path.slice('/canales/'.length).toUpperCase();
-        requireThat(Object.hasOwn(channels,channel),'Canal no encontrado.',404);requireThat(can(actor,channel),'No tienes acceso a este canal.',403);
+      if(method==='GET' && path.startsWith('/canales/')) {
+        const channel=path.slice('/canales/'.length).toUpperCase();requireThat(Object.hasOwn(channels,channel),'Área no encontrada.',404);
+        requireThat(can(actor,channel),'No tienes acceso a esta área.',403);
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
-        const rows=db.all(`SELECT r.*,c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id WHERE r.channel=?
-          AND (? IS NULL OR r.company_id=?) AND (?=0 OR r.type NOT IN ('QUOTE','COURTESY','PLAN')) ORDER BY r.created_at DESC,r.id LIMIT 100`,
-        channel,company?.id||null,company?.id||null,Number(actor.kind==='COLLABORATOR'));
-        return render({title:channels[channel],description:'Solicitudes, seguimiento y entregas del canal.',body:channelWorkspace(channel,rows,pathFor(actor,company),can(actor,channel,'REQUEST')&&actor.kind!=='AGENCY')});
+        return redirect(res,pathFor(actor,company)(socialChannels.includes(channel)?'/contenido':channel==='WALLET'?'/wallet':'/servicios/'+channel.toLowerCase(),socialChannels.includes(channel)?{plataforma:channel}:{}));
+      }
+      if(method==='GET'&&(path==='/contenido'||path.startsWith('/servicios/'))) {
+        const channel=path==='/contenido'?'SOCIAL':path.slice('/servicios/'.length).toUpperCase();
+        requireThat(['SOCIAL','MAPS','WEB','BRAND'].includes(channel),'Área no encontrada.',404);requireAccess(actor,channel);
+        if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
+        const platform=channel==='SOCIAL'?(target.searchParams.get('plataforma')||''):'';
+        requireThat(!platform||socialChannels.includes(platform)&&can(actor,platform),'Plataforma no autorizada.',403);
+        const policy=requestAccessSql(actor);
+        const rows=db.all(`SELECT r.*,c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id WHERE r.channel=? AND ${policy.sql}
+          AND (? IS NULL OR r.company_id=?) AND (?='' OR EXISTS(SELECT 1 FROM request_platforms rp WHERE rp.company_id=r.company_id AND rp.request_id=r.id AND rp.platform=?))
+          ORDER BY r.created_at DESC,r.id LIMIT 100`,channel,...policy.params,company?.id||null,company?.id||null,platform,platform);
+        return render({title:areas[channel],description:channel==='SOCIAL'?'Contenido común y publicaciones por plataforma.':'Servicios, proyectos y seguimiento.',
+          body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'),socialChannels.filter(p=>can(actor,p)),platform)});
       }
       if (path==='/cuenta' && method==='GET') return render({title:'Mi cuenta',body:accountPage(actor)});
       if (path==='/cuenta/clave' && method==='POST') {
@@ -256,14 +279,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
       const url = pathFor(actor,company);
       if (path==='/inicio' && method==='GET') {
         const groups = requestCounts(db,actor,company.id);
-        const videos = db.all(`SELECT r.channel,r.type,r.status,r.quantity,
-          (SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
-          FROM requests r WHERE r.company_id=? AND r.service IN ('VIDEO','REEL','SHORT') AND r.type<>'VISIT'`,company.id)
-          .filter(row=>visibleVisit(actor,row) && row.status!=='CANCELLED');
-        const upcoming = db.all(`SELECT r.channel,r.type,count(*) AS count FROM visits v
-          JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
-          WHERE v.company_id=? AND v.status='SCHEDULED' AND v.starts_at>=? GROUP BY r.channel,r.type`,company.id,now())
-          .filter(row=>visibleVisit(actor,row)).reduce((sum,row)=>sum+row.count,0);
+        const policy=requestAccessSql(actor);
+        const videos=db.all(`SELECT r.quantity,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
+          FROM requests r WHERE r.company_id=? AND ${policy.sql} AND r.service IN ('VIDEO','REEL','SHORT') AND r.type<>'VISIT' AND r.status<>'CANCELLED'`,company.id,...policy.params);
+        const upcoming=db.get(`SELECT count(*) AS count FROM visits v JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
+          WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
         const courtesy = actor.kind==='OWNER' ? db.get("SELECT id,status FROM requests WHERE company_id=? AND type='COURTESY'",company.id) : null;
         return render({title:'Panel de trabajo',description:'Sigue el avance de los servicios y las actividades de tu negocio.',
           body:homePage({actor,company,url,groups,upcoming,courtesy,cash,
@@ -274,18 +294,12 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
         return redirect(res,url('/inicio'));
       }
       if (path==='/equipo' && method==='GET') {
-        return render({title:'Equipo y accesos',description:'Asigna canales, acciones y permisos de Caja por persona.',
+        return render({title:'Equipo y accesos',description:'Asigna áreas, tareas y permisos de Caja por persona.',
           body:teamPage(actor,company,teamList(db,actor))});
       }
       if (path==='/equipo' && method==='POST') {
         const result = createTeamMember(db,actor,data);
         return render(teamInvitation(db,actor,result.id,result.code),201);
-      }
-      if (path==='/equipo/loyalty/vincular' && method==='POST') {
-        requireOwner(actor);
-        limit(db,'loyalty:'+actor.id,40);
-        await bridge.link(actor,data);
-        return redirect(res,'/equipo');
       }
       const teamMatch = path.match(/^\/equipo\/([^/]+)(?:\/(permisos|invitar|desactivar|caja\/(?:sucursales|guardar|revocar)))?$/);
       if (teamMatch && isId(teamMatch[1])) {
@@ -301,11 +315,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null }) {
           }
           if (action?.startsWith('caja/')) limit(db,'loyalty:'+actor.id,40);
           if (action==='caja/sucursales') {
-            const branches = await bridge.branches(actor,data.credential);
+            const branches = await bridge.branches(actor,await wallets.ownerCredential(actor));
             return render({title:member.name,body:memberPage(actor,company,member,branches)});
           }
-          if (action==='caja/guardar') await bridge.configure(actor,id,data);
-          if (action==='caja/revocar') await bridge.revoke(actor,id,data);
+          if (action==='caja/guardar') await bridge.configure(actor,id,{...data,credential:await wallets.ownerCredential(actor)});
+          if (action==='caja/revocar') await bridge.revoke(actor,id,{...data,credential:await wallets.ownerCredential(actor)});
           requireThat(action,'Acción no encontrada.',404);
           return redirect(res,'/equipo/'+id);
         }

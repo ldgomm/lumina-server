@@ -3,21 +3,31 @@ import { randomUUID } from 'node:crypto';
 export const uuid = randomUUID;
 export const now = () => new Date().toISOString();
 export const zone = 'America/Guayaquil';
-export const channels = Object.freeze({
+export const areas = Object.freeze({ SOCIAL: 'Contenido para redes', WALLET: 'Fidelización digital · Wallet', MAPS: 'Google Maps', WEB: 'Web', BRAND: 'Diseño de marca' });
+export const walletScopes = Object.freeze({ WALLET_DESIGN: 'Diseño de tarjetas', WALLET_PROGRAMS: 'Promociones y premios', WALLET_CUSTOMERS: 'Clientes y recuperación', WALLET_REPORTS: 'Informes y estado de tarjetas' });
+export const channels = Object.freeze({ ...areas,
   INSTAGRAM: 'Instagram', TIKTOK: 'TikTok', FACEBOOK: 'Facebook', YOUTUBE: 'YouTube',
-  MAPS: 'Google Maps', WEB: 'Web', WALLET: 'Loyalty · Wallet',
+  
 });
 export const socialChannels = ['INSTAGRAM', 'TIKTOK', 'FACEBOOK', 'YOUTUBE'];
 export const services = Object.freeze({
   VIDEO: 'Video', REEL: 'Reel', POST: 'Post', CAROUSEL: 'Carrusel', STORY: 'Story',
+  PHOTO: 'Fotografía', EDITING: 'Edición de video', GRAPHIC: 'Pieza gráfica', COPY: 'Texto para publicación', PUBLICATION: 'Publicación',
+  WEBSITE: 'Página empresarial', STORE: 'Tienda en línea', CATALOG: 'Catálogo', MENU: 'Menú digital', BOOKING: 'Reservas', LANDING: 'Página de campaña', MAINTENANCE: 'Mantenimiento web',
+  MAPS_PROFILE: 'Gestión del Perfil de Empresa', MAPS_INFO: 'Actualización de información', MAPS_PHOTO: 'Fotografías del negocio', MAPS_RESPONSES: 'Respuestas a reseñas', MAPS_PERFORMANCE: 'Seguimiento del rendimiento',
+  LOYALTY_PROGRAM: 'Programa de puntos, sellos y recompensas', WALLET_DESIGN: 'Diseño de tarjeta digital',
+  LOGO: 'Diseño de logo', IDENTITY: 'Identidad visual', BRAND_GUIDE: 'Manual de marca',
   SHORT: 'Short', REVIEWS: 'Gestión de reseñas', WEB: 'Página web', WALLET: 'Wallet',
 });
 export const formats = Object.freeze({
+  SOCIAL: ['VIDEO','PHOTO','EDITING','POST','CAROUSEL','STORY','GRAPHIC','COPY','PUBLICATION','REEL','SHORT'],
+  BRAND: ['LOGO','IDENTITY','BRAND_GUIDE'],
   INSTAGRAM: ['VIDEO', 'REEL', 'POST', 'CAROUSEL', 'STORY'],
   TIKTOK: ['VIDEO', 'POST', 'CAROUSEL', 'STORY'],
   FACEBOOK: ['VIDEO', 'REEL', 'POST', 'CAROUSEL', 'STORY'],
   YOUTUBE: ['VIDEO', 'SHORT', 'POST'],
-  MAPS: ['REVIEWS', 'POST'], WEB: ['WEB'], WALLET: ['WALLET'],
+  MAPS: ['MAPS_PROFILE','MAPS_INFO','MAPS_PHOTO','REVIEWS','MAPS_RESPONSES','MAPS_PERFORMANCE','POST'],
+  WEB: ['WEBSITE','STORE','CATALOG','MENU','BOOKING','LANDING','MAINTENANCE','WEB'], WALLET: ['WALLET','LOYALTY_PROGRAM','WALLET_DESIGN'],
 });
 export const labels = Object.freeze({
   CONTENT: 'Contenido', QUOTE: 'Cotización', VISIT: 'Visita de grabación',
