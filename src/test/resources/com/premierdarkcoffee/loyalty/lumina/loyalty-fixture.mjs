@@ -6,7 +6,7 @@ import { uuid } from '../../../../../../main/resources/com/premierdarkcoffee/loy
 import { cashierAssets } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/wallet/bridge.mjs';
 import { close, listen } from './helpers.mjs';
 
-export async function fakeLoyalty(t,webFolder = null) {
+export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
   const business = {id:uuid(),name:'Negocio conectado',slug:'negocio-conectado',timezone:'America/Guayaquil',currency:'USD'};
   const other = {id:uuid(),name:'Otro Loyalty',slug:'otro-loyalty',timezone:'America/Guayaquil',currency:'USD'};
   const branch = {id:uuid(),name:'Sucursal Centro',code:'CENTRO'};
@@ -31,7 +31,7 @@ export async function fakeLoyalty(t,webFolder = null) {
   };
   const ownerToken = createOwner(business);
   const foreignToken = createOwner(other);
-  const platformToken=randomCode();
+  const platformToken=configuration.platformToken||randomCode();
   const health={configuration:{apple:true,google:true},summary:{total:2,attention:1,pending:1,accepted:1,unissued:0},items:[{name:'Cliente de prueba',provider:'APPLE',state:'PENDING',lastAcceptedAt:null}],hasMore:false};
   const json = (res,status,data) => {
     res.writeHead(status,{'Content-Type':'application/json'});

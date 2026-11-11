@@ -115,12 +115,27 @@ test('acceso único persiste cifrado al reiniciar servidor y no crea otro emplea
  }finally{await close(server);db.close();rmSync(folder,{recursive:true,force:true});}
 });
 test('configuración interna usa solo .env privado, sin evaluar texto, y verifica destino',()=>{
- const folder=mkdtempSync(join(tmpdir(),'lumina-config-')),token='x'.repeat(43),old=process.env.LUMINA_LOYALTY_ADMIN_TOKEN;
+ const folder=mkdtempSync(join(tmpdir(),'lumina-config-')),old=process.env.LUMINA_LOYALTY_ADMIN_TOKEN;
  delete process.env.LUMINA_LOYALTY_ADMIN_TOKEN;
  try{
   assert.deepEqual(loadIntegration('http://127.0.0.1:8097',folder),{});
-  const path=join(folder,'.env');writeFileSync(path,`STAGING_ADMIN_TOKEN=${token}\nLOYALTY_HTTP_PORT=8097\nUNRELATED=$(bad command)\n`,{mode:0o600});
-  assert.equal(loadIntegration('http://127.0.0.1:8097',folder).platformToken,token);
+  const path=join(folder,'.env');
+  for(const length of [32,43,48,64,128]){
+    const token='x'.repeat(length);
+    writeFileSync(path,`STAGING_ADMIN_TOKEN=${token}\nLOYALTY_HTTP_PORT=8097\nUNRELATED=$(bad command)\n`,{mode:0o600});
+    assert.equal(loadIntegration('http://127.0.0.1:8097',folder).platformToken,token);
+    process.env.LUMINA_LOYALTY_ADMIN_TOKEN=token;
+    assert.equal(loadIntegration('http://127.0.0.1:8097',folder).platformToken,token);
+    delete process.env.LUMINA_LOYALTY_ADMIN_TOKEN;
+  }
+  for(const token of ['x'.repeat(31),'x'.repeat(129),'x'.repeat(43)+'!']){
+    writeFileSync(path,`STAGING_ADMIN_TOKEN=${token}\nLOYALTY_HTTP_PORT=8097\n`,{mode:0o600});
+    assert.throws(()=>loadIntegration('http://127.0.0.1:8097',folder));
+    process.env.LUMINA_LOYALTY_ADMIN_TOKEN=token;
+    assert.throws(()=>loadIntegration('http://127.0.0.1:8097',folder));
+    delete process.env.LUMINA_LOYALTY_ADMIN_TOKEN;
+  }
+  writeFileSync(path,`STAGING_ADMIN_TOKEN=${'x'.repeat(48)}\nLOYALTY_HTTP_PORT=8097\n`,{mode:0o600});
   assert.throws(()=>loadIntegration('http://127.0.0.1:8096',folder));
   rmSync(path);symlinkSync('/tmp/never-read',path);assert.throws(()=>loadIntegration('http://127.0.0.1:8097',folder));
  }finally{if(old!==undefined)process.env.LUMINA_LOYALTY_ADMIN_TOKEN=old;rmSync(folder,{recursive:true,force:true});}

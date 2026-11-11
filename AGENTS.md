@@ -389,3 +389,10 @@ Esta revisión reemplaza el modelo de cuatro áreas sociales y el acceso Wallet 
 Wallet usa la misma cuenta de Lúmina. No pedir credenciales al dueño ni al colaborador para cada módulo o al configurar Caja. El backend obtiene su configuración privada existente y conserva una asociación explícita por tenant. El puente valida sesión, pertenencia y permisos en cada solicitud. Los accesos internos se cifran con la clave existente; nunca exponerlos al cliente. Un acceso revocado queda bloqueado hasta reparación explícita y auditada de la agencia. Conservar las identidades de tarjetas Apple/Google.
 
 SQLite v2 se aplica con migración nueva y respaldo privado coherente de v1; no modificar schema.sql original. Después de migrar no arrancar código v1 sin una recuperación explícita de código/datos. El checkpoint exige 30 contratos Lúmina además de las 570 Kotlin/PostgreSQL, 128 Python y gates locales. Guía: docs/lumina-contenido-acceso-unico-v042.md.
+
+
+## Reparación de arranque v042r1
+
+La credencial de plataforma es opaca: usar el contrato de staging.read_config, base64url de 32 a 128 caracteres. init_config genera 36 bytes, que producen 48 caracteres; no aplicar el tamaño de 43 de las sesiones o de los empleados creados por Kotlin a esta credencial. Conservar el valor original, los controles de permisos y el destino privado. La corrección no modifica .env, claves, tarjetas ni esquemas.
+
+El gate del portal ahora requiere 32 pruebas completas. Las nuevas pruebas arrancan el lanzador real en otro proceso con un .env generado por staging.init_config y comprueban salud, sesión persistente y acceso autenticado de plataforma. Una configuración inválida falla antes de crear/migrar SQLite. El instalador comprueba la configuración existente con el lector corregido antes de aplicar archivos y ejecutar el checkpoint. Mantener todos los gates existentes para el commit local, sin push.
