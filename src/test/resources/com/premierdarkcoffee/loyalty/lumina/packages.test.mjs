@@ -8,7 +8,7 @@ import { agency, colleague, owner, portal } from './helpers.mjs';
 import { localDay, uuid } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 import { monthlyEnd } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/orders.mjs';
 import { openDatabase } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/database.mjs';
-const selected=(p,id)=>p+'?empresa='+id;
+const selected= (p,id)=>'/agencia'+p+'?empresa='+id;
 const identifier=response=>response.location?.split('?')[0].split('/').at(-1);
 async function setup(t) {
   const w=await portal(t),admin=await agency(w),{client,id}=await owner(w,'Comercio de prueba','1');

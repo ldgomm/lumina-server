@@ -9,7 +9,7 @@ async function linked(t) {
   const integration={};const world = await portal(t,loyalty.origin,integration);
   const admin = await agency(world);
   const {client,id} = await owner(world,'Restaurante de prueba','7');
-  await admin.post('/clientes/verificar?empresa='+id);
+  await admin.post('/agencia/clientes/verificar?empresa='+id);
   world.db.run('UPDATE companies SET loyalty_tenant=?,loyalty_name=? WHERE id=?',loyalty.business.id,loyalty.business.name,id);
   integration.platformToken=loyalty.platformToken;
   await client.get('/wallet');

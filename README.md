@@ -66,3 +66,6 @@ Consulta [la guía de Administración v040](docs/administracion-v040.md) para co
 
 
 Lúmina v003 / Loyalty v042: contenido compartido entre plataformas y acceso único a Wallet. Consulta [la guía de actualización](docs/lumina-contenido-acceso-unico-v042.md).
+
+
+Actualización Lúmina v007 / Loyalty v046: [Contenido independiente y límites de acceso](docs/lumina-contenido-accesos-v046.md). Incluye solicitudes simplificadas, consulta administrativa de solo lectura y resultado único en Terminal.

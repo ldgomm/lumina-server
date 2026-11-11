@@ -4,7 +4,8 @@ export function platformTargets(db,request) {
   return db.all('SELECT platform FROM request_platforms WHERE company_id=? AND request_id=? ORDER BY platform',request.company_id,request.id).map(row=>row.platform);
 }
 export function canRequest(actor,request,action='VIEW') {
-  if (actor.kind!=='COLLABORATOR') return true;
+  if (actor.kind==='AGENCY') return action==='VIEW';
+  if (actor.kind==='OWNER') return actor.company_id===request.company_id;
   if (['PLAN','QUOTE','COURTESY'].includes(request.type)) return false;
   if (request.channel!=='SOCIAL') return can(actor,request.channel,action);
   if (actor.grants.some(g=>g.scope==='SOCIAL' && g.action===action)) return true;

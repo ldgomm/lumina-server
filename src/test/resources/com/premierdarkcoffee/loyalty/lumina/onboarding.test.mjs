@@ -42,22 +42,22 @@ test('la caída del servicio conserva la cuenta y reintenta sin pedir asociació
  loyalty.registrationUnavailable(false);assert.equal((await client.get('/wallet')).status,200);
  assert.ok(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant);assert.equal(loyalty.registrations.size,1);
 });
-test('agencia abre cada negocio dentro de Lúmina con acceso propio y contexto independiente',async t=>{
+test('agencia consulta cada negocio sin abrir su sesión operativa ni emitir credenciales',async t=>{
  const {loyalty,world,admin}=await setup(t);const a=await owner(world,'Negocio A','4'),b=await owner(world,'Negocio B','5');
  const directory=await admin.get('/wallet');assert.match(directory.body,/Negocio A/);assert.match(directory.body,/Negocio B/);assert.doesNotMatch(directory.body,/Café Loyalty|Asociar negocio|Administración de Loyalty/);
  for(const company of [a,b]){
   const page=await admin.get('/wallet?empresa='+company.id);assert.match(page.body,/Wallet activa/);
-  const workspace=await admin.get('/wallet/gestion?empresa='+company.id);assert.equal(workspace.status,200);assert.match(workspace.body,new RegExp('lumina-wallet-company" content="'+company.id));
+  const workspace=await admin.get('/wallet/gestion?empresa='+company.id);assert.equal(workspace.status,403);assert.doesNotMatch(workspace.body,/lumina-wallet-mode/);
   const slug=loyalty.registrations.get(company.id).slug;
-  const qr=await admin.get('/api/public/'+slug+'/qr?empresa='+company.id);assert.equal(qr.status,200);assert.match(qr.body,new RegExp(slug));
-  const join=await admin.get('/join/'+slug+'?empresa='+company.id);assert.equal(join.location,loyalty.origin+'/join/'+slug);
+  const qr=await admin.get('/api/public/'+slug+'/qr?empresa='+company.id);assert.equal(qr.status,403);
+  const join=await admin.get('/join/'+slug+'?empresa='+company.id);assert.equal(join.status,403);
  }
  const slugB=loyalty.registrations.get(b.id).slug;
  assert.equal((await admin.get('/api/public/'+slugB+'/qr?empresa='+a.id)).status,403);
  assert.equal((await a.client.get('/api/public/'+slugB+'/qr?empresa='+b.id)).status,403);
  const responses=await Promise.all([admin.get('/wallet-api/api/staff/dashboard',scope(a.id)),admin.get('/wallet-api/api/staff/dashboard',scope(b.id))]);
- assert.deepEqual(responses.map(r=>JSON.parse(r.body).business.name),['Negocio A','Negocio B']);
- const accesses=world.db.all("SELECT w.* FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE a.kind='AGENCY'");assert.equal(accesses.length,2);assert.notEqual(accesses[0].staff_id,accesses[1].staff_id);
+ assert.deepEqual(responses.map(r=>r.status),[403,403]);
+ const accesses=world.db.all("SELECT w.* FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE a.kind='AGENCY'");assert.equal(accesses.length,0);
  assert.equal((await admin.get('/wallet-api/api/platform/tenants')).status,403);
  assert.equal((await admin.get('/wallet-api/api/staff/dashboard')).status,403);
  assert.equal((await a.client.get('/wallet-api/api/staff/dashboard',scope(b.id))).status,403);
@@ -93,5 +93,5 @@ test('identidades y permisos del equipo se administran desde Lúmina sin emitir 
   assert.equal(response.status,403);
  }
  const view=await client.get('/equipo');assert.match(view.body,/Añadir colaborador/);assert.doesNotMatch(view.body,/verificar tu negocio|name="credential"/);
- const agency=await admin.get('/wallet/gestion?empresa='+id);assert.match(agency.body,/lumina-wallet-agency" content="yes"/);
+ const agency=await admin.get('/wallet/gestion?empresa='+id);assert.equal(agency.status,403);assert.doesNotMatch(agency.body,/lumina-wallet-mode/);
 });

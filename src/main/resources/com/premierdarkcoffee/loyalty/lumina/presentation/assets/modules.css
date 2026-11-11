@@ -1,4 +1,4 @@
-/* Content and commercial modules share the Lúmina shell and current session. */
+/* Commercial views in Lúmina; content has its own shell and shared session. */
 .signed-in .module-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 24px;padding:7px;background:#e7edf5;border:1px solid #dbe3ee;border-radius:12px}
 .signed-in .module-tabs a{display:inline-flex;align-items:center;min-height:42px;padding:10px 15px;border-radius:8px;color:#344f70;text-decoration:none;font-size:12px;font-weight:650}
 .signed-in .module-tabs a[aria-current]{background:#0b1f3a;color:#fff;box-shadow:0 2px 6px #0b1f3a20}
@@ -24,3 +24,5 @@
 @media(max-width:520px){.signed-in .module-tabs{gap:3px;padding:5px}.signed-in .module-tabs a{font-size:11px;padding:9px 10px}.module-lead,.selection-summary,.package-card{padding:21px}.commercial-totals{grid-template-columns:1fr;gap:10px}.commercial-totals>div{padding:16px}.commercial-totals strong{font-size:26px}.content-flow{grid-template-columns:1fr}.content-entry{padding:22px}.purchase-options{gap:16px}.package-grid{grid-template-columns:1fr}}
 
 .signed-in .module-tabs{max-height:none;overflow:visible;scrollbar-width:auto}.signed-in .module-tabs a{margin:0;flex:0 0 auto;box-shadow:none}.signed-in .module-tabs a[aria-current]{box-shadow:0 2px 6px #0b1f3a20}
+
+.consultation-notice{padding:18px 22px;margin:0 0 26px;border:1px solid #bbcede;border-left:4px solid #547b9c;border-radius:10px;background:#edf3f8;color:#294a68;font-size:13px}.consultation-notice p{margin:6px 0 0}

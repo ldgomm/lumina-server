@@ -441,3 +441,18 @@ Renovación manual de cada período mensual, con día de corte anclado, sin acum
 SQLite v4 se aplica con 004_packages.sql nueva y respaldo privado coherente. schema.sql, 002, 003 y PostgreSQL V001–V014 son inmutables. Contratos anteriores reciben units=1 y conservan sus valores. Mantener agency.key, datos, ciphertext, vínculos, identidad Apple/Google y URLs públicas. Código anterior a v4 requiere recuperación explícita coherente; el instalador no borra ni restaura automáticamente datos reales.
 
 Gate: 56 pruebas del portal en nueve suites, 128 Python, 280 unitarias/HTTP + 300 PostgreSQL, Docker y 114 comprobaciones gateway antes del commit local; sin push. Revisión visual, HTTPS y teléfonos se reportan por separado. Guía: docs/lumina-contenido-paquetes-v045.md.
+
+
+## Lúmina v007 / Loyalty v046 — identidad y Contenido
+
+Las instrucciones de esta sección sustituyen los permisos administrativos de Wallet descritos en versiones anteriores.
+
+- La agencia no representa al dueño: nunca puede crear solicitudes, reclamar cortesía, seleccionar paquetes, renovar, aceptar propuestas o aprobar entregables del negocio. Los permisos genéricos de agencia solo conceden VIEW.
+- La consulta de un negocio es de solo lectura en la interfaz y en el servidor. Las tareas de producción/cotización propias de Lúmina se abren explícitamente en /agencia/... y conservan al actor AGENCY en auditoría. El prefijo no concede acciones del cliente.
+- AGENCY nunca se convierte en OWNER ni recibe una credencial nativa de dueño. Wallet de agencia solo lee el tenant seleccionado mediante endpoints GET limitados; no provisiona ni repara accesos. Las credenciales anteriores de agencia permanecen inertes. No alterar conexiones, claves ni identidades de clientes.
+- El dueño puede reparar accesos internos bloqueados de su mismo negocio, con confirmación y motivo; ningún colaborador o agencia puede hacerlo.
+- Contenido usa content-shell.mjs y content.css, una interfaz propia con Volver a Lúmina y sesión compartida. No devolver sus fichas sociales al menú general.
+- La solicitud de contenido muestra exclusivamente Video, Fotografías y Diseño para redes. Cortesía sin formatos ni plataformas. Conservar formatos y contratos históricos; cupo compatible elegido expresamente al producir.
+- La Terminal del instalador/checkpoint imprime únicamente RESULTADO=... una vez. Detalles en evidencia; log de arranque privado y excluido del ZIP. No inferir PASS de reportes ausentes ni omitir gates para silenciar salida.
+- Gate del portal: diez suites, al menos 68 pruebas sin omisiones. Gate Python: al menos 130. Se mantienen 580 casos nativos y 114 checks del gateway. Commit local solo tras PASS completo; nunca push.
+- Ver docs/lumina-contenido-accesos-v046.md. No cambiar migraciones SQLite/PostgreSQL ni archivos privados por esta actualización.

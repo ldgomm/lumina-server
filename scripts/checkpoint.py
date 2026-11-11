@@ -24,7 +24,7 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v045'
+VERSION = 'v046'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
@@ -452,7 +452,8 @@ def main(arguments=None, updates=None, origin=None):
         def heartbeat():
             began = time.monotonic()
             while not stop.wait(20):
-                print(label+': trabajando ('+str(int(time.monotonic()-began))+' s)...', flush=True)
+                with (folder/'logs'/'progress.log').open('a') as progress:
+                    progress.write(label+': trabajando ('+str(int(time.monotonic()-began))+' s)\n')
         thread = threading.Thread(target=heartbeat, daemon=True)
         thread.start()
         try:
@@ -470,9 +471,6 @@ def main(arguments=None, updates=None, origin=None):
             log = clean(data.decode('utf-8', 'replace'))
             (folder/'logs'/(label+'.log')).write_text(log)
             report['checks'][label] = {'exit_code': code}
-            print(label+': '+('OK' if code == 0 else 'ERROR'), flush=True)
-            if code:
-                print('\n'.join(log.splitlines()[-14:]), flush=True)
             return code
         finally:
             if process.poll() is None:
@@ -539,7 +537,7 @@ def main(arguments=None, updates=None, origin=None):
         for attempt in (1, 2):
             before = snapshot(project)
             prefix = 'attempt_'+str(attempt)+'_'
-            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=128, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
+            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=130, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
             if workflow:
                 report['status'] = 'WORKFLOW_TESTS_FAILED_NO_COMMIT'
                 break
@@ -576,7 +574,7 @@ def main(arguments=None, updates=None, origin=None):
                     raise RuntimeError('El gateway público no pasó sus comprobaciones de rutas y autenticación.')
             except Exception as error:
                 if attempt == 1 and not same_snapshot(before, snapshot(project)):
-                    print('Se guardaron cambios durante la construcción. Revalidando y reconstruyendo la versión actual...', flush=True)
+                    report['source_revalidated_after_build'] = True
                     continue
                 report['status'] = 'STAGING_FAILED_NO_COMMIT'
                 report['staging_error'] = clean(str(error))
@@ -584,7 +582,7 @@ def main(arguments=None, updates=None, origin=None):
             after = snapshot(project)
             if not same_snapshot(before, after):
                 if attempt == 1:
-                    print('Se guardaron cambios durante las pruebas. Revalidando el estado actual una vez...', flush=True)
+                    report['source_revalidated_after_tests'] = True
                     continue
                 report['status'] = 'SOURCE_CHANGED_DURING_TESTS_NO_COMMIT'
                 break
@@ -655,22 +653,8 @@ def main(arguments=None, updates=None, origin=None):
         with zipfile.ZipFile(archive) as z:
             if z.testzip():
                 raise RuntimeError('El ZIP no pasó la verificación de integridad.')
-        print('\nRESULTADO='+report['status'])
-        if report['auto_commit'].get('hash'):
-            print('COMMIT='+report['auto_commit']['hash'])
-        if report.get('error'):
-            print(report['error'])
-        print('Archivo para compartir: '+str(archive))
+        print('RESULTADO='+report['status'],flush=True)
         if report.get('core_status') == 'CORE_TESTS_PASS' and report['auto_commit'].get('hash'):
-            print('Servidor local: '+report['staging']['urls']['preview'])
-            if report.get('https',{}).get('origin'):
-                print('HTTPS: '+report['https']['origin'])
-                print('Guía local: '+str(project/'.local-wallet/guide.html'))
-                if report['https'].get('pass_refresh'):
-                    print('La conexión cambió: abre la guía para actualizar la misma tarjeta en el iPhone. No la borres ni te registres otra vez.')
-            if report.get('https', {}).get('status') == 'HTTPS_SETUP_FAILED':
-                print('HTTPS no está funcionando. Guía de recuperación: ' + str(project/'.local-wallet/guide.html'))
-            print('Portal integrado: http://127.0.0.1:'+os.environ.get('LUMINA_PORT','8099')+'/')
             try:
                 show_recovery = report.get('https', {}).get('pass_refresh') or report.get('https', {}).get('status') == 'HTTPS_SETUP_FAILED'
                 if show_recovery:

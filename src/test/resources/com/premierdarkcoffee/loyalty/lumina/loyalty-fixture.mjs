@@ -68,6 +68,11 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
       if(path==='/api/platform/wallet/status')return json(res,200,{configuration:{apple:'CONFIGURED_DEVICE_TEST_REQUIRED',google:'CONFIGURED_DEVICE_TEST_REQUIRED'},passes:1});
       if(path==='/api/platform/overview')return json(res,200,{businesses:[{...business,clients:1,branches:2,state:'ACTIVE'}],summary:{businesses:1}});
       if(path==='/api/platform/tenants')return json(res,200,{items:[business,other]});
+      const read=path.match(/^\/api\/platform\/tenants\/([^/]+)\/(profile|wallet-health|metrics)$/);
+      if(read&&req.method==='GET') {
+        const company=businesses.get(read[1]);if(!company)return fail(res,404,'NOT_FOUND');
+        return json(res,200,read[2]==='wallet-health'?health:read[2]==='profile'?{business:company}:{businessId:company.id,totalClients:0});
+      }
       const match=path.match(/^\/api\/platform\/tenants\/([^/]+)\/(branches|credentials|team)(?:\/([^/]+)\/actions)?$/);
       if(match) {
         const company=businesses.get(match[1]);if(!company)return fail(res,404,'NOT_FOUND');

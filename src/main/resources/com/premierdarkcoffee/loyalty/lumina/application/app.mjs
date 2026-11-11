@@ -21,11 +21,14 @@ import { loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentat
 import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
 
 import { contentData } from '../content/workspace.mjs';
-import { contentNav, contentPage } from '../presentation/pages/content-pages.mjs';
+import { contentShell } from '../presentation/pages/content-shell.mjs';
+import { recordingForm } from '../presentation/pages/content-forms.mjs';
+import { contentPage } from '../presentation/pages/content-pages.mjs';
 import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs';
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/content.css': ['content.css','text/css; charset=utf-8'],
   '/assets/modules.css': ['modules.css','text/css; charset=utf-8'],
   '/assets/packages.js': ['packages.js','text/javascript; charset=utf-8'],
   '/assets/lumina.css': ['lumina.css','text/css; charset=utf-8'],
@@ -80,7 +83,8 @@ function getRequestPage(db,actor,company,url,request) {
   const plan = request.plan_id ? getPlan(db,request.plan_id) : null;
   const contracts = actor.kind === 'AGENCY' ? contractsFor(db,company.id) : [];
   return {title:request.title,description:'Solicitud, visitas, piezas e historial del negocio.',
-    body:(request.channel==='SOCIAL'?contentNav(url,'solicitudes'):'')+requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan})};
+    layout:request.channel==='SOCIAL'?'content':undefined,contentView:'solicitudes',
+    body:requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan})};
 }
 
 export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {} }) {
@@ -92,7 +96,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
     let path = '/';
     let cash = null;
     let api = false;
-    const render = (view,status=200) => send(res,status,page({actor,company,path,cash,...view}));
+    let agencyWork=false;
+    const render = (view,status=200) => {
+      const viewer=actor?{...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(company)&&!agencyWork}:null;
+      return send(res,status,(view.layout==='content'?contentShell:page)({actor:viewer,company,path,cash,...view}));
+    };
     try {
       const origin = publicOrigin || `http://127.0.0.1:${req.socket.localPort}`;
       const trusted = new URL(origin);
@@ -143,6 +151,12 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if (method==='GET' && !api) return redirect(res,'/');
         throw new Problem('Inicia sesión para continuar.',401);
       }
+      if(path.startsWith('/agencia/')) {
+        requireAgency(actor);
+        requireThat(/^\/agencia\/(inicio|contenido|solicitudes|agenda|planes|mapas|clientes\/verificar)(\/|$)/.test(path),'Área de trabajo no encontrada.',404);
+        agencyWork=true;path=path.slice('/agencia'.length);
+      }
+      actor={...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('empresa'))&&!agencyWork};
       if (actor.kind === 'COLLABORATOR') cash = db.get(
         "SELECT branch_name FROM cash_grants WHERE account_id=? AND company_id=? AND status='ACTIVE'",actor.id,actor.company_id);
       if (path.startsWith('/wallet-api/')) {
@@ -164,9 +178,10 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if(method==='GET' && path==='/platform')return redirect(res,'/wallet');
       if (method==='GET' && path==='/wallet/gestion') {
+        requireThat(actor.kind!=='AGENCY','La agencia solo puede consultar Wallet desde la ficha del negocio.',403);
         company=companyFor(db,actor,target.searchParams.get('empresa'));
         actor={...actor,wallet_company:company.id};
-        const sections=walletSections(actor.kind==='AGENCY'?{...actor,kind:'OWNER'}:actor);
+        const sections=walletSections(actor);
         requireThat(actor.kind!=='COLLABORATOR'||sections.length,'Tu cuenta no tiene áreas operativas de Wallet.',403);
         const section=target.searchParams.get('seccion')||(actor.kind==='COLLABORATOR'?sections[0]:'design');
         requireThat(actor.kind!=='COLLABORATOR'||sections.includes(section),'No tienes acceso a esta área de Wallet.',403);
@@ -183,7 +198,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (method==='GET' && /^\/join\/[a-z0-9-]+$/.test(path)) {
         if(target.searchParams.has('empresa')){actor={...actor,wallet_company:target.searchParams.get('empresa')};target.searchParams.delete('empresa');}
         const dashboard=await wallets.validate(actor);
-        requireThat((actor.kind==='AGENCY'&&actor.wallet_company||actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&(can(actor,'WALLET_CUSTOMERS','EDIT')||!target.search&&can(actor,'WALLET_DESIGN'))) && path==='/join/'+dashboard.business?.slug,'Negocio no encontrado.',404);
+        requireThat((actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&(can(actor,'WALLET_CUSTOMERS','EDIT')||!target.search&&can(actor,'WALLET_DESIGN'))) && path==='/join/'+dashboard.business?.slug,'Negocio no encontrado.',404);
         return redirect(res,loyaltyUrl+path+target.search);
       }
       if (api) {
@@ -205,7 +220,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         data = await readForm(req);
         actor = getSession(db,cookie);
         requireThat(actor,'Tu sesión terminó. Vuelve a iniciar sesión.',401);
+        actor={...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('empresa'))&&!agencyWork};
         requireThat(equal(actor.csrf,data._csrf),'El formulario venció. Abre la página y reintenta.',403);
+      }
+      if(method==='POST'&&actor.kind==='AGENCY'&&target.searchParams.get('empresa')&&!agencyWork&&!['/salir','/cuenta/clave'].includes(path)) {
+        throw new Problem('La ficha del negocio es de solo lectura para la agencia.',403);
       }
       if (path==='/salir' && method==='POST') {
         wallets.forget(actor);
@@ -214,7 +233,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return redirect(res,'/');
       }
       if (['/wallet/conectar','/wallet/desconectar','/equipo/loyalty/vincular','/wallet/vincular'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
-      if(path==='/wallet/reparar'&&method==='POST'){requireAgency(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));await wallets.repair(actor,company,data);return redirect(res,'/wallet?empresa='+company.id);}
+      if(path==='/wallet/reparar'&&method==='POST'){requireOwner(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));await wallets.repair(actor,company,data);return redirect(res,'/wallet');}
       if (path==='/wallet' && method==='GET') {
         requireThat(can(actor,'WALLET'),'No tienes permiso para consultar Wallet.',403);
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
@@ -227,7 +246,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const companies=actor.kind==='AGENCY'&&!company?db.all('SELECT id,name FROM companies ORDER BY name,id'):[];
         const contact=company?db.get("SELECT a.name,a.email,c.phone FROM accounts a JOIN companies c ON c.id=a.company_id WHERE c.id=? AND a.kind='OWNER'",company.id):null;
         return render({title:'Fidelización digital',description:'Wallet de tu negocio, integrado en Lúmina.',
-          body:walletPage({actor,company,contact,companies,data:information,error,blocked:actor.kind==='AGENCY'&&company?db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1",company.id):[]})});
+          body:walletPage({actor,company,contact,companies,data:information,error,blocked:actor.kind==='OWNER'&&company?db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[]})});
       }
       if(path==='/proximamente'&&method==='GET') {
         requireThat(actor.kind!=='COLLABORATOR','Área no asignada.',403);
@@ -258,6 +277,10 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
         return redirect(res,pathFor(actor,company)(socialChannels.includes(channel)?'/contenido':channel==='WALLET'?'/wallet':'/servicios/'+channel.toLowerCase()));
       }
+      if(method==='GET'&&path==='/contenido/grabacion') {
+        requireAccess(actor,'SOCIAL','REQUEST');company=companyFor(db,actor);
+        return render({layout:'content',contentView:'agenda',title:'Solicitar una grabación',body:card('Coordinemos la visita',recordingForm(actor,pathFor(actor,company)))});
+      }
       if(method==='GET'&&path==='/contenido') {
         requireAccess(actor,'SOCIAL');
         if(actor.kind!=='AGENCY'||target.searchParams.get('empresa'))company=companyFor(db,actor,target.searchParams.get('empresa'));
@@ -266,7 +289,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const data=contentData(db,actor,company,target.searchParams);
         const metricsHtml=data.view==='metricas'&&company?metricsPage(actor,url,analytics(db,actor,company.id,
           {from:target.searchParams.get('desde'),to:target.searchParams.get('hasta')}),'/contenido'):'';
-        return render({title:'Contenido para redes',description:'Solicitudes, producción, aprobaciones, entregas y resultados.',body:contentPage({actor,company,url,data,metricsHtml})});
+        return render({layout:'content',contentView:data.view,title:data.view==='resumen'?'Tu espacio de contenido':data.title,description:'De la idea a la entrega, en un solo lugar.',body:contentPage({actor,company,url,data,metricsHtml})});
       }
       if(method==='GET'&&path.startsWith('/servicios/')) {
         const channel=path==='/contenido'?'SOCIAL':path.slice('/servicios/'.length).toUpperCase();
@@ -290,7 +313,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const q = text(target.searchParams.get('q') || '','búsqueda',0,100);
         const companies = db.all(`SELECT id,name,approved,phone,created_at FROM companies
           WHERE instr(lower(name),lower(?))>0 OR ?='' ORDER BY approved,name,id LIMIT 100`,q,q);
-        return render({title:'Clientes',description:'Verifica registros y abre el espacio de trabajo de cada negocio.',body:companiesPage(companies,q)});
+        return render({title:'Clientes',description:'Consulta la información y el avance de cada negocio. Conservas tu identidad de agencia.',body:companiesPage(companies,q)});
       }
       const companyId = target.searchParams.get('empresa');
       const catalog = ['/planes','/planes/retirar'].includes(path);
@@ -309,7 +332,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const upcoming=db.get(`SELECT count(*) AS count FROM visits v JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
           WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
         const courtesy = actor.kind==='OWNER' ? db.get("SELECT id,status FROM requests WHERE company_id=? AND type='COURTESY'",company.id) : null;
-        return render({title:'Panel de trabajo',description:'Sigue el avance de los servicios y las actividades de tu negocio.',
+        return render({title:actor.kind==='AGENCY'?'Información del negocio':'Panel de trabajo',description:'Servicios y actividades del negocio.',
           body:homePage({actor,company,url,groups,upcoming,courtesy,cash,
             videoRequested:videos.reduce((sum,row)=>sum+row.quantity,0),videoDelivered:videos.reduce((sum,row)=>sum+row.delivered,0)})});
       }
@@ -419,7 +442,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (path==='/reportes' && method==='GET') {
         requireThat(socialChannels.some(key=>can(actor,key)),'Tu acceso no incluye métricas de redes.',403);
         const report = analytics(db,actor,company.id,{from:target.searchParams.get('desde'),to:target.searchParams.get('hasta')});
-        return render({title:'Métricas',description:'Seguimiento por canal y cobertura de las mediciones.',body:contentNav(url,'metricas')+metricsPage(actor,url,report)});
+        return render({title:'Métricas',description:'Seguimiento por canal y cobertura de las mediciones.',layout:'content',contentView:'metricas',body:metricsPage(actor,url,report)});
       }
       if (path.startsWith('/mapas')) {
         requireAccess(actor,'MAPS');

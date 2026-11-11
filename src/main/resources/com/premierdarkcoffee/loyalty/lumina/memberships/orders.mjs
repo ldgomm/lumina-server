@@ -44,7 +44,7 @@ function renewable(db,company,id) {
   return contract;
 }
 export function submitOrder(db,actor,company,data) {
-  commercial(actor,company);
+  requireOwner(actor);commercial(actor,company);
   requireThat(isId(data.key),'Vuelve a abrir el catálogo antes de enviar.',400);
   const notes=text(data.notes||'','indicaciones',0,2000);
   return db.transaction(()=>{

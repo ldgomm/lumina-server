@@ -1,5 +1,6 @@
+import { compatibleContentQuota } from '../content/service-options.mjs';
 import { canRequest, platformTargets, requestAccessSql } from '../access/content-policy.mjs';
-import { can, requireAccess, requireAgency, requireOwner } from '../access/accounts.mjs';
+import { can, requireAccess, requireAgency, requireOwner, requireBusinessActor } from '../access/accounts.mjs';
 import { checkCapacity, getPlan } from '../memberships/billing.mjs';
 import { channels, areas, choice, event, formats, httpsUrl, integer, localInstant, now, requireThat, socialChannels, text, uuid } from '../shared/domain.mjs';
 
@@ -28,6 +29,7 @@ export function getRequest(db, actor, companyId, id) {
   return request;
 }
 export function createRequest(db, actor, company, data) {
+  requireBusinessActor(actor,company);
   const type = choice(data.type,['CONTENT','QUOTE','VISIT','COURTESY','PLAN'],'tipo de solicitud');
   if (['COURTESY','PLAN'].includes(type)) requireOwner(actor);
   if (type === 'QUOTE') requireThat(actor.kind !== 'COLLABORATOR','Solo el dueño puede solicitar cotizaciones.',403);
@@ -131,15 +133,18 @@ export function addPiece(db, actor, company, request, data) {
   requireThat(company.approved && !['PLAN','VISIT'].includes(request.type) && productionStates.includes(request.status),
     'Aprueba la solicitud antes de crear entregables.',409);
   const title = text(data.title,'título de la pieza',2,150);
-  const contract = data.contract || null;
+  const allocation = (data.allocation || '').split(':');
+  const contract = allocation[0] || data.contract || null;
+  const service = allocation[1] || request.service;
+  requireThat(!allocation[2] && (request.channel==='SOCIAL' ? compatibleContentQuota(request.service,service) : service===request.service),'El cupo no corresponde al contenido solicitado.',400);
   requireThat(request.type !== 'COURTESY' || !contract,'La cortesía se gestiona por separado de los cupos del plan.');
   db.transaction(() => {
     const existing = db.get("SELECT count(*) AS total FROM pieces WHERE request_id=? AND status<>'CANCELLED'",request.id).total;
     requireThat(existing < request.quantity,'Ya se crearon todos los entregables solicitados.',409);
-    if (contract) checkCapacity(db,company.id,contract,request.service);
+    if (contract) checkCapacity(db,company.id,contract,service);
     const id = uuid();
     db.run(`INSERT INTO pieces(id,company_id,request_id,contract_id,title,service,status,observations,created_at)
-      VALUES(?,?,?,?,?,?,'PRODUCTION','',?)`,id,company.id,request.id,contract,title,request.service,now());
+      VALUES(?,?,?,?,?,?,'PRODUCTION','',?)`,id,company.id,request.id,contract,title,service,now());
     db.run("UPDATE requests SET status='PRODUCTION',revision=revision+1 WHERE id=?",request.id);
     event(db,actor,company.id,'REQUEST',request.id,'PIEZA_CREADA',title,request.channel);
   });

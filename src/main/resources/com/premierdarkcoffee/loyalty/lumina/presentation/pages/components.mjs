@@ -42,7 +42,8 @@ export function pathFor(actor,company) {
   return (path, query = {}) => {
     const params = new URLSearchParams(query);
     if (actor?.kind === 'AGENCY' && company) params.set('empresa',company.id);
-    return path + (params.size ? '?' + params : '');
+    const provider=actor?.kind==='AGENCY'&&actor.agencyWork&&/^\/(inicio|contenido|solicitudes|agenda|planes|mapas|clientes\/verificar)(\/|$)/.test(path);
+    return (provider?'/agencia':'') + path + (params.size ? '?' + params : '');
   };
 }
 function navLinks(actor,company,url,cash) {
@@ -76,7 +77,8 @@ export function page({actor,company,path='/',title,description='',body,cash=fals
     <header class="site-header"><div class="top"><a class="brand" href="${actor?esc(actor.kind==='AGENCY'?'/resumen':'/inicio'):'/'}">${mark}</a>
     ${actor?`<button class="menu-toggle quiet" type="button" aria-label="Abrir navegación" aria-controls="workspace-nav" aria-expanded="false">${icon('menu')}</button>`:`<div class="top-links">${localLink('/','Ingresar')}${localLink('/registro','Registrar negocio cliente')}</div>`}</div>
     ${actor?`<nav id="workspace-nav" aria-label="Área de trabajo"><div class="workspace-context"><small>ESPACIO DE TRABAJO</small><strong>${esc(company?.name||(actor.kind==='AGENCY'?'Lúmina Digital':'Mi negocio'))}</strong><span>${esc(label(actor.kind))}</span></div>${menu}<div class="nav-foot"><span class="brand-spark">L+</span><p>Marketing con propósito.<small>Lúmina Digital</small></p></div></nav>`:''}</header>
-    ${actor?`<div class="workspace-topbar"><span>${esc(company?.name||'Lúmina Digital')}<small>Tu centro de trabajo</small></span><div class="identity"><span class="avatar" aria-hidden="true">${esc(actor.name.trim().charAt(0).toUpperCase())}</span><span>${esc(actor.name)}<small>${esc(label(actor.kind))}</small></span>${form('/salir',actor,button('Salir','quiet'),'inline')}</div></div>`:''}
+    ${actor?`<div class="workspace-topbar"><span>${esc(company?.name||'Lúmina Digital')}<small>${actor.kind==='AGENCY'&&company?'Consulta de cliente':'Tu centro de trabajo'}</small></span><div class="identity"><span class="avatar" aria-hidden="true">${esc(actor.name.trim().charAt(0).toUpperCase())}</span><span>${esc(actor.name)}<small>${esc(label(actor.kind))}</small></span>${form('/salir',actor,button('Salir','quiet'),'inline')}</div></div>`:''}
     <main id="contenido"><header class="page-title"><p class="eyebrow">${esc(company?.name||(actor?'LÚMINA / ESPACIO PRIVADO':'LÚMINA DIGITAL'))}</p><h1>${esc(title)}</h1>${description?`<p>${esc(description)}</p>`:''}</header>
+    ${actor?.kind==='AGENCY'&&company?`<aside class="consultation-notice" role="note"><strong>${actor.agencyWork?'Trabajo de Lúmina':'Consulta del negocio · Solo lectura'}</strong><p>${actor.agencyWork?'Las acciones se registran a nombre de la agencia. Las solicitudes y aprobaciones corresponden al negocio.':'Estás consultando '+esc(company.name)+' como administrador de Lúmina. Conservas tu identidad de agencia.'}</p></aside>`:''}
     ${notice?`<p class="notice" role="status">${esc(notice)}</p>`:''}${body}</main><footer><div><span>Lúmina Digital <span class="footer-dot">·</span> Marketing y fidelización</span><span>Ecuador continental · UTC−5</span></div></footer></body></html>`;
 }

@@ -116,7 +116,8 @@ export async function changePassword(db, actor, input) {
   });
 }
 export function can(actor, scope, action = 'VIEW') {
-  return actor.kind !== 'COLLABORATOR' ||
+  if (actor.kind === 'AGENCY') return action === 'VIEW';
+  return actor.kind === 'OWNER' ||
     actor.grants.some(grant => grant.action === action && (grant.scope === scope || (socialChannels.includes(scope) && grant.scope === 'SOCIAL'))) ||
     (scope === 'SOCIAL' && actor.grants.some(grant => socialChannels.includes(grant.scope) && grant.action === action));
 }
@@ -128,6 +129,10 @@ export function requireAgency(actor) {
 }
 export function requireOwner(actor) {
   requireThat(actor.kind === 'OWNER' && actor.company_id, 'Acceso reservado para el dueño del negocio.', 403);
+}
+export function requireBusinessActor(actor, company) {
+  requireThat(['OWNER','COLLABORATOR'].includes(actor.kind) && actor.company_id === company?.id,
+    'Solo el negocio puede realizar esta acción. La agencia tiene acceso de consulta.',403);
 }
 export function companyFor(db, actor, selected) {
   const id = actor.kind === 'AGENCY' ? selected : actor.company_id;

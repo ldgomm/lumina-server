@@ -4,7 +4,7 @@ import { badge, button, card, disclosure, displayAmount, esc, external, form, hi
   number, select, table, textarea, timestamp } from './components.mjs';
 
 export function metricsPage(actor,url,data,route='/reportes') {
-  const filters = `<form action="${esc(route)}" class="filter">${actor.kind==='AGENCY' ? hidden('empresa',new URL(url('/reportes'),'http://localhost').searchParams.get('empresa')) : ''}
+  const filters = `<form action="${esc(route)}" class="filter">${actor.kind==='AGENCY'&&!actor.readOnlyCompany ? hidden('empresa',new URL(url('/reportes'),'http://localhost').searchParams.get('empresa')) : ''}
     ${route==='/contenido'?hidden('vista','metricas'):''}${input('desde','Desde','date','required',data.from)}${input('hasta','Hasta','date','required',data.to)}
     ${button('Actualizar','secondary')}</form>`;
   const blocks = data.rows.map(row=>card(channels[row.channel],`
@@ -18,7 +18,7 @@ export function metricsPage(actor,url,data,route='/reportes') {
     'Fuente manual. Cada plataforma usa sus propios indicadores. Comparamos la misma publicación con su último corte anterior, cuando existe.') + blocks;
 }
 export function mapsPage(actor,url,locations) {
-  const admin = actor.kind==='AGENCY';
+  const admin = actor.kind==='AGENCY'&&!actor.readOnlyCompany;
   const cards = locations.map(loc=>{
     const last = loc.cuts[0];
     const previous = loc.cuts[1];

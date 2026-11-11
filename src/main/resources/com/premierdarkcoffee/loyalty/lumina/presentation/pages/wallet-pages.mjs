@@ -5,9 +5,17 @@ import { icon } from './icons.mjs';
 import { cashierAssets } from '../../wallet/bridge.mjs';
 export function walletPage({actor,company,contact,companies=[],data,error,blocked=[]}) {
   const admin=actor.kind==='AGENCY';
+  if(admin) return card(company?'Wallet de '+company.name:'Wallet de los negocios',
+    company?`<p>${company.loyalty_tenant?badge('Wallet activa','success'):badge('Preparación pendiente')}</p>
+      <p>Consulta de fidelización. El dueño y su equipo administran tarjetas, promociones y Caja desde sus propias cuentas.</p>
+      ${contact?`<p>${esc(contact.name)} · ${esc(contact.email)} · ${esc(contact.phone)}</p>`:''}
+      ${error?`<p class="notice" role="status">${esc(error)}</p>`:''}
+      ${data?.health?.summary?table(['Seguimiento','Registros'],[['Registros por proveedor',number(data.health.summary.total??0)],['Actualizaciones pendientes',number(data.health.summary.pending??0)],['Requieren atención',number(data.health.summary.attention??0)]]):''}`:
+      table(['Negocio','Consulta'],companies.map(item=>[esc(item.name),localLink('/wallet?empresa='+item.id,'Consultar Wallet','btn secondary')]),'Los negocios aparecerán aquí al crear su cuenta.'),
+    'Acceso de agencia · Solo lectura');
   const suffix=admin&&company?'&empresa='+encodeURIComponent(company.id):'';
   const names={design:['Diseño de tarjetas','Personaliza Apple Wallet y Google Wallet con la identidad de tu negocio.','wallet'],programs:['Promociones y recompensas','Configura puntos, sellos, beneficios y premios.','plans'],customers:['Clientes','Seguimiento y recuperación de tarjetas.','clients'],reports:['Informes','Actividad y resultados de fidelización.','metrics'],walletHealth:['Estado de tarjetas','Actualizaciones y seguimiento de Apple y Google.','wallet'],qr:['QR de registro','Comparte el acceso a la tarjeta de tu negocio.','clients'],sales:['Caja','Compras, canjes y recibos.','wallet']};
-  const sections=walletSections(admin&&company?{...actor,kind:'OWNER'}:actor);
+  const sections=walletSections(actor);
   const shortcuts=Object.entries(names).filter(([key])=>sections.includes(key)).map(([key,[title,copy,mark]])=>['/wallet/gestion?seccion='+key+suffix,title,copy,mark]);
   const health=data?.health;
   const ready=Boolean(company?.loyalty_tenant);
@@ -16,13 +24,14 @@ export function walletPage({actor,company,contact,companies=[],data,error,blocke
     <div class="wallet-visual" aria-hidden="true"><div class="mini-wallet rear"><span>LÚMINA DIGITAL</span><strong>Google Wallet</strong><i>Fidelización</i></div><div class="mini-wallet front"><span>${esc(company?.name||'LÚMINA DIGITAL')}</span><strong>Apple Wallet</strong><i>Tu próxima visita cuenta.</i><div class="wallet-dots"><b></b><b></b><b></b><b></b><b></b></div></div></div></section>
     ${!company&&admin?card('Negocios de Lúmina',table(['Negocio','Fidelización'],companies.map(item=>[esc(item.name),localLink('/wallet?empresa='+item.id,'Abrir Wallet','btn secondary')]),'Los negocios aparecerán aquí al crear su cuenta.')):''}
     ${company&&contact?card(company.name,`<p>${esc(contact.name)} · ${esc(contact.email)} · ${esc(contact.phone)}</p>`,ready?'Wallet se creó con los datos de tu registro. Define tus promociones y recompensas para empezar.':'Tu cuenta está creada. La preparación de Wallet se reintentará al abrir esta página.') : ''}
-    ${admin&&company&&blocked.length?card('Revisar accesos',blocked.map(row=>form('/wallet/reparar?empresa='+company.id,actor,`<h3>${esc(row.name)}</h3>${hidden('account',row.account_id)}${input('reason','Motivo de la reparación','text','required minlength="5" maxlength="500"')}${check('confirm','Confirmo que esta persona debe recuperar su acceso a Wallet.',false,true)}${button('Reparar acceso interno','secondary')}`)).join('')):''}
+    ${actor.kind==='OWNER'&&company&&blocked.length?card('Revisar accesos',blocked.map(row=>form('/wallet/reparar',actor,`<h3>${esc(row.name)}</h3>${hidden('account',row.account_id)}${input('reason','Motivo de la reparación','text','required minlength="5" maxlength="500"')}${check('confirm','Confirmo que esta persona debe recuperar su acceso a Wallet.',false,true)}${button('Reparar acceso interno','secondary')}`)).join('')):''}
     ${error?`<div class="notice" role="status">${esc(error)} ${localLink('/wallet'+(admin&&company?'?empresa='+company.id:''),'Volver a intentar')}</div>`:''}
     ${data&&company?`<section class="module-grid wallet-shortcuts">${shortcuts.map(([href,title,copy,mark])=>`<a class="module-card" href="${href}">${icon(mark)}<h3>${esc(title)}</h3><p>${esc(copy)}</p><span>Abrir ${icon('arrow')}</span></a>`).join('')}</section>`:''}
     ${health?card('Seguimiento de tarjetas',`<div class="metric-grid compact">${[['Registros por proveedor','total'],['Requieren atención','attention'],['Actualizaciones pendientes','pending'],['Solicitudes procesadas','accepted']].map(([title,key])=>`<div class="metric-card"><span>${title}</span><strong>${number(health.summary?.[key]||0)}</strong></div>`).join('')}</div><p class="muted">Una respuesta procesada por el proveedor no confirma recepción en el teléfono.</p>`):''}
     ${actor.kind==='COLLABORATOR'&&!sections.length?card('Servicios de fidelización',`<p>Tu cuenta permite consultar los trabajos de Wallet. El dueño puede habilitar tareas de operación desde Equipo y permisos.</p>${localLink('/solicitudes?canal=WALLET','Ver solicitudes','btn secondary')}`):''}`;
 }
 export function loyaltyWorkspaceHtml(actor,section='design',sections=null,company=null) {
+  if(actor.kind==='AGENCY')throw new Error('Agency cannot render an owner workspace.');
   const platform=false;
   const back='/wallet'+(actor.kind==='AGENCY'&&company?'?empresa='+company.id:'');
   const scripts=Object.keys(cashierAssets).filter(name=>name.endsWith('.js'));

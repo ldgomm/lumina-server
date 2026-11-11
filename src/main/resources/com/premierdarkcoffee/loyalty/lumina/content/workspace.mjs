@@ -27,7 +27,7 @@ export function contentData(db,actor,company,query) {
     JOIN requests r ON r.id=p.request_id AND r.company_id=p.company_id JOIN companies c ON c.id=r.company_id`;
   const pubWhere=`${where} AND p.status<>'CANCELLED' AND pub.channel IN (${platforms.map(()=>'?').join(',')||"''"})`;
   counts.publications=db.get(`SELECT count(*) AS total FROM ${pubFrom} WHERE ${pubWhere}`,...params,...platforms).total;
-  let sql,values=[...params],title='Solicitudes recientes';
+  let sql,values=[...params],title=view==='resumen'?'Solicitudes recientes':contentViews[view];
   if(['produccion','revisiones','entregas'].includes(view)) {
     const state=view==='revisiones'?"p.status='REVIEW'":view==='entregas'?"p.status='DELIVERED'":"p.status IN ('PRODUCTION','REVIEW','APPROVED')";
     sql=`SELECT p.*,r.title AS request_title,c.name AS company_name FROM ${pieceFrom} WHERE ${where} AND ${state} ORDER BY p.created_at DESC,p.id DESC`;

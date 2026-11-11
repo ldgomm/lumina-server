@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { agency, colleague, owner, portal } from './helpers.mjs';
 import { contentData } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/content/workspace.mjs';
 import { localDay, uuid } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
-const selected=(p,id)=>p+'?empresa='+id;
+const selected= (p,id)=>'/agencia'+p+'?empresa='+id;
 const yesterday=()=>localDay(new Date(Date.now()-86400000))+'T12:00';
 async function setup(t) {
   const w=await portal(t),admin=await agency(w),{client,id}=await owner(w,'Contenido de prueba','1');

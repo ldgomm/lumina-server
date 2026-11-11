@@ -18,11 +18,11 @@ export function agencyOverview({counts,pipeline,visits,recent}) {
 }
 export function requestTable(rows) {
   return table(['Cliente / solicitud','Área','Estado','Cantidad','Registrada'],rows.map(r=>[
-    `<strong class="cell-heading">${esc(r.company_name)}</strong>${localLink('/solicitudes/'+r.id+'?empresa='+r.company_id,r.title)}`,
+    `<strong class="cell-heading">${esc(r.company_name)}</strong>${localLink('/agencia/solicitudes/'+r.id+'?empresa='+r.company_id,r.title)}`,
     esc(channels[r.channel]||r.channel),badge(r.status),number(r.quantity),esc(timestamp(r.created_at))]),'Las solicitudes aparecerán aquí cuando tus clientes las registren.');
 }
 function visitList(rows) {
-  return rows.length?`<div class="appointment-list">${rows.map(r=>`<a href="/solicitudes/${r.request_id}?empresa=${r.company_id}"><div class="appointment-icon">${icon('calendar')}</div><div><strong>${esc(r.company_name)}</strong><span>${esc(r.title)}</span><small>${esc(timestamp(r.starts_at))} · ${esc(r.place)}</small></div>${icon('arrow')}</a>`).join('')}</div>`:
+  return rows.length?`<div class="appointment-list">${rows.map(r=>`<a href="/agencia/solicitudes/${r.request_id}?empresa=${r.company_id}"><div class="appointment-icon">${icon('calendar')}</div><div><strong>${esc(r.company_name)}</strong><span>${esc(r.title)}</span><small>${esc(timestamp(r.starts_at))} · ${esc(r.place)}</small></div>${icon('arrow')}</a>`).join('')}</div>`:
     '<div class="empty-state"><span>Tu agenda está al día</span><p>Las visitas programadas aparecerán aquí con su fecha, lugar y negocio.</p></div>';
 }
 export function agencyProduction(rows,{q='',state='',channel=''}={}) {
@@ -46,6 +46,6 @@ export function channelWorkspace(channel,rows,url,canCreate) {
     ${social?localLink(url('/reportes'),'Ver métricas por plataforma','btn secondary'):''}</div></section>
     <div class="metric-grid compact"><div class="metric-card"><span>Solicitudes en esta vista</span><strong>${number(rows.length)}</strong></div><div class="metric-card"><span>Trabajos abiertos</span><strong>${number(open)}</strong></div></div>
     ${card(social?'Contenido y entregables':'Proyectos y servicios',table(['Trabajo','Negocio','Estado','Cantidad','Registro'],rows.map(r=>[
-      localLink(url('/solicitudes/'+r.id,{empresa:r.company_id}),r.title),esc(r.company_name),badge(r.status),number(r.quantity),esc(timestamp(r.created_at))])), 'Hasta 100 solicitudes visibles según tus permisos. Abre el trabajo para consultar los archivos, las revisiones y las evidencias.')}`;
+      localLink(url('/agencia/solicitudes/'+r.id,{empresa:r.company_id}),r.title),esc(r.company_name),badge(r.status),number(r.quantity),esc(timestamp(r.created_at))])), 'Hasta 100 solicitudes visibles según tus permisos. Abre el trabajo para consultar los archivos, las revisiones y las evidencias.')}`;
 }
 export function comingSoonPage(){return `<section class="service-intro"><span class="badge">Próximamente</span><h2>WhatsApp Business y asistentes con IA</h2><p>Un nuevo servicio de Lúmina Digital para la atención de tus clientes.</p><p class="muted">Todavía no está disponible para contratar ni activar. Aparecerá aquí cuando el servicio esté habilitado.</p></section>`;}

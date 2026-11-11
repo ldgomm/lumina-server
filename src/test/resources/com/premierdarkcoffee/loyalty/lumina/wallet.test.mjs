@@ -5,7 +5,7 @@ import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { walletRouteAllowed } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/wallet/wallet.mjs';
 async function context(t,link=true){
  const loyalty=await fakeLoyalty(t),integration={},world=await portal(t,loyalty.origin,integration),admin=await agency(world);
- const {client,id}=await owner(world,'Negocio Wallet','5');await admin.post('/clientes/verificar?empresa='+id);
+ const {client,id}=await owner(world,'Negocio Wallet','5');await admin.post('/agencia/clientes/verificar?empresa='+id);
  // Existing businesses from previous versions retain their exact binding.
  if(link)world.db.run('UPDATE companies SET loyalty_tenant=?,loyalty_name=? WHERE id=?',loyalty.business.id,loyalty.business.name,id);
  integration.platformToken=loyalty.platformToken;
@@ -45,7 +45,7 @@ test('alta automática usa un negocio propio y retira la asociación manual al d
  assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,200);
  const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant;
  assert.notEqual(tenant,loyalty.business.id);
- for(const session of [client,admin])assert.equal((await session.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,410);
+ for(const session of [client,admin])assert.equal((await session.post('/wallet/vincular?empresa='+id,{tenant:loyalty.business.id,confirm:'yes'})).status,session===admin?403:410);
  assert.equal(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant,tenant);
  const other=await owner(world,'Otro negocio','6');
  assert.equal((await other.client.get('/wallet-api/api/staff/dashboard')).status,200);
@@ -112,16 +112,18 @@ test('rutas delegadas limitadas; métodos, rutas públicas y roles desconocidos 
   assert.equal(walletRouteAllowed('OWNER','DELETE','/api/staff/programs/'+id),true);
   for(const role of ['AGENCY','OWNER','COLLABORATOR','anything'])for(const path of ['/api/me','/api/public/demo/enroll','/api/platform/wallet/reset','/api/staff/wallet-design/extra','/api/staff/../platform/overview'])for(const method of ['GET','POST','PUT','DELETE'])assert.equal(walletRouteAllowed(role,method,path),false);
   assert.equal(walletRouteAllowed('COLLABORATOR','GET','/api/staff/dashboard'),false);
+  for(const path of ['/api/platform/overview','/api/platform/tenants','/api/platform/tenants/'+id+'/team'])assert.equal(walletRouteAllowed('AGENCY','GET',path),false);
+  for(const method of ['POST','PUT','DELETE'])assert.equal(walletRouteAllowed('AGENCY',method,'/api/platform/tenants/'+id+'/profile'),false);
 });
 
-test('reparar un acceso bloqueado exige agencia y confirmación, conserva el empleado y no toca tarjetas',async t=>{
+test('reparar un acceso bloqueado exige dueño y confirmación; la agencia no puede reparar ni rotar',async t=>{
  const {client,world,loyalty,admin,id}=await context(t);await client.get('/wallet');
  const row=world.db.get('SELECT * FROM wallet_access');loyalty.staff.get(row.staff_id).state='INACTIVE';
  await client.get('/wallet-api/api/staff/dashboard');
  const path='/wallet/reparar?empresa='+id,input={account:row.account_id,reason:'El dueño confirmó su acceso.',confirm:'yes'};
- assert.equal((await client.post(path,input)).status,403);
- assert.equal((await admin.post(path,{...input,confirm:''})).status,400);
- assert.equal((await admin.post(path,input)).status,303);
+ assert.equal((await admin.post(path,input)).status,403);
+ assert.equal((await client.post(path,{...input,confirm:''})).status,400);
+ assert.equal((await client.post(path,input)).status,303);
  assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,200);
  assert.equal(world.db.get('SELECT staff_id FROM wallet_access').staff_id,row.staff_id);
  assert.ok(!loyalty.calls.some(call=>call.path.includes('/wallet/reset')));
@@ -137,7 +139,7 @@ test('informes delegados se abren sin consultar ni mostrar la cuenta comercial',
 
 test('una pestaña anterior no mezcla datos Wallet después de cambiar de cuenta',async t=>{
  const {client,world,admin,loyalty,id}=await context(t);await client.get('/wallet');const oldCsrf=client.csrf;
- await client.post('/salir');const other=await owner(world,'Otro titular','6');await admin.post('/clientes/verificar?empresa='+other.id);
+ await client.post('/salir');const other=await owner(world,'Otro titular','6');await admin.post('/agencia/clientes/verificar?empresa='+other.id);
  const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',other.id).loyalty_tenant;
  const stale=await fetch(world.origin+'/wallet-api/api/staff/dashboard',{headers:{Cookie:other.client.cookie,'X-Lumina-CSRF':oldCsrf}});assert.equal(stale.status,403);
  const valid=await other.client.get('/wallet-api/api/staff/dashboard');assert.equal(valid.status,200);assert.equal(JSON.parse(valid.body).business.id,tenant);

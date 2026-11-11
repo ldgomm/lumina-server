@@ -18,7 +18,8 @@ const paths={
  WALLET_REPORTS:{GET:/^\/api\/staff\/(metrics|return-radar|wallet-health)$/},
 };
 export function delegatedRouteAllowed(actor,method,path) {
-  if(actor.kind!=='COLLABORATOR')return true;
+  if(actor.kind==='AGENCY')return false;
+  if(actor.kind==='OWNER')return true;
   if(!can(actor,'WALLET')||!walletSections(actor).length)return false;
   if(method==='GET'&&['/api/staff/dashboard','/api/staff/access'].includes(path))return true;
   return Object.entries(paths).some(([scope,routes])=>can(actor,scope,method==='GET'?'VIEW':'EDIT')&&routes[method]?.test(path));

@@ -15,14 +15,14 @@ const when=days=>localDay(new Date(Date.now()-days*86400000));
 const published=when(2)+'T09:00',observed=when(1)+'T09:00';
 const platforms=['INSTAGRAM','TIKTOK','FACEBOOK','YOUTUBE'];
 const social={type:'CONTENT',channel:'SOCIAL',service:'VIDEO',title:'Un mismo video',quantity:'1',brief:'El mismo material para todas las redes.'};
-async function context(t){const world=await portal(t),admin=await agency(world),{client,id}=await owner(world,'Prueba de contenido','4');await admin.post('/clientes/verificar?empresa='+id);return {world,admin,client,id};}
-const selected=(path,id)=>path+'?empresa='+id;
+async function context(t){const world=await portal(t),admin=await agency(world),{client,id}=await owner(world,'Prueba de contenido','4');await admin.post('/agencia/clientes/verificar?empresa='+id);return {world,admin,client,id};}
+const selected= (path,id)=>'/agencia'+path+'?empresa='+id;
 async function produce(c,contract){const {world,admin,client,id}=c;const result=await client.post('/solicitudes',social);assert.equal(result.status,303);const path=result.location;await admin.post(selected(path+'/estado',id),{status:'APPROVED'});assert.equal((await admin.post(selected(path+'/piezas',id),{title:'Video común',...(contract?{contract}:{})})).status,303);const piece=world.db.get('SELECT * FROM pieces');const piecePath=path+'/piezas/'+piece.id;await admin.post(selected(piecePath+'/editar',id),{revision:String(piece.revision),status:'REVIEW',notes:'Lista para aprobación.'});return {path,piecePath,piece};}
 test('una pieza, cuatro publicaciones y cuatro métricas consumen un solo cupo mensual',async t=>{
  const c=await context(t),{world,admin,client,id}=c;
  assert.equal((await admin.post('/planes',{name:'Contenido mensual',term:'MONTHLY',price:'100',wallet:'NONE',VIDEO:'1'})).status,303);
  const plan=world.db.get('SELECT id FROM plans').id;
- assert.equal((await admin.post('/planes/activar?empresa='+id,{plan,startsOn:localDay()})).status,303);
+ assert.equal((await admin.post('/agencia/planes/activar?empresa='+id,{plan,startsOn:localDay()})).status,303);
  const contract=world.db.get('SELECT id FROM contracts').id;
  const {path,piecePath,piece}=await produce(c,contract);
  const revision=world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision;
@@ -181,7 +181,7 @@ test('acceso único persiste cifrado al reiniciar servidor y no crea otro emplea
  let db=openDatabase(path),server=createPortal({db,key,loyaltyUrl:loyalty.origin,integration}),origin=await listen(server);
  try{
   const world={db,session:()=>browser(origin)};const admin=await agency(world),{client,id}=await owner(world,'Persistencia Wallet','2');
-  await admin.post('/clientes/verificar?empresa='+id);await client.get('/wallet');
+  await admin.post('/agencia/clientes/verificar?empresa='+id);await client.get('/wallet');
   const original={...db.get('SELECT * FROM wallet_access')};await close(server);db.close();
   db=openDatabase(path);server=createPortal({db,key,loyaltyUrl:loyalty.origin,integration});origin=await listen(server);
   const session=browser(origin);await session.post('/entrar',{email:'negocio2@example.test',password});await session.get('/inicio');

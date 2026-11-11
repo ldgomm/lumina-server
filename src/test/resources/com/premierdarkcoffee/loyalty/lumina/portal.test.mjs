@@ -5,7 +5,7 @@ import { agency, colleague, owner, password, portal } from './helpers.mjs';
 
 const oldDate = days => localDay(new Date(Date.now()-days*86400000));
 const date = (days,time='10:00') => oldDate(days)+'T'+time;
-const selected = (path,id) => path+'?empresa='+id;
+const selected= (path,id)=>'/agencia'+path+'?empresa='+id;
 const reviewData = {title:'Campaña de noviembre',channel:'INSTAGRAM',service:'REEL',quantity:'2',type:'CONTENT',brief:'Piezas para el restaurante'};
 const redirectId = response => response.location.split('?')[0].split('/').at(-1);
 
