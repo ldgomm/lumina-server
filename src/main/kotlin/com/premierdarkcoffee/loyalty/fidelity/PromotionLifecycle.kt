@@ -1,5 +1,9 @@
 package com.premierdarkcoffee.loyalty.fidelity
 
+import com.premierdarkcoffee.loyalty.campaigns.blackFridayAvailable
+import com.premierdarkcoffee.loyalty.shared.Program
+import java.time.Instant
+
 import com.premierdarkcoffee.loyalty.access.Security
 import com.premierdarkcoffee.loyalty.access.Staff
 import com.premierdarkcoffee.loyalty.access.authorizeStaff
@@ -46,12 +50,14 @@ fun lockPromotionBusiness(c: Connection, tenant: String) {
 fun queuePromotionCards(c: Connection, tenant: String) {
     c.exec("UPDATE wallet_passes SET next_scan_at=TIMESTAMPTZ '1970-01-01 00:00:00+00' WHERE tenant_id=?",tenant)
 }
-fun requireActivePromotion(c: Connection, tenant: String, program: String) {
+fun requireActivePromotion(c: Connection, tenant: String, program: String, at: Instant = Instant.now()) {
     val row=c.one("SELECT current_version,deleted_at IS NOT NULL FROM programs WHERE tenant_id=? AND id=? FOR SHARE",tenant,program){it.getInt(1) to it.getBoolean(2)}
         ?:throw Problem(404,"NOT_FOUND","Promoción no encontrada.")
     need(!row.second,"PROMOTION_DELETED","Esta promoción fue eliminada y ya no permite acumular ni canjear.",410)
     val active=c.one("SELECT coalesce((config->>'active')::boolean,true) FROM program_versions WHERE tenant_id=? AND program_id=? AND version=?",tenant,program,row.first){it.getBoolean(1)} == true
     need(active,"PROMOTION_PAUSED","Esta promoción está pausada. No permite acumular ni canjear hasta que el negocio la reactive.",409)
+    val config=c.one("SELECT config::text FROM program_versions WHERE tenant_id=? AND program_id=? AND version=?",tenant,program,row.first){json.decodeFromString<Program>(it.getString(1))}!!
+    need(config.blackFridayAvailable(at),"CAMPAIGN_ENDED","La promoción de Viernes Negro no está vigente. Al terminar noviembre se desactivan la acumulación y los canjes.",409)
 }
 private fun removalImpact(c: Connection, tenant: String, program: String): JsonObject {
     val p=c.one("SELECT p.current_version,p.kind,v.config->>'name' AS name FROM programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? AND p.id=? AND p.deleted_at IS NULL",tenant,program){obj("id" to program,"version" to it.getInt(1),"kind" to it.getString(2),"name" to it.getString(3))}

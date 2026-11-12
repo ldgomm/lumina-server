@@ -65,7 +65,7 @@ fun LoyaltyService.prepareReceipt(c:Connection,s:Staff,p:Purchase):ReceiptCalcul
     val reward=c.one("SELECT * FROM rewards WHERE tenant_id=? AND id=? AND active FOR SHARE",s.tenant,uuid(p.rewardId)) {
         obj("id" to it.getString("id"),"programId" to it.getString("program_id"),"name" to it.getString("name"),"cost" to it.getLong("cost"),"version" to it.getInt("version"),"benefit" to it.getString("benefit")?.let{v->json.parseToJsonElement(v)})
     }?:throw Problem(404,"NOT_FOUND","Premio no disponible.")
-    requireActivePromotion(c,s.tenant,reward.getValue("programId").jsonPrimitive.content)
+    requireActivePromotion(c,s.tenant,reward.getValue("programId").jsonPrimitive.content,clock.instant())
     need(reward.getValue("version").jsonPrimitive.int==p.expectedRewardVersion,"REWARD_CHANGED","El premio cambió. Revisa sus condiciones.",409)
     need(reward["benefit"]!=JsonNull,"SEPARATE_REDEMPTION","Este premio se entrega desde Canjear un premio.")
     val benefit=json.decodeFromString<Benefit>(reward.getValue("benefit").toString());benefit.validate()

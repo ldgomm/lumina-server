@@ -144,6 +144,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             need(current.first == input.program.kind.name,"UNIT_CHANGE_REQUIRES_NEW_PROGRAM","Crea otro programa para cambiar entre puntos, cashback o sellos; conserva el saldo anterior.",409)
             val previous = c.one("SELECT config::text FROM program_versions WHERE tenant_id=? AND program_id=? AND version=?",s.tenant,programId,current.second){json.decodeFromString<Program>(it.getString(1))}!!
             need(previous.productGroup.equals(input.program.productGroup,true) && previous.countUnits==input.program.countUnits,"RULE_CHANGE_REQUIRES_NEW_PROGRAM","Crea otra promoción para cambiar la categoría o contar por producto en lugar de compra. Así conservas lo acumulado.",409)
+            need(previous.blackFridayYear==input.program.blackFridayYear,"CAMPAIGN_IMMUTABLE","Crea otra campaña para cambiar de año. No se puede retirar el cierre de noviembre.",409)
             val version = current.second + 1
             c.exec("INSERT INTO program_versions(tenant_id,program_id,version,config) VALUES(?,?,?,?::jsonb)",s.tenant,programId,version,json.encodeToString(input.program))
             c.exec("UPDATE programs SET current_version=? WHERE tenant_id=? AND id=?",version,s.tenant,programId)
@@ -301,7 +302,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         
         lockMember(c,member.tenant,member.id); releaseExpired(c,member.tenant,member.id)
         val reward = c.one("SELECT * FROM rewards WHERE tenant_id=? AND id=? AND active=true FOR SHARE",member.tenant,uuid(input.rewardId)) { obj("program" to it.getString("program_id"),"name" to it.getString("name"),"cost" to it.getLong("cost"),"version" to it.getInt("version")) } ?: throw Problem(404,"NOT_FOUND","Premio no disponible.")
-        val program = reward.getValue("program").jsonPrimitive.content; requireActivePromotion(c,member.tenant,program); val cost = reward.getValue("cost").jsonPrimitive.long
+        val program = reward.getValue("program").jsonPrimitive.content; requireActivePromotion(c,member.tenant,program,clock.instant()); val cost = reward.getValue("cost").jsonPrimitive.long
         val redeemId = id(); val token = Security.token(); val expires = now().plusSeconds(300)
         c.exec("INSERT INTO redemptions(tenant_id,id,member_id,program_id,reward_id,reward_version,reward_name,cost,token_hash,status,expires_at) VALUES(?,?,?,?,?,?,?,?,?,'RESERVED',?)",member.tenant,redeemId,member.id,program,input.rewardId,reward.getValue("version").jsonPrimitive.int,reward.getValue("name").jsonPrimitive.content,cost,Security.hash(token),
             Timestamp.from(expires))
@@ -348,7 +349,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             need(now() < Instant.parse(hold.getValue("expiresAt").jsonPrimitive.content),"REDEMPTION_EXPIRED","El código venció. Solicita uno nuevo al cliente.",409)
             val redemption = hold.getValue("id").jsonPrimitive.content
             val program=c.one("SELECT program_id FROM redemptions WHERE tenant_id=? AND id=?",s.tenant,redemption){it.getString(1)}!!
-            requireActivePromotion(c,s.tenant,program)
+            requireActivePromotion(c,s.tenant,program,clock.instant())
             c.exec("UPDATE redemptions SET status='CONSUMED',confirmed_branch_id=?,confirmed_actor_id=?,consumed_at=? WHERE tenant_id=? AND id=?",input.branchId,s.id,
                 Timestamp.from(now()),s.tenant,redemption)
             changed(c,s.tenant,member); audit(c,s.tenant,s.id,"CONSUME",redemption)

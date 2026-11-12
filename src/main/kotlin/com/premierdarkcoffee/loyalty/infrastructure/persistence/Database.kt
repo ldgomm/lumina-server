@@ -14,6 +14,8 @@ import com.premierdarkcoffee.loyalty.wallet.WalletFirstMigration
 import com.premierdarkcoffee.loyalty.wallet.WalletHealthMigration
 import com.premierdarkcoffee.loyalty.wallet.WalletMigration
 
+import com.premierdarkcoffee.loyalty.campaigns.BlackFridayMigration
+
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import java.sql.Connection
@@ -61,6 +63,7 @@ class Database(val source: DataSource) : AutoCloseable {
         WalletHealthMigration.apply(c)
         AdministrationMigration.apply(c)
         LuminaRegistrationMigration.apply(c)
+        BlackFridayMigration.apply(c)
         
     }
     override fun close() { (source as? AutoCloseable)?.close() }

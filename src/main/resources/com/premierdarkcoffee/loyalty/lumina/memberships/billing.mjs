@@ -1,15 +1,16 @@
+import { attachCampaign, offerAvailable } from '../campaigns/season.mjs';
 import { normalizeOffer } from './offers.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { choice, dateOnly, event, integer, localDay, money, nextMonth, now, requireThat, services, text, uuid } from '../shared/domain.mjs';
 
 export function listPlans(db, includeHidden = false) {
   return db.all('SELECT * FROM plans WHERE published=1 OR ?=1 ORDER BY term,name,created_at DESC', Number(includeHidden))
-    .map(plan => ({ ...plan, items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',plan.id) }));
+    .map(plan => ({ ...attachCampaign(db,plan), items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',plan.id) })).filter(plan=>includeHidden||offerAvailable(plan));
 }
 export function getPlan(db, id) {
   const plan = db.get('SELECT * FROM plans WHERE id=?',id || '');
   requireThat(plan, 'Ese plan no está disponible.', 404);
-  return { ...plan, items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',id) };
+  return { ...attachCampaign(db,plan), items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',id) };
 }
 export function createPlan(db, actor, data) {
   requireAgency(actor);
@@ -47,7 +48,7 @@ export function hidePlan(db, actor, id) {
   });
 }
 export function contractsFor(db, companyId) {
-  return db.all(`SELECT c.*,p.name,p.term,p.wallet FROM contracts c JOIN plans p ON p.id=c.plan_id
+  return db.all(`SELECT c.*,p.name,p.term,p.wallet,s.year AS campaign_year,s.base_plan_id FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN seasonal_offers s ON s.plan_id=p.id
     WHERE c.company_id=? ORDER BY starts_on DESC,created_at DESC`,companyId).map(contract => ({
     ...contract,
     items: db.all(`SELECT i.service,i.quantity * ? AS quantity,
@@ -61,6 +62,7 @@ export function activateContract(db, actor, company, data) {
   requireAgency(actor);
   requireThat(company.approved,'Verifica el negocio antes de activar un plan.',409);
   const plan = getPlan(db,data.plan);
+  requireThat(!plan.campaign,'Las promociones requieren una propuesta aceptada desde Paquetes y servicios.',409);
   const startsOn = dateOnly(data.startsOn,'la fecha de inicio');
   const endsBefore = plan.term === 'MONTHLY' ? nextMonth(startsOn) : dateOnly(data.endsBefore,'la fecha de fin exclusiva');
   requireThat(endsBefore > startsOn,'La fecha de fin debe ser posterior al inicio.');

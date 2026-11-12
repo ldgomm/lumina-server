@@ -6,6 +6,10 @@ import com.premierdarkcoffee.loyalty.marketing.Benefit
 import com.premierdarkcoffee.loyalty.marketing.PurchaseItem
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
+import com.premierdarkcoffee.loyalty.campaigns.validateBlackFriday
+import com.premierdarkcoffee.loyalty.campaigns.blackFridayAvailable
 import kotlinx.serialization.json.*
 import java.time.*
 import java.math.BigInteger
@@ -51,15 +55,18 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
     }
 }
 @Serializable data class Bonus(val priority: Int, val multiplier: Int, val window: Window = Window(), val branchIds: Set<String> = emptySet())
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable data class Program(
     val name: String, val kind: Kind, val active: Boolean = true,
     val unitMinor: Long = 100, val pointsPerUnit: Long = 1, val cashbackBps: Int = 0,
     val stampsPerPurchase: Long = 1, val minimumSpendMinor: Long = 1,
     val branchIds: Set<String> = emptySet(), val window: Window = Window(), val bonuses: List<Bonus> = emptyList(),
-    val productGroup: String = "", val countUnits: Boolean = false
+    val productGroup: String = "", val countUnits: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val blackFridayYear: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val blackFridayMessage: String = ""
 ) {
     fun validate() {
-        text(name); window.validate()
+        text(name); window.validate(); validateBlackFriday()
         need(productGroup.length <= 60 && (!countUnits || kind == Kind.STAMPS),"INVALID_PRODUCT_RULE","El conteo por productos se usa con sellos.")
         need(unitMinor in 1..1_000_000_000 && pointsPerUnit in 1..1_000_000 && cashbackBps in 0..10_000 && stampsPerPurchase in 1..100 && minimumSpendMinor in 1..1_000_000_000,"INVALID_RULE","Valores de acumulación fuera de rango.")
         need(kind != Kind.CASHBACK || cashbackBps > 0,"INVALID_RULE","Define el porcentaje de cashback.")
@@ -68,7 +75,7 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
         bonuses.forEach { it.window.validate(); need(it.multiplier in 1..10,"INVALID_MULTIPLIER","Multiplicador entre 1 y 10.") }
     }
     fun earn(amount: Long, branch: String, now: Instant, zone: ZoneId): Long {
-        if (!active || amount < minimumSpendMinor || branchIds.isNotEmpty() && branch !in branchIds || !window.matches(now,zone)) return 0
+        if (!active || !blackFridayAvailable(now) || amount < minimumSpendMinor || branchIds.isNotEmpty() && branch !in branchIds || !window.matches(now,zone)) return 0
         val multiplier = bonuses.filter { it.window.matches(now,zone) && (it.branchIds.isEmpty() || branch in it.branchIds) }.maxByOrNull { it.priority }?.multiplier ?: 1
         val base = when(kind) {
             Kind.POINTS -> BigInteger.valueOf(amount / unitMinor).multiply(BigInteger.valueOf(pointsPerUnit))

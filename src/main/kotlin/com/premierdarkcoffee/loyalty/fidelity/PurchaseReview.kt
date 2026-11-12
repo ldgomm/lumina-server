@@ -1,5 +1,6 @@
 package com.premierdarkcoffee.loyalty.fidelity
 
+import com.premierdarkcoffee.loyalty.campaigns.blackFridayAvailable
 import com.premierdarkcoffee.loyalty.access.Security
 import com.premierdarkcoffee.loyalty.access.Staff
 import com.premierdarkcoffee.loyalty.infrastructure.persistence.one
@@ -25,6 +26,7 @@ internal data class ReceiptEarning(val amount: Long, val eligiblePaid: Long, val
 internal fun Program.explainReceipt(p: Purchase, programId: String, receipt: ReceiptCalculation, at: Instant, zone: ZoneId): ReceiptEarning {
     if (p.programIds != null && programId !in p.programIds) return ReceiptEarning(0, 0, "NOT_SELECTED")
     if (!active) return ReceiptEarning(0, 0, "PAUSED")
+    if (!blackFridayAvailable(at)) return ReceiptEarning(0, 0, "OUTSIDE_WINDOW")
     if (receipt.reward?.get("programId")?.jsonPrimitive?.content == programId) return ReceiptEarning(0, 0, "REDEEMED_PROGRAM")
     val matches = p.items.filter { productGroup.isBlank() || it.group.equals(productGroup, true) }
     if ((productGroup.isNotBlank() || countUnits) && matches.isEmpty()) return ReceiptEarning(0, 0, "PRODUCTS_REQUIRED")
@@ -51,6 +53,7 @@ internal fun LoyaltyService.purchaseReview(c: Connection, staff: Staff, p: Purch
             json.decodeFromString<Program>(it.getString(1))
         }!!
         if (p.programIds?.contains(program) == true) need(config.active, "PROMOTION_PAUSED", "La promoción seleccionada está pausada. Actualiza las promociones de la compra.", 409)
+        if (p.programIds?.contains(program) == true) need(config.blackFridayAvailable(at),"CAMPAIGN_ENDED","La campaña de Viernes Negro no está vigente. Actualiza las promociones de la compra.",409)
         val earning = config.explainReceipt(p, program, receipt, at, zone)
         obj("programId" to program, "version" to version, "name" to config.name, "kind" to config.kind,
             "amount" to earning.amount, "eligiblePaidMinor" to earning.eligiblePaid, "reason" to earning.reason,

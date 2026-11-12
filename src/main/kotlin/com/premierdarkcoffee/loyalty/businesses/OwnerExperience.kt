@@ -21,6 +21,9 @@ import com.premierdarkcoffee.loyalty.shared.text
 import com.premierdarkcoffee.loyalty.shared.uuid
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
+import com.premierdarkcoffee.loyalty.marketing.Benefit
 import kotlinx.serialization.json.*
 import java.sql.Connection
 import java.sql.Timestamp
@@ -83,10 +86,14 @@ fun LoyaltyService.resolveProfileCorrection(tenant: String, requestId: String, i
     }
 }
 
-@Serializable data class SimplePromotionSetup(val program: Program, val rewardName: String, val rewardCost: Long) {
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable data class SimplePromotionSetup(val program: Program, val rewardName: String, val rewardCost: Long,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val rewardBenefit: Benefit? = null) {
     fun validate() {
         program.validate(); text(rewardName)
-        need(program.kind in setOf(Kind.POINTS,Kind.CASHBACK) && rewardCost in 1..1_000_000_000,
+        rewardBenefit?.validate()
+        need(rewardBenefit==null || program.blackFridayYear!=null,"INVALID_PROMOTION_SETUP","El beneficio adicional requiere una campaña de noviembre.")
+        need((program.kind in setOf(Kind.POINTS,Kind.CASHBACK) || program.blackFridayYear!=null && program.kind==Kind.STAMPS) && rewardCost in 1..1_000_000_000,
             "INVALID_PROMOTION_SETUP", "Revisa el tipo de acumulación y el saldo necesario para el premio.")
     }
 }
@@ -95,11 +102,12 @@ fun LoyaltyService.createSimplePromotion(s: Staff, input: SimplePromotionSetup, 
     return db.tx { c -> authorizeStaff(c,s); once(c,s.tenant,"simple-promotion",key,json.encodeToString(input)) {
         authorizeStaff(c,s); commercial.requireActive(c,s.tenant)
         (input.program.branchIds + input.program.bonuses.flatMap { it.branchIds }).forEach { branch(c,s.tenant,it) }
-        val pid=id();val rid=id();val reward=Reward(pid,input.rewardName.trim(),input.rewardCost)
+        val pid=id();val rid=id();val reward=Reward(pid,input.rewardName.trim(),input.rewardCost,benefit=input.rewardBenefit)
         c.exec("INSERT INTO programs(tenant_id,id,kind,current_version) VALUES(?,?,?,1)",s.tenant,pid,input.program.kind.name)
         c.exec("INSERT INTO program_versions(tenant_id,program_id,version,config) VALUES(?,?,1,?::jsonb)",s.tenant,pid,json.encodeToString(input.program))
-        c.exec("INSERT INTO rewards(tenant_id,id,program_id,name,cost,active,version) VALUES(?,?,?,?,?,true,1)",s.tenant,rid,pid,reward.name,reward.cost)
+        c.exec("INSERT INTO rewards(tenant_id,id,program_id,name,cost,active,version,benefit) VALUES(?,?,?,?,?,true,1,?::jsonb)",s.tenant,rid,pid,reward.name,reward.cost,input.rewardBenefit?.let{json.encodeToString(it)})
         c.exec("INSERT INTO reward_versions(tenant_id,reward_id,version,config) VALUES(?,?,1,?::jsonb)",s.tenant,rid,json.encodeToString(reward))
+        com.premierdarkcoffee.loyalty.fidelity.queuePromotionCards(c,s.tenant)
         audit(c,s.tenant,s.id,"SIMPLE_PROMOTION_CREATED",pid)
         obj("programId" to pid,"rewardId" to rid)
     } }

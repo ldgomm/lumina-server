@@ -117,6 +117,7 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
     let body = '';
     for await (const chunk of req) body += chunk;
     const data = JSON.parse(body);
+    if (path==='/api/staff/promotion-setups' && p.role==='OWNER')return json(res,200,{programId:uuid(),rewardId:uuid(),company:p.company.id});
     if (path==='/api/staff/wallet/restore' && p.role==='OWNER')return json(res,200,{path:'/join/'+p.company.slug+'?restore=ficticio',qrData:'RklDVElDSU8='});
     if (path==='/api/staff/wallet-design' && p.role==='OWNER')return json(res,200,{version:data.version,company:p.company.id});
     if (path==='/api/staff/credentials' && p.role==='OWNER') {

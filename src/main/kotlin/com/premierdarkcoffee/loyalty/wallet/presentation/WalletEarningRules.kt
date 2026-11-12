@@ -23,6 +23,10 @@ internal fun walletEarningRules(program: Program, currency: String, zone: ZoneId
         Kind.CASHBACK -> BigDecimal.valueOf(program.cashbackBps.toLong(),2).stripTrailingZeros().toPlainString()+"% del importe elegible pagado."
     }
     val rules=mutableListOf(program.name, "Cómo acumulas: $base", "Mínimo elegible por compra: ${money(program.minimumSpendMinor)}.")
+    if(program.blackFridayYear!=null){
+        rules+="Viernes Negro ${program.blackFridayYear}. Acumulación y canjes se desactivan al terminar noviembre, a las 00:00 del 1 de diciembre (Ecuador continental)."
+        if(program.blackFridayMessage.isNotBlank())rules+="Condiciones: ${program.blackFridayMessage}"
+    }
     if(program.productGroup.isNotBlank())rules+="Categoría: ${program.productGroup}. Se registran los productos en caja."
     rules+=if(program.branchIds.isEmpty()) "En todas las sucursales." else "Solo en sucursales habilitadas; consulta en caja."
     val w=program.window

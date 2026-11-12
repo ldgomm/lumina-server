@@ -1,0 +1,35 @@
+(() => {
+ 'use strict';
+ const root=document.querySelector('[data-bf-editor]');if(!root)return;
+ const form=root.closest('form'),data=JSON.parse(document.querySelector('#bf-base-data').textContent),f=form.elements;
+ const money=n=>new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(n/100);
+ const labels={VIDEO:'Videos',PHOTO:'Fotografías',GRAPHIC:'Diseños para redes',WEBSITE:'Proyecto web',MAINTENANCE:'Mantenimiento web',IDENTITY:'Diseño de marca',LOGO:'Logo',POST:'Diseños para redes',REEL:'Videos',SHORT:'Videos'};
+ const set=(selector,value)=>root.querySelector(selector).textContent=value;
+ const draft=()=>JSON.stringify([...new FormData(form)].filter(([key])=>key!=='confirm'));
+ let initial;let submitted=false;
+ const update=()=>{
+  const base=data.find(p=>p.id===f.base.value);if(!base)return;
+  const percent=f.discount_mode.value==='PERCENT';
+  root.querySelector('[data-bf-percent]').hidden=!percent;f.discount.disabled=!percent;f.discount.required=percent;
+  root.querySelector('[data-bf-price]').hidden=percent;f.price.disabled=percent;f.price.required=!percent;
+  f.starts_on.min=f.year.value+'-11-01';f.starts_on.max=f.year.value+'-11-30';
+  const raw=percent?f.discount.value:f.price.value;
+  const valid=raw.trim()!==''&&(percent?/^\d+$/.test(raw)&&Number(raw)>=1&&Number(raw)<=100:/^\d+(?:[.,]\d{1,2})?$/.test(raw));
+  const value=valid?(percent?Math.floor(base.price*(100-Number(raw))/100):Math.round(Number(raw.replace(',','.'))*100)):NaN;
+  const good=Number.isSafeInteger(value)&&value>=0&&value<base.price;
+  set('[data-bf-title]',f.name.value||'Tu promoción');set('[data-bf-regular]',money(base.price));set('[data-bf-amount]',good?money(value):'Define tu precio');
+  set('[data-bf-saving]',good?'Ahorro de '+money(base.price-value):'');set('[data-bf-year]',f.year.value);
+  set('[data-bf-description]',f.description.value);set('[data-bf-conditions]',f.conditions.value);
+  const items=root.querySelector('[data-bf-items]');items.replaceChildren();const ul=document.createElement('ul');ul.className='bf-items';
+  for(const item of base.items){const li=document.createElement('li');li.textContent=item.quantity+' '+(labels[item.service]||item.service);ul.append(li);}items.append(ul);
+  const note=document.createElement('p');note.className='bf-help';note.textContent=base.term==='MONTHLY'?'Primer período mensual. Después, tarifa habitual y nueva aceptación.':'Pago único por el trabajo acordado.';items.append(note);
+  root.querySelector('[data-bf-preview]').className='bf-preview bf-'+f.theme.value;
+  set('[data-bf-error]',raw&&!good?'Define un precio inferior al habitual.':'');
+ };
+ form.addEventListener('input',update);form.addEventListener('change',update);
+ f.year.addEventListener('change',()=>{f.starts_on.value=f.year.value+'-11-01';update();});
+ form.addEventListener('submit',()=>{submitted=true;});
+ window.addEventListener('beforeunload',e=>{if(!submitted&&draft()!==initial){e.preventDefault();e.returnValue='';}});
+ document.addEventListener('click',e=>{if(!e.target.closest('a[href]')||submitted||draft()===initial)return;if(!confirm('Hay cambios sin publicar. ¿Salir del formulario?'))e.preventDefault();else submitted=true;});
+ update();initial=draft();
+})();

@@ -82,3 +82,7 @@ Inicio con pendientes y accesos directos, solicitudes con teléfono, navegación
 ### Lúmina v011 / Loyalty v050
 
 Equipo con búsqueda, estados, permisos claros, historial y protección ante formularios antiguos. Baja inmediata incluso si Wallet no responde, recuperación de acceso con permisos vigentes y vista de consulta sin edición. Revisión de los flujos de solicitudes, contenido, métricas, paquetes y administración. [Guía y alcance de la revisión](docs/lumina-equipo-v050.md).
+
+## Campañas de noviembre · v051
+
+[Promociones personalizables, vigencia y validación](docs/lumina-viernes-negro-v051.md).

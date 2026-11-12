@@ -98,7 +98,7 @@ fun LoyaltyService.redeemAtCounter(staff: Staff, input: CounterRedemption, key: 
         val redemption = id()
         val cost = reward.getValue("cost").jsonPrimitive.long
         val program = reward.getValue("programId").jsonPrimitive.content
-        requireActivePromotion(c,staff.tenant,program)
+        requireActivePromotion(c,staff.tenant,program,clock.instant())
         val at = Timestamp.from(clock.instant())
         c.exec("INSERT INTO redemptions(tenant_id,id,member_id,program_id,reward_id,reward_version,reward_name,cost,token_hash,status,expires_at,confirmed_branch_id,confirmed_actor_id,consumed_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,'CONSUMED',?,?,?,?,?)",
             staff.tenant, redemption, input.memberId, program, input.rewardId, input.expectedRewardVersion, reward.getValue("name").jsonPrimitive.content, cost,

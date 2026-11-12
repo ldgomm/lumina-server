@@ -1,3 +1,5 @@
+import { campaignPage, campaignBanner } from '../presentation/pages/campaign-pages.mjs';
+import { campaignBases, createCampaignOffer } from '../campaigns/offers.mjs';
 import { canReadFidelityReport, centralPaths, managementSections, managementTitles } from '../wallet/management-policy.mjs';
 import { managementPage, managementFramePage, managementDocument } from '../presentation/pages/management-pages.mjs';
 import { offerEditor } from '../presentation/pages/offer-editor.mjs';
@@ -35,6 +37,9 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/black-friday.css':['black-friday.css','text/css; charset=utf-8'],
+  '/assets/black-friday.js':['black-friday.js','text/javascript; charset=utf-8'],
+  '/assets/wallet-season.js':['wallet-season.js','text/javascript; charset=utf-8'],
   '/assets/team.css': ['team.css','text/css; charset=utf-8'],
   '/assets/team.js': ['team.js','text/javascript; charset=utf-8'],
   '/assets/instagram.webp': ['instagram.webp','image/webp'],
@@ -347,7 +352,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       const companyId = target.searchParams.get('empresa');
       if(path==='/equipo'||path.startsWith('/equipo/'))requireOwner(actor);
-      const catalog = ['/planes','/planes/retirar','/planes/nueva'].includes(path);
+      const catalog = ['/planes','/planes/retirar','/planes/nueva','/planes/viernes-negro'].includes(path);
       if (actor.kind==='AGENCY' && !companyId && !catalog) {
         if (method==='GET' && path==='/inicio') return redirect(res,'/resumen');
         throw new Problem('Selecciona un negocio desde Clientes.',404);
@@ -364,7 +369,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
         const courtesy = actor.kind==='OWNER' ? db.get("SELECT id,status FROM requests WHERE company_id=? AND type='COURTESY'",company.id) : null;
         return render({title:actor.kind==='AGENCY'?'Información del negocio':'Panel de trabajo',description:'Servicios y actividades del negocio.',
-          body:homePage({actor,company,url,groups,upcoming,courtesy,cash,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
+          body:(actor.kind==='OWNER'?campaignBanner(listPlans(db),url):'')+homePage({actor,company,url,groups,upcoming,courtesy,cash,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
             videoRequested:videos.reduce((sum,row)=>sum+row.quantity,0),videoDelivered:videos.reduce((sum,row)=>sum+row.delivered,0)})});
       }
       if (path==='/clientes/verificar' && method==='POST') {
@@ -504,6 +509,13 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (path.startsWith('/planes')) {
         requireThat(actor.kind!=='COLLABORATOR','Tu acceso no incluye contratos ni precios.',403);
+        if(path==='/planes/viernes-negro') {
+          const screen=(values={},error='')=>campaignPage({actor,company,url,plans:listPlans(db,actor.kind==='AGENCY'),bases:actor.kind==='AGENCY'?campaignBases(db):[],values,error});
+          if(method==='GET')return render({title:'Viernes Negro',body:screen({base:target.searchParams.get('base')||''})});
+          requireAgency(actor);requireThat(!actor.readOnlyCompany,'Publica desde el catálogo de Lúmina.',403);
+          try { createCampaignOffer(db,actor,data);return redirect(res,url('/planes/viernes-negro')); }
+          catch(issue){if(!(issue instanceof Problem)||![400,409].includes(issue.status))throw issue;return render({title:'Revisa tu promoción',body:screen(data,issue.message)},issue.status);}
+        }
         if(method==='GET'&&path==='/planes/nueva') {requireAgency(actor);requireThat(!actor.readOnlyCompany,'Publica las ofertas desde el catálogo de Lúmina.',403);return render({title:'Crear oferta',body:offerEditor(actor,url)});}
         if (method==='GET' && path==='/planes') {
           const plans = listPlans(db,actor.kind==='AGENCY');
