@@ -38,6 +38,18 @@ for (const editor of document.querySelectorAll('[data-team-editor]')) {
   });
   render();
 }
+for(const form of document.querySelectorAll('form[action$="/caja/guardar"]')){
+  const f=form.elements,preview=form.querySelector('[data-cash-preview]');
+  const update=()=>{
+    const actions=[f.purchases.checked?'registrar compras':null,f.rewards.checked?'canjear premios y descuentos':null].filter(Boolean);
+    preview.textContent=actions.length?'Podrá '+actions.join(' y ')+' en '+f.branch.selectedOptions[0].textContent+'. Se aplicará al guardar.':'Elige al menos una operación para habilitar Caja.';
+    f.purchases.setCustomValidity(actions.length?'':'Selecciona compras, canjes o ambas operaciones.');
+  };
+  for(const button of form.querySelectorAll('[data-cash-preset]'))button.addEventListener('click',()=>{
+    f.purchases.checked=button.dataset.cashPreset!=='rewards';f.rewards.checked=button.dataset.cashPreset!=='purchases';form.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  form.addEventListener('change',update);update();
+}
 const edited=new Set();
 for(const form of document.querySelectorAll('[data-team-form]')){
   const signature=()=>JSON.stringify([...new FormData(form)]);

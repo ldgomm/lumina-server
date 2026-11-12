@@ -11,9 +11,8 @@ export function businessHome({actor,url,groups,upcoming,videoRequested,videoDeli
   const actions=[...overview.reviews.map(r=>({title:r.title,kind:'Entrega por revisar',path:'/solicitudes/'+r.id})),
     ...overview.quotes.map(r=>({title:r.title,kind:'Cotización lista',path:'/solicitudes/'+r.id})),
     ...overview.proposals.map(r=>({title:'Revisar propuesta de servicios',kind:'Precio y condiciones listos',path:'/planes/pedidos/'+r.id}))];
-  const modules=[...(can(actor,'WALLET')?[['wallet','Wallet','Tarjetas, promociones y clientes.','/wallet']]:[]),
+  const modules=[...(can(actor,'WALLET')||cash?[['wallet',cash?'Wallet · Caja':'Wallet',cash?'Atender en '+cash.branch_name+'.':'Tarjetas, promociones y clientes.','/wallet']]:[]),
     ...(can(actor,'SOCIAL')?[['social','Contenido','Producción, entregas y resultados.','/contenido']]:[]),
-    ...(cash?[['wallet','Caja','Atender en '+cash.branch_name+'.','/caja']]:[]),
     ...(actor.kind==='OWNER'?[['plans','Paquetes y servicios','Precios, acuerdos y cupos disponibles.','/planes']]:[])];
   const gift=actor.kind==='OWNER'?`<section class="welcome-gift"><span class="service-symbol">${icon('social')}</span><div><h2>Tu video de cortesía</h2>${courtesy?`<p>${badge(courtesy.status)} ${localLink(url('/solicitudes/'+courtesy.id),'Ver solicitud de cortesía →')}</p>`:`<p>Tu primer video es gratis. Cuéntanos qué te gustaría mostrar.</p>${disclosure('Solicitar mi video gratis',giftForm)}`}</div></section>`:'';
   const pending=`<section class="card attention-card"><div class="split"><h2>Necesita tu atención</h2>${actions.length?`<span class="attention-count">${actions.length}</span>`:''}</div>${actions.length?`<div class="attention-list">${actions.slice(0,5).map(a=>`<a href="${esc(url(a.path))}"><span><small>${esc(a.kind)}</small><strong>${esc(a.title)}</strong></span>${icon('arrow')}</a>`).join('')}</div>${actions.length>5?`<p class="muted">Mostrando 5 de ${actions.length} pendientes. Revisa los siguientes al completar estos.</p>`:''}`:'<div class="all-clear">'+icon('check')+'<div><strong>Todo al día</strong><p>No tienes aprobaciones pendientes.</p></div></div>'}</section>`;

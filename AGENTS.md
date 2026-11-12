@@ -514,3 +514,12 @@ Las instrucciones de esta sección sustituyen los permisos administrativos de Wa
 ## Campaign contract — v051
 
 Black Friday metadata belongs to a single November/year. Server admission and redemption guards must enforce the exclusive December 1 midnight America/Guayaquil limit. Preserve regular offers, accepted work, wallet identities, balances and ledger. Do not remove or rewrite seasonal markers to extend a campaign. Monthly promotional renewal uses the regular base offer and explicit new acceptance. Do not seed public discounts. Preserve old Program/SimplePromotionSetup serialization when optional campaign fields are absent. New migrations: PostgreSQL V015 and SQLite 006; previous migrations remain immutable. Native suites total 596; portal contracts total 146. Physical wallet/device and visual browser validation remain separate gates.
+
+## Lúmina v013 / Loyalty v052 — entrada de colaboradores a Wallet
+
+- `/wallet` abre Caja para colaboradores con `cash_grants` activo; una sección explícita sigue exigiendo sus propios permisos. El cajero conserva rol CASHIER y sucursal. No ampliar `WALLET.VIEW` a compras o canjes ni dar permiso OWNER al navegador.
+- Equipo muestra compras/canjes primero. Las opciones rápidas no guardan ni otorgan permisos hasta enviar el formulario del dueño con revisión vigente. La agencia no actúa en nombre del cliente.
+- Caja usa el diseño común de Wallet; sólo ofrece operaciones y enlaces permitidos, conserva revisión/consentimiento/idempotencia y elimina el encabezado Authorization ficticio antes de enviar la petición. La autorización real permanece en el servidor.
+- El resumen de campañas de Caja filtra por sucursal, vigencia y estado activo. No calcula elegibilidad ni saldos. El motor nativo sigue decidiendo acumulación y canje, incluido el cierre de noviembre.
+- Gates: 16 suites / 152 pruebas HTTP, 130 Python, 596 nativas, PostgreSQL, Docker y gateway antes del commit local. Interacciones DOM de equipo, campañas y Caja no equivalen a prueba visual ni de dispositivos. Conservar una línea RESULTADO y URL sólo después de arranque comprobado.
+- No hay cambios Kotlin ni SQL en v052. Conservar configuraciones privadas, credenciales, saldos, historial, identidades Wallet y conexión HTTPS. Guía: `docs/lumina-wallet-equipo-v052.md`.

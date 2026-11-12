@@ -9,6 +9,7 @@
  renderPrograms=function(edit=null,create=false){
   original(edit,create);
   const root=document.querySelector('#content');if(!root)return;
+  if(!edit&&!create){const summary=window.luminaCampaignSummary?.(state.data);if(summary)root.prepend(summary);}
   if(edit?.config.blackFridayYear){
    const p=document.createElement('p');p.className='bf-wallet-expiry';p.textContent='Viernes Negro '+edit.config.blackFridayYear+'. La acumulación y los canjes terminan al finalizar su vigencia, como máximo el 30 de noviembre. El año de esta campaña no se puede cambiar.';root.prepend(p);
   }else if(!create){
@@ -52,7 +53,7 @@
    try{
     await api('/api/staff/promotion-setups',payload,'POST',key);
     saved=true;busy=false;dialog.close();if(!same())return;
-    try{await merchant();notice('Campaña publicada. Su fecha de cierre es automática; Wallet recibirá la actualización.');}catch{notice('Campaña publicada. Recarga Promociones para verla.');}
+    try{await merchant();notice('Campaña publicada. Se desactiva automáticamente al terminar su vigencia.');}catch{notice('Campaña publicada. Recarga Promociones para verla.');}
    }catch(issue){
     if(!dialog.isConnected)return;
     if(!same()){saved=true;busy=false;dialog.close();return;}

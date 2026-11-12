@@ -97,12 +97,12 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
       return json(res,200,{items:[]});
     }
     const p = tokens.get((req.headers.authorization || '').replace(/^Bearer /,''));
-    calls.push({path,method:req.method,role:p?.role || null,actorId:p?.id || null});
+    calls.push({path,method:req.method,role:p?.role || null,actorId:p?.id || null,key:req.headers['idempotency-key']||null});
     if (!p || p.state!=='ACTIVE') return fail(res,401,'UNAUTHORIZED');
     const b = branches.get(p.company.id);
     if (req.method==='GET' && path==='/api/staff/dashboard') return json(res,200,{
       business:p.company,role:p.role,branchId:p.branchId,permissions:p.permissions,
-      branches:p.branchId ? b.filter(item=>item.id===p.branchId) : b,programs:[],rewards:[],
+      branches:p.branchId ? b.filter(item=>item.id===p.branchId) : b,programs:configuration.programs||[],rewards:configuration.rewards||[],
     });
     if (req.method==='GET' && path==='/api/staff/metrics' && p.role==='OWNER')return json(res,200,{days:30,fromDate:'2026-10-13',throughDate:'2026-11-11',totalClients:5,newClients:2,activeClients:3,repeatClients:1,purchases:7,redemptions:1,salesMinor:10500,branches:[],daily:[],topRewards:[]});
     if (req.method==='GET' && path==='/api/staff/wallet-health' && p.role==='OWNER')return json(res,200,health);
@@ -153,12 +153,13 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
         return json(res,200,{id:target.id,version:++target.version,token:issue(target),credentialIssued:true});
       }
     }
-    if (path==='/api/staff/members/lookup') return json(res,200,{member:{id:uuid(),name:'Cliente de prueba',cardCode:'ficticio',revision:0},balances:[],rewards:[]});
+    if (path==='/api/staff/members/lookup') return json(res,200,configuration.member||{member:{id:uuid(),name:'Cliente de prueba',cardCode:'ficticio',revision:0},balances:[],rewards:[]});
+    if (path==='/api/staff/purchases/quote' && data.branchId===p.branchId && p.permissions.purchases) return json(res,200,{amountMinor:data.amountMinor??data.items?.reduce((s,i)=>s+i.unitPriceMinor*i.quantity,0),grossMinor:data.amountMinor,discountMinor:0,earned:[]});
     if (path==='/api/staff/purchases' && data.branchId===p.branchId && p.permissions.purchases) {
       return json(res,200,{purchaseId:uuid(),earned:[],recordedAt:new Date().toISOString(),amountMinor:data.amountMinor});
     }
     if (path==='/api/staff/counter-redemptions' && data.branchId===p.branchId && p.permissions.rewards) {
-      return json(res,200,{redemptionId:uuid()});
+      return json(res,200,{redemptionId:uuid(),name:'Premio de prueba',receipt:uuid(),replayed:false});
     }
     return fail(res,403,'FORBIDDEN');
   });

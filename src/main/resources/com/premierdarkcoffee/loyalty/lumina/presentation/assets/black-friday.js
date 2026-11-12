@@ -6,7 +6,7 @@
  const labels={VIDEO:'Videos',PHOTO:'Fotografías',GRAPHIC:'Diseños para redes',WEBSITE:'Proyecto web',MAINTENANCE:'Mantenimiento web',IDENTITY:'Diseño de marca',LOGO:'Logo',POST:'Diseños para redes',REEL:'Videos',SHORT:'Videos'};
  const set=(selector,value)=>root.querySelector(selector).textContent=value;
  const draft=()=>JSON.stringify([...new FormData(form)].filter(([key])=>key!=='confirm'));
- let initial;let submitted=false;
+ let initial;let submitted=false;let previousBase=data.find(p=>p.id===f.base.value);
  const update=()=>{
   const base=data.find(p=>p.id===f.base.value);if(!base)return;
   const percent=f.discount_mode.value==='PERCENT';
@@ -25,10 +25,13 @@
   const note=document.createElement('p');note.className='bf-help';note.textContent=base.term==='MONTHLY'?'Primer período mensual. Después, tarifa habitual y nueva aceptación.':'Pago único por el trabajo acordado.';items.append(note);
   root.querySelector('[data-bf-preview]').className='bf-preview bf-'+f.theme.value;
   set('[data-bf-error]',raw&&!good?'Define un precio inferior al habitual.':'');
+  (percent?f.discount:f.price).setCustomValidity(raw&&!good?'Define un precio inferior al habitual.':'');
  };
+ f.base.addEventListener('change',()=>{const next=data.find(p=>p.id===f.base.value);if(!next)return;if(!f.description.value||f.description.value===(previousBase?.description||''))f.description.value=next.description||'';previousBase=next;update();});
  form.addEventListener('input',update);form.addEventListener('change',update);
  f.year.addEventListener('change',()=>{f.starts_on.value=f.year.value+'-11-01';update();});
- form.addEventListener('submit',()=>{submitted=true;});
+ form.addEventListener('submit',event=>{update();if(!form.checkValidity()){event.preventDefault();form.reportValidity();return;}submitted=true;});
+ form.addEventListener('invalid',()=>{form.closest('details')?.setAttribute('open','');},true);
  window.addEventListener('beforeunload',e=>{if(!submitted&&draft()!==initial){e.preventDefault();e.returnValue='';}});
  document.addEventListener('click',e=>{if(!e.target.closest('a[href]')||submitted||draft()===initial)return;if(!confirm('Hay cambios sin publicar. ¿Salir del formulario?'))e.preventDefault();else submitted=true;});
  update();initial=draft();

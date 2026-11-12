@@ -33,7 +33,7 @@ test('una cuenta combina TikTok, Instagram y Caja, con compras y canjes independ
   assert.ok(original.sealed_token && original.sealed_token!==remote.token);
   const counter = await member.session.get('/caja');
   assert.equal(counter.status,200);
-  assert.match(counter.body,/Loyalty · Caja/);
+  assert.match(counter.body,/Caja · Wallet de Lúmina/);
   assert.ok(!counter.body.includes(remote.token));
   const dash = await member.session.get('/api/staff/dashboard');
   assert.equal(dash.status,200);

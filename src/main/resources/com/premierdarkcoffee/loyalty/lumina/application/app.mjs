@@ -25,7 +25,7 @@ import { card, esc, localLink, page, pathFor } from '../presentation/pages/compo
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
 import { agendaPage, companiesPage, homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
 import { mapsPage, metricsPage } from '../presentation/pages/service-pages.mjs';
-import { loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
+import { cajaHtml, loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
 import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
 
 import { contentData } from '../content/workspace.mjs';
@@ -37,6 +37,7 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/wallet-campaigns.js':['wallet-campaigns.js','text/javascript; charset=utf-8'],
   '/assets/black-friday.css':['black-friday.css','text/css; charset=utf-8'],
   '/assets/black-friday.js':['black-friday.js','text/javascript; charset=utf-8'],
   '/assets/wallet-season.js':['wallet-season.js','text/javascript; charset=utf-8'],
@@ -77,17 +78,6 @@ const pieceOperations = {
 function teamInvitation(db,actor,id,code) {
   const member = teamMember(db,actor,id);
   return {title:'Acceso creado',description:'Comparte el código con la persona por tu canal habitual.',body:invitePage(member,code)};
-}
-function cajaHtml(actor) {
-  const names = Object.keys(cashierAssets);
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="lumina-csrf" content="${esc(actor.csrf)}"><title>Loyalty · Caja de Lúmina</title>
-    ${names.filter(name=>name.endsWith('.css')).map(name=>`<link rel="stylesheet" href="/caja-assets/${name}">`).join('')}
-    ${names.filter(name=>name.endsWith('.js')).map(name=>`<script defer src="/caja-assets/${name}"></script>`).join('')}
-    <script defer src="/assets/caja.js"></script></head><body><header><a class="brand" href="/inicio">Lúmina <span>Digital</span></a>
-    <span class="pill">Loyalty · Caja</span><button id="exit" type="button" class="quiet" hidden>Volver al portal</button></header>
-    <main id="app"><p>Abriendo Caja…</p></main><p id="notice" role="status" aria-live="polite"></p>
-    <footer>Operaciones de Loyalty para la sucursal asignada</footer></body></html>`;
 }
 function agendaRows(db,actor,companyId) {
   const policy=requestAccessSql(actor);
@@ -183,7 +173,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       actor={...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('empresa'))&&!agencyWork};
       if (actor.kind === 'COLLABORATOR') cash = db.get(
-        "SELECT branch_name FROM cash_grants WHERE account_id=? AND company_id=? AND status='ACTIVE'",actor.id,actor.company_id);
+        "SELECT branch_name,purchases,rewards FROM cash_grants WHERE account_id=? AND company_id=? AND status='ACTIVE'",actor.id,actor.company_id);
       if (path.startsWith('/wallet-api/')||path.startsWith('/gestion-api/')) {
         const management=path.startsWith('/gestion-api/');
         const body=method==='GET'?undefined:await readJson(req);
@@ -204,7 +194,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if(method==='GET' && path==='/platform')return redirect(res,'/wallet');
       if (method==='GET' && (path==='/wallet/gestion' || path==='/wallet' && actor.kind!=='AGENCY' && (walletSections(actor).length || cash))) {
-        if(actor.kind==='COLLABORATOR'&&!walletSections(actor).length&&cash)return redirect(res,'/caja');
+        if(actor.kind==='COLLABORATOR'&&cash&&path==='/wallet'&&!target.searchParams.has('seccion'))return redirect(res,'/caja');
         requireThat(actor.kind!=='AGENCY','La agencia solo puede consultar Wallet desde la ficha del negocio.',403);
         company=companyFor(db,actor,target.searchParams.get('empresa'));
         actor={...actor,wallet_company:company.id};
@@ -220,7 +210,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return render({title:'Abrir Wallet',body:walletPage({actor,company,error:issue.status>=500?'Wallet no está disponible en este momento. Tu cuenta y tus tarjetas se conservan. Vuelve a intentarlo en unos minutos.':issue.message,blocked})},issue.status);
         }
         company=companyFor(db,actor,company.id);
-        return send(res,200,loyaltyWorkspaceHtml(actor,section,sections,company));
+        return send(res,200,loyaltyWorkspaceHtml(actor,section,sections,company,cash));
       }
       if (method==='GET' && /^\/join\/[a-z0-9-]+$/.test(path)) {
         if(target.searchParams.has('empresa')){actor={...actor,wallet_company:target.searchParams.get('empresa')};target.searchParams.delete('empresa');}
@@ -238,8 +228,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return json(res,200,await bridge.proxy(actor,path,{method,body:input,query:target.searchParams,idempotency}));
       }
       if (method==='GET' && path==='/caja') {
-        bridge.activeGrant(actor);
-        return send(res,200,cajaHtml(actor));
+        const grant=bridge.activeGrant(actor);
+        return send(res,200,cajaHtml(actor,companyFor(db,actor),grant));
       }
       if (method==='GET' && path.startsWith('/caja-assets/')) {
         const name = path.slice('/caja-assets/'.length);

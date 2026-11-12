@@ -54,7 +54,7 @@ function navLinks(actor,company,url,cash) {
     items.push([url('/inicio'),company&&actor.kind==='AGENCY'?'Resumen del negocio':'Mi negocio','home',company&&actor.kind==='AGENCY'?'Negocio seleccionado':'Mi espacio']);
     if(Object.keys(channels).some(scope=>can(actor,scope)))items.push([url('/solicitudes'),'Solicitudes','content'],[url('/agenda'),'Grabaciones','calendar']);
   }
-  if(can(actor,'WALLET'))items.push([url('/wallet'),'Fidelización digital · Wallet','wallet','Servicios']);
+  if(can(actor,'WALLET')||cash)items.push([url('/wallet'),'Fidelización digital · Wallet','wallet','Servicios']);
   for(const [scope,route,mark] of [['SOCIAL','/contenido','social'],['MAPS','/servicios/maps','maps'],['WEB','/servicios/web','web'],['BRAND','/servicios/brand','content']])if(can(actor,scope))items.push([url(route),areas[scope],mark]);
   if(actor.kind!=='COLLABORATOR')items.push([url('/proximamente'),'WhatsApp Business e IA · Próximamente','social']);
   if(actor.kind!=='COLLABORATOR')items.push([url('/planes'),'Paquetes y servicios','plans','Gestión']);
@@ -62,7 +62,6 @@ function navLinks(actor,company,url,cash) {
   if((actor.kind!=='AGENCY'||company)&&can(actor,'MAPS'))items.push([url('/mapas'),'Reseñas y ubicaciones','maps']);
   if(actor.kind==='OWNER')items.push(['/gestion','Administración','settings'],['/equipo','Equipo y permisos','clients']);
   if(actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&can(actor,'WALLET')&&can(actor,'WALLET_REPORTS'))items.push(['/gestion/informes','Informes de fidelización','metrics']);
-  if(cash)items.push(['/caja','Loyalty · Caja','wallet']);
   items.push(['/cuenta','Mi cuenta','settings']);
   return items;
 }

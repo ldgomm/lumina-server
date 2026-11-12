@@ -16,6 +16,10 @@
    for(const control of app.querySelectorAll('[data-tab]'))if(!allowed.includes(control.dataset.tab))control.remove();
    for(const group of app.querySelectorAll('.nav-group'))if(!group.querySelector('[data-tab]'))group.remove();
    app.querySelector('.workspace-search')?.remove();if(!allowed.includes('sales'))app.querySelector('#quickCounter')?.remove();
+   const nav=app.querySelector('.workspace-nav');
+   if(nav&&document.querySelector('meta[name="lumina-wallet-cash"]')?.content==='yes'&&!nav.querySelector('[data-lumina-cash]')){
+    const a=document.createElement('a');a.dataset.luminaCash='yes';a.className='wallet-section-link';a.href='/caja';a.textContent='Caja · Compras y canjes';a.onclick=e=>{e.preventDefault();leave('/caja');};nav.prepend(a);
+   }
    const caption=app.querySelector('.workspace-business small');const text=owner?'Wallet de tu negocio':'Equipo · Mis áreas';if(caption&&caption.textContent!==text)caption.textContent=text;
    const content=app.querySelector('#content');
    if(!owner&&content&&!editable.includes(state.tab)&&state.tab!=='qr'){
