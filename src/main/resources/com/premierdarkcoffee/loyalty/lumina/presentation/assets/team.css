@@ -1,4 +1,9 @@
 /* Team directory */
+.team-company-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px}
+.team-company-card{display:flex;gap:16px;align-items:flex-start;padding:24px;border:1px solid #dce5ee;border-radius:14px;background:#fff;color:#173c60;text-decoration:none}
+.team-company-card:hover{border-color:#9ab5d4;background:#fbfdff}.team-company-card:focus-visible{outline:3px solid #9abfee;outline-offset:3px}
+.team-company-card>.icon{flex:0 0 24px;width:24px;height:24px}.team-company-card>div{min-width:0}.team-company-card h2{font-size:17px;line-height:1.4;margin:0;overflow-wrap:anywhere}
+.team-company-card p{font-size:13px;color:#52677f;margin:8px 0 16px}.team-company-card span{font-size:13px;font-weight:650}.team-read-tasks{padding-left:18px;font-size:13px;line-height:1.8;overflow-wrap:anywhere}
 .team-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
 .team-heading p{margin:0;color:#52677f}.team-contact{color:#52677f;margin-top:-8px}
 .team-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 26px;padding:22px 0;border-block:1px solid #dce5ee}

@@ -147,7 +147,7 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     }
     const allowed=who=>surface==='management'?managementRouteAllowed(who,method,path):!isManagementPath(path)&&delegatedRouteAllowed(who,method,path);
     requireThat(walletRouteAllowed('OWNER',method,path)&&allowed(fresh),message,403);
-    requireThat(!/^\/api\/staff\/(team(?:\/|$)|credentials(?:\/|$))/.test(path),'Administra las personas y sus permisos desde Equipo y permisos de Lúmina.',403);
+    requireThat(!/^\/api\/staff\/(team(?:\/|$)|credentials(?:\/|$))/.test(path),'Administra las personas y sus permisos desde Equipos y roles de Lúmina.',403);
     const {item}=await validated(actor);
     fresh=current(actor);
     requireThat(allowed(fresh),message,403);

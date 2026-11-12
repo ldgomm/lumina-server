@@ -49,9 +49,10 @@ export function pathFor(actor,company) {
 }
 function navLinks(actor,company,url,cash) {
   const items=[];
-  if(actor.kind==='AGENCY')items.push(['/resumen','Vista general','home','Agencia'],['/clientes','Clientes','clients'],['/produccion','Producción','content'],['/agenda-general','Agenda','calendar']);
+  if(actor.kind==='AGENCY')items.push(['/resumen','Vista general','home','Agencia'],['/clientes','Clientes','clients'],[url('/equipos'),'Equipos y roles','clients'],['/produccion','Producción','content'],['/agenda-general','Agenda','calendar']);
   if(actor.kind!=='AGENCY'||company){
     items.push([url('/inicio'),company&&actor.kind==='AGENCY'?'Resumen del negocio':'Mi negocio','home',company&&actor.kind==='AGENCY'?'Negocio seleccionado':'Mi espacio']);
+    if(actor.kind==='OWNER')items.push(['/equipo','Equipos y roles','clients']);
     if(Object.keys(channels).some(scope=>can(actor,scope)))items.push([url('/solicitudes'),'Solicitudes','content'],[url('/agenda'),'Grabaciones','calendar']);
   }
   if(can(actor,'WALLET')||cash)items.push([url('/wallet'),'Fidelización digital · Wallet','wallet','Servicios']);
@@ -60,7 +61,7 @@ function navLinks(actor,company,url,cash) {
   if(actor.kind!=='COLLABORATOR')items.push([url('/planes'),'Paquetes y servicios','plans','Gestión']);
   if((actor.kind!=='AGENCY'||company)&&socialChannels.some(scope=>can(actor,scope)))items.push([url('/reportes'),'Estadísticas','metrics']);
   if((actor.kind!=='AGENCY'||company)&&can(actor,'MAPS'))items.push([url('/mapas'),'Reseñas y ubicaciones','maps']);
-  if(actor.kind==='OWNER')items.push(['/gestion','Administración','settings'],['/equipo','Equipo y permisos','clients']);
+  if(actor.kind==='OWNER')items.push(['/gestion','Administración','settings']);
   if(actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&can(actor,'WALLET')&&can(actor,'WALLET_REPORTS'))items.push(['/gestion/informes','Informes de fidelización','metrics']);
   items.push(['/cuenta','Mi cuenta','settings']);
   return items;

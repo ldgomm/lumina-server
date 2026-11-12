@@ -532,3 +532,12 @@ Black Friday metadata belongs to a single November/year. Server admission and re
 - Formularios sin JavaScript conservan controles nativos; interfaz con JS usa opciones compactas, mantiene borradores y bloquea envío duplicado. No almacenar información privada en el navegador.
 - Gates: 17 suites / 169 pruebas HTTP, 130 Python, 596 nativas, PostgreSQL, Docker y gateway antes del commit local. Sin push. DOM no equivale a navegador visual ni recepción en teléfonos. Mantener una línea RESULTADO y URL tras arranque verificado.
 - Sin cambios de Kotlin, SQL, identidades Wallet, configuraciones privadas ni HTTPS. Guía: `docs/lumina-equipo-simple-v053.md`.
+
+## Lúmina v015 / Loyalty v054 — equipos visibles
+
+- El dueño tiene Equipos y roles junto a Mi negocio y un botón en el inicio. La edición permanece en `/equipo`, exclusivamente para el dueño y su empresa. No condicionar el enlace a verificación comercial ni a grants de colaboradores.
+- La agencia consulta `/equipos`, visible junto a Clientes: directorio paginado de negocios y personas, con roles, estados y tareas exactas. Esta lectura no otorga edición ni simula un actor OWNER; no consulta el motor Wallet ni prepara credenciales. No incluir contraseñas, tokens, códigos de activación, sesiones ni ciphertext en la proyección.
+- `/equipos` lleva al dueño a su `/equipo`; un parámetro empresa nunca cambia su identidad o pertenencia. Colaboradores sin administración de equipo. Validar autorización en servidor y mantener las prohibiciones de acciones del negocio para la agencia.
+- No cambiar roles registrados basándose en capturas, nombres o correo parecido. La sesión conserva el id de la cuenta autenticada y lee su rol/negocio vigente. Probar registro, salida e ingreso de dueño y cambio de cuenta en el mismo navegador.
+- Gates: 18 suites / 181 pruebas HTTP, 130 Python y 596 nativas, PostgreSQL, Docker y gateway antes del commit local. Sin push. DOM en `lumina-team-navigation.dom.mjs` y `lumina-team.dom.mjs`; no equivalen a revisión visual ni teléfonos. Una línea RESULTADO y URL solo tras arranque comprobado.
+- Conservar Kotlin, todas las migraciones, claves, saldos, identidades Wallet, asociaciones y HTTPS. Guía: `docs/lumina-equipos-visibles-v054.md`.

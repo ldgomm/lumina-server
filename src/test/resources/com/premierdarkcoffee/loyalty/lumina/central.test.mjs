@@ -48,7 +48,7 @@ test('Wallet del dueño solo ofrece herramientas de fidelización y los enlaces 
 
 test('administración central usa la misma sesión, tiene navegación común y prohíbe la suplantación de agencia',async t=>{
  const w=await setup(t);await w.client.get('/wallet');const before=w.db.all('SELECT * FROM wallet_access');
- assert.match((await w.client.get('/gestion')).body,/Equipo y permisos/);
+ assert.match((await w.client.get('/gestion')).body,/Equipos y roles/);
  for(const slug of ['negocio','sucursales','actividad','operacion','historial','informes']){const r=await w.client.get('/gestion/'+slug);assert.equal(r.status,200);assert.match(r.body,/lumina-sidebar-nav/);assert.match(r.body,/data-management-frame/);assert.equal((await w.admin.get('/gestion/'+slug+'?empresa='+w.id)).status,403);}
  const doc=await w.client.get('/gestion/vista?seccion=branches');assert.equal(doc.status,200);assert.match(doc.body,/lumina-management/);assert.equal(doc.headers.get('x-frame-options'),'SAMEORIGIN');assert.match(doc.headers.get('content-security-policy'),/frame-ancestors 'self'/);assert.match(doc.body,/management-launch.js/);
  assert.equal((await w.client.get('/gestion/vista?seccion=team')).status,404);assert.deepEqual(w.db.all('SELECT * FROM wallet_access'),before);

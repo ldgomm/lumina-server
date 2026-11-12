@@ -13,7 +13,7 @@ export function publicPage(path,setupAvailable) {
       ${password('password','Contraseña')}</div>
       <p class="muted">Usamos tus datos de contacto para administrar los servicios del negocio. Guardamos una huella y los últimos cuatro dígitos de la cédula para identificar el registro.</p>
       ${check('consent','Autorizo el registro de estos datos para gestionar mi cuenta.',false,true)}
-      ${button('Crear mi cuenta')}`),'Tu cuenta es personal. Desde Equipo y accesos puedes crear las de tus colaboradores.'),
+      ${button('Crear mi cuenta')}`),'Tu cuenta es personal. Desde Equipos y roles puedes crear las de tus colaboradores.'),
   };
   if (path === '/activar') return {
     title:'Activa tu acceso', description:'Usa el código que te entregó el dueño del negocio y elige tu contraseña.',

@@ -11,6 +11,8 @@ import { readFileSync } from 'node:fs';
 import { activate, approveCompany, authenticate, can, changePassword, companyFor, createAgency, createSession, createTeamMember,
   getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamMember, updateGrants, updateMember } from '../access/accounts.mjs';
 import { teamDirectory, teamHistory } from '../access/team-directory.mjs';
+import { consultTeams } from '../access/team-consultation.mjs';
+import { teamsConsultationPage } from '../presentation/pages/team-consultation-pages.mjs';
 import { saveTeamAccess } from '../access/team-access.mjs';
 import { equal } from '../access/security.mjs';
 import { acceptQuote, cancelContract, contractsFor, createPlan, currentQuote, getPlan, hidePlan, listPlans, offerQuote } from '../memberships/billing.mjs';
@@ -341,6 +343,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           WHERE instr(lower(name),lower(?))>0 OR ?='' ORDER BY approved,name,id LIMIT 100`,q,q);
         return render({title:'Clientes',description:'Consulta la información y el avance de cada negocio. Conservas tu identidad de agencia.',body:companiesPage(companies,q)});
       }
+      if (path==='/equipos') {
+        if(actor.kind==='OWNER'&&method==='GET')return redirect(res,'/equipo');
+        requireAgency(actor);
+        requireThat(method==='GET','La consulta de equipos es de solo lectura.',405);
+        const directory=consultTeams(db,actor,target.searchParams);
+        company=directory.company;
+        return render({title:'Equipos y roles',body:teamsConsultationPage(directory)});
+      }
       const companyId = target.searchParams.get('empresa');
       if(path==='/equipo'||path.startsWith('/equipo/'))requireOwner(actor);
       const catalog = ['/planes','/planes/retirar','/planes/nueva','/planes/viernes-negro'].includes(path);
@@ -385,7 +395,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return render({title:managementTitles[slug],description:'Administración del negocio desde Lúmina.',body:managementFramePage(slug,target.searchParams)});
       }
       if (path==='/equipo' && method==='GET') {
-        return render({title:'Equipo y permisos',body:teamPage(actor,company,teamDirectory(db,actor,target.searchParams))});
+        return render({title:'Equipos y roles',body:teamPage(actor,company,teamDirectory(db,actor,target.searchParams))});
       }
       if (path==='/equipo/nuevo' && method==='GET') {
         requireOwner(actor);

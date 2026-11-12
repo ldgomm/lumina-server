@@ -14,9 +14,9 @@ const scheduleDate = (name,caption,extra='required',value='') => input(name,capt
 const stat = (caption,value) => `<div class="stat"><span>${esc(caption)}</span><strong>${number(value)}</strong></div>`;
 export function companiesPage(companies, q) {
   const filter = `<form class="filter" action="/clientes"><div>${input('q','Buscar negocio','search','maxlength="100"',q)}</div>${button('Buscar','secondary')}</form>`;
-  return card('Cartera de clientes',filter + table(['Negocio','Verificación','Contacto','Registro'],companies.map(company=>[
+  return card('Cartera de clientes',filter + table(['Negocio','Verificación','Contacto','Registro','Equipo'],companies.map(company=>[
     localLink('/inicio?empresa='+company.id,company.name),company.approved ? badge('Verificado','success') : badge('Por verificar'),
-    esc(company.phone),esc(timestamp(company.created_at)),
+    esc(company.phone),esc(timestamp(company.created_at)),localLink('/equipos?empresa='+company.id,'Ver equipo →'),
   ]),'Los negocios que se registren aparecerán aquí.'));
 }
 export function requestForm(actor,url,courtesy = false,selected='',onlySocial=false,values={}) {
