@@ -1,3 +1,5 @@
+import { contactField, contactLine } from './contact.mjs';
+import { businessHome } from './business-home.mjs';
 import { composer, serviceChoices, requestCards } from './request-composer.mjs';
 import { contentOptions, contentName, compatibleContentQuota } from '../../content/service-options.mjs';
 import { canRequest } from '../../access/content-policy.mjs';
@@ -17,18 +19,19 @@ export function companiesPage(companies, q) {
     esc(company.phone),esc(timestamp(company.created_at)),
   ]),'Los negocios que se registren aparecerán aquí.'));
 }
-export function requestForm(actor,url,courtesy = false,selected='',onlySocial=false) {
+export function requestForm(actor,url,courtesy = false,selected='',onlySocial=false,values={}) {
   if (actor.kind==='AGENCY') return '';
   if(courtesy && actor.kind!=='OWNER')return '';
   if (courtesy) return form(url('/solicitudes'),actor,`
     ${hidden('type','COURTESY')}${hidden('channel','SOCIAL')}${hidden('service','VIDEO')}
-    ${input('title','¿Qué quieres mostrar en tu video?','text','required maxlength="150"')}
-    ${textarea('brief','Cuéntanos tu idea','maxlength="4000" rows="3"')}
+    ${input('title','¿Qué quieres mostrar en tu video?','text','required maxlength="150"',values.title||'')}
+    ${textarea('brief','Cuéntanos tu idea','maxlength="4000" rows="3"',values.brief||'')}${contactField(values.phone)}
     ${button('Solicitar mi video gratis')}`);
-  if(onlySocial)return composer(actor,url,{area:'SOCIAL',onlySocial:true});
-  return Object.hasOwn(areas,selected)?composer(actor,url,{area:selected}):serviceChoices(actor,url);
+  if(onlySocial)return composer(actor,url,{area:'SOCIAL',onlySocial:true,values});
+  return Object.hasOwn(areas,selected)?composer(actor,url,{area:selected,values}):serviceChoices(actor,url);
 }
-export function homePage({actor,company,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash}) {
+export function homePage({actor,company,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash,overview}) {
+  if(actor.kind!=='AGENCY')return businessHome({actor,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash,overview,giftForm:actor.kind==='OWNER'?requestForm(actor,url,true,'',false,{phone:company.phone}):''});
   const hasScopes = Object.keys(channels).some(channel=>can(actor,channel));
   const open = groups.filter(row=>!['CANCELLED','DELIVERED'].includes(row.status)).reduce((sum,row)=>sum+row.count,0);
   const gift = actor.kind === 'OWNER' ? card('Tu video de cortesía',
@@ -143,14 +146,6 @@ function pieceView({actor,url,request,piece}) {
     ${piece.evidence.length ? `<ul class="evidence">${piece.evidence.map(item=>`<li>${external(item.url,item.label)}</li>`).join('')}</ul>` : ''}
     ${editForm}${reviewForm}${attachForm}${platformPanels||publishForm?`<section class="piece-platforms"><h4>Publicaciones y métricas</h4><p class="muted">Esta pieza cuenta una sola vez en el plan. Cada plataforma conserva su enlace y sus resultados; las audiencias pueden coincidir.</p>${publishForm}<div class="platform-grid">${platformPanels}</div></section>`:''}</article>`;
 }
-export function contractForm(actor,action,plans,plan,requestId) {
-  const fields = plan ? hidden('plan',plan.id) : select('plan','Plan',plans.map(p=>[p.id,p.name]));
-  return form(action,actor,`${fields}${requestId ? hidden('requestId',requestId) : ''}
-    <div class="fields three">${input('startsOn','Inicio del período','date','required',localDay())}
-    ${plan?.term === 'MONTHLY' ? '' : input('endsBefore','Fecha de fin exclusiva (individual)','date')}
-    ${input('agreed','Monto acordado si es a medida (USD)','text','inputmode="decimal"')}</div>
-    ${button('Activar período')}`);
-}
 export function requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan}) {
   const root = '/solicitudes/'+request.id;
   const base = suffix => url(root+suffix);
@@ -164,11 +159,10 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
   const timeline=step===undefined||request.type==='VISIT'?'':`<ol class="request-timeline" aria-label="Avance de la solicitud">${['Recibida','Coordinación','Producción','Entrega'].map((name,index)=>`<li${index===step?' aria-current="step"':''}><span>${index<step?'✓':index+1}</span>${name}</li>`).join('')}</ol>`;
   const details = timeline+card('Ficha de la solicitud',`<div class="tags">${badge(request.type)}${badge(request.channel)}${badge(request.status)}</div>
     <p>${esc(request.channel==='SOCIAL'&&actor.kind!=='AGENCY'?contentName(request.service):label(request.service))} · Cantidad ${request.quantity} · Recibida ${esc(timestamp(request.created_at))}</p>
-    <p class="prewrap">${esc(request.brief)}</p>
+    <p class="prewrap">${esc(request.brief)}</p>${contactLine(request.contact_phone,company.phone)}
     ${admin && stateOptions.length ? disclosure('Cambiar estado',form(base('/estado'),actor,
       select('status','Estado',by(stateOptions))+textarea('notes','Motivo u observaciones','maxlength="1000"')+button('Guardar estado'))) : ''}
-    ${admin && plan && request.status==='APPROVED' ? disclosure('Activar este plan',
-      contractForm(actor,url('/planes/activar'),[],plan,request.id)) : ''}`);
+    ${plan ? `<p class="muted">Solicitud de plan anterior. Las nuevas contrataciones se gestionan desde ${localLink(url('/planes'),'Paquetes y servicios')}, mediante una propuesta aceptada por el dueño.</p>` : ''}`);
   const addPiece = admin && company.approved && ['APPROVED','SCHEDULED','PRODUCTION'].includes(request.status) &&
     pieces.filter(p=>p.status!=='CANCELLED').length<request.quantity;
   const availableContracts = contracts.filter(c=>!c.cancelled_at && c.starts_on<=localDay() && c.ends_before>localDay() &&

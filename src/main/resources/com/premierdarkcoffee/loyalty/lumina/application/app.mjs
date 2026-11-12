@@ -1,6 +1,7 @@
 import { canReadFidelityReport, centralPaths, managementSections, managementTitles } from '../wallet/management-policy.mjs';
 import { managementPage, managementFramePage, managementDocument } from '../presentation/pages/management-pages.mjs';
 import { offerEditor } from '../presentation/pages/offer-editor.mjs';
+import { businessOverview } from '../production/overview.mjs';
 import { requestAccessSql } from '../access/content-policy.mjs';
 import { walletSections } from '../wallet/access-policy.mjs';
 import { createServer } from 'node:http';
@@ -18,7 +19,7 @@ import { addLocation, addMapsMetric, addReview, addSocialMetric, analytics, maps
 import { accountPage, invitePage, memberPage, publicPage, teamPage } from '../presentation/pages/account-pages.mjs';
 import { card, esc, localLink, page, pathFor } from '../presentation/pages/components.mjs';
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
-import { agendaPage, companiesPage, homePage, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
+import { agendaPage, companiesPage, homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
 import { mapsPage, metricsPage } from '../presentation/pages/service-pages.mjs';
 import { loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
 import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
@@ -32,6 +33,9 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/instagram.webp': ['instagram.webp','image/webp'],
+  '/assets/tiktok.jpg': ['tiktok.jpg','image/jpeg'],
+  '/assets/practical.css': ['practical.css','text/css; charset=utf-8'],
   '/assets/management-launch.js': ['management-launch.js','text/javascript; charset=utf-8'],
   '/assets/lumina-symbol.png': ['lumina-symbol.png','image/png'],
   '/assets/lumina-logo.png': ['lumina-logo.png','image/png'],
@@ -298,7 +302,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if(method==='GET'&&path==='/contenido/grabacion') {
         requireAccess(actor,'SOCIAL','REQUEST');company=companyFor(db,actor);
-        return render({layout:'content',contentView:'agenda',title:'Solicitar una grabación',body:card('Coordinemos la visita',recordingForm(actor,pathFor(actor,company)))});
+        return render({layout:'content',contentView:'agenda',title:'Solicitar una grabación',body:card('Coordinemos la visita',recordingForm(actor,pathFor(actor,company),company.phone))});
       }
       if(method==='GET'&&path==='/contenido') {
         requireAccess(actor,'SOCIAL');
@@ -352,7 +356,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
         const courtesy = actor.kind==='OWNER' ? db.get("SELECT id,status FROM requests WHERE company_id=? AND type='COURTESY'",company.id) : null;
         return render({title:actor.kind==='AGENCY'?'Información del negocio':'Panel de trabajo',description:'Servicios y actividades del negocio.',
-          body:homePage({actor,company,url,groups,upcoming,courtesy,cash,
+          body:homePage({actor,company,url,groups,upcoming,courtesy,cash,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
             videoRequested:videos.reduce((sum,row)=>sum+row.quantity,0),videoDelivered:videos.reduce((sum,row)=>sum+row.delivered,0)})});
       }
       if (path==='/clientes/verificar' && method==='POST') {
@@ -412,7 +416,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const area=target.searchParams.get('area')||'';
         requireThat(!area||Object.hasOwn(areas,area),'Servicio no disponible.',404);
         if(area)requireAccess(actor,area,'REQUEST');
-        return render({layout:area==='SOCIAL'?'content':undefined,contentView:'solicitudes',title:'Nueva solicitud',description:'Elige un servicio y cuéntanos tu idea.',body:newRequestPage({actor,url,area,plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'?contractsFor(db,company.id):[]})});
+        return render({layout:area==='SOCIAL'?'content':undefined,contentView:'solicitudes',title:'Nueva solicitud',description:'Elige un servicio y cuéntanos tu idea.',body:newRequestPage({actor,url,area,values:{phone:company.phone},plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'?contractsFor(db,company.id):[]})});
       }
       if (path==='/solicitudes') {
         if (method==='POST') {
@@ -420,7 +424,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
             const id = createRequest(db,actor,company,data);
             return redirect(res,url('/solicitudes/'+id));
           } catch(issue) {
-            if(!(issue instanceof Problem)||![400,409].includes(issue.status)||actor.kind==='AGENCY'||!Object.hasOwn(areas,data.channel)||!can(actor,data.channel,'REQUEST')||['COURTESY','PLAN'].includes(data.type))throw issue;
+            if(!(issue instanceof Problem)||![400,409].includes(issue.status)||actor.kind==='AGENCY'||!Object.hasOwn(areas,data.channel)||!can(actor,data.channel,'REQUEST')||data.type==='PLAN')throw issue;
+            if(data.type==='COURTESY')return render({title:'Revisa tu video de cortesía',body:card('Tu video de cortesía',`<p class="notice" role="alert">${esc(issue.message)}</p>`+requestForm(actor,url,true,'',false,data))},issue.status);
             return render({layout:data.channel==='SOCIAL'?'content':undefined,contentView:'solicitudes',title:'Revisa tu solicitud',body:newRequestPage({actor,url,area:data.channel,plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'?contractsFor(db,company.id):[],values:data,error:issue.message})},issue.status);
           }
         }
@@ -465,8 +470,13 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
             body:packagesPage({actor,company,url,plans,contracts,orders,view})});
         }
         if(method==='POST'&&path==='/planes/solicitar') {
-          const id=submitOrder(db,actor,company,data);
-          return redirect(res,url('/planes/pedidos/'+id));
+          try{
+            const id=submitOrder(db,actor,company,data);
+            return redirect(res,url('/planes/pedidos/'+id));
+          }catch(issue){
+            if(!(issue instanceof Problem)||![400,409].includes(issue.status)||actor.kind!=='OWNER'||data.renewal)throw issue;
+            return render({title:'Revisa tu selección',body:packagesPage({actor,company,url,plans:listPlans(db),contracts:[],orders:{rows:[],page:0,more:false},view:'catalogo',values:data,error:issue.message})},issue.status);
+          }
         }
         const orderMatch=path.match(/^\/planes\/pedidos\/([^/]+)(?:\/(cotizar|aceptar|activar|cancelar))?$/);
         if(orderMatch&&isId(orderMatch[1])) {

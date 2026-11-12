@@ -1,0 +1,3 @@
+export function brandSocial() {
+  return `<nav class="brand-social" aria-label="Redes de Lúmina Digital"><a href="https://www.instagram.com/luminadigital360/" target="_blank" rel="noopener noreferrer" aria-label="Lúmina Digital en Instagram: luminadigital360 (abre otra pestaña)"><img src="/assets/instagram.webp" alt="" width="22" height="22"><span>Instagram</span></a><a href="https://www.tiktok.com/@luminadigital360" target="_blank" rel="noopener noreferrer" aria-label="Lúmina Digital en TikTok: luminadigital360 (abre otra pestaña)"><img src="/assets/tiktok.jpg" alt="" width="22" height="22"><span>TikTok</span></a></nav>`;
+}

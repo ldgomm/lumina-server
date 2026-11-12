@@ -1,3 +1,4 @@
+import { requestPhone } from '../shared/contact.mjs';
 import { compatibleContentQuota } from '../content/service-options.mjs';
 import { canRequest, platformTargets, requestAccessSql } from '../access/content-policy.mjs';
 import { can, requireAccess, requireAgency, requireOwner, requireBusinessActor } from '../access/accounts.mjs';
@@ -52,6 +53,7 @@ export function createRequest(db, actor, company, data) {
     integer(data.quantity,'cantidad',{ min:1,max:100 });
   const title = plan ? `Contratar ${plan.name}` : text(data.title,'título',2,150);
   const brief = text(data.brief || '', 'indicaciones',0,4000);
+  const phone=requestPhone(data,company);
   const preferred = type === 'VISIT' ? localInstant(data.preferred,'horario sugerido',true) : null;
   return db.transaction(() => {
     if (type === 'COURTESY') {
@@ -59,8 +61,8 @@ export function createRequest(db, actor, company, data) {
       if (prior) return prior.id;
     }
     const id = uuid();
-    db.run(`INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,plan_id,requested_at,created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,'NEW',?,?,?)`,id,company.id,actor.id,type,channel,service,quantity,title,brief,plan?.id ?? null,preferred,now());
+    db.run(`INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,plan_id,requested_at,created_at,contact_phone)
+      VALUES(?,?,?,?,?,?,?,?,?,'NEW',?,?,?,?)`,id,company.id,actor.id,type,channel,service,quantity,title,brief,plan?.id ?? null,preferred,now(),phone);
     event(db,actor,company.id,'REQUEST',id,'SOLICITUD_RECIBIDA',title,channel);
     return id;
   });

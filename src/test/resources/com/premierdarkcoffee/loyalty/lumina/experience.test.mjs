@@ -76,7 +76,7 @@ test('solicitud guiada ofrece solo áreas autorizadas y tres formatos comunes, s
 
 test('formulario conserva datos y formato ante error, escapa HTML y no crea registros parciales',async t=>{
  const w=await setup(t),payload={...idea,title:'Idea <script>alert(1)</script>',brief:'Texto <img src=x>',service:'GRAPHIC',quantity:'101',composer:'content'};
- const r=await w.client.post('/solicitudes',payload);assert.equal(r.status,400);assert.match(r.body,/Conservamos tu información/);assert.match(r.body,/value="GRAPHIC" checked/);assert.match(r.body,/Idea &lt;script&gt;/);assert.match(r.body,/Texto &lt;img src=x&gt;/);assert.doesNotMatch(r.body,/<script>alert/);assert.equal(w.db.get('SELECT count(*) n FROM requests').n,0);
+ const r=await w.client.post('/solicitudes',payload);assert.equal(r.status,400);assert.match(r.body,/role="alert"/);assert.match(r.body,/value="GRAPHIC" checked/);assert.match(r.body,/Idea &lt;script&gt;/);assert.match(r.body,/Texto &lt;img src=x&gt;/);assert.doesNotMatch(r.body,/<script>alert/);assert.equal(w.db.get('SELECT count(*) n FROM requests').n,0);
  assert.equal((await w.client.post('/solicitudes',{...payload,quantity:'2'})).status,303);const saved=w.db.get('SELECT * FROM requests');assert.equal(saved.service,'GRAPHIC');assert.equal(saved.quantity,2);assert.equal(saved.brief,payload.brief);assert.equal(w.db.get('SELECT count(*) n FROM request_platforms').n,0);
  assert.equal((await w.client.post('/solicitudes',{...idea,_csrf:'wrong'})).status,403);
 });
@@ -84,7 +84,7 @@ test('formulario conserva datos y formato ante error, escapa HTML y no crea regi
 test('precios y cupos del dueño se muestran en la solicitud sin revelar contratos a colaboradores',async t=>{
  const w=await setup(t);await offer(w);await w.admin.post('/agencia/clientes/verificar?empresa='+w.id);
  const pack=await offer(w,{name:'Videos mes',offer_kind:'BUNDLE',VIDEO:'4',term:'MONTHLY',price:'100'});await acceptedContract(w,w.admin,w.client,w.id,pack.id);
- const view=await w.client.get('/contenido?vista=solicitudes');assert.match(view.body,/35[,.]25/);assert.match(view.body,/4 cupo\(s\) disponibles/);assert.match(view.body,/no los reserva/);
+ const view=await w.client.get('/contenido?vista=solicitudes');assert.match(view.body,/35[,.]25/);assert.match(view.body,/4 cupo\(s\) disponibles/);assert.match(view.body,/no reserva cupos/);
  const member=await colleague(w,w.client,{name:'Contenido',email:'collabprice@example.test','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
  assert.doesNotMatch((await member.session.get('/contenido?vista=solicitudes')).body,/PRECIOS Y CUPOS|35[,.]25|Videos mes|100[,.]00/);
 });

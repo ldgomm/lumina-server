@@ -1,3 +1,4 @@
+import { requestPhone } from '../shared/contact.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { dateOnly, event, integer, isId, localDay, money, now, requireThat, text, uuid } from '../shared/domain.mjs';
 import { getPlan } from './billing.mjs';
@@ -50,6 +51,7 @@ export function submitOrder(db,actor,company,data) {
   return db.transaction(()=>{
     const replay=db.get('SELECT id FROM package_orders WHERE company_id=? AND submission_key=?',company.id,data.key);
     if(replay)return replay.id;
+    const phone=requestPhone(data,company);
     let selections=[];
     if(data.renewal) {
       const previous=renewable(db,company,data.renewal);
@@ -67,8 +69,8 @@ export function submitOrder(db,actor,company,data) {
     }
     requireThat(selections.length>0&&selections.length<=30,'Selecciona entre 1 y 30 ofertas. Puedes combinarlas libremente.');
     const id=uuid();
-    db.run(`INSERT INTO package_orders(id,company_id,submitted_by,submission_key,status,notes,created_at)
-      VALUES(?,?,?,?,'REQUESTED',?,?)`,id,company.id,actor.id,data.key,notes,now());
+    db.run(`INSERT INTO package_orders(id,company_id,submitted_by,submission_key,status,notes,created_at,contact_phone)
+      VALUES(?,?,?,?,'REQUESTED',?,?,?)`,id,company.id,actor.id,data.key,notes,now(),phone);
     for(const {plan,units,previous} of selections) {
       const price=previous?previous.agreed_minor/previous.units:plan.price_minor;
       requireThat(price===null||Number.isSafeInteger(price),'Revisa el precio unitario del acuerdo.');

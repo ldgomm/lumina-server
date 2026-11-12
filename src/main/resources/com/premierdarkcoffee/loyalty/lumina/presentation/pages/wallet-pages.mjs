@@ -1,3 +1,4 @@
+import { brandSocial } from './brand-social.mjs';
 import { can } from '../../access/accounts.mjs';
 import { walletSections } from '../../wallet/access-policy.mjs';
 import { badge, button, card, check, displayAmount, esc, form, hidden, input, localLink, number, select, table } from './components.mjs';
@@ -24,10 +25,10 @@ export function loyaltyWorkspaceHtml(actor,section='design',sections=null,compan
   const scripts=Object.keys(cashierAssets).filter(name=>name.endsWith('.js'));
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="lumina-wallet-owner" content="${actor.kind==='OWNER'?'yes':'no'}"><meta name="lumina-wallet-agency" content="${actor.kind==='AGENCY'?'yes':'no'}"><meta name="lumina-wallet-team" content="${actor.kind==='OWNER'?'/equipo':esc(back)}"><meta name="lumina-wallet-company" content="${esc(company?.id||actor.company_id||'')}"><meta name="lumina-wallet-back" content="${esc(back)}"><meta name="lumina-csrf" content="${esc(actor.csrf)}"><meta name="lumina-wallet-mode" content="${platform?'platform':'owner'}"><meta name="lumina-wallet-section" content="${esc(section)}">
-    <meta name="lumina-wallet-sections" content="${esc(JSON.stringify(sections))}"><title>Wallet · Lúmina Digital</title><link rel="stylesheet" href="/loyalty-assets/style.css"><link rel="stylesheet" href="/loyalty-assets/commercial.css"><link rel="stylesheet" href="/assets/loyalty-workspace.css"><link rel="stylesheet" href="/assets/central.css"><link rel="icon" href="/assets/lumina-symbol.png">
+    <meta name="lumina-wallet-sections" content="${esc(JSON.stringify(sections))}"><title>Wallet · Lúmina Digital</title><link rel="stylesheet" href="/loyalty-assets/style.css"><link rel="stylesheet" href="/loyalty-assets/commercial.css"><link rel="stylesheet" href="/assets/loyalty-workspace.css"><link rel="stylesheet" href="/assets/central.css"><link rel="stylesheet" href="/assets/practical.css"><link rel="icon" href="/assets/lumina-symbol.png">
     <script src="/assets/loyalty-context.js"></script>${scripts.map(name=>`<script defer src="/loyalty-assets/${name}"></script>`).join('')}<script defer src="/assets/loyalty-launch.js"></script></head>
     <body class="lumina-loyalty"><header><a class="brand" href="${esc(back)}"><img class="lumina-symbol" src="/assets/lumina-symbol.png" width="38" height="38" alt=""> Wallet <span>de Lúmina</span></a><span class="pill">Fidelización digital</span><button id="exit" class="quiet" hidden>Volver a Lúmina</button></header><div class="loyalty-breadcrumb"><a href="/inicio">Lúmina Digital</a><span>/</span><a href="/wallet">Wallet</a><span>/</span><strong>${platform?'Administración':company?esc(company.name):'Mis áreas de Wallet'}</strong></div>
-    <main id="app"><p>Abriendo tu espacio de Wallet…</p></main><p id="notice" role="status" aria-live="polite"></p><footer>Loyalty · Un servicio de Lúmina Digital</footer></body></html>`;
+    <main id="app"><p>Abriendo tu espacio de Wallet…</p></main><p id="notice" role="status" aria-live="polite"></p><footer><span>Wallet · Lúmina Digital</span>${brandSocial()}</footer></body></html>`;
 }
 
 export function walletReportPage(data) {

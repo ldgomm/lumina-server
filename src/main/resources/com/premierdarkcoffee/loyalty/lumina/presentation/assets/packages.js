@@ -11,8 +11,12 @@ for(const catalog of document.querySelectorAll('.catalog-layout')) {
         if(!card.hidden)count++;
       }
       catalog.querySelector('[data-catalog-empty]').hidden=count!==0;
-      catalog.querySelector('[data-catalog-count]').textContent=`${count} oferta(s) disponibles. Los filtros conservan tu selección.`;
+      const active=[...filters.querySelectorAll('select')].filter(s=>s.value).length;
+      const hint=filters.querySelector('[data-active-filters]');if(hint)hint.textContent=active?'('+active+' activos)':'';
+      catalog.querySelector('[data-catalog-count]').textContent=`${count} ${count===1?'oferta disponible':'ofertas disponibles'}.`;
     };
+    const clear=filters.querySelector('[data-clear-filters]');
+    clear?.addEventListener('click',()=>{for(const select of filters.querySelectorAll('select'))select.value='';filter();});
     filters.addEventListener('change',filter);filter();
   }
   if(!catalog.matches('form'))continue;
@@ -34,15 +38,19 @@ for(const catalog of document.querySelectorAll('.catalog-layout')) {
     }
     summary.replaceChildren();const container=document.createElement('div');container.className='commercial-totals';
     for(const [term,title] of [['MONTHLY','Por mes'],['ONE_OFF','Pago único']]){
+      if(!known[term]&&!pending[term])continue;
       const block=document.createElement('div'),caption=document.createElement('span'),amount=document.createElement('strong'),note=document.createElement('small');
       caption.textContent=title;amount.textContent=pending[term]&&!known[term]?'Por cotizar':format(totals[term]);
       note.textContent=pending[term]?`${pending[term]} oferta(s) pendientes de precio. ${known[term]?'Subtotal conocido, no total final.':''}`:known[term]?'Precio de referencia de lo seleccionado.':'Sin servicios de esta modalidad.';
       block.append(caption,amount,note);container.append(block);
     }
-    summary.append(container);
+    if(selected)summary.append(container);
+    const jump=catalog.querySelector('[data-selection-jump]');
+    if(jump){jump.hidden=!selected;const count=jump.querySelector('[data-selection-count]');count.textContent=selected+' '+(selected===1?'selección':'selecciones');}
     if(!selected){const empty=document.createElement('p');empty.textContent='Elige una o varias ofertas para comenzar.';lines.append(empty);}
     if(submit&&!catalog.dataset.busy)submit.disabled=!selected;
   }
   for(const card of cards)for(const b of card.querySelectorAll('[data-quantity-change]'))b.addEventListener('click',()=>{const field=card.querySelector('[data-package-quantity]');field.value=String(Math.max(0,Math.min(10,Number(field.value||0)+Number(b.dataset.quantityChange))));update();});
+  catalog.querySelector('[data-selection-jump]')?.addEventListener('click',()=>catalog.querySelector('#tu-seleccion').focus());
   catalog.addEventListener('input',update);window.addEventListener('pageshow',update);update();
 }

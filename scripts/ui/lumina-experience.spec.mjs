@@ -12,7 +12,7 @@ const cleanups=[],t={after:f=>cleanups.push(f)};
 const out=process.env.LUMINA_UI_EVIDENCE;
 let browser;
 try {
- const loyalty=await fakeLoyalty(t),w=await portal(t,loyalty.origin,{platformToken:loyalty.platformToken}),admin=await agency(w),a=await owner(w,'Negocio de prueba visual','1');
+ const loyalty=await fakeLoyalty(t,fileURLToPath(new URL('../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty/',import.meta.url))),w=await portal(t,loyalty.origin,{platformToken:loyalty.platformToken}),admin=await agency(w),a=await owner(w,'Negocio de prueba visual','1');
  for(const data of [
   {name:'Video individual',offer_kind:'INDIVIDUAL',individual_service:'VIDEO',term:'ONE_OFF',price:'35.25'},
   {name:'Contenido mensual',offer_kind:'BUNDLE',VIDEO:'4',GRAPHIC:'2',term:'MONTHLY',price:'120'},
@@ -27,19 +27,26 @@ try {
  if(out)await mkdir(out,{recursive:true});
  for(const width of [320,390,1024,1440]) {
   await page.setViewportSize({width,height:1000});
-  for(const path of ['/contenido?vista=solicitudes','/solicitudes/nueva','/planes','/solicitudes']) {
+  for(const path of ['/inicio','/contenido?vista=solicitudes','/solicitudes/nueva','/planes','/solicitudes']) {
    await page.goto(w.origin+path);await fit();
    if(out&&[390,1440].includes(width))await page.screenshot({path:resolve(out,`${path.split('?')[0].replaceAll('/','_')}-${width}.png`),fullPage:true});
   }
+  if(width>760){
+   await page.goto(w.origin+'/inicio');const principal=await page.locator('.site-header').boundingBox(),row=await page.locator('#workspace-nav>a').first().boundingBox();
+   await page.goto(w.origin+'/contenido');const module=await page.locator('.content-sidebar').boundingBox(),moduleRow=await page.locator('.content-sidebar nav>a').first().boundingBox();
+   assert.equal(module.width,principal.width,'Identical sidebar width');assert.equal(moduleRow.height,row.height,'Identical navigation row height');assert.ok(Math.abs(moduleRow.width-row.width)<=1,'Identical navigation insets');
+   await page.goto(w.origin+'/wallet/gestion?seccion=programs');await page.locator('.workspace-sidebar').waitFor();const wallet=await page.locator('.workspace-sidebar').boundingBox(),walletRow=await page.locator('.workspace-nav button').first().boundingBox();assert.equal(wallet.width,principal.width,'Wallet sidebar width');assert.equal(walletRow.height,row.height,'Wallet navigation row height');assert.ok(Math.abs(walletRow.width-row.width)<=1,'Wallet navigation insets');await fit();
+  }
   await page.goto(w.origin+'/contenido?vista=solicitudes');
-  if(width<760){await page.getByRole('button',{name:'Abrir menú de Contenido'}).click();assert.equal(await page.locator('.content-sidebar').isVisible(),true);await page.keyboard.press('Escape');assert.equal(await page.locator('.content-sidebar').isVisible(),false);}
+  if(width<760){await page.getByRole('button',{name:'Abrir menú de Contenido'}).click();assert.equal(await page.locator('.content-sidebar').isVisible(),true);await page.getByRole('button',{name:'Cerrar navegación',exact:true}).first().focus();await page.keyboard.press('Escape');assert.equal(await page.locator('.content-sidebar').isVisible(),false);}
   await page.getByLabel('Diseño para redes',{exact:false}).check();assert.equal(await page.locator('[data-price-service=VIDEO]').isVisible(),false);assert.equal(await page.locator('[data-price-service=GRAPHIC]').isVisible(),true);
   await page.goto(w.origin+'/planes');
   await page.getByRole('button',{name:'Añadir una unidad de Video individual',exact:true}).click();await page.getByRole('button',{name:'Añadir una unidad de Contenido mensual',exact:true}).click();
-  await page.getByLabel('Tipo de oferta').selectOption('individual');assert.equal(await page.locator('[data-name="Contenido mensual"]').isVisible(),false);assert.match(await page.locator('[data-package-lines]').innerText(),/Contenido mensual/);
+  await page.locator('[data-catalog-filters] summary').click();await page.getByLabel('Tipo de oferta').selectOption('individual');assert.equal(await page.locator('[data-name="Contenido mensual"]').isVisible(),false);assert.match(await page.locator('[data-package-lines]').innerText(),/Contenido mensual/);
   await page.getByRole('button',{name:'Añadir una unidad de Proyecto web a medida',exact:true}).click();assert.match(await page.locator('[data-package-totals]').innerText(),/Subtotal conocido/);await fit();
  }
- await page.goto(w.origin+'/solicitudes/nueva?area=SOCIAL');await page.getByLabel('¿Cómo quieres empezar?').selectOption('VISIT');assert.equal(await page.locator('[data-visit]').isVisible(),true);assert.equal(await page.locator('[name=quantity]').isEnabled(),false);
+ await page.goto(w.origin+'/solicitudes/nueva?area=SOCIAL');await page.locator('.request-options summary').click();await page.getByLabel('Tipo de solicitud').selectOption('VISIT');assert.equal(await page.locator('[data-visit]').isVisible(),true);assert.equal(await page.locator('[name=quantity]').isEnabled(),false);
+ assert.equal(await page.getByLabel('Teléfono de contacto',{exact:true}).inputValue(),'0991234567');await page.getByLabel('Teléfono de contacto',{exact:true}).fill('0987654321');
  await page.getByLabel('¿Qué quieres lograr?').fill('Grabación ficticia');await page.getByRole('button',{name:'Enviar solicitud',exact:true}).click();await page.waitForURL(/\/solicitudes\/[a-f0-9-]+$/);assert.match(await page.locator('h1').innerText(),/Grabación ficticia/);
  assert.deepEqual(errors,[]);
  if(out)await writeFile(resolve(out,'result.json'),JSON.stringify({status:'PASS',widths:[320,390,1024,1440],data:'fictional'},null,2));
