@@ -78,3 +78,7 @@ Catálogo guiado en tres pasos y administración central en Lúmina. Wallet mant
 ### Lúmina v010 / Loyalty v049
 
 Inicio con pendientes y accesos directos, solicitudes con teléfono, navegación de dimensiones compartidas, catálogo más compacto y redes de Lúmina. Conserva el motor y las conexiones Wallet. [Guía de actualización](docs/lumina-sencilla-v049.md).
+
+### Lúmina v011 / Loyalty v050
+
+Equipo con búsqueda, estados, permisos claros, historial y protección ante formularios antiguos. Baja inmediata incluso si Wallet no responde, recuperación de acceso con permisos vigentes y vista de consulta sin edición. Revisión de los flujos de solicitudes, contenido, métricas, paquetes y administración. [Guía y alcance de la revisión](docs/lumina-equipo-v050.md).

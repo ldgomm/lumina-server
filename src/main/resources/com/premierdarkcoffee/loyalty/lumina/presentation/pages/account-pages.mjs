@@ -1,6 +1,4 @@
-import { channels, areas, walletScopes, socialChannels } from '../../shared/domain.mjs';
-import { permissions } from '../../access/accounts.mjs';
-import { badge, button, card, check, disclosure, esc, form, hidden, input, label, localLink, message, select, table } from './components.mjs';
+import { button, card, check, esc, form, input, label, localLink } from './components.mjs';
 
 const password = (name,caption,extra='') => input(name,caption,'password',extra || 'required minlength="12" maxlength="128" autocomplete="new-password"');
 export function publicPage(path,setupAvailable) {
@@ -45,58 +43,4 @@ export function accountPage(actor) {
     ${form('/cuenta/clave',actor,`${password('current','Contraseña actual','required maxlength="128" autocomplete="current-password"')}
     ${password('password','Nueva contraseña')}${button('Actualizar contraseña')}`)}`,
   'Al guardarla se cierran tus otras sesiones.');
-}
-function matrix(member) {
-  const chosen=(scope,action)=>Boolean(member?.grants.some(g=>g.scope===scope&&g.action===action));
-  const rows=Object.entries(areas).map(([scope,name])=>[esc(name),...Object.entries(permissions).map(([action,caption])=>check(`${scope}.${action}`,caption,chosen(scope,action)))]);
-  const granular=Object.entries(walletScopes).map(([scope,name])=>[esc(name),check(scope+'.VIEW','Ver',chosen(scope,'VIEW')),scope==='WALLET_REPORTS'?'—':check(scope+'.EDIT','Modificar',chosen(scope,'EDIT'))]);
-  const legacy=socialChannels.map(scope=>[esc(channels[scope]),...Object.entries(permissions).map(([action,caption])=>check(`${scope}.${action}`,caption,chosen(scope,action)))]);
-  return table(['Área',...Object.values(permissions)],rows)+disclosure('Permisos por plataforma',`<p class="muted">Contenido para redes da acceso al trabajo común y a todas sus publicaciones. Los permisos por plataforma limitan los enlaces y métricas visibles y permiten ver o solicitar contenido común. Para aprobar nuevas piezas, activa Aprobar en Contenido para redes. Las restricciones de solicitudes anteriores se conservan.</p>${table(['Plataforma',...Object.values(permissions)],legacy)}`)+
-    disclosure('Áreas de fidelización digital',`<p class="muted">Activa Ver en Fidelización digital y elige las tareas autorizadas. Caja y su sucursal se asignan en la sección de Caja.</p>${table(['Área de Wallet','Consulta','Cambios'],granular)}`);
-}
-export function teamPage(actor,company,members) {
-  const list = table(['Persona','Áreas de Lúmina','Loyalty · Caja','Acceso'],members.map(member=>[
-    `${localLink('/equipo/' + member.id,member.name)}<div class="muted">${esc(member.email)}</div>`,
-    member.grants.filter(g=>g.action==='VIEW').map(g=>badge(g.scope)).join(' ') || '—',
-    member.cash_status ? `${badge(member.cash_status)} ${esc(member.branch_name)}` : '—',
-    badge(!member.active ? 'INACTIVE' : member.activated ? 'ACTIVE' : 'PENDING'),
-  ]),'Crea un acceso para la primera persona de tu equipo.');
-  return `${card('Personas del negocio',list)}
-    ${card('Fidelización digital',company.loyalty_tenant?`<p><strong>${esc(company.loyalty_name)}</strong> tiene Wallet activa. Tu equipo usa su misma cuenta de Lúmina.</p>`:'<p>Tu Wallet se prepara automáticamente. Puedes crear tu equipo y asignar sus permisos desde aquí.</p>')}
-    ${card('Añadir colaborador',form('/equipo',actor,`<div class="fields two">
-      ${input('name','Nombre','text','required maxlength="100" autocomplete="off"')}
-      ${input('email','Correo del colaborador','email','required maxlength="180" autocomplete="off"')}</div>
-      <p class="muted">Puedes combinar áreas y tareas. Deja todos vacíos para configurar únicamente Caja en el siguiente paso.</p>
-      ${matrix()}${button('Crear acceso')}`))}`;
-}
-export function memberPage(actor,company,member,branches = null) {
-  const base = '/equipo/' + member.id;
-  let cash = message('Abre Wallet para completar su preparación automática y después asigna Caja.');
-  if (company.loyalty_tenant) {
-    cash = `${member.cash_status ? `<p>${badge(member.cash_status)} <strong>${esc(member.branch_name)}</strong> ·
-      ${member.purchases ? 'Compras' : ''}${member.purchases && member.rewards ? ' y ' : ''}${member.rewards ? 'canjes' : ''}</p>` : ''}
-      ${member.active && member.cash_status !== 'REVOKING' ?
-        branches ? form(base + '/caja/guardar',actor,`
-          ${select('branch','Sucursal',branches.map(b=>[b.id,b.name]),member.branch_id,'required')}
-          <div class="actions">${check('purchases','Registrar compras',Boolean(member.purchases))}
-          ${check('rewards','Canjear premios y aplicar descuentos',Boolean(member.rewards))}</div>
-          ${button('Guardar acceso de Caja')}`) :
-        form(base + '/caja/sucursales',actor,`${button('Consultar sucursales','secondary')}`) : ''}
-      ${['ACTIVE','REVOKING'].includes(member.cash_status) ? disclosure('Revocar acceso de Caja',
-        form(base + '/caja/revocar',actor,`${input('reason','Motivo','text','required minlength="5" maxlength="500"')}
-          ${button('Revocar Caja','danger')}`)) : ''}`;
-  }
-  return `<div class="actions">${localLink('/equipo','← Equipo y accesos')}</div>
-    ${card('Permisos de Lúmina',form(base + '/permisos',actor,`${hidden('revision',member.revision)}${matrix(member)}
-      ${button('Guardar permisos')}`),'Activa Ver en cada área donde la persona pueda solicitar contenido o aprobar entregas.')}
-    ${card('Loyalty · Caja',cash,'La persona entra a Caja con su cuenta de Lúmina y opera en la sucursal asignada. Loyalty conserva la auditoría de sus compras y canjes.')}
-    ${card('Credencial de acceso',`<p>${esc(member.email)} · ${badge(!member.active ? 'INACTIVE' : member.activated ? 'ACTIVE' : 'PENDING')}</p>
-      <div class="actions">${form(base + '/invitar',actor,button('Emitir nuevo código','secondary'))}
-      ${member.active ? form(base + '/desactivar',actor,`${check('confirm','Confirmo la baja del acceso completo.',false,true)}${button('Desactivar persona','danger')}`) : ''}</div>`,
-      'La baja cierra las sesiones de la persona. Si había una Caja delegada, completa su retiro en la sección anterior.')}`;
-}
-export function invitePage(member,code) {
-  return card('Código de un solo uso',`<p>Entrega este código a <strong>${esc(member.name)}</strong> para que abra <strong>Activar un acceso</strong> y elija su contraseña. Vence en 48 horas.</p>
-    <code class="secret">${esc(code)}</code><div class="actions">${localLink('/equipo/'+member.id,'Configurar acceso de Caja','btn')}
-    ${localLink('/equipo','Volver al equipo','btn secondary')}</div>`);
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loyaltyOrigin } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/wallet/bridge.mjs';
-import { agency, colleague, owner, portal } from './helpers.mjs';
+import { teamRevision, agency, colleague, owner, portal } from './helpers.mjs';
 import { fakeLoyalty } from './loyalty-fixture.mjs';
 
 async function linked(t) {
@@ -23,9 +23,9 @@ test('una cuenta combina TikTok, Instagram y Caja, con compras y canjes independ
   const input = {credential:loyalty.ownerToken,branch:loyalty.branch.id,purchases:'yes'};
   assert.equal((await client.post(path+'/sucursales',{credential:loyalty.ownerToken})).status,200);
   // Extra client-supplied secrets cannot change which tenant the backend operates on.
-  assert.equal((await client.post(path+'/guardar',{...input,credential:loyalty.foreignToken})).status,303);
-  assert.equal((await client.post(path+'/guardar',{...input,branch:loyalty.foreignBranch.id})).status,400);
-  assert.equal((await client.post(path+'/guardar',input)).status,303);
+  assert.equal((await client.post(path+'/guardar',{...input,revision:teamRevision(world,member.id),credential:loyalty.foreignToken})).status,303);
+  assert.equal((await client.post(path+'/guardar',{...input,revision:teamRevision(world,member.id),branch:loyalty.foreignBranch.id})).status,400);
+  assert.equal((await client.post(path+'/guardar',{...input,revision:teamRevision(world,member.id)})).status,303);
   const original = world.db.get('SELECT * FROM cash_grants WHERE account_id=?',member.id);
   const remote = loyalty.staff.get(original.staff_id);
   assert.equal(remote.role,'CASHIER');
@@ -53,11 +53,11 @@ test('una cuenta combina TikTok, Instagram y Caja, con compras y canjes independ
   assert.equal((await member.session.get('/solicitudes?canal=INSTAGRAM')).status,200);
   assert.equal((await member.session.get('/solicitudes?canal=FACEBOOK')).status,403);
   assert.equal((await member.session.get('/planes')).status,403);
-  const edited = await client.post(path+'/guardar',{credential:loyalty.ownerToken,branch:loyalty.secondBranch.id,rewards:'yes'});
+  const edited = await client.post(path+'/guardar',{revision:teamRevision(world,member.id),credential:loyalty.ownerToken,branch:loyalty.secondBranch.id,rewards:'yes'});
   assert.equal(edited.status,303);
   assert.equal((await member.session.post('/api/staff/purchases',{...receipt,branchId:loyalty.secondBranch.id},api)).status,403);
   assert.equal((await member.session.post('/api/staff/counter-redemptions',{branchId:loyalty.secondBranch.id},api)).status,200);
-  assert.equal((await client.post(path+'/revocar',{credential:loyalty.ownerToken,reason:'Cambio de función'})).status,303);
+  assert.equal((await client.post(path+'/revocar',{revision:teamRevision(world,member.id),credential:loyalty.ownerToken,reason:'Cambio de función'})).status,303);
   assert.equal((await member.session.get('/api/staff/dashboard')).status,403);
   assert.equal((await member.session.get('/caja')).status,403);
   assert.equal((await member.session.get('/solicitudes?canal=TIKTOK')).status,200);
@@ -68,7 +68,7 @@ test('Caja sola funciona y recupera un alta de respuesta perdida sin duplicar el
   const {loyalty,world,client} = await linked(t);
   const member = await colleague(world,client,{name:'Solo Caja',email:'caja@example.test'});
   const path = '/equipo/'+member.id+'/caja/guardar';
-  const data = {credential:loyalty.ownerToken,branch:loyalty.branch.id,purchases:'yes',rewards:'yes'};
+  const data = {revision:teamRevision(world,member.id),credential:loyalty.ownerToken,branch:loyalty.branch.id,purchases:'yes',rewards:'yes'};
   loyalty.loseCreateResponse();
   assert.equal((await client.post(path,data)).status,503);
   const pending = world.db.get('SELECT * FROM cash_grants WHERE account_id=?',member.id);
@@ -79,10 +79,9 @@ test('Caja sola funciona y recupera un alta de respuesta perdida sin duplicar el
   assert.equal((await member.session.get('/caja')).status,200);
   assert.equal((await member.session.get('/solicitudes')).status,403);
   assert.equal((await member.session.get('/reportes')).status,403);
-  assert.equal((await client.post('/equipo/'+member.id+'/desactivar',{confirm:'yes'})).status,303);
+  assert.equal((await client.post('/equipo/'+member.id+'/desactivar',{revision:teamRevision(world,member.id),confirm:'yes'})).status,303);
   assert.equal((await member.session.get('/api/staff/dashboard')).status,401);
-  assert.equal(world.db.get('SELECT status FROM cash_grants WHERE account_id=?',member.id).status,'REVOKING');
-  assert.equal((await client.post('/equipo/'+member.id+'/caja/revocar',{credential:loyalty.ownerToken,reason:'Fin del contrato'})).status,303);
+  assert.equal(world.db.get('SELECT status FROM cash_grants WHERE account_id=?',member.id).status,'INACTIVE');
   assert.equal(world.db.get('SELECT sealed_token FROM cash_grants WHERE account_id=?',member.id).sealed_token,null);
 });
 test('el servidor de Caja acepta únicamente un origen privado de loopback',()=>{

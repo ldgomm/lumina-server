@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync,readFileSync,readdirSync,rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { agency,colleague,owner,portal } from './helpers.mjs';
+import { teamRevision, agency,colleague,owner,portal } from './helpers.mjs';
 import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { openDatabase } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/database.mjs';
 import { uuid } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
@@ -22,7 +22,7 @@ test('registrar negocio prepara Wallet propio y contacto sin verificación manua
  const dashboard=JSON.parse((await client.get('/wallet-api/api/staff/dashboard')).body);assert.equal(dashboard.business.name,'Panadería Sol');assert.deepEqual(dashboard.programs,[]);assert.deepEqual(dashboard.rewards,[]);
  const member=await colleague(world,client,{name:'Caja principal',email:'caja-auto@example.test'});
  const branch=dashboard.branches[0].id;
- assert.equal((await client.post('/equipo/'+member.id+'/caja/guardar',{branch,purchases:'yes',rewards:'yes'})).status,303);
+ assert.equal((await client.post('/equipo/'+member.id+'/caja/guardar',{revision:teamRevision(world,member.id),branch,purchases:'yes',rewards:'yes'})).status,303);
  assert.equal((await member.session.get('/caja')).status,200);
 });
 test('una interrupción tras crear Wallet recupera el mismo negocio y no entrega el demo',async t=>{
@@ -93,6 +93,6 @@ test('identidades y permisos del equipo se administran desde Lúmina sin emitir 
   const response=method==='GET'?await client.get('/wallet-api/api/staff/team'):await client.post('/wallet-api/api/staff/credentials',{role:'OWNER'},{json:true,headers:{'X-Lumina-CSRF':client.csrf}});
   assert.equal(response.status,403);
  }
- const view=await client.get('/equipo');assert.match(view.body,/Añadir colaborador/);assert.doesNotMatch(view.body,/verificar tu negocio|name="credential"/);
+ const view=await client.get('/equipo');assert.match(view.body,/Añadir persona/);assert.doesNotMatch(view.body,/verificar tu negocio|name="credential"/);
  const agency=await admin.get('/wallet/gestion?empresa='+id);assert.equal(agency.status,403);assert.doesNotMatch(agency.body,/lumina-wallet-mode/);
 });

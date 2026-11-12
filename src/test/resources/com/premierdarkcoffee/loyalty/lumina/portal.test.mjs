@@ -2,7 +2,7 @@ import { acceptedContract } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { localDay, nextMonth } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
-import { agency, colleague, owner, password, portal } from './helpers.mjs';
+import { teamRevision, agency, colleague, owner, password, portal } from './helpers.mjs';
 
 const oldDate = days => localDay(new Date(Date.now()-days*86400000));
 const date = (days,time='10:00') => oldDate(days)+'T'+time;
@@ -129,7 +129,7 @@ test('la matriz impide ver, solicitar o aprobar áreas sin permiso y aplica camb
   const current = world.db.get('SELECT revision FROM accounts WHERE id=?',member.id).revision;
   assert.equal((await client.post('/equipo/'+member.id+'/permisos',{revision:String(current),'TIKTOK.VIEW':'yes'})).status,303);
   assert.equal((await member.session.get('/solicitudes?canal=INSTAGRAM')).status,403);
-  assert.equal((await client.post('/equipo/'+member.id+'/desactivar',{confirm:'yes'})).status,303);
+  assert.equal((await client.post('/equipo/'+member.id+'/desactivar',{revision:teamRevision(world,member.id),confirm:'yes'})).status,303);
   assert.equal((await member.session.get('/inicio')).status,303);
 });
 test('Google Maps conserva mediciones por ubicación y referencias de reseñas',async t=>{

@@ -4,7 +4,9 @@ import { choice, dateOnly, event, httpsUrl, integer, localDay, localInstant, mon
 
 export const metrics = Object.freeze({ views:'Vistas', likes:'Me gusta', comments:'Comentarios', shares:'Compartidos', reach:'Alcance' });
 const metricsKeys = Object.keys(metrics);
+const requireCompanyReader = (actor,companyId) => requireThat(actor.kind==='AGENCY'||actor.company_id===companyId,'Área no disponible.',403);
 export function publicationsFor(db, actor, companyId, pieceId) {
+  requireCompanyReader(actor,companyId);
   return db.all('SELECT * FROM publications WHERE company_id=? AND piece_id=? ORDER BY published_at,id',companyId,pieceId)
     .filter(pub => can(actor,pub.channel))
     .map(pub => ({...pub, metrics: db.all(`SELECT * FROM social_metrics
@@ -28,6 +30,7 @@ export function addSocialMetric(db, actor, company, request, piece, input) {
   });
 }
 export function analytics(db, actor, companyId, filters) {
+  requireCompanyReader(actor,companyId);
   const defaultFrom = localDay(new Date(Date.now() - 29 * 86400000));
   const from = dateOnly(filters.from || defaultFrom,'la fecha inicial');
   const to = dateOnly(filters.to || localDay(),'la fecha final');
@@ -79,6 +82,7 @@ function mapsLocation(db, companyId, id) {
   return location;
 }
 export function mapsData(db, actor, companyId) {
+  requireCompanyReader(actor,companyId);
   requireAccess(actor,'MAPS');
   return db.all('SELECT * FROM maps_locations WHERE company_id=? ORDER BY name,id',companyId).map(location => ({
     ...location,

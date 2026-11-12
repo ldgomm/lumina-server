@@ -7,7 +7,8 @@ import { walletSections } from '../wallet/access-policy.mjs';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { activate, approveCompany, authenticate, can, changePassword, companyFor, createAgency, createSession, createTeamMember,
-  getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamList, teamMember, updateGrants } from '../access/accounts.mjs';
+  getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamMember, updateGrants, updateMember } from '../access/accounts.mjs';
+import { teamDirectory, teamHistory } from '../access/team-directory.mjs';
 import { equal } from '../access/security.mjs';
 import { acceptQuote, cancelContract, contractsFor, createPlan, currentQuote, getPlan, hidePlan, listPlans, offerQuote } from '../memberships/billing.mjs';
 import { channels, areas, integer, isId, now, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
@@ -16,7 +17,8 @@ import { createWalletWorkspace } from '../wallet/wallet.mjs';
 import { addEvidence, addPiece, addPublication, addVisit, createRequest, editPiece, finishVisit, getPiece, getRequest,
   requestCounts, reviewPiece, updateRequest, visibleRequests } from '../production/production.mjs';
 import { addLocation, addMapsMetric, addReview, addSocialMetric, analytics, mapsData, publicationsFor } from '../analytics/reporting.mjs';
-import { accountPage, invitePage, memberPage, publicPage, teamPage } from '../presentation/pages/account-pages.mjs';
+import { accountPage, publicPage } from '../presentation/pages/account-pages.mjs';
+import { invitePage, memberPage, newMemberPage, teamPage } from '../presentation/pages/team-pages.mjs';
 import { card, esc, localLink, page, pathFor } from '../presentation/pages/components.mjs';
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
 import { agendaPage, companiesPage, homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
@@ -33,6 +35,8 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/team.css': ['team.css','text/css; charset=utf-8'],
+  '/assets/team.js': ['team.js','text/javascript; charset=utf-8'],
   '/assets/instagram.webp': ['instagram.webp','image/webp'],
   '/assets/tiktok.jpg': ['tiktok.jpg','image/jpeg'],
   '/assets/practical.css': ['practical.css','text/css; charset=utf-8'],
@@ -69,10 +73,10 @@ function teamInvitation(db,actor,id,code) {
   const member = teamMember(db,actor,id);
   return {title:'Acceso creado',description:'Comparte el código con la persona por tu canal habitual.',body:invitePage(member,code)};
 }
-function cajaHtml() {
+function cajaHtml(actor) {
   const names = Object.keys(cashierAssets);
   return `<!doctype html><html lang="es"><head><meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1"><title>Loyalty · Caja de Lúmina</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="lumina-csrf" content="${esc(actor.csrf)}"><title>Loyalty · Caja de Lúmina</title>
     ${names.filter(name=>name.endsWith('.css')).map(name=>`<link rel="stylesheet" href="/caja-assets/${name}">`).join('')}
     ${names.filter(name=>name.endsWith('.js')).map(name=>`<script defer src="/caja-assets/${name}"></script>`).join('')}
     <script defer src="/assets/caja.js"></script></head><body><header><a class="brand" href="/inicio">Lúmina <span>Digital</span></a>
@@ -207,7 +211,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         try { await wallets.validate(actor); }
         catch(issue) {
           if(!(issue instanceof Problem))throw issue;
-          const blocked=actor.kind==='OWNER'?db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[];
+          const blocked=actor.kind==='OWNER'?db.all("SELECT w.account_id,a.name,a.revision FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[];
           return render({title:'Abrir Wallet',body:walletPage({actor,company,error:issue.status>=500?'Wallet no está disponible en este momento. Tu cuenta y tus tarjetas se conservan. Vuelve a intentarlo en unos minutos.':issue.message,blocked})},issue.status);
         }
         company=companyFor(db,actor,company.id);
@@ -221,13 +225,16 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (api) {
         const input = method==='POST' ? await readJson(req) : undefined;
+        actor=getSession(db,cookie);
+        requireThat(actor,'Tu sesión terminó. Ingresa nuevamente.',401);
+        if(method!=='GET')requireThat(equal(actor.csrf,req.headers['x-lumina-csrf']),'Tu sesión cambió. Abre de nuevo Caja.',403);
         const idempotency = req.headers['idempotency-key'];
         requireThat(idempotency === undefined || /^[A-Za-z0-9_:-]{8,128}$/.test(idempotency),'Referencia de operación inválida.');
         return json(res,200,await bridge.proxy(actor,path,{method,body:input,query:target.searchParams,idempotency}));
       }
       if (method==='GET' && path==='/caja') {
         bridge.activeGrant(actor);
-        return send(res,200,cajaHtml());
+        return send(res,200,cajaHtml(actor));
       }
       if (method==='GET' && path.startsWith('/caja-assets/')) {
         const name = path.slice('/caja-assets/'.length);
@@ -253,7 +260,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (['/wallet/conectar','/wallet/desconectar','/equipo/loyalty/vincular','/wallet/vincular'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
       if(path==='/wallet/accesos'&&method==='GET') {
         requireOwner(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));
-        const blocked=db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id);
+        const blocked=db.all("SELECT w.account_id,a.name,a.revision FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id);
         return render({title:'Accesos de Wallet',body:walletPage({actor,company,blocked})});
       }
       if(path==='/wallet/reparar'&&method==='POST'){requireOwner(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));await wallets.repair(actor,company,data);return redirect(res,'/wallet');}
@@ -269,7 +276,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const companies=actor.kind==='AGENCY'&&!company?db.all('SELECT id,name FROM companies ORDER BY name,id'):[];
         const contact=company?db.get("SELECT a.name,a.email,c.phone FROM accounts a JOIN companies c ON c.id=a.company_id WHERE c.id=? AND a.kind='OWNER'",company.id):null;
         return render({title:'Fidelización digital',description:'Wallet de tu negocio, integrado en Lúmina.',
-          body:walletPage({actor,company,contact,companies,data:information,error,blocked:actor.kind==='OWNER'&&company?db.all("SELECT w.account_id,a.name FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[]})});
+          body:walletPage({actor,company,contact,companies,data:information,error,blocked:actor.kind==='OWNER'&&company?db.all("SELECT w.account_id,a.name,a.revision FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[]})});
       }
       if(path==='/proximamente'&&method==='GET') {
         requireThat(actor.kind!=='COLLABORATOR','Área no asignada.',403);
@@ -339,6 +346,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return render({title:'Clientes',description:'Consulta la información y el avance de cada negocio. Conservas tu identidad de agencia.',body:companiesPage(companies,q)});
       }
       const companyId = target.searchParams.get('empresa');
+      if(path==='/equipo'||path.startsWith('/equipo/'))requireOwner(actor);
       const catalog = ['/planes','/planes/retirar','/planes/nueva'].includes(path);
       if (actor.kind==='AGENCY' && !companyId && !catalog) {
         if (method==='GET' && path==='/inicio') return redirect(res,'/resumen');
@@ -381,34 +389,71 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return render({title:managementTitles[slug],description:'Administración del negocio desde Lúmina.',body:managementFramePage(slug,target.searchParams)});
       }
       if (path==='/equipo' && method==='GET') {
-        return render({title:'Equipo y accesos',description:'Asigna áreas, tareas y permisos de Caja por persona.',
-          body:teamPage(actor,company,teamList(db,actor))+card('Accesos internos de Wallet',localLink('/wallet/accesos','Revisar accesos bloqueados','btn secondary'))});
+        return render({title:'Equipo y permisos',body:teamPage(actor,company,teamDirectory(db,actor,target.searchParams))});
+      }
+      if (path==='/equipo/nuevo' && method==='GET') {
+        requireOwner(actor);
+        return render({title:'Añadir persona',body:newMemberPage(actor)});
       }
       if (path==='/equipo' && method==='POST') {
-        const result = createTeamMember(db,actor,data);
-        return render(teamInvitation(db,actor,result.id,result.code),201);
+        requireOwner(actor);
+        try {
+          const result = createTeamMember(db,actor,data);
+          return render(teamInvitation(db,actor,result.id,result.code),201);
+        } catch(issue) {
+          if(!(issue instanceof Problem)||![400,409].includes(issue.status))throw issue;
+          return render({title:'Añadir persona',body:newMemberPage(actor,data,issue.message)},issue.status);
+        }
       }
-      const teamMatch = path.match(/^\/equipo\/([^/]+)(?:\/(permisos|invitar|desactivar|caja\/(?:sucursales|guardar|revocar)))?$/);
+      const teamMatch = path.match(/^\/equipo\/([^/]+)(?:\/(permisos|datos|invitar|desactivar|caja\/(?:sucursales|guardar|revocar)))?$/);
       if (teamMatch && isId(teamMatch[1])) {
         const [,id,action] = teamMatch;
-        const member = teamMember(db,actor,id);
-        if (method==='GET' && !action) return render({title:member.name,body:memberPage(actor,company,member)});
+        teamMember(db,actor,id);
+        const memberView = async (options={},loadBranches=true) => {
+          let branches=null;
+          const member=teamMember(db,actor,id);
+          if(loadBranches&&member.active&&member.cash_status!=='REVOKING')try {
+            branches=await bridge.branches(actor,await wallets.ownerCredential(actor));
+          } catch(issue) {
+            if(!(issue instanceof Problem))throw issue;
+            options={...options,branchError:'No se pudieron cargar las sucursales. Los demás permisos se pueden gestionar.'};
+          }
+          actor=getSession(db,cookie);
+          requireThat(actor,'Tu sesión terminó. Ingresa nuevamente.',401);
+          const current=teamMember(db,actor,id);
+          return {title:current.name,body:memberPage(actor,company,current,branches,{...options,history:teamHistory(db,actor,id)})};
+        };
+        if (method==='GET' && !action) {
+          const notices={permisos:'Permisos guardados.',datos:'Datos guardados.',caja:'Acceso de Caja guardado.',baja:'Acceso desactivado.',retiro:'Caja retirada.'};
+          return render(await memberView({notice:notices[target.searchParams.get('guardado')]||''}));
+        }
         if (method==='POST') {
-          if (action==='permisos') updateGrants(db,actor,id,data);
-          if (action==='invitar') return render(teamInvitation(db,actor,id,manageAccount(db,actor,id,'INVITE')));
-          if (action==='desactivar') {
-            requireThat(data.confirm==='yes','Confirma la baja del acceso.');
-            manageAccount(db,actor,id,'DISABLE');
+          try {
+            if (action==='permisos') updateGrants(db,actor,id,data);
+            if (action==='datos') updateMember(db,actor,id,data);
+            if (action==='invitar') return render(teamInvitation(db,actor,id,manageAccount(db,actor,id,'INVITE',data)));
+            if (action==='desactivar') {
+              manageAccount(db,actor,id,'DISABLE',data);
+              if(teamMember(db,actor,id).cash_status==='REVOKING')try {
+                await bridge.revoke(actor,id,{revision:String(teamMember(db,actor,id).revision),reason:'Baja del acceso completo en Lúmina.',credential:()=>wallets.ownerCredential(actor)});
+              } catch(issue) {
+                if(!(issue instanceof Problem))throw issue;
+                return render(await memberView({notice:'Acceso desactivado. Caja está bloqueada; queda pendiente confirmar su retiro con Wallet.'},false));
+              }
+            }
+            if (action?.startsWith('caja/')) limit(db,'loyalty:'+actor.id,40);
+            if (action==='caja/sucursales') return render(await memberView());
+            if (action==='caja/guardar') await bridge.configure(actor,id,{...data,credential:await wallets.ownerCredential(actor)});
+            if (action==='caja/revocar') await bridge.revoke(actor,id,{...data,credential:()=>wallets.ownerCredential(actor)});
+            requireThat(action,'Acción no encontrada.',404);
+            const notice={permisos:'permisos',datos:'datos',desactivar:'baja','caja/guardar':'caja','caja/revocar':'retiro'}[action];
+            return redirect(res,'/equipo/'+id+(notice?'?guardado='+notice:''));
+          } catch(issue) {
+            if(!(issue instanceof Problem)||![400,409,503].includes(issue.status))throw issue;
+            const section=action==='caja/guardar'?'caja':action==='caja/revocar'?'revocar':action;
+            const values=issue.localAccessBlocked?{...data,revision:String(teamMember(db,actor,id).revision)}:data;
+            return render(await memberView({values,error:issue.message,section},issue.status<500),issue.status);
           }
-          if (action?.startsWith('caja/')) limit(db,'loyalty:'+actor.id,40);
-          if (action==='caja/sucursales') {
-            const branches = await bridge.branches(actor,await wallets.ownerCredential(actor));
-            return render({title:member.name,body:memberPage(actor,company,member,branches)});
-          }
-          if (action==='caja/guardar') await bridge.configure(actor,id,{...data,credential:await wallets.ownerCredential(actor)});
-          if (action==='caja/revocar') await bridge.revoke(actor,id,{...data,credential:await wallets.ownerCredential(actor)});
-          requireThat(action,'Acción no encontrada.',404);
-          return redirect(res,'/equipo/'+id);
         }
       }
       if(path==='/solicitudes/nueva'&&method==='GET') {

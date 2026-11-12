@@ -41,7 +41,8 @@ export function contentData(db,actor,company,query) {
     values.push(...platforms,platform,platform);title='Publicaciones registradas';
   } else if(view==='agenda') {
     sql=`SELECT v.*,r.title,c.name AS company_name FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id
-      JOIN companies c ON c.id=r.company_id WHERE ${where} ORDER BY CASE WHEN v.status='SCHEDULED' THEN 0 ELSE 1 END,v.starts_at DESC,v.id DESC`;
+      JOIN companies c ON c.id=r.company_id WHERE ${where} ORDER BY CASE WHEN v.status='SCHEDULED' THEN 0 ELSE 1 END,
+      CASE WHEN v.status='SCHEDULED' THEN v.starts_at END,v.starts_at DESC,v.id DESC`;
     title='Visitas y grabaciones';
   } else {
     sql=`SELECT r.*,c.name AS company_name FROM ${from} WHERE ${where} ORDER BY r.created_at DESC,r.id DESC`;

@@ -37,7 +37,7 @@ export function browser(origin) {
     },
     async post(path,data={},options={}) {
       const form = new URLSearchParams({_csrf:csrf,...data});
-      const headers = {Cookie:cookie,Origin:origin,...options.headers};
+      const headers = {Cookie:cookie,Origin:origin,'X-Lumina-CSRF':csrf,...options.headers};
       const body = options.json === true ? JSON.stringify(data) : form;
       if (options.json === true) headers['Content-Type'] = 'application/json';
       const res = await fetch(origin+path,{method:'POST',headers,body,redirect:'manual'});
@@ -86,3 +86,5 @@ export async function acceptedContract(world,admin,client,company,plan,price) {
   const activated=await admin.post(selected(request.location+'/activar'),{revision});assert.equal(activated.status,303,activated.body);
   return world.db.get('SELECT * FROM contracts WHERE order_line_id=?',item.id);
 }
+
+export const teamRevision = (world,id) => String(world.db.get("SELECT revision FROM accounts WHERE id=?",id).revision);

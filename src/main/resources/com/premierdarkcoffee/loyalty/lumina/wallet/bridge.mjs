@@ -1,4 +1,4 @@
-import { requireOwner, teamMember } from '../access/accounts.mjs';
+import { requireOwner, teamMember, requireTeamRevision, auditTeamChange } from '../access/accounts.mjs';
 import { seal, unseal } from '../access/security.mjs';
 import { event, isId, now, Problem, requireThat, text, uuid } from '../shared/domain.mjs';
 
@@ -42,7 +42,7 @@ function contract(condition) {
 }
 function currentSession(db, actor) {
   requireThat(db.get(`SELECT 1 FROM sessions s JOIN accounts a ON a.id=s.account_id
-    WHERE s.digest=? AND s.expires_at>? AND a.id=? AND a.active=1`,actor.session_id,now(),actor.id),
+    WHERE s.digest=? AND s.expires_at>? AND a.id=? AND a.active=1 AND a.kind=? AND a.company_id=? AND a.revision=?`,actor.session_id,now(),actor.id,actor.kind,actor.company_id,actor.revision),
   'Vuelve a iniciar sesión.',401);
 }
 function context(grant) {
@@ -143,6 +143,7 @@ export function createLoyaltyBridge({ db, key, origin }) {
   async function configure(actor, id, data) {
     return runExclusive(id,async () => {
       const target = teamMember(db,actor,id);
+      requireTeamRevision(target,data);
       requireThat(target.active,'Reactiva primero el acceso de la persona.',409);
       const { team, company } = await ownerContext(actor,data.credential);
       const branch = team.branches.find(item => item.id === data.branch && isId(item.id));
@@ -214,24 +215,40 @@ export function createLoyaltyBridge({ db, key, origin }) {
         db.run(`UPDATE cash_grants SET branch_id=?,branch_name=?,purchases=?,rewards=?,staff_id=?,
           sealed_token=?,status='ACTIVE' WHERE company_id=? AND account_id=?`,
         branch.id,branch.name,Number(purchases),Number(rewards),staffId,seal(key,context({...grant,staff_id:staffId}),token),company.id,id);
-        event(db,actor,company.id,'ACCOUNT',id,'CAJA_AUTORIZADA',branch.name);
+        db.run('UPDATE accounts SET revision=revision+1 WHERE id=?',id);
+        auditTeamChange(db,actor,target,'CAJA_AUTORIZADA',grant.status==='ACTIVE'?{branch:grant.branch_name,purchases:Boolean(grant.purchases),rewards:Boolean(grant.rewards)}:null,{branch:branch.name,purchases,rewards});
       });
     });
   }
   async function revoke(actor,id,data) {
     return runExclusive(id,async () => {
-      teamMember(db,actor,id);
-      const reason = text(data.reason,'motivo de retiro',5,500);
-      const grant = rowFor(actor,id);
+      currentSession(db,actor);
+      const target=teamMember(db,actor,id);requireTeamRevision(target,data);
+      const reason=text(data.reason,'motivo de retiro',5,500);
+      const grant=rowFor(actor,id);
       requireThat(grant?.staff_id && ['ACTIVE','REVOKING'].includes(grant.status),'El acceso de Caja ya está inactivo o el alta sigue pendiente.',409);
-      const { team, company } = await ownerContext(actor,data.credential);
-      const staff = staffRow(team,grant.staff_id);
-      db.run("UPDATE cash_grants SET status='REVOKING' WHERE company_id=? AND account_id=?",company.id,id);
-      if (staff.state === 'ACTIVE') await staffAction(data.credential,staff,'DEACTIVATE',reason);
-      db.transaction(() => {
-        db.run("UPDATE cash_grants SET status='INACTIVE',sealed_token=NULL WHERE company_id=? AND account_id=?",company.id,id);
-        event(db,actor,company.id,'ACCOUNT',id,'CAJA_REVOCADA',reason);
+      // Deny locally before any network call. An outage never keeps Caja usable.
+      db.transaction(()=>{
+        db.run("UPDATE cash_grants SET status='REVOKING' WHERE company_id=? AND account_id=?",actor.company_id,id);
+        if(grant.status==='ACTIVE'){
+          db.run('UPDATE accounts SET revision=revision+1 WHERE id=?',id);
+          auditTeamChange(db,actor,target,'CAJA_BLOQUEADA',{branch:grant.branch_name,purchases:Boolean(grant.purchases),rewards:Boolean(grant.rewards)},{status:'REVOKING',reason});
+        }
       });
+      try {
+        const credential=typeof data.credential==='function'?await data.credential():data.credential;
+        const {team}=await ownerContext(actor,credential);
+        const staff=staffRow(team,grant.staff_id);
+        if(staff.state==='ACTIVE')await staffAction(credential,staff,'DEACTIVATE',reason);
+        currentSession(db,actor);
+        db.transaction(()=>{
+          db.run("UPDATE cash_grants SET status='INACTIVE',sealed_token=NULL WHERE company_id=? AND account_id=? AND status='REVOKING'",actor.company_id,id);
+          auditTeamChange(db,actor,target,'CAJA_REVOCADA',{status:'REVOKING'},{status:'INACTIVE',reason});
+        });
+      } catch(error) {
+        if(error instanceof Problem){const issue=new Problem('Caja ya está bloqueada en Lúmina. Falta confirmar su retiro con Wallet; puedes reintentarlo.',error.status>=500?503:409);issue.localAccessBlocked=true;throw issue;}
+        throw error;
+      }
     });
   }
   function activeGrant(actor) {
@@ -274,6 +291,8 @@ export function createLoyaltyBridge({ db, key, origin }) {
     }
     const queryString = path === '/api/staff/member-suggestions' ? '?' + new URLSearchParams({q:(query.get('q') || '').slice(0,80)}) : '';
     const result = await request(path + queryString,{method,token,body,idempotency});
+    const latest=activeGrant(actor);
+    requireThat(latest.sealed_token===grant.sealed_token&&latest.branch_id===grant.branch_id&&latest.purchases===grant.purchases&&latest.rewards===grant.rewards,'El acceso cambió durante la operación. Consulta el historial antes de reintentar.',409);
     return path === '/api/staff/access' ? {canOperate:result.canOperate === true} : result;
   }
   return {

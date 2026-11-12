@@ -20,6 +20,13 @@ export function walletRouteAllowed(role,method,path) {
   return role==='OWNER' && Boolean(ownerWrites[method]?.test(path));
 }
 
+function scopedDashboard(actor,data) {
+  if(actor.kind!=='COLLABORATOR')return data;
+  const programRead=['WALLET_DESIGN','WALLET_PROGRAMS','WALLET_CUSTOMERS'].some(scope=>can(actor,scope));
+  return {business:data.business,role:data.role,branchId:null,permissions:{purchases:false,rewards:false},
+    branches:data.branches||[],programs:programRead?data.programs||[]:[],rewards:programRead?data.rewards||[]:[],
+    ...(can(actor,'WALLET_PROGRAMS','EDIT')?{promotionSuggestions:data.promotionSuggestions}:{}),wallet:data.wallet};
+}
 export function createWalletWorkspace({db,key,origin,integration={}}) {
   const busy=new Map();
   const context=row=>`wallet:${row.company_id}:${row.account_id}:${row.tenant_id}:${row.staff_id}`;
@@ -122,7 +129,7 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
       return {readOnly:true,health};
     }
     const {item,data,fresh}=await validated(actor);
-    const result={dashboard:data,...(fresh.kind!=='COLLABORATOR'||can(fresh,'WALLET_REPORTS')?{health:await remote('/api/staff/wallet-health',{token:item.token})}:{})};
+    const result={dashboard:scopedDashboard(fresh,data),...(fresh.kind!=='COLLABORATOR'||can(fresh,'WALLET_REPORTS')?{health:await remote('/api/staff/wallet-health',{token:item.token})}:{})};
     const latest=current(actor);requireThat(latest.revision===fresh.revision,message,403);return result;
   }
   async function proxy(actor,path,{method='GET',query='',body,key,surface='wallet'}={}) {
@@ -152,6 +159,7 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     requireThat(/^(application\/json|text\/csv)/i.test(result.type),'Formato de respuesta no permitido.',502);
     if(item.account_id && result.status===401)db.run("UPDATE wallet_access SET status='BLOCKED',sealed_token=NULL WHERE account_id=? AND company_id=?",item.account_id,item.company_id);
     if(method!=='GET')event(db,actor,fresh.company_id,'WALLET_ACCESS',item.staff_id||actor.id,'WALLET_'+method,`${path} · HTTP ${result.status}`,'WALLET');
+    if(fresh.kind==='COLLABORATOR'&&path==='/api/staff/dashboard'&&result.status===200)return {...result,bytes:Buffer.from(JSON.stringify(scopedDashboard(fresh,JSON.parse(result.bytes))))};
     return result;
   }
   async function repair(actor,company,input) {
@@ -159,18 +167,26 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     requireThat(owner.company_id===company.id,message,403);
     requireThat(input.confirm==='yes'&&isId(input.account),'Confirma el acceso que deseas reparar.');
     const reason=(input.reason||'').trim();requireThat(reason.length>=5&&reason.length<=500,'Escribe el motivo de la reparación.');
-    const row=db.get(`SELECT w.*,a.active FROM wallet_access w JOIN accounts a ON a.id=w.account_id
+    const row=db.get(`SELECT w.*,a.active,a.kind,a.revision AS account_revision FROM wallet_access w JOIN accounts a ON a.id=w.account_id
       WHERE w.company_id=? AND w.account_id=? AND w.status='BLOCKED' AND a.kind IN ('OWNER','COLLABORATOR')`,company.id,input.account);
     requireThat(row?.active && row.tenant_id===company.loyalty_tenant,'El acceso está inactivo o ya cambió.',409);
+    const targetCurrent=()=>{
+      const target=db.get('SELECT id,company_id,kind,active,revision FROM accounts WHERE id=?',row.account_id);
+      requireThat(target?.active&&target.company_id===company.id&&target.revision===row.account_revision&&String(target.revision)===input.account_revision,'Los permisos de esta persona cambiaron. Revisa el acceso actual.',409);
+      target.grants=db.all('SELECT scope,action FROM grants WHERE account_id=?',target.id);
+      requireThat(target.kind==='OWNER'||walletSections(target).length,'Esta persona ya no tiene áreas operativas de Wallet.',409);
+    };
+    targetCurrent();
     const base='/api/platform/tenants/'+row.tenant_id;
     const team=await remote(base+'/team',{token:configured()});
     const staff=team.users?.find(u=>u.id===row.staff_id);
     requireThat(staff?.role==='OWNER'&&staff.name===row.staff_name&&['ACTIVE','INACTIVE'].includes(staff.state),'El acceso interno cambió en Loyalty. Revísalo antes de repararlo.',409);
     const action=staff.state==='INACTIVE'?'REACTIVATE':'ROTATE';
+    requireOwner(current(actor));targetCurrent();
     const result=await remote(base+'/team/'+staff.id+'/actions',{method:'POST',token:configured(),body:{action,expectedVersion:staff.version,reason,confirmed:true}});
     requireThat(result.id===row.staff_id && result.credentialIssued===true && /^[A-Za-z0-9_-]{43}$/.test(result.token||''),'Respuesta de reparación inválida.',502);
     requireOwner(current(actor));
-    requireThat(db.get('SELECT active FROM accounts WHERE id=?',row.account_id)?.active,'El usuario fue desactivado.',409);
+    targetCurrent();
     db.transaction(()=>{
       requireThat(db.run("UPDATE wallet_access SET sealed_token=?,status='ACTIVE' WHERE account_id=? AND company_id=? AND status='BLOCKED'",seal(key,context(row),result.token),row.account_id,row.company_id).changes===1,'El acceso cambió durante la reparación.',409);
       event(db,actor,company.id,'ACCOUNT',row.account_id,'ACCESO_WALLET_REPARADO',reason,'WALLET');

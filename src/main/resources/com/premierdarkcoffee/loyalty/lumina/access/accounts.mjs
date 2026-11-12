@@ -1,8 +1,9 @@
 import { channels, areas, walletScopes, socialChannels, event, now, requireThat, text, uuid } from '../shared/domain.mjs';
+import { parseGrants, grantsSnapshot, permissions } from './team-policy.mjs';
+export { permissions };
 import { digest, fingerprint, hashPassword, randomCode, verifyPassword } from './security.mjs';
 
 const expires = hours => new Date(Date.now() + hours * 3600000).toISOString();
-export const permissions = Object.freeze({ VIEW: 'Ver', REQUEST: 'Solicitar', APPROVE: 'Aprobar entregas' });
 const codePattern = /^[A-Za-z0-9_-]{43}$/;
 
 export function emailAddress(value) {
@@ -150,9 +151,12 @@ export function approveCompany(db, actor, company) {
 export function teamMember(db, actor, id) {
   requireOwner(actor);
   const target = db.get(`SELECT a.id,a.name,a.email,a.revision,a.active,a.password IS NOT NULL AS activated,
-    c.status AS cash_status,c.branch_id,c.branch_name,c.purchases,c.rewards
+    c.status AS cash_status,c.branch_id,c.branch_name,c.purchases,c.rewards,
+    (SELECT max(expires_at) FROM codes WHERE account_id=a.id AND kind='ACTIVATE') AS activation_expires,
+    (SELECT count(*) FROM sessions WHERE account_id=a.id AND expires_at>?) AS session_count,
+    (SELECT status FROM wallet_access WHERE account_id=a.id AND company_id=a.company_id) AS wallet_status
     FROM accounts a LEFT JOIN cash_grants c ON c.account_id=a.id
-    WHERE a.id=? AND a.company_id=? AND a.kind='COLLABORATOR'`, id, actor.company_id);
+    WHERE a.id=? AND a.company_id=? AND a.kind='COLLABORATOR'`, now(), id, actor.company_id);
   requireThat(target, 'No se encontró ese colaborador.', 404);
   target.grants = db.all('SELECT scope,action FROM grants WHERE account_id=?',target.id);
   return target;
@@ -163,13 +167,14 @@ export function teamList(db, actor) {
     .map(row => teamMember(db,actor,row.id));
 }
 function setGrants(db, accountId, values) {
-  const actions = Object.keys(permissions);
-  for (const channel of [...Object.keys(channels),...Object.keys(walletScopes)]) {
-    const selected = (Object.hasOwn(walletScopes,channel) ? (channel==='WALLET_REPORTS'?['VIEW']:['VIEW','EDIT']) : actions).filter(action => values[`${channel}.${action}`] === 'yes');
-    requireThat(!selected.length || selected.includes('VIEW'), 'Activa Ver para poder asignar Solicitar o Aprobar.');
-    if (Object.hasOwn(walletScopes,channel) && selected.length) requireThat(values['WALLET.VIEW']==='yes','Activa Ver fidelización digital para asignar sus áreas.');
-    for (const action of selected) db.run('INSERT INTO grants VALUES(?,?,?)',accountId,channel,action);
-  }
+  for (const {scope,action} of parseGrants(values)) db.run('INSERT INTO grants VALUES(?,?,?)',accountId,scope,action);
+}
+export function requireTeamRevision(member, input) {
+  requireThat(typeof input?.revision === 'string' && String(member.revision) === input.revision,
+    'Este acceso cambió o el formulario venció. Revisa la versión actual antes de guardar.',409);
+}
+export function auditTeamChange(db, actor, member, action, before, after) {
+  event(db,actor,actor.company_id,'ACCOUNT',member.id,action,JSON.stringify({v:1,before,after}));
 }
 function issueActivation(db, accountId) {
   const code = randomCode();
@@ -187,35 +192,54 @@ export function createTeamMember(db, actor, input) {
     db.run("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'COLLABORATOR')",id,actor.company_id,name,email);
     setGrants(db,id,input);
     const code = issueActivation(db,id);
-    event(db,actor,actor.company_id,'ACCOUNT',id,'ACCESO_CREADO',name);
+    auditTeamChange(db,actor,{id},'ACCESO_CREADO',null,{name,email,grants:grantsSnapshot(parseGrants(input))});
     return { id, code };
   });
 }
 export function updateGrants(db, actor, id, input) {
-  const target = teamMember(db,actor,id);
-  requireThat(String(target.revision) === input.revision, 'El acceso cambió. Recarga el formulario.', 409);
-  db.transaction(() => {
+  return db.transaction(() => {
+    const target = teamMember(db,actor,id);
+    requireTeamRevision(target,input);
+    const next = parseGrants(input);
+    const before=grantsSnapshot(target.grants), after=grantsSnapshot(next);
+    if (JSON.stringify(before)===JSON.stringify(after)) return;
     db.run('DELETE FROM grants WHERE account_id=?',id);
-    setGrants(db,id,input);
+    for(const grant of next) db.run('INSERT INTO grants VALUES(?,?,?)',id,grant.scope,grant.action);
     db.run('UPDATE accounts SET revision=revision+1 WHERE id=?',id);
-    event(db,actor,actor.company_id,'ACCOUNT',id,'PERMISOS_ACTUALIZADOS',target.name);
+    auditTeamChange(db,actor,target,'PERMISOS_ACTUALIZADOS',{grants:before},{grants:after});
   });
 }
-export function manageAccount(db, actor, id, action) {
-  const target = teamMember(db,actor,id);
+export function updateMember(db, actor, id, input) {
+  const name=text(input.name,'nombre',2,100),email=emailAddress(input.email);
   return db.transaction(() => {
+    const target=teamMember(db,actor,id);requireTeamRevision(target,input);
+    requireThat(!db.get('SELECT id FROM accounts WHERE email=? AND id<>?',email,id),'Ese correo ya tiene un acceso.',409);
+    if(name===target.name&&email===target.email)return;
+    db.run('UPDATE accounts SET name=?,email=?,revision=revision+1 WHERE id=?',name,email,id);
+    if(email!==target.email){
+      db.run('DELETE FROM sessions WHERE account_id=?',id);
+      db.run('DELETE FROM codes WHERE account_id=?',id);
+    }
+    auditTeamChange(db,actor,target,'PERSONA_ACTUALIZADA',{name:target.name,email:target.email},{name,email});
+  });
+}
+export function manageAccount(db, actor, id, action, input) {
+  return db.transaction(() => {
+    const target = teamMember(db,actor,id);
+    requireTeamRevision(target,input);
+    requireThat(['DISABLE','INVITE'].includes(action),'Acción de acceso inválida.');
+    requireThat(input.confirm==='yes',action==='DISABLE'?'Confirma la baja del acceso completo.':'Confirma que se cerrarán sus sesiones y deberá elegir una nueva contraseña.');
     db.run('DELETE FROM sessions WHERE account_id=?',id);
     db.run('DELETE FROM codes WHERE account_id=?',id);
     if (action === 'DISABLE') {
       db.run('UPDATE accounts SET active=0,password=NULL,revision=revision+1 WHERE id=?',id);
       db.run("UPDATE cash_grants SET status='REVOKING' WHERE account_id=? AND status='ACTIVE'",id);
-      event(db,actor,actor.company_id,'ACCOUNT',id,'ACCESO_DESACTIVADO',target.name);
+      auditTeamChange(db,actor,target,'ACCESO_DESACTIVADO',{active:Boolean(target.active)},{active:false});
       return null;
     }
-    requireThat(action === 'INVITE', 'Acción de acceso inválida.');
     db.run('UPDATE accounts SET active=1,password=NULL,revision=revision+1 WHERE id=?',id);
     const code = issueActivation(db,id);
-    event(db,actor,actor.company_id,'ACCOUNT',id,'ACTIVACIÓN_EMITIDA',target.name);
+    auditTeamChange(db,actor,target,'ACTIVACIÓN_EMITIDA',{active:Boolean(target.active)},{active:true,grants:grantsSnapshot(target.grants)});
     return code;
   });
 }

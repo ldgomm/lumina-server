@@ -1,7 +1,7 @@
 import { acceptedContract } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { agency, colleague, owner, portal } from './helpers.mjs';
+import { teamRevision, agency, colleague, owner, portal } from './helpers.mjs';
 import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { describeOffer, requestCommercial } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/catalog.mjs';
 import { createRequest } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/production/production.mjs';
@@ -28,7 +28,7 @@ test('Wallet dirige al personal a su permiso operativo o Caja y conserva la revo
  assert.match((await designer.session.get('/wallet')).body,/lumina-wallet-section" content="design"/);
  assert.equal((await designer.session.get('/wallet/gestion?seccion=programs')).status,403);
  const cashier=await colleague(w,w.client,{name:'Caja',email:'cash@example.test'}),tenant=w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant;
- assert.equal((await w.client.post('/equipo/'+cashier.id+'/caja/guardar',{branch:w.loyalty.branches.get(tenant)[0].id,purchases:'yes',rewards:'yes'})).status,303);
+ assert.equal((await w.client.post('/equipo/'+cashier.id+'/caja/guardar',{revision:teamRevision(w,cashier.id),branch:w.loyalty.branches.get(tenant)[0].id,purchases:'yes',rewards:'yes'})).status,303);
  assert.equal((await cashier.session.get('/wallet')).location,'/caja');assert.equal((await cashier.session.get('/caja')).status,200);
  w.db.run('UPDATE accounts SET active=0 WHERE id=?',designer.id);assert.equal((await designer.session.get('/wallet')).location,'/');
 });

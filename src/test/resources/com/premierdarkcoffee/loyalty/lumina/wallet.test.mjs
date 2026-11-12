@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { agency, colleague, owner, portal, password } from './helpers.mjs';
+import { teamRevision, agency, colleague, owner, portal, password } from './helpers.mjs';
 import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { walletRouteAllowed } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/wallet/wallet.mjs';
 async function context(t,link=true){
@@ -77,7 +77,7 @@ test('permisos de servicios no crean acceso operativo y baja de persona cierra W
  assert.equal(world.db.get('SELECT count(*) AS n FROM wallet_access').n,0);
  await client.post('/equipo/'+member.id+'/permisos',{revision:String(world.db.get('SELECT revision FROM accounts WHERE id=?',member.id).revision),'WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
  assert.equal((await member.session.get('/wallet-api/api/staff/wallet-health')).status,200);
- await client.post('/equipo/'+member.id+'/desactivar',{confirm:'yes'});
+ await client.post('/equipo/'+member.id+'/desactivar',{revision:teamRevision(world,member.id),confirm:'yes'});
  assert.equal((await member.session.get('/wallet-api/api/staff/wallet-health')).status,401);
 });
 test('revocación en Loyalty queda bloqueada; no se genera otra credencial ni se reactiva silenciosamente',async t=>{
@@ -120,7 +120,7 @@ test('reparar un acceso bloqueado exige dueño y confirmación; la agencia no pu
  const {client,world,loyalty,admin,id}=await context(t);await client.get('/wallet');
  const row=world.db.get('SELECT * FROM wallet_access');loyalty.staff.get(row.staff_id).state='INACTIVE';
  await client.get('/wallet-api/api/staff/dashboard');
- const path='/wallet/reparar?empresa='+id,input={account:row.account_id,reason:'El dueño confirmó su acceso.',confirm:'yes'};
+ const path='/wallet/reparar?empresa='+id,input={account:row.account_id,account_revision:teamRevision(world,row.account_id),reason:'El dueño confirmó su acceso.',confirm:'yes'};
  assert.equal((await admin.post(path,input)).status,403);
  assert.equal((await client.post(path,{...input,confirm:''})).status,400);
  assert.equal((await client.post(path,input)).status,303);

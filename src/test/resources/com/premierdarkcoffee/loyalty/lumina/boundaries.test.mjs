@@ -171,5 +171,6 @@ test('equipo de contenido conserva asignaciones y reparación de Wallet queda ai
   assert.equal((await w.client.post('/wallet/reparar?empresa='+other.id,{account:row.account_id,reason:'Intento cruzado',confirm:'yes'})).status,409);
   assert.equal((await member.session.post('/wallet/reparar',{account:row.account_id,reason:'Intento ajeno',confirm:'yes'})).status,403);
   assert.equal(w.loyalty.calls.length,start);
-  assert.equal((await other.client.post('/wallet/reparar',{account:row.account_id,reason:'Recuperar mi acceso',confirm:'yes'})).status,303);
+  const accountRevision=String(w.db.get('SELECT revision FROM accounts WHERE id=?',row.account_id).revision);
+  assert.equal((await other.client.post('/wallet/reparar',{account:row.account_id,account_revision:accountRevision,reason:'Recuperar mi acceso',confirm:'yes'})).status,303);
 });

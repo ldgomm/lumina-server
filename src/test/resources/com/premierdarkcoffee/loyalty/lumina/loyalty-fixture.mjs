@@ -14,7 +14,7 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
   const foreignBranch = {id:uuid(),name:'Otra sucursal',code:'OTRA'};
   const branches = new Map([[business.id,[branch,secondBranch]],[other.id,[foreignBranch]]]);
   const businesses=new Map([[business.id,business],[other.id,other]]),registrations=new Map();
-  let dropRegistration=false,unavailable=false;
+  let dropRegistration=false,unavailable=false,allUnavailable=false,beforeRequest=null;
   const staff = new Map();
   const tokens = new Map();
   const calls = [];
@@ -42,6 +42,8 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
   const fail = (res,status,code) => json(res,status,{code,message:code});
   const server = createServer(async (req,res)=>{
     const path = new URL(req.url,'http://127.0.0.1').pathname;
+    if(beforeRequest)await beforeRequest({path,method:req.method,role:tokens.get((req.headers.authorization||'').replace(/^Bearer /,''))?.role});
+    if(allUnavailable)return fail(res,503,'UNAVAILABLE');
     const asset = path.slice(1);
     if(req.method==='GET' && /^\/api\/public\/[a-z0-9-]+\/qr$/.test(path)){
       const slug=path.split('/')[3];if(![...businesses.values()].some(b=>b.slug===slug))return fail(res,404,'NOT_FOUND');
@@ -162,6 +164,7 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
   const origin = await listen(server);
   t.after(()=>close(server));
   return {origin,ownerToken,foreignToken,platformToken,branch,secondBranch,foreignBranch,staff,calls,business,businesses,branches,registrations,
+    unavailable:value=>{allUnavailable=value;},beforeRequest:handler=>{beforeRequest=handler;},
     loseRegistrationResponse:()=>{dropRegistration=true;},registrationUnavailable:value=>{unavailable=value;},
     loseCreateResponse:()=>{dropNextCreate = true;}};
 }
