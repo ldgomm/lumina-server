@@ -69,3 +69,7 @@ Lúmina v003 / Loyalty v042: contenido compartido entre plataformas y acceso ún
 
 
 Actualización Lúmina v007 / Loyalty v046: [Contenido independiente y límites de acceso](docs/lumina-contenido-accesos-v046.md). Incluye solicitudes simplificadas, consulta administrativa de solo lectura y resultado único en Terminal.
+
+### Lúmina v009 / Loyalty v048
+
+Catálogo guiado en tres pasos y administración central en Lúmina. Wallet mantiene las herramientas de fidelización; paquetes, equipo, cuenta e informes se gestionan desde el portal. Ver [guía de actualización](docs/lumina-gestion-v048.md).

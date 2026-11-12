@@ -6,7 +6,7 @@ export function serviceArea(service) {
   if(service==='POST')return 'SOCIAL'; // Legacy POST quotas do not identify a Maps service.
   return Object.keys(areas).find(area=>formats[area].includes(service))||'';
 }
-export const serviceName=service=>serviceArea(service)==='SOCIAL'?contentName(service):services[service]||service;
+export const serviceName=service=>({WEBSITE:'Proyecto web',MAPS_PROFILE:'Gestión de Google Maps',IDENTITY:'Diseño de marca'})[service]||(serviceArea(service)==='SOCIAL'?contentName(service):services[service]||service);
 export function describeOffer(plan) {
   const individual=plan.items.length===1&&plan.items[0].quantity===1;
   const single=plan.items.length===1?plan.items[0]:null;

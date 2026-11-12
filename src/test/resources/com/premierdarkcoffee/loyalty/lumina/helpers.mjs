@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import { localDay, uuid } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 import { once } from 'node:events';
 import { randomBytes } from 'node:crypto';
 import { createPortal } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/application/app.mjs';
@@ -72,4 +74,15 @@ export async function colleague(world,client,data) {
   if ((await session.post('/activar',{code,password})).status!==303) throw new Error('No se activó prueba.');
   await session.get('/inicio');
   return {id:accountId,session,code};
+}
+
+export async function acceptedContract(world,admin,client,company,plan,price) {
+  const selected=path=>'/agencia'+path+'?empresa='+company;
+  const request=await client.post('/planes/solicitar',{key:uuid(),['qty_'+plan]:'1'});assert.equal(request.status,303,request.body);
+  const order=world.db.get('SELECT * FROM package_orders WHERE id=?',request.location.split('/').at(-1));
+  const item=world.db.get('SELECT * FROM package_order_lines WHERE order_id=?',order.id);
+  const quoted=await admin.post(selected(request.location+'/cotizar'),{revision:String(order.revision),['price_'+item.id]:price??String(item.catalog_minor/100),['start_'+item.id]:localDay(),['end_'+item.id]:localDay(),terms:'Alcance acordado para esta prueba.'});assert.equal(quoted.status,303,quoted.body);
+  const revision=String(order.revision+1);assert.equal((await client.post(request.location+'/aceptar',{revision,confirm:'yes'})).status,303);
+  const activated=await admin.post(selected(request.location+'/activar'),{revision});assert.equal(activated.status,303,activated.body);
+  return world.db.get('SELECT * FROM contracts WHERE order_line_id=?',item.id);
 }

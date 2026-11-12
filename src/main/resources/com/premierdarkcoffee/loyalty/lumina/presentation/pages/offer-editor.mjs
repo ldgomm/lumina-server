@@ -1,0 +1,26 @@
+import { offerGroups, offerHelp, offerAreaOptions } from '../../memberships/offers.mjs';
+import { icon } from './icons.mjs';
+import { button, check, esc, form, hidden, input, localLink, textarea } from './components.mjs';
+const marks={SOCIAL:'social',WALLET:'wallet',MAPS:'maps',WEB:'web',BRAND:'content'};
+export function offerEditor(actor,url,values={},error='') {
+  const first=offerAreaOptions.find(([area])=>offerGroups[area].some(([code])=>Number(values[code])>0))?.[0]||'SOCIAL';
+  const groups=offerAreaOptions.map(([area,name])=>`<section data-offer-area="${area}" class="offer-service-group"><h3>${esc(name)}</h3><p>${esc(offerHelp[area])}</p>
+    ${offerGroups[area].map(([code,title])=>`<label class="offer-service-row"><span><strong>${esc(title)}</strong><small>${code==='PHOTO'?'Detalla las sesiones y las fotografías incluidas en el alcance.':code==='WALLET'?'Inclúyelo una vez. Define el trabajo que realizará Lúmina.':'Cantidad incluida en esta oferta.'}</small></span><input aria-label="Cantidad de ${esc(title)}" type="number" name="${code}" data-offer-item data-name="${esc(title)}" min="0" max="${code==='WALLET'?1:100}" step="1" value="${esc(values[code]||'0')}"></label>`).join('')}</section>`).join('');
+  return `<p>${localLink(url('/planes'),'← Volver al catálogo')}</p>${error?`<p class="notice" role="alert">${esc(error)} Conservamos tu borrador.</p>`:''}`+
+    form(url('/planes'),actor,hidden('catalog_version','SIMPLE')+`<div class="offer-editor" data-offer-editor data-first-area="${first}">
+      <div class="offer-editor-main"><ol class="offer-progress" aria-label="Pasos para publicar"><li data-progress="0">1. Servicios</li><li data-progress="1">2. Precio</li><li data-progress="2">3. Revisión</li></ol>
+      <section data-offer-step="0"><h2>¿Qué vas a ofrecer?</h2><p>Elige un área y añade cantidades. Puedes combinar varias áreas en la misma oferta.</p>
+        <div class="offer-area-tabs" aria-label="Áreas de la oferta">${offerAreaOptions.map(([area,title])=>`<button type="button" data-offer-tab="${area}" aria-pressed="${area===first}">${icon(marks[area])}<span>${esc(title)}</span><small data-area-count="${area}"></small></button>`).join('')}</div>${groups}
+        <div data-wallet-gift>${check('wallet_gift','Incluir el servicio de Wallet como cortesía, sin recargo.',values.wallet_gift==='yes')}</div>
+      </section>
+      <section data-offer-step="1"><h2>Un precio para toda la oferta</h2>${input('name','Nombre de la oferta','text','required minlength="2" maxlength="100" placeholder="Por ejemplo: Contenido del mes"',values.name||'')}
+        <fieldset class="offer-frequency"><legend>¿Cómo se contrata?</legend><label><input type="radio" name="term" value="ONE_OFF" ${values.term!=='MONTHLY'?'checked':''}> <strong>Una vez</strong><span>Un trabajo, con entrega y cierre.</span></label><label><input type="radio" name="term" value="MONTHLY" ${values.term==='MONTHLY'?'checked':''}> <strong>Cada mes</strong><span>Estas cantidades por cada período confirmado.</span></label></fieldset><p data-brand-frequency hidden>Diseño de marca se contrata una vez. Publica los servicios mensuales como otra oferta; el cliente podrá pedirlos juntos.</p>
+        <fieldset class="offer-frequency"><legend>Precio</legend><label><input type="radio" name="price_type" value="FIXED" ${values.price_type!=='QUOTE'?'checked':''}> Precio definido</label><label><input type="radio" name="price_type" value="QUOTE" ${values.price_type==='QUOTE'?'checked':''}> Cotizar según el trabajo</label></fieldset>
+        <div data-fixed-price>${input('price','Precio total en USD','text','inputmode="decimal" maxlength="11" placeholder="0.00"',values.price||'')}</div>
+        ${textarea('description','Alcance y entregables','maxlength="1200" rows="4" placeholder="Qué incluye, cuántas revisiones y qué recibirá el cliente."',values.description||'')}
+      </section>
+      <section data-offer-step="2"><h2>Así verá el cliente tu oferta</h2><div data-offer-review class="offer-review"><p>Revisa las cantidades elegidas y el precio total antes de publicar.</p></div>
+        ${check('confirm_offer','Revisé los servicios, las cantidades, la modalidad y el precio.',false,true)}<p>Se publicará una oferta nueva. Los contratos y precios ya aceptados se conservan.</p>${button('Publicar oferta')}
+      </section><p data-offer-error role="alert"></p><div class="offer-step-actions" hidden><button type="button" data-offer-prev class="secondary">Atrás</button><button type="button" data-offer-next>Continuar</button></div></div>
+      <aside class="offer-selection-summary"><p class="eyebrow">TU OFERTA</p><h2 data-offer-kind>Elige los servicios</h2><div data-offer-summary aria-live="polite"><p>Añade la cantidad que incluirás.</p></div><p class="muted">Una unidad se ofrece sola. Varias unidades o servicios forman un paquete. No necesitas elegir otro tipo.</p></aside></div>`,'offer-publish-form');
+}

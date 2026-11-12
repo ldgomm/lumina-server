@@ -1,3 +1,4 @@
+import { normalizeOffer } from './offers.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { choice, dateOnly, event, integer, localDay, money, nextMonth, now, requireThat, services, text, uuid } from '../shared/domain.mjs';
 
@@ -12,6 +13,7 @@ export function getPlan(db, id) {
 }
 export function createPlan(db, actor, data) {
   requireAgency(actor);
+  data=normalizeOffer(data);
   if(data.offer_kind==='INDIVIDUAL') {
     const selected=choice(data.individual_service,Object.keys(services),'servicio individual');
     data={...data,...Object.fromEntries(Object.keys(services).map(service=>[service,'0'])),[selected]:'1',wallet:selected==='WALLET'?'INCLUDED':'NONE'};

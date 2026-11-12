@@ -1,13 +1,13 @@
 import { can } from '../access/accounts.mjs';
 export function walletSections(actor) {
   if(actor.kind==='AGENCY')return [];
-  if(actor.kind==='OWNER')return ['overview','design','walletHealth','programs','rewards','qr','customers','administration','reports','sales'];
+  if(actor.kind==='OWNER')return ['overview','sales','customers','radar','programs','rewards','design','walletHealth','events','qr'];
   if(!can(actor,'WALLET'))return [];
   const sections=[];
   if(can(actor,'WALLET_DESIGN'))sections.push('design','qr');
   if(can(actor,'WALLET_PROGRAMS'))sections.push('programs','rewards');
   if(can(actor,'WALLET_CUSTOMERS'))sections.push('customers');
-  if(can(actor,'WALLET_REPORTS'))sections.push('walletHealth','reports');
+  if(can(actor,'WALLET_REPORTS'))sections.push('walletHealth');
   return sections;
 }
 const id='[0-9a-fA-F-]{36}';

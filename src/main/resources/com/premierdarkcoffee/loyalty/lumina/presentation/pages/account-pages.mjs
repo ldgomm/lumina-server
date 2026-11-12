@@ -36,7 +36,7 @@ export function publicPage(path,setupAvailable) {
       ${input('email','Correo','email','required maxlength="180" autocomplete="username"')}
       ${password('password','Contraseña','required maxlength="128" autocomplete="current-password"')}
       ${button('Ingresar')}`))}
-      ${card('Empieza aquí',`<p>Si tienes un negocio, crea tu cuenta y solicita un video de cortesía. Si te dieron un acceso de equipo, actívalo con tu código.</p>
+      ${card('Empieza aquí',`<img class="auth-logo" src="/assets/lumina-logo.png" alt="Lúmina Digital" width="180" height="180"><p>Si tienes un negocio, crea tu cuenta y solicita un video de cortesía. Si te dieron un acceso de equipo, actívalo con tu código.</p>
       <div class="actions">${localLink('/registro','Registrar mi negocio','btn secondary')}${localLink('/activar','Activar un acceso','btn secondary')}${setupAvailable ? localLink('/configurar','Configurar la agencia','btn secondary') : ''}</div>`)}</div>`,
   };
 }

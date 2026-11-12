@@ -1,3 +1,4 @@
+import { isManagementPath, managementRouteAllowed } from './management-policy.mjs';
 import { createWalletOnboarding } from './onboarding.mjs';
 import { can, requireOwner } from '../access/accounts.mjs';
 import { seal, unseal } from '../access/security.mjs';
@@ -124,9 +125,10 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     const result={dashboard:data,...(fresh.kind!=='COLLABORATOR'||can(fresh,'WALLET_REPORTS')?{health:await remote('/api/staff/wallet-health',{token:item.token})}:{})};
     const latest=current(actor);requireThat(latest.revision===fresh.revision,message,403);return result;
   }
-  async function proxy(actor,path,{method='GET',query='',body,key}={}) {
+  async function proxy(actor,path,{method='GET',query='',body,key,surface='wallet'}={}) {
     let fresh=current(actor);
     if(fresh.kind==='AGENCY') {
+      requireThat(surface==='wallet',message,403);
       const global=path==='/api/platform/wallet/status'&&!fresh.company_id;
       const selected=fresh.loyalty_tenant && ['/profile','/wallet-health','/metrics','/branches'].some(suffix=>path==='/api/platform/tenants/'+fresh.loyalty_tenant+suffix);
       requireThat(method==='GET'&&(global||selected)&&(!query||/^\?days=(7|30|90|365)$/.test(query)),message,403);
@@ -136,16 +138,17 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
       requireThat(/^application\/json/i.test(result.type),'Formato de respuesta no permitido.',502);
       return result;
     }
-    requireThat(walletRouteAllowed('OWNER',method,path)&&delegatedRouteAllowed(fresh,method,path),message,403);
+    const allowed=who=>surface==='management'?managementRouteAllowed(who,method,path):!isManagementPath(path)&&delegatedRouteAllowed(who,method,path);
+    requireThat(walletRouteAllowed('OWNER',method,path)&&allowed(fresh),message,403);
     requireThat(!/^\/api\/staff\/(team(?:\/|$)|credentials(?:\/|$))/.test(path),'Administra las personas y sus permisos desde Equipo y permisos de Lúmina.',403);
     const {item}=await validated(actor);
     fresh=current(actor);
-    requireThat(delegatedRouteAllowed(fresh,method,path),message,403);
+    requireThat(allowed(fresh),message,403);
     requireThat(!query||(query.startsWith('?')&&query.length<=3000),'Filtro inválido.');
     requireThat(!key||/^[A-Za-z0-9_:-]{8,128}$/.test(key),'Referencia de operación inválida.');
     const result=await remote(path+query,{method,body,key,token:item.token,raw:true});
     const latest=current(actor);
-    requireThat(latest.revision===fresh.revision && latest.approved===fresh.approved && latest.loyalty_tenant===fresh.loyalty_tenant && delegatedRouteAllowed(latest,method,path),message,403);
+    requireThat(latest.revision===fresh.revision && latest.approved===fresh.approved && latest.loyalty_tenant===fresh.loyalty_tenant && allowed(latest),message,403);
     requireThat(/^(application\/json|text\/csv)/i.test(result.type),'Formato de respuesta no permitido.',502);
     if(item.account_id && result.status===401)db.run("UPDATE wallet_access SET status='BLOCKED',sealed_token=NULL WHERE account_id=? AND company_id=?",item.account_id,item.company_id);
     if(method!=='GET')event(db,actor,fresh.company_id,'WALLET_ACCESS',item.staff_id||actor.id,'WALLET_'+method,`${path} · HTTP ${result.status}`,'WALLET');

@@ -43,6 +43,7 @@ for(const form of document.querySelectorAll('form[method="post"]'))form.addEvent
 window.addEventListener('pageshow',()=>{for(const form of document.querySelectorAll('form[data-busy]')){delete form.dataset.busy;form.removeAttribute('aria-busy');for(const button of form.querySelectorAll('button[data-caption]')){button.textContent=button.dataset.caption;button.disabled=false;}}});
 
 for(const form of document.querySelectorAll('form:has([name="term"])')) {
+  if(form.querySelector('[data-offer-editor]'))continue;
   const term=form.querySelector('[name="term"]');
   const sync=()=>{for(const code of ['LOGO','IDENTITY','BRAND_GUIDE']){const field=form.elements[code];if(field){field.disabled=term.value==='MONTHLY';field.closest('label').hidden=field.disabled;}}};
   term.addEventListener('change',sync);sync();

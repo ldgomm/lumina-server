@@ -1,3 +1,4 @@
+import { acceptedContract } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
@@ -22,7 +23,7 @@ test('una pieza, cuatro publicaciones y cuatro métricas consumen un solo cupo m
  const c=await context(t),{world,admin,client,id}=c;
  assert.equal((await admin.post('/planes',{name:'Contenido mensual',term:'MONTHLY',price:'100',wallet:'NONE',VIDEO:'1'})).status,303);
  const plan=world.db.get('SELECT id FROM plans').id;
- assert.equal((await admin.post('/agencia/planes/activar?empresa='+id,{plan,startsOn:localDay()})).status,303);
+ await acceptedContract(world,admin,client,id,plan);
  const contract=world.db.get('SELECT id FROM contracts').id;
  const {path,piecePath,piece}=await produce(c,contract);
  const revision=world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision;

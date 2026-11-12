@@ -1,3 +1,4 @@
+import { acceptedContract } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { localDay, nextMonth } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
@@ -89,10 +90,11 @@ test('membresía Premium y paquete individual mantienen precio, cupos y cotizaci
   const request = await client.post('/solicitudes',{type:'PLAN',plan});
   assert.equal(request.status,303);
   assert.equal((await admin.post(selected(request.location+'/estado',id),{status:'APPROVED'})).status,303);
-  assert.equal((await admin.post(selected('/planes/activar',id),{plan,startsOn:oldDate(1),requestId:redirectId(request)})).status,303);
+  assert.equal((await admin.post(selected('/planes/activar',id),{plan,startsOn:oldDate(1),requestId:redirectId(request)})).status,410);
+  await acceptedContract(world,admin,client,id,plan);
   const contract = world.db.get('SELECT * FROM contracts WHERE company_id=?',id);
   assert.equal(contract.agreed_minor,37525);
-  assert.equal((await admin.post(selected('/planes/activar',id),{plan,startsOn:oldDate(1)})).status,409);
+  assert.equal((await admin.post(selected('/planes/activar',id),{plan,startsOn:oldDate(1)})).status,410);
   const pieceRequest = await client.post('/solicitudes',reviewData);
   await admin.post(selected(pieceRequest.location+'/estado',id),{status:'APPROVED'});
   assert.equal((await admin.post(selected(pieceRequest.location+'/piezas',id),{title:'Cupo 1',contract:contract.id})).status,303);
@@ -105,7 +107,8 @@ test('membresía Premium y paquete individual mantienen precio, cupos y cotizaci
   assert.equal((await client.post(oneOff.location+'/aceptar',{quote:q.id})).status,303);
   const end = nextMonth(oldDate(0));
   assert.equal((await admin.post(selected('/planes/activar',id),{plan:single,startsOn:oldDate(0),endsBefore:end,
-    requestId:redirectId(oneOff),agreed:'1'})).status,303);
+    requestId:redirectId(oneOff),agreed:'1'})).status,410);
+  await acceptedContract(world,admin,client,id,single,'42.55');
   assert.equal(world.db.get('SELECT agreed_minor FROM contracts WHERE plan_id=?',single).agreed_minor,4255);
 });
 test('la matriz impide ver, solicitar o aprobar áreas sin permiso y aplica cambios en la misma sesión',async t=>{

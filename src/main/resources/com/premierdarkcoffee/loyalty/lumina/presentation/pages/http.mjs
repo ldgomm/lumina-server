@@ -7,15 +7,15 @@ export function cookieFrom(req) {
 export function sessionCookie(token, secure = false) {
   return `${cookieName}=${token || ''}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${token ? 28800 : 0}${secure ? '; Secure' : ''}`;
 }
-export function securityHeaders(res, caja = false) {
+export function securityHeaders(res, caja = false, management = false) {
   res.setHeader('Cache-Control','no-store');
   // Native POST forms need their same-origin Origin header for the CSRF check.
   // no-referrer changes it to "null" (Fetch Standard, append a request Origin header).
   res.setHeader('Referrer-Policy','same-origin');
   res.setHeader('X-Content-Type-Options','nosniff');
-  res.setHeader('X-Frame-Options','DENY');
+  res.setHeader('X-Frame-Options',management?'SAMEORIGIN':'DENY');
   res.setHeader('Permissions-Policy',`camera=${caja ? '(self)' : '()'}, microphone=(), geolocation=()`);
-  res.setHeader('Content-Security-Policy',`default-src 'none'; script-src 'self'; style-src 'self'${caja ? " 'unsafe-inline'" : ""}; img-src 'self' data: blob:; connect-src 'self'; media-src blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`);
+  res.setHeader('Content-Security-Policy',`default-src 'none'; script-src 'self'; style-src 'self'${caja ? " 'unsafe-inline'" : ""}; img-src 'self' data: blob:; connect-src 'self'; media-src blob:; frame-src ${management?"'self'":"'none'"}; frame-ancestors ${management?"'self'":"'none'"}; base-uri 'none'; form-action 'self'`);
 }
 export function send(res,status,body,type = 'text/html; charset=utf-8') {
   res.writeHead(status,{'Content-Type':type});

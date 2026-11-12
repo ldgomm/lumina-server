@@ -132,7 +132,8 @@ test('informes delegados se abren sin consultar ni mostrar la cuenta comercial',
  const {client,world,loyalty}=await context(t);
  const member=await colleague(world,client,{name:'Analista',email:'reports@example.test','WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
  const start=loyalty.calls.length;
- const view=await member.session.get('/wallet/gestion?seccion=reports');assert.equal(view.status,200);assert.match(view.body,/Resultados por sucursal/);assert.match(view.body,/105/);
+ assert.equal((await member.session.get('/wallet/gestion?seccion=reports')).location,'/gestion/informes');
+ const view=await member.session.get('/gestion/informes');assert.equal(view.status,200);assert.match(view.body,/Resultados por sucursal/);assert.match(view.body,/105/);
  assert.ok(!loyalty.calls.slice(start).some(c=>c.path.endsWith('/account')));
  assert.equal((await member.session.get('/wallet-api/api/staff/account')).status,403);
 });

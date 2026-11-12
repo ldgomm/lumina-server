@@ -1,3 +1,6 @@
+import { canReadFidelityReport, centralPaths, managementSections, managementTitles } from '../wallet/management-policy.mjs';
+import { managementPage, managementFramePage, managementDocument } from '../presentation/pages/management-pages.mjs';
+import { offerEditor } from '../presentation/pages/offer-editor.mjs';
 import { requestAccessSql } from '../access/content-policy.mjs';
 import { walletSections } from '../wallet/access-policy.mjs';
 import { createServer } from 'node:http';
@@ -5,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { activate, approveCompany, authenticate, can, changePassword, companyFor, createAgency, createSession, createTeamMember,
   getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamList, teamMember, updateGrants } from '../access/accounts.mjs';
 import { equal } from '../access/security.mjs';
-import { activateContract, acceptQuote, cancelContract, contractsFor, createPlan, currentQuote, getPlan, hidePlan, listPlans, offerQuote } from '../memberships/billing.mjs';
+import { acceptQuote, cancelContract, contractsFor, createPlan, currentQuote, getPlan, hidePlan, listPlans, offerQuote } from '../memberships/billing.mjs';
 import { channels, areas, integer, isId, now, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
 import { cashierAssets, createLoyaltyBridge } from '../wallet/bridge.mjs';
 import { createWalletWorkspace } from '../wallet/wallet.mjs';
@@ -29,6 +32,12 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/management-launch.js': ['management-launch.js','text/javascript; charset=utf-8'],
+  '/assets/lumina-symbol.png': ['lumina-symbol.png','image/png'],
+  '/assets/lumina-logo.png': ['lumina-logo.png','image/png'],
+  '/assets/central.css': ['central.css','text/css; charset=utf-8'],
+  '/assets/offers.js': ['offers.js','text/javascript; charset=utf-8'],
+  '/assets/management-frame.js': ['management-frame.js','text/javascript; charset=utf-8'],
   '/assets/experience.css': ['experience.css','text/css; charset=utf-8'],
   '/assets/requests.js': ['requests.js','text/javascript; charset=utf-8'],
   '/assets/content.css': ['content.css','text/css; charset=utf-8'],
@@ -113,9 +122,9 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       requireThat(target.origin === origin,'Ruta del portal inválida.');
       path = target.pathname;
       const method = req.method;
-      api = path.startsWith('/api/') || path.startsWith('/wallet-api/');
-      securityHeaders(res,['/caja','/platform','/wallet','/wallet/gestion'].includes(path));
-      requireThat(['GET','POST'].includes(method) || path.startsWith('/wallet-api/') && ['PUT','DELETE'].includes(method),'Método no permitido.',405);
+      api = path.startsWith('/api/') || path.startsWith('/wallet-api/') || path.startsWith('/gestion-api/');
+      securityHeaders(res,['/caja','/platform','/wallet','/wallet/gestion','/gestion/vista'].includes(path),path.startsWith('/gestion'));
+      requireThat(['GET','POST'].includes(method) || (path.startsWith('/wallet-api/')||path.startsWith('/gestion-api/')) && ['PUT','DELETE'].includes(method),'Método no permitido.',405);
       if (method!=='GET') requireThat(req.headers.origin === origin,'Esta acción requiere el formulario del portal.',403);
       if (method==='GET' && Object.hasOwn(sourceAssets,path)) {
         const asset = sourceAssets[path];
@@ -162,13 +171,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       actor={...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('empresa'))&&!agencyWork};
       if (actor.kind === 'COLLABORATOR') cash = db.get(
         "SELECT branch_name FROM cash_grants WHERE account_id=? AND company_id=? AND status='ACTIVE'",actor.id,actor.company_id);
-      if (path.startsWith('/wallet-api/')) {
+      if (path.startsWith('/wallet-api/')||path.startsWith('/gestion-api/')) {
+        const management=path.startsWith('/gestion-api/');
         const body=method==='GET'?undefined:await readJson(req);
         actor=getSession(db,cookie);
         requireThat(actor,'Tu sesión terminó. Ingresa nuevamente.',401);
         requireThat(equal(actor.csrf,req.headers['x-lumina-csrf']),'Tu sesión de Wallet cambió. Abre de nuevo Wallet.',403);
         if(req.headers['x-lumina-company'])actor={...actor,wallet_company:req.headers['x-lumina-company']};
-        const result=await wallets.proxy(actor,path.slice('/wallet-api'.length),{method,body,query:target.search,key:req.headers['idempotency-key']});
+        const result=await wallets.proxy(actor,path.slice((management?'/gestion-api':'/wallet-api').length),{method,body,query:target.search,key:req.headers['idempotency-key'],surface:management?'management':'wallet'});
         return send(res,result.status,result.bytes,result.type);
       }
       if (method==='GET' && (path.startsWith('/wallet/art/') || path.startsWith('/wallet/brand/') || /^\/api\/public\/[a-z0-9-]+\/qr$/.test(path))) {
@@ -188,14 +198,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const sections=walletSections(actor);
         requireThat(actor.kind!=='COLLABORATOR'||sections.length,'Tu cuenta no tiene áreas operativas de Wallet.',403);
         const section=target.searchParams.get('seccion')||(actor.kind==='COLLABORATOR'?sections[0]:path==='/wallet'?'overview':'design');
-        requireThat(actor.kind!=='COLLABORATOR'||sections.includes(section),'No tienes acceso a esta área de Wallet.',403);
-        if(actor.kind==='COLLABORATOR'&&section==='reports') {
-          const days=target.searchParams.get('dias')||'30';requireThat(['7','30','90','365'].includes(days),'Período inválido.');
-          company=companyFor(db,actor);
-          const result=await wallets.proxy(actor,'/api/staff/metrics',{query:'?days='+days});
-          requireThat(result.status===200,'No se pudo consultar el informe.',result.status);
-          return render({title:'Informes de fidelización',body:walletReportPage(JSON.parse(result.bytes))});
-        }
+        if(Object.hasOwn(centralPaths,section)){requireThat(actor.kind==='OWNER'||section==='reports'&&canReadFidelityReport(actor),'No tienes acceso a esta área.',403);return redirect(res,centralPaths[section]);}
+        requireThat(sections.includes(section),'No tienes acceso a esta área de Wallet.',403);
         try { await wallets.validate(actor); }
         catch(issue) {
           if(!(issue instanceof Problem))throw issue;
@@ -203,7 +207,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return render({title:'Abrir Wallet',body:walletPage({actor,company,error:issue.status>=500?'Wallet no está disponible en este momento. Tu cuenta y tus tarjetas se conservan. Vuelve a intentarlo en unos minutos.':issue.message,blocked})},issue.status);
         }
         company=companyFor(db,actor,company.id);
-        return send(res,200,loyaltyWorkspaceHtml(actor,section,actor.kind==='COLLABORATOR'?sections:null,company));
+        return send(res,200,loyaltyWorkspaceHtml(actor,section,sections,company));
       }
       if (method==='GET' && /^\/join\/[a-z0-9-]+$/.test(path)) {
         if(target.searchParams.has('empresa')){actor={...actor,wallet_company:target.searchParams.get('empresa')};target.searchParams.delete('empresa');}
@@ -331,7 +335,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return render({title:'Clientes',description:'Consulta la información y el avance de cada negocio. Conservas tu identidad de agencia.',body:companiesPage(companies,q)});
       }
       const companyId = target.searchParams.get('empresa');
-      const catalog = ['/planes','/planes/retirar'].includes(path);
+      const catalog = ['/planes','/planes/retirar','/planes/nueva'].includes(path);
       if (actor.kind==='AGENCY' && !companyId && !catalog) {
         if (method==='GET' && path==='/inicio') return redirect(res,'/resumen');
         throw new Problem('Selecciona un negocio desde Clientes.',404);
@@ -354,6 +358,23 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (path==='/clientes/verificar' && method==='POST') {
         approveCompany(db,actor,company);
         return redirect(res,url('/inicio'));
+      }
+      if(method==='GET'&&path.startsWith('/gestion')) {
+        if(path==='/gestion/informes'&&actor.kind==='COLLABORATOR') {
+          requireThat(canReadFidelityReport(actor),'Tu acceso no incluye informes de fidelización.',403);
+          const days=target.searchParams.get('dias')||'30';requireThat(['7','30','90','365'].includes(days),'Período inválido.');
+          const result=await wallets.proxy(actor,'/api/staff/metrics',{query:'?days='+days,surface:'management'});
+          requireThat(result.status===200,'No se pudo consultar el informe.',result.status);
+          return render({title:'Informes de fidelización',body:walletReportPage(JSON.parse(result.bytes))});
+        }
+        requireOwner(actor);
+        if(path==='/gestion')return render({title:'Administración',body:managementPage()});
+        if(path==='/gestion/vista') {
+          const section=target.searchParams.get('seccion');requireThat(Object.hasOwn(managementSections,section),'Sección no disponible.',404);
+          await wallets.validate(actor);return send(res,200,managementDocument(actor,company,section));
+        }
+        const slug=path.slice('/gestion/'.length);requireThat(Object.hasOwn(managementTitles,slug),'Sección no disponible.',404);
+        return render({title:managementTitles[slug],description:'Administración del negocio desde Lúmina.',body:managementFramePage(slug,target.searchParams)});
       }
       if (path==='/equipo' && method==='GET') {
         return render({title:'Equipo y accesos',description:'Asigna áreas, tareas y permisos de Caja por persona.',
@@ -433,6 +454,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (path.startsWith('/planes')) {
         requireThat(actor.kind!=='COLLABORATOR','Tu acceso no incluye contratos ni precios.',403);
+        if(method==='GET'&&path==='/planes/nueva') {requireAgency(actor);requireThat(!actor.readOnlyCompany,'Publica las ofertas desde el catálogo de Lúmina.',403);return render({title:'Crear oferta',body:offerEditor(actor,url)});}
         if (method==='GET' && path==='/planes') {
           const plans = listPlans(db,actor.kind==='AGENCY');
           const contracts = company ? contractsFor(db,company.id) : [];
@@ -459,9 +481,9 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         }
         if (method==='POST') {
           requireAgency(actor);
-          if (path==='/planes') createPlan(db,actor,data);
+          if (path==='/planes') {try{createPlan(db,actor,data);}catch(issue){if(!(issue instanceof Problem)||![400,409].includes(issue.status)||data.catalog_version!=='SIMPLE')throw issue;return render({title:'Revisa la oferta',body:offerEditor(actor,url,data,issue.message)},issue.status);}}
           else if (path==='/planes/retirar') hidePlan(db,actor,data.plan);
-          else if (path==='/planes/activar') activateContract(db,actor,company,data);
+          else if (path==='/planes/activar') throw new Problem('La contratación se activa desde una propuesta aceptada por el dueño en Paquetes y servicios.',410);
           else if (path==='/planes/cancelar') cancelContract(db,actor,company,data.contract,data.reason);
           else throw new Problem('Acción no encontrada.',404);
           return redirect(res,url('/planes'));

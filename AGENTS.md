@@ -469,3 +469,17 @@ Las instrucciones de esta sección sustituyen los permisos administrativos de Wa
 - Gate: once suites del portal, al menos 80 pruebas sin omisiones; 130 Python; 580 nativas; Docker y 114 comprobaciones gateway. Commit local solo con PASS completo, sin push. Terminal: una línea RESULTADO.
 - `scripts/ui/lumina-experience.spec.mjs` verifica 320/390/1024/1440 px, filtros, selección combinada, formularios y menú con datos ficticios. No equiparar pruebas HTTP con revisión visual real. Informar navegador/dispositivos por separado.
 - SQLite v4 y todas las migraciones se conservan. Guía: `docs/lumina-experiencia-v047.md`.
+
+## Lúmina v009 / Loyalty v048 — catálogo y administración central
+
+- Lúmina es la única superficie de contratación. Wallet conserva operaciones, clientes, promociones, premios, tarjetas, radar y QR. Cuenta, sucursales, datos, actividad, informes y equipo se gestionan desde Lúmina con la misma sesión.
+- El dueño recibe una lista explícita de secciones operativas, nunca `null` como permiso total. Enlaces históricos de administración redirigen a `/gestion`, `/equipo` o `/planes`; la API Wallet rechaza esas operaciones. `/gestion-api` tiene su propia lista permitida y revalida dueño/negocio/sesión. La agencia no representa al dueño. Colaboradores de informes solo leen métricas autorizadas.
+- Los formularios nativos de ficha/sucursales e informes se integran en páginas de Lúmina, conservando validaciones, versión, idempotencia y protección de borradores. El contenido interno solo admite marcos del mismo origen. El equipo se administra exclusivamente desde `/equipo`.
+- Crear oferta: Servicios → Precio → Revisión. Cinco áreas con ocho servicios esenciales. Individual o paquete se deduce de cantidades; un solo precio por oferta; mensual o trabajo puntual. Marca es puntual. Web y Maps detallan sus variantes en el alcance. No inventar precios ni convertir por cotizar en cero.
+- Solo la nueva publicación SIMPLE usa este vocabulario; servicios y contratos históricos se conservan. Wallet de cortesía requiere otro servicio y no activa, duplica, rota ni recrea vínculos. Nueva tarifa crea nueva oferta.
+- Retirar `/planes/activar`: responde 410. Toda nueva activación procede de una propuesta aceptada por el dueño y su versión actual. Conservar propuestas, períodos, cancelaciones independientes, auditoría y cupos. No añadir renovación o cobro bancario automático.
+- Cargos y programaciones anteriores de Wallet se consultan en `/gestion/historial` identificados como históricos; nunca borrarlos, cancelarlos ni convertirlos silenciosamente en un contrato nuevo. La contratación actual se abre desde `/planes`.
+- Logos originales en assets propios, sin modificar sus bytes. No usar esos logos para reemplazar la identidad de las tarjetas de clientes.
+- El instalador imprime RESULTADO una vez. Con `--iniciar` y disponibilidad comprobada imprime también `Lúmina Digital disponible en http://127.0.0.1:8099` (o el puerto configurado), antes de mantener el proceso abierto. Detalles y código inicial permanecen en el registro privado; nunca incluir secretos en evidencia.
+- Exigir doce suites / 92 pruebas HTTP del portal, 130 Python, 580 nativas, Docker y 114 verificaciones gateway antes de commit local. Sin push. Pruebas DOM de interacción en `scripts/ui/lumina-management.dom.mjs`; no equivalen a revisión visual del navegador ni a dispositivos Wallet.
+- Sin cambios de SQL, esquema, Kotlin, motor nativo Wallet, claves, HTTPS, seriales, emisor o IDs de tarjetas. Guía: `docs/lumina-gestion-v048.md`.

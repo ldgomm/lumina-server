@@ -9,8 +9,8 @@ const termName=term=>term==='MONTHLY'?'Mensual':'Trabajo puntual';
 const stateName=state=>({REQUESTED:'Por cotizar',QUOTED:'Propuesta lista',ACCEPTED:'Aceptada · por activar',ACTIVE:'Activada',CANCELLED:'Cancelada'}[state]||state);
 const walletNote=wallet=>wallet==='NONE'?'':`<p class="commercial-wallet">${wallet==='GIFT'?'Servicio de Wallet de cortesía, sin recargo en este paquete.':'Incluye servicio de Wallet dentro del precio del paquete.'}</p>`;
 const itemsList=(items,units=1)=>`<ul class="package-items">${items.map(i=>`<li><strong>${i.quantity*units}</strong> ${esc(i.service==='WALLET'?'servicio de fidelización':serviceName(i.service))}</li>`).join('')}</ul>`;
-export function packageNav(url,active='catalogo') {
-  return `<nav class="module-tabs" aria-label="Paquetes y servicios">${[['catalogo','Catálogo'],['acuerdos','Mis servicios'],['contrataciones','Propuestas']].map(([key,title])=>
+export function packageNav(url,active='catalogo',agency=false) {
+  return `<nav class="module-tabs" aria-label="Paquetes y servicios">${[['catalogo',agency?'Catálogo':'Contratar'],['acuerdos',agency?'Acuerdos':'Mis servicios'],['contrataciones',agency?'Propuestas':'Solicitudes']].map(([key,title])=>
     `<a href="${esc(url('/planes',{vista:key}))}"${active===key?' aria-current="page"':''}>${title}</a>`).join('')}</nav>`;
 }
 export function totalsPanel(totals) {
@@ -32,27 +32,17 @@ function catalog(actor,company,url,plans) {
   }).join('');
   const selection=`<div class="catalog-offers"><div class="catalog-filters" data-catalog-filters hidden>${select('catalog_kind','Tipo de oferta',[['','Todas'],['individual','Servicios individuales'],['paquete','Paquetes']])}${select('catalog_area','Servicio',[['','Todos los servicios'],...Object.entries(areas)])}${select('catalog_term','Modalidad',[['','Todas'],['MONTHLY','Mensual'],['ONE_OFF','Pago único']])}</div><p class="muted" data-catalog-count aria-live="polite"></p><div class="package-grid">${cards||message('Todavía no hay precios publicados. Lúmina debe publicar sus servicios y paquetes; mientras tanto, puedes solicitar una cotización.')}</div><p data-catalog-empty hidden>No hay ofertas con estos filtros. Prueba otra modalidad o servicio.</p>${actor.kind==='OWNER'?localLink(url('/solicitudes/nueva'),'¿Necesitas algo distinto? Pide una cotización →'):''}</div>`;
   const summary=selectable&&active.length?`<aside class="selection-summary"><p class="eyebrow">A TU MEDIDA</p><h3>Tu selección</h3><p>Combina servicios sueltos y paquetes como necesites.</p><div data-package-lines><p>Elige las cantidades en el catálogo.</p></div><div data-package-totals aria-live="polite"><p>Revisaremos los importes antes de confirmar.</p></div>
-    ${textarea('notes','¿Algún detalle para tu propuesta?','maxlength="2000" rows="3" placeholder="Puedes pedir ajustes o combinar servicios."')}<p class="purchase-note">Solicitar la propuesta no cobra ni activa un servicio de pago. Revisarás precio, fechas y condiciones antes de aceptar.</p>${hidden('key',uuid())}${button('Revisar mi propuesta')}<span class="muted">1. Eliges · 2. Recibes propuesta · 3. Confirmas</span></aside>`:'';
+    ${textarea('notes','¿Algún detalle para tu propuesta?','maxlength="2000" rows="3" placeholder="Puedes pedir ajustes o combinar servicios."')}<p class="purchase-note">Solicitar la propuesta no cobra ni activa un servicio de pago. Revisarás precio, fechas y condiciones antes de aceptar.</p>${hidden('key',uuid())}${button('Solicitar esta combinación')}<span class="muted">Eliges → Lúmina cotiza → Confirmas → Lúmina inicia</span></aside>`:'';
   return selectable&&active.length?form(url('/planes/solicitar'),actor,selection+summary,'package-selection catalog-layout'):`<div class="catalog-layout catalog-readonly">${selection}</div>`;
 }
 function publishForm(actor,url) {
-  const options=[...contentOptions,...Object.entries(services).filter(([code])=>!formats.SOCIAL.includes(code)&&code!=='WEB')];
-  const seen=new Set(['WALLET']);
-  const groups=Object.entries(areas).map(([area,title])=>{
-    const codes=(area==='SOCIAL'?contentOptions.map(([code])=>code):formats[area]).filter(code=>{if(seen.has(code)||code==='WEB')return false;seen.add(code);return true;});
-    return disclosure(title,`<div class="fields three">${codes.map(code=>input(code,serviceName(code),'number','min="0" max="100" step="1"','0')).join('')}</div>`);
-  }).join('');
-  const common=`<div class="fields two">${input('name','Nombre visible para el cliente','text','required minlength="2" maxlength="100"')}${select('term','Modalidad',[['ONE_OFF','Pago único'],['MONTHLY','Mensual']])}</div>${input('price','Precio total en USD','text','inputmode="decimal" placeholder="Ejemplo de formato: 25.00; vacío = por cotizar"')}${textarea('description','Qué incluye y qué se entrega','maxlength="1200" rows="3" placeholder="Describe el alcance, las revisiones y el plazo aproximado."')}`;
-  return `<section class="catalog-editor"><h2>Publica tus precios</h2><p>El cliente verá únicamente las ofertas que publiques. Los cambios futuros se publican como una oferta nueva y conservan los acuerdos anteriores.</p>
-    ${disclosure('Servicio individual · precio por una unidad',form(url('/planes'),actor,hidden('offer_kind','INDIVIDUAL')+select('individual_service','Servicio',options)+common+hidden('wallet','NONE')+'<p class="muted">Este precio corresponde a una unidad del servicio. El cliente puede elegir varias.</p>'+button('Publicar precio individual')))}
-    ${disclosure('Paquete · varios servicios o varias unidades',form(url('/planes'),actor,hidden('offer_kind','BUNDLE')+common+'<p>Indica la cantidad incluida de cada servicio. El precio corresponde a todo el paquete.</p>'+groups+select('wallet','Servicio adicional de Wallet',[['NONE','Sin servicio adicional'],['INCLUDED','Incluido en el precio'],['GIFT','De cortesía, sin recargo']])+'<p class="muted">Todos los negocios tienen Wallet activo. Esta oferta cubre el trabajo de configuración o gestión. Diseño de marca se contrata por trabajo, sin mensualidad.</p>'+button('Publicar paquete')))}
-    </section>`;
+  return `<section class="catalog-editor"><div class="split"><div><h2>Tu catálogo</h2><p>Publica un servicio o un paquete en tres pasos: servicios, precio y revisión.</p></div>${localLink(url('/planes/nueva'),'Crear oferta','btn')}</div></section>`;
 }
 function contractsPanel(actor,company,url,contracts) {
   if(!company)return message('Selecciona un negocio para consultar sus acuerdos.');
   const current=contracts.filter(c=>!c.cancelled_at&&c.starts_on<=localDay()&&c.ends_before>localDay());
   const monthly=current.filter(c=>c.term==='MONTHLY').reduce((s,c)=>s+c.agreed_minor,0);
-  return `<section class="agreement-summary"><span>Mensualidad de los acuerdos vigentes hoy</span><strong>${esc(displayAmount(monthly))}</strong><p>No incluye trabajos puntuales, acuerdos futuros ni períodos finalizados. No es un saldo de deuda.</p></section>
+  return `${actor.kind==='OWNER'?localLink('/gestion/historial','Consultar cargos anteriores de Wallet →'):''}<section class="agreement-summary"><span>Mensualidad de los acuerdos vigentes hoy</span><strong>${esc(displayAmount(monthly))}</strong><p>No incluye trabajos puntuales, acuerdos futuros ni períodos finalizados. No es un saldo de deuda.</p></section>
     <p>Los cupos se reservan al iniciar una pieza y se usan al entregarla. Publicarla en varias redes consume una sola pieza. Los cupos no utilizados no se acumulan al siguiente período.</p>
     <p>La renovación mensual se confirma para cada período; no se cobra ni se renueva automáticamente. Un trabajo puntual tiene una fecha acordada de finalización. Para cambiar o cancelar un acuerdo vigente, coordina con Lúmina.</p>
     ${contracts.map(c=>{
@@ -71,13 +61,13 @@ function contractsPanel(actor,company,url,contracts) {
 }
 function ordersPanel(actor,company,url,orders) {
   const link=row=>actor.kind==='AGENCY'?(actor.agencyWork||!company?'/agencia':'')+'/planes/pedidos/'+row.id+'?empresa='+row.company_id:'/planes/pedidos/'+row.id;
-  return card('Propuestas de contratación',table(['Registro','Negocio','Estado','Versión','Propuesta'],orders.rows.map(o=>[
+  return card('Solicitudes de contratación',table(['Registro','Negocio','Estado','Versión','Propuesta'],orders.rows.map(o=>[
     esc(timestamp(o.created_at)),esc(o.company_name),badge(stateName(o.status)),o.revision,localLink(link(o),'Revisar combinación →'),
   ]),'Tus combinaciones solicitadas aparecerán aquí.')+`<div class="actions">${orders.page>0?localLink(url('/planes',{vista:'contrataciones',pagina:orders.page-1}),'← Anterior','btn secondary'):''}${orders.more?localLink(url('/planes',{vista:'contrataciones',pagina:orders.page+1}),'Siguiente →','btn secondary'):''}</div>`);
 }
 export function packagesPage({actor,company,url,plans,contracts,orders,view}) {
   const intro=`<section class="pricing-intro"><div><p class="eyebrow">SERVICIOS Y PRECIOS</p><h2>Lo que necesitas. A tu medida.</h2><p>Un video, un mes de contenido o varios servicios juntos. Elige tu combinación y revisa cada importe antes de confirmar.</p></div><div class="pricing-key"><div><strong>Pago único</strong><span>Un trabajo concreto, con entrega y cierre.</span></div><div><strong>Mensual</strong><span>Cupos por un mes. Renuevas cuando lo confirmes.</span></div></div></section>`;
-  return packageNav(url,view)+(view==='catalogo'?intro+catalog(actor,company,url,plans)+(actor.kind==='AGENCY'&&!actor.readOnlyCompany?publishForm(actor,url)+disclosure('Retirar ofertas del catálogo',
+  return packageNav(url,view,actor.kind==='AGENCY')+(view==='catalogo'?(actor.kind==='AGENCY'&&!actor.readOnlyCompany?publishForm(actor,url):intro)+catalog(actor,company,url,plans)+(actor.kind==='AGENCY'&&!actor.readOnlyCompany?disclosure('Retirar ofertas del catálogo',
     plans.filter(p=>p.published).map(p=>form(url('/planes/retirar'),actor,hidden('plan',p.id)+`<p>${esc(p.name)}</p>`+button('Retirar oferta','secondary'))).join('')):''):
     view==='acuerdos'?contractsPanel(actor,company,url,contracts):ordersPanel(actor,company,url,orders));
 }
@@ -85,12 +75,12 @@ export function orderPage({actor,company,url,order,audit}) {
   const base='/planes/pedidos/'+order.id;
   const version=hidden('revision',order.revision);
   const confirmed=order.status!=='REQUESTED';
-  const lines=order.lines.map(line=>`<article class="package-card"><div class="split">${badge(termName(line.term))}<span>${line.units} paquete(s)</span></div><h3>${esc(line.name)}</h3>
-    <p><strong>${line.unit_minor===null?'Por cotizar':esc(displayAmount(line.unit_minor*line.units))}</strong> ${line.term==='MONTHLY'?'por mes':'una sola vez'}${line.units>1&&line.unit_minor!==null?' · '+esc(displayAmount(line.unit_minor))+' por paquete':''}</p>
+  const lines=order.lines.map(line=>`<article class="package-card"><div class="split">${badge(termName(line.term))}<span>${line.units} × oferta</span></div><h3>${esc(line.name)}</h3>
+    <p><strong>${line.unit_minor===null?'Por cotizar':esc(displayAmount(line.unit_minor*line.units))}</strong> ${line.term==='MONTHLY'?'por mes':'una sola vez'}${line.units>1&&line.unit_minor!==null?' · '+esc(displayAmount(line.unit_minor))+' por oferta':''}</p>
     ${itemsList(line.items,line.units)}${walletNote(line.wallet)}${line.starts_on?`<p>${esc(line.starts_on)} al ${esc(inclusiveEnd(line.ends_before))}, ambos incluidos.</p>`:''}</article>`).join('');
   const editor=actor.kind==='AGENCY'&&!actor.readOnlyCompany&&['REQUESTED','QUOTED'].includes(order.status)?card('Preparar propuesta',form(url(base+'/cotizar'),actor,version+order.lines.map(line=>`
     <fieldset><legend>${esc(line.name)} × ${line.units}</legend><div class="fields three">
-      ${input('price_'+line.id,'Precio por paquete en USD','text','required inputmode="decimal"',line.unit_minor===null?'':(line.unit_minor/100).toFixed(2))}
+      ${input('price_'+line.id,'Precio por oferta en USD','text','required inputmode="decimal"',line.unit_minor===null?'':(line.unit_minor/100).toFixed(2))}
       ${line.renewal_of?'<p>Renovación: conserva el inicio del siguiente período y su día de corte.</p>':input('start_'+line.id,'Fecha de inicio','date','required',line.starts_on||localDay())}
       ${line.term==='ONE_OFF'?input('end_'+line.id,'Último día del trabajo puntual','date','required',line.ends_before?inclusiveEnd(line.ends_before):''):'<p>Duración: un mes. Los cupos corresponden a ese período.</p>'}</div></fieldset>`).join('')+
     textarea('terms','Alcance, plazos, revisiones y condiciones de pago','required minlength="5" maxlength="4000" rows="5"',order.terms)+
@@ -102,7 +92,7 @@ export function orderPage({actor,company,url,order,audit}) {
     'Cada oferta mantiene sus fechas y cupos. La activación es conjunta y no ejecuta un cobro bancario.') : '';
   const cancel=!actor.readOnlyCompany&&!['ACTIVE','CANCELLED'].includes(order.status)?disclosure('Cancelar esta propuesta',form(url(base+'/cancelar'),actor,version+
     input('reason','Motivo','text','required minlength="5" maxlength="500"')+button('Cancelar propuesta','danger'))):'';
-  return packageNav(url,'contrataciones')+`<div class="split"><p>${badge(stateName(order.status))} · Versión ${order.revision}</p>${localLink(url('/planes',{vista:'acuerdos'}),'Ver acuerdos','btn secondary')}</div>
+  return packageNav(url,'contrataciones',actor.kind==='AGENCY')+`<div class="split"><p>${badge(stateName(order.status))} · Versión ${order.revision}</p>${localLink(url('/planes',{vista:'acuerdos'}),'Ver acuerdos','btn secondary')}</div>
     ${totalsPanel(order.totals)}<p>${confirmed?'Importes de esta propuesta.':'Importes de referencia del catálogo, sujetos a la propuesta final.'} El total mensual y el pago único se muestran por separado.</p>
     <div class="package-grid">${lines}</div>${order.notes?card('Tus indicaciones',`<p class="prewrap">${esc(order.notes)}</p>`):''}
     ${order.terms?card('Condiciones de la propuesta',`<p class="prewrap">${esc(order.terms)}</p>`):''}

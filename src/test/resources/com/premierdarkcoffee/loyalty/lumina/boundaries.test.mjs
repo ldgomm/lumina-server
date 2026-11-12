@@ -1,3 +1,4 @@
+import { acceptedContract } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { agency, colleague, owner, portal } from './helpers.mjs';
@@ -147,7 +148,7 @@ test('consultar una Wallet pendiente no la aprovisiona; solo el negocio reintent
 test('formatos simples usan cupos históricos compatibles sin modificar contratos ni duplicar reservas',async t=>{
   const w=await setup(t);await w.admin.post(provider('/clientes/verificar',w.id));
   await w.admin.post('/planes',{name:'Plan anterior',term:'MONTHLY',price:'60',REEL:'1',POST:'1',wallet:'NONE'});
-  const plan=w.db.get('SELECT * FROM plans');await w.admin.post(provider('/planes/activar',w.id),{plan:plan.id,startsOn:localDay()});
+  const plan=w.db.get('SELECT * FROM plans');await acceptedContract(w,w.admin,w.client,w.id,plan.id);
   const contract=w.db.get('SELECT * FROM contracts'),items=w.db.all('SELECT * FROM plan_items');
   for(const [requested,quota,bad] of [['VIDEO','REEL','POST'],['GRAPHIC','POST','REEL']]) {
     const r=await w.client.post('/solicitudes',{...idea,service:requested,quantity:'2'});await w.admin.post(provider(r.location+'/estado',w.id),{status:'APPROVED'});

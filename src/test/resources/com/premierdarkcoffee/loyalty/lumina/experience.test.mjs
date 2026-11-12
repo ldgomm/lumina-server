@@ -1,3 +1,4 @@
+import { acceptedContract } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { agency, colleague, owner, portal } from './helpers.mjs';
@@ -82,7 +83,7 @@ test('formulario conserva datos y formato ante error, escapa HTML y no crea regi
 
 test('precios y cupos del dueño se muestran en la solicitud sin revelar contratos a colaboradores',async t=>{
  const w=await setup(t);await offer(w);await w.admin.post('/agencia/clientes/verificar?empresa='+w.id);
- const pack=await offer(w,{name:'Videos mes',offer_kind:'BUNDLE',VIDEO:'4',term:'MONTHLY',price:'100'});await w.admin.post('/agencia/planes/activar?empresa='+w.id,{plan:pack.id,startsOn:localDay()});
+ const pack=await offer(w,{name:'Videos mes',offer_kind:'BUNDLE',VIDEO:'4',term:'MONTHLY',price:'100'});await acceptedContract(w,w.admin,w.client,w.id,pack.id);
  const view=await w.client.get('/contenido?vista=solicitudes');assert.match(view.body,/35[,.]25/);assert.match(view.body,/4 cupo\(s\) disponibles/);assert.match(view.body,/no los reserva/);
  const member=await colleague(w,w.client,{name:'Contenido',email:'collabprice@example.test','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
  assert.doesNotMatch((await member.session.get('/contenido?vista=solicitudes')).body,/PRECIOS Y CUPOS|35[,.]25|Videos mes|100[,.]00/);
