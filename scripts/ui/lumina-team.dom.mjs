@@ -18,23 +18,27 @@ function load(w,name,native=false){const s=w.document.createElement('script');s.
 const settle=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}throw Error('UI not ready; '+errors.join('; '));};
 try{
   const l=await fakeLoyalty(t),world=await portal(t,l.origin,{platformToken:l.platformToken});await agency(world);const {client}=await owner(world,'Prueba de equipo','1');
-  const w=dom((await client.get('/equipo/nuevo')).body);for(const script of ['lumina.js','team.js'])load(w,script);
+  const initial=await colleague(world,client,{name:'Persona inicial',email:'persona-inicial@example.test','WALLET.VIEW':'yes','WALLET.APPROVE':'yes','WALLET_CUSTOMERS.VIEW':'yes','WALLET_CUSTOMERS.EDIT':'yes','INSTAGRAM.VIEW':'yes','INSTAGRAM.APPROVE':'yes'});
+  const response=await client.get('/equipo/'+initial.id),w=dom(response.body);for(const script of ['lumina.js','team.js'])load(w,script);
   const d=w.document,editor=d.querySelector('[data-team-editor]'),form=editor.closest('form'),field=name=>form.elements.namedItem(name),preview=()=>d.querySelector('[data-access-preview]').textContent;
-  let confirms=0;w.confirm=()=>{confirms++;return false;};
-  d.querySelector('[data-team-preset=CONTENT]').click();assert.equal(field('SOCIAL.VIEW').checked,true);assert.equal(field('SOCIAL.REQUEST').checked,true);assert.equal(field('SOCIAL.APPROVE').checked,false);assert.match(preview(),/solicitar/);
-  const leave=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(leave);assert.equal(leave.defaultPrevented,true);
-  d.querySelector('[data-team-preset=CLEAR]').click();assert.equal(confirms,1);assert.equal(field('SOCIAL.REQUEST').checked,true);
-  w.confirm=()=>true;d.querySelector('[data-team-preset=CLEAR]').click();assert.equal([...editor.querySelectorAll('input')].some(e=>e.checked),false);
-  const change=(name,checked)=>{field(name).checked=checked;field(name).dispatchEvent(new w.Event('change',{bubbles:true}));};
-  change('WALLET_DESIGN.EDIT',true);assert.equal(field('WALLET_DESIGN.VIEW').checked,true);assert.equal(field('WALLET.VIEW').checked,true);assert.match(preview(),/modificar/);
-  change('WALLET.VIEW',false);assert.equal(field('WALLET_DESIGN.VIEW').checked,false);assert.equal(field('WALLET_DESIGN.EDIT').checked,false);
-  change('INSTAGRAM.REQUEST',true);assert.equal(field('INSTAGRAM.VIEW').checked,true);assert.equal(field('SOCIAL.VIEW').checked,false);assert.match(preview(),/Instagram/);
-  change('SOCIAL.VIEW',true);assert.match(preview(),/Instagram/);change('SOCIAL.REQUEST',true);assert.doesNotMatch(preview(),/Instagram/);
-  assert.equal(form.querySelectorAll('[name="WALLET_REPORTS.EDIT"]').length,0);assert.equal(form.querySelectorAll('[name="ADMIN.VIEW"]').length,0);
-  checks.push('Presets, explicit replacement, dependent grants, effective-access summary and unsaved-change warning');
+  assert.equal(editor.querySelectorAll('[data-module=WALLET]').length,1);assert.equal(form.querySelectorAll('button[type=submit]').length,1);assert.equal(d.querySelector('form[action$="/caja/guardar"]'),null);assert.equal(d.querySelector('form[action$="/permisos"]'),null);
+  assert.equal(d.querySelector('[data-access-level=WALLET]').value,'CUSTOM');assert.equal(field('WALLET.APPROVE').checked,true);assert.equal(field('WALLET.REQUEST').checked,false);assert.equal(d.querySelector('[data-access-level=WALLET_CUSTOMERS]').value,'EDIT');assert.equal(d.querySelector('[data-access-level=INSTAGRAM]').value,'CUSTOM');
+  const unchanged=Object.fromEntries(new w.FormData(form));assert.equal((await client.post(form.getAttribute('action'),unchanged)).status,303);
+  assert.match(preview(),/Instagram/);assert.equal(field('cash_mode').value,'OFF');assert.equal(d.querySelector('[data-cash-branch]').hidden,true);
+  checks.push('One Wallet block and one save; custom legacy grants and per-platform rights survive an unchanged submission');
+  const choose=(scope,value)=>{const select=d.querySelector('[data-access-level="'+scope+'"]');select.value=value;select.dispatchEvent(new w.Event('change',{bubbles:true}));};
+  choose('SOCIAL','REQUEST');assert.equal(field('SOCIAL.VIEW').checked,true);assert.equal(field('SOCIAL.REQUEST').checked,true);assert.equal(field('SOCIAL.APPROVE').checked,false);assert.match(preview(),/solicitar/);
+  const leave=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(leave);assert.equal(leave.defaultPrevented,true);assert.match(d.querySelector('[data-save-status]').textContent,/sin guardar/);
+  choose('SOCIAL','NONE');assert.equal(field('SOCIAL.VIEW').checked,false);assert.equal(field('INSTAGRAM.APPROVE').checked,true);
+  choose('WALLET_DESIGN','EDIT');assert.equal(field('WALLET_DESIGN.VIEW').checked,true);assert.equal(field('WALLET.VIEW').checked,true);assert.match(preview(),/modificar/);
+  choose('WALLET','NONE');assert.equal(field('WALLET_DESIGN.EDIT').checked,true);assert.equal(field('WALLET.VIEW').checked,true);assert.equal(field('WALLET.APPROVE').checked,false);
+  field('cash_mode').value='BOTH';field('cash_mode').dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(d.querySelector('[data-cash-branch]').hidden,false);assert.equal(field('branch').required,true);assert.ok(field('branch').value);assert.match(preview(),/compras y canjes/);
+  assert.equal(world.db.get('SELECT COUNT(*) n FROM cash_grants').n,0);assert.equal(form.querySelectorAll('[name="WALLET_REPORTS.EDIT"],[name="ADMIN.VIEW"]').length,0);
+  checks.push('Simple area choices, dependency validation, branch selection, exact summary and no permission until Save');
   w.confirm=()=>false;const link=d.querySelector('a[href="/equipo"]'),click=new w.MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(click);assert.equal(click.defaultPrevented,true);
-  field('name').value='Mi persona';field('email').value='persona@example.test';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));const afterSubmit=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(afterSubmit);assert.equal(afterSubmit.defaultPrevented,false);
-  checks.push('Leaving cancels when a draft exists; actual submit does not trigger an extra draft prompt');
+  const submitted=Object.fromEntries(new w.FormData(form)),saved=await client.post(form.getAttribute('action'),submitted);assert.equal(saved.status,303,saved.body);assert.equal((await initial.session.get('/wallet')).location,'/caja');
+  form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));const afterSubmit=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(afterSubmit);assert.equal(afterSubmit.defaultPrevented,false);assert.equal(form.querySelector('button[type=submit]').disabled,true);
+  checks.push('Unified UI payload activates real session access through HTTP; draft navigation and double submit are guarded');
   const invite=await client.post('/equipo',{name:'Por activar',email:'activar@example.test'}),code=invite.body.match(/<code class="secret">([^<]+)</)[1];
   const copied=dom(invite.body);let value=null;Object.defineProperty(copied.navigator,'clipboard',{value:{writeText:async text=>{value=text;}}});load(copied,'team.js');assert.equal(value,null);copied.document.querySelector('[data-copy-activation]').click();await settle(()=>copied.document.querySelector('[data-copy-status]').textContent.includes('copiado'));assert.equal(value,code);assert.match(copied.document.querySelector('[data-copy-status]').textContent,/copiado/);
   checks.push('Activation code copies only after an explicit click; no automatic sharing or storage');
@@ -42,7 +46,7 @@ try{
   const bad=await client.post('/equipo/'+member.id+'/datos',{revision:teamRevision(world,member.id),name:'Borrador',email:'agencia@example.test'});assert.equal(bad.status,409);
   const invalid=dom(bad.body);assert.equal(invalid.document.querySelector('form[action$="/datos"]').closest('details').open,true);assert.equal(invalid.document.querySelector('form[action$="/datos"] [name=name]').value,'Borrador');
   const noJS=dom((await client.get('/equipo/nuevo')).body);assert.equal(noJS.document.querySelector('[name=email]').required,true);assert.equal(noJS.document.querySelector('form[action="/equipo"]').method,'post');
-  checks.push('Server errors keep the draft visible; ordinary HTML forms remain usable without JavaScript');
+  const fallback=dom(response.body),fallbackForm=fallback.document.querySelector('form[action$="/acceso"]');assert.equal(fallbackForm.method,'post');assert.equal(fallbackForm.querySelector('[name="WALLET.APPROVE"]').checked,true);assert.equal(fallbackForm.querySelector('[data-custom=WALLET]').open,true);assert.equal(fallbackForm.querySelector('[data-access-level=WALLET]').parentElement.hidden,true);checks.push('Server errors keep the draft visible; complete access form remains usable without JavaScript');
   async function wallet(){
     const page=await member.session.get('/wallet'),native=dom(page.body);
     native.fetch=async(input,options={})=>{

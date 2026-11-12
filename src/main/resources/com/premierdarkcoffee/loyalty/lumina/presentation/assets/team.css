@@ -1,4 +1,59 @@
-.team-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}.team-heading p{margin:0;color:#52677f}.team-contact{color:#52677f;margin-top:-8px}.team-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 26px;padding:22px 0;border-block:1px solid #dce5ee}.team-stats strong{display:block;font-size:28px;color:#153a5e;line-height:1.3}.team-stats span,.team-help{font-size:13px;line-height:1.6;color:#52677f}.team-filters{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:22px}.team-filters label{flex:1;min-width:130px}.team-filters label:first-child{flex:2;min-width:180px}.team-filters input,.team-filters select{width:100%}.team-email{display:block;color:#52677f;font-size:12px;margin-top:5px;overflow-wrap:anywhere}.team-area-tag{display:inline-block;padding:4px 9px;border-radius:6px;background:#edf3f9;color:#365575;font-size:12px;margin:3px 4px 3px 0}.team-state{display:inline-block;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:650;background:#edf2f8;color:#52677f}.team-state.active{background:#e5f2e9;color:#24623e}.team-state.pending,.team-state.expired{background:#fff3da;color:#775213}.team-manage{white-space:nowrap;text-decoration:none}.team-pagination{display:flex;justify-content:space-between;gap:12px;margin-top:16px}.team-support{display:inline-block;color:#365b81;font-size:13px;margin:8px 0 20px}.team-form{display:grid;gap:24px}.team-presets{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.team-presets>span{font-size:13px;margin-right:4px;color:#52677f}.team-presets button{font-size:12px;padding:9px 12px}.team-editor-grid{display:grid;grid-template-columns:minmax(0,1fr) 240px;align-items:start;gap:24px}.team-areas{display:grid;gap:18px;min-width:0}.team-area{border:1px solid #d5dfeb;border-radius:12px;margin:0;padding:18px;min-width:0;background:#fff}.team-area legend{display:flex;align-items:center;gap:8px;color:#193b61;font-weight:650;font-size:15px;padding:0 8px}.team-area legend .icon{width:20px;height:20px}.team-permission-options{display:flex;gap:10px 18px;flex-wrap:wrap}.team-permission{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;font-size:13px;font-weight:500}.team-permission input[type=checkbox]{width:18px;height:18px;min-height:18px;accent-color:#244f79;margin:0}.team-permission span{margin:0}.team-wallet-tasks,.team-platforms{margin-top:14px}.team-wallet-tasks summary,.team-platforms summary{cursor:pointer;padding:12px 0;min-height:44px;color:#315677;font-size:13px;font-weight:600}.team-wallet-tasks>div{display:grid;gap:14px;padding:10px 0}.team-wallet-tasks fieldset,.team-platforms fieldset{border:0;border-top:1px solid #e1e8f1;margin:0;padding:12px 0;min-width:0}.team-wallet-tasks legend,.team-platforms legend{font-size:13px;font-weight:600;padding:0 8px 0 0}.team-platforms{border:1px solid #dbe4ee;border-radius:12px;padding:4px 18px}.team-platforms>p{font-size:13px;color:#52677f}.team-preview{position:sticky;top:24px;background:#edf3f9;border:1px solid #d6e2ef;border-radius:12px;padding:21px}.team-preview h3{margin:0 0 14px;font-size:16px}.team-preview ul{margin:0;padding-left:18px;display:grid;gap:12px}.team-preview li{font-size:13px;line-height:1.6;color:#23486d;overflow-wrap:anywhere}.team-preview .team-help{border-top:1px solid #cedbeb;padding-top:14px;margin-top:16px;font-size:12px}.team-save{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:20px;border-top:1px solid #dce5ee}.team-save span{font-size:12px;line-height:1.5;color:#52677f;max-width:44ch}.team-alert{border:1px solid #dec29a;background:#fff7e9;color:#724f24;border-radius:10px;padding:14px 18px;margin:14px 0;line-height:1.6;font-size:14px}.team-success{border:1px solid #a7cfb6;background:#ecf7f0;color:#225a39;border-radius:10px;padding:14px 18px}.team-sections{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}.team-sections a{font-size:13px;color:#315677;border:1px solid #d7e1ec;background:white;min-height:44px;display:flex;align-items:center;padding:10px 16px}.team-sections a:hover{background:#eaf1f8;color:#153b63}.team-history{list-style:none;padding:0;margin:0}.team-history li{padding:20px 0;border-top:1px solid #e0e8f1}.team-history li>div{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.team-history strong{font-size:14px}.team-history time{font-size:12px;color:#52677f}.team-history p{font-size:13px}.team-audit-diff{display:grid;grid-template-columns:65px minmax(0,1fr);gap:8px;font-size:12px;line-height:1.7}.team-audit-diff dt{color:#52677f}.team-audit-diff dd{margin:0;color:#294b6b;overflow-wrap:anywhere}.team-code{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin:20px 0}.team-code .secret{font-size:16px;padding:16px;margin:0;overflow-wrap:anywhere}.team-code button{min-height:48px}#permisos,#caja,#datos,#historial{scroll-margin-top:25px}
-@media(max-width:1100px){.team-editor-grid{grid-template-columns:1fr}.team-preview{position:static}.team-preview ul{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:760px){.team-heading{align-items:start;flex-direction:column}.team-heading>.btn{width:100%}.team-stats{grid-template-columns:1fr 1fr;gap:20px}.team-area{padding:12px}.team-permission-options{gap:4px 14px}.team-preview ul{grid-template-columns:1fr}.team-presets button{flex:1}.team-filters{display:grid;grid-template-columns:1fr 1fr}.team-filters label:first-child{grid-column:1/-1}.team-filters label{min-width:0}.team-save{display:grid}.team-save button{width:100%}.team-code{grid-template-columns:1fr}.team-code .secret{font-size:14px}.team-sections{gap:6px}.team-sections a{font-size:12px;padding:8px 11px}#permisos,#caja,#datos,#historial{scroll-margin-top:90px}}
-.team-cash-card{border-top:4px solid #315e93}.team-cash-options{border:0;padding:0;margin:20px 0}.team-cash-options legend{font-weight:650;margin-bottom:12px}.team-cash-card [data-cash-preview]{min-height:24px;padding:14px;background:#edf3fa;border-radius:10px}.team-cash-card .team-permission-options{margin-block:16px}.team-cash-card:target{scroll-margin-top:24px;outline:2px solid #8baed9}
+/* Team directory */
+.team-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
+.team-heading p{margin:0;color:#52677f}.team-contact{color:#52677f;margin-top:-8px}
+.team-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 26px;padding:22px 0;border-block:1px solid #dce5ee}
+.team-stats strong{display:block;font-size:28px;color:#153a5e;line-height:1.3}
+.team-stats span,.team-help{font-size:13px;line-height:1.6;color:#52677f}
+.team-filters{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:22px}
+.team-filters label{flex:1;min-width:130px}.team-filters label:first-child{flex:2;min-width:180px}
+.team-filters input,.team-filters select{width:100%}
+.team-email{display:block;color:#52677f;font-size:12px;margin-top:5px;overflow-wrap:anywhere}
+.team-area-tag{display:inline-block;padding:4px 9px;border-radius:6px;background:#edf3f9;color:#365575;font-size:12px;margin:3px 4px 3px 0}
+.team-state{display:inline-block;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:650;background:#edf2f8;color:#52677f}
+.team-state.active{background:#e5f2e9;color:#24623e}.team-state.pending,.team-state.expired{background:#fff3da;color:#775213}
+.team-manage{white-space:nowrap;text-decoration:none}.team-pagination{display:flex;justify-content:space-between;gap:12px;margin-top:16px}
+.team-support{display:inline-block;color:#365b81;font-size:13px;margin:8px 0 20px}
+/* Access: one editor, one Wallet block and one submit. */
+.team-form{display:grid;gap:24px}.team-access-card{max-width:960px}.team-access-card .team-form{gap:12px}
+.team-access-card>.team-help{margin-bottom:24px}.team-access-list{display:grid;gap:16px}
+.team-module{min-width:0;margin:0;padding:18px 22px 14px;border:1px solid #dce4ee;border-radius:14px;background:#fff}
+.team-module[data-enabled=true]{border-color:#9ab5d4;background:#fbfdff}
+.team-module>legend{display:flex;gap:9px;align-items:center;padding:0 7px;font-size:15px;font-weight:650;color:#143957}
+.team-module>legend .icon{width:21px;height:21px}
+.team-cash-row{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:4px}.team-cash-row label>span{font-size:13px}
+.team-access-card select{appearance:auto;min-height:44px;width:100%;padding:10px 12px;border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:#183752;font-size:14px}
+.team-access-card select:focus-visible,.team-permission input:focus-visible{outline:3px solid #9abfee;outline-offset:2px}
+.team-level-row{min-width:0;padding:12px 0}.team-level-row+.team-level-row{border-top:1px solid #e4ebf2}
+.team-level-heading{display:flex;justify-content:space-between;align-items:center;gap:18px}
+.team-level-heading>strong{font-size:13px;font-weight:550;color:#476079}.team-module>.team-level-row>.team-level-heading>strong{font-weight:400}
+.team-level-select{width:235px;flex-shrink:0}
+.team-more{margin:10px 0 0}.team-more>summary,.team-access-summary>summary,.team-platforms>summary{min-height:44px;display:list-item;padding:12px 0;cursor:pointer;font-size:13px;color:#315677;font-weight:550}
+.team-more[open]>summary{border-bottom:1px solid #dce5ee;margin-bottom:4px}
+.team-custom{margin-top:8px}.team-custom>summary{font-size:12px;color:#52677f;cursor:pointer;padding:8px 0}
+.team-permission-options{display:flex;gap:10px 18px;flex-wrap:wrap}
+.team-permission{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;font-size:13px;font-weight:500}
+.team-permission input[type=checkbox]{width:18px;height:18px;min-height:18px;accent-color:#244f79;margin:0}.team-permission span{margin:0}
+.team-platforms{border:0;padding:0;margin-top:10px}.team-platforms>p{font-size:13px;color:#52677f}
+.team-access-summary{padding:0 8px}.team-access-summary ul{font-size:13px;line-height:1.8;color:#315677}
+.team-save{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:20px;border-top:1px solid #dce5ee}
+.team-save span{font-size:12px;line-height:1.5;color:#52677f;max-width:44ch}
+.team-save-sticky{position:sticky;bottom:0;background:rgba(255,255,255,.98);padding:16px 0 4px;justify-content:space-between;z-index:2}.team-save-sticky>button{min-width:190px}
+.team-access-card [hidden]{display:none!important}
+.team-level-row .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* Identity, history and feedback stay secondary. */
+.team-secondary{max-width:960px;padding:20px 26px}.team-secondary>summary{font-weight:650;font-size:16px;cursor:pointer;color:#173c60;min-height:30px}.team-secondary[open]>summary{margin-bottom:20px}
+.team-alert{border:1px solid #dec29a;background:#fff7e9;color:#724f24;border-radius:10px;padding:14px 18px;margin:14px 0;line-height:1.6;font-size:14px}
+.team-success{border:1px solid #a7cfb6;background:#ecf7f0;color:#225a39;border-radius:10px;padding:14px 18px}
+.team-history{list-style:none;padding:0;margin:0}.team-history li{padding:20px 0;border-top:1px solid #e0e8f1}.team-history li>div{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.team-history strong{font-size:14px}.team-history time{font-size:12px;color:#52677f}.team-history p{font-size:13px}
+.team-audit-diff{display:grid;grid-template-columns:65px minmax(0,1fr);gap:8px;font-size:12px;line-height:1.7}.team-audit-diff dt{color:#52677f}.team-audit-diff dd{margin:0;color:#294b6b;overflow-wrap:anywhere}
+.team-code{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin:20px 0}.team-code .secret{font-size:16px;padding:16px;margin:0;overflow-wrap:anywhere}.team-code button{min-height:48px}
+#permisos,#datos,#historial{scroll-margin-top:25px}
+@media(max-width:760px){
+ .team-heading{align-items:start;flex-direction:column}.team-heading>.btn{width:100%}.team-stats{grid-template-columns:1fr 1fr;gap:20px}
+ .team-filters{display:grid;grid-template-columns:1fr 1fr}.team-filters label:first-child{grid-column:1/-1}.team-filters label{min-width:0}
+ .team-module{padding:14px}.team-module>legend{font-size:14px}.team-cash-row{grid-template-columns:1fr;gap:10px}
+ .team-level-heading{flex-direction:column;align-items:stretch;gap:7px}.team-level-select{width:100%;flex-shrink:1}.team-permission-options{gap:4px 14px}
+ .team-save{display:grid}.team-save button{width:100%}.team-save-sticky{position:static;gap:12px}.team-secondary{padding:18px}
+ .team-code{grid-template-columns:1fr}.team-code .secret{font-size:14px}#permisos,#datos,#historial{scroll-margin-top:90px}
+}

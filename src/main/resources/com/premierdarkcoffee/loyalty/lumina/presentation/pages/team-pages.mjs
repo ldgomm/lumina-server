@@ -1,6 +1,7 @@
+import { cashMode } from '../../access/team-access.mjs';
 import { areas, channels, walletScopes, socialChannels } from '../../shared/domain.mjs';
-import { permissions, permissionTitles, permissionRules, teamPresets, describeGrants, memberState } from '../../access/team-policy.mjs';
-import { badge, button, card, check, disclosure, esc, form, hidden, input, localLink, select, table, timestamp } from './components.mjs';
+import { permissionTitles, permissionRules, describeGrants, memberState } from '../../access/team-policy.mjs';
+import { button, card, check, disclosure, esc, form, hidden, input, localLink, select, table, timestamp } from './components.mjs';
 import { icon } from './icons.mjs';
 
 const states = { ACTIVE: 'Acceso activo', PENDING: 'Por activar', INACTIVE: 'Desactivado', EXPIRED: 'Necesita un código' };
@@ -8,30 +9,32 @@ const scopeIcon = { SOCIAL:'social', WALLET:'wallet', MAPS:'maps', WEB:'web', BR
 const alert = error => error ? `<div class="team-alert" role="alert">${esc(error)}</div>` : '';
 const grantValues = member => Object.fromEntries((member?.grants || []).map(g => [`${g.scope}.${g.action}`, 'yes']));
 const teamForm = (path, actor, body) => form(path, actor, body, 'team-form').replace('<form ', '<form data-team-form ');
-function editor(member, values = null) {
-  const selected = values || grantValues(member);
+function editor(member, branches, values = null, branchError = '') {
+  const selected = values || {...grantValues(member),cash_mode:cashMode(member),branch:member.branch_id};
   const controls = (scope, actions) => actions.map(action => `<label class="team-permission"><input type="checkbox" name="${scope}.${action}" value="yes" ${selected[`${scope}.${action}`] === 'yes' ? 'checked' : ''}><span>${esc(permissionTitles[action])}</span></label>`).join('');
-  const areaCards = Object.entries(areas).map(([scope,title]) => `<fieldset class="team-area" data-team-scope="${scope}"><legend>${icon(scopeIcon[scope])}${esc(title)}</legend>${scope==='WALLET'?'<p class="team-help">Solicitudes de fidelización. Para registrar compras y canjear, asigna Caja.</p>':''}<div class="team-permission-options">${controls(scope,Object.keys(permissions))}</div>
-    ${scope === 'WALLET' ? `<details class="team-wallet-tasks"${Object.keys(walletScopes).some(key=>selected[`${key}.VIEW`]==='yes')?' open':''}><summary>Otras tareas de Wallet</summary><div>${Object.entries(walletScopes).map(([scope,title])=>`<fieldset data-team-scope="${scope}"><legend>${esc(title)}</legend><div class="team-permission-options">${controls(scope,permissionRules[scope].actions)}</div></fieldset>`).join('')}</div></details>${member?localLink('#caja','Asignar compras y canjes →','team-support'):'<p class="team-help">Caja: crea la persona y elige su sucursal en el siguiente paso.</p>'}` : ''}</fieldset>`).join('');
-  const platformCards = socialChannels.map(scope=>`<fieldset data-team-scope="${scope}"><legend>${esc(channels[scope])}</legend><div class="team-permission-options">${controls(scope,Object.keys(permissions))}</div></fieldset>`).join('');
-  const definitions = JSON.stringify({ rules:permissionRules,titles:permissionTitles,presets:teamPresets });
-  return `<div data-team-editor data-definitions="${esc(definitions)}"><div class="team-presets"><span>Empezar con:</span>${Object.entries(teamPresets).map(([key,preset])=>`<button type="button" class="secondary" data-team-preset="${key}">${esc(preset.title)}</button>`).join('')}<button type="button" class="secondary" data-team-preset="CLEAR">Sin permisos</button></div>
-    <p class="team-help" data-preset-note>Elige una base o configura las tareas. Los cambios se aplican al guardar.</p>
-    <div class="team-editor-grid"><div class="team-areas">${areaCards}
-      <details class="team-platforms"${socialChannels.some(scope=>Object.keys(permissions).some(action=>selected[`${scope}.${action}`]==='yes'))?' open':''}><summary>Limitar publicaciones y métricas por red</summary><p>Contenido para redes incluye todas las redes. Para limitarlo, deja esa área sin marcar y elige aquí. Aprobar una pieza nueva requiere Aprobar en Contenido para redes.</p>${platformCards}</details></div>
-      <aside class="team-preview"><h3>Así quedará su acceso</h3><ul data-access-preview>${describeGrants(Object.entries(selected).filter(([key,value])=>value==='yes'&&key.includes('.')&&permissionRules[key.split('.')[0]]).map(([key])=>{const [scope,action]=key.split('.');return {scope,action};})).map(line=>`<li>${esc(line)}</li>`).join('')}</ul><p class="team-help">Precios, contrataciones y equipo quedan reservados al dueño.</p></aside></div></div>`;
+  const level = (scope,title,extra='') => `<div class="team-level-row" data-team-scope="${scope}"><div class="team-level-heading"><strong>${esc(title)}</strong><label class="team-level-select" hidden><span class="sr-only">Acceso a ${esc(title)}</span><select data-access-level="${scope}" aria-label="Acceso a ${esc(title)}"></select></label></div><details class="team-custom" open data-custom="${scope}"><summary>Elegir tareas</summary><div class="team-permission-options">${controls(scope,permissionRules[scope].actions)}</div></details>${extra}</div>`;
+  const branchOptions=branches?.length?branches.map(b=>[b.id,b.name]):member.branch_id?[[member.branch_id,member.branch_name]]:[];
+  // Preserve a failed draft even if the branch list is temporarily unavailable.
+  if(selected.branch&&!branchOptions.some(([id])=>id===selected.branch))branchOptions.push([selected.branch,'Sucursal por verificar']);
+  const pending=member.cash_status==='PENDING'?'<p class="team-alert">Asignación pendiente. Guarda de nuevo para completarla o elige Sin acceso para retirarla.</p>':member.cash_status==='REVOKING'?'<p class="team-alert">Caja está bloqueada. Guarda de nuevo para confirmar el retiro pendiente.</p>':'';
+  const wallet=`<fieldset class="team-module" data-module="WALLET"><legend>${icon('wallet')}Wallet</legend><div class="team-cash-row">${select('cash_mode','Atención en Caja',[['OFF','Sin acceso a Caja'],['BOTH','Compras y canjes'],['PURCHASES','Solo compras'],['REWARDS','Solo canjes']],selected.cash_mode||'OFF')}
+    <div data-cash-branch>${select('branch','Sucursal',[['','Elegir sucursal'],...branchOptions],selected.branch||(branchOptions.length===1?branchOptions[0][0]:'')||'')}</div></div>${pending}${branchError?`<p class="team-help">No se pudieron consultar las sucursales. Puedes conservar Caja y cambiar las demás tareas.</p>`:''}
+    <details class="team-more"><summary>Más opciones de Wallet</summary>${Object.entries(walletScopes).map(([scope,title])=>level(scope,title)).join('')}${level('WALLET','Solicitudes a Lúmina')}</details></fieldset>`;
+  const socialExtra=`<details class="team-platforms"><summary>Permisos por red</summary><p>Opcional: para trabajar solo con algunas redes, deja el acceso general sin permisos.</p>${socialChannels.map(scope=>level(scope,channels[scope])).join('')}</details>`;
+  const others=Object.entries(areas).filter(([scope])=>scope!=='WALLET').map(([scope,title])=>`<fieldset class="team-module" data-module="${scope}"><legend>${icon(scopeIcon[scope])}${esc(title)}</legend>${level(scope,'Tareas permitidas',scope==='SOCIAL'?socialExtra:'')}</fieldset>`).join('');
+  return `<div data-team-editor data-definitions="${esc(JSON.stringify({rules:permissionRules,titles:permissionTitles}))}"><div class="team-access-list">${wallet}${others}</div><details class="team-access-summary"><summary>Ver resumen del acceso</summary><ul data-access-preview>${describeGrants(Object.entries(selected).filter(([key,value])=>value==='yes'&&key.includes('.')&&permissionRules[key.split('.')[0]]).map(([key])=>{const [scope,action]=key.split('.');return {scope,action};})).map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details></div>`;
 }
 export function newMemberPage(actor, values = {}, error = '') {
   return `<div class="team-heading">${localLink('/equipo','← Volver al equipo')}</div>${alert(error)}${card('Añadir persona',teamForm('/equipo',actor,
     `<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100" autocomplete="name"',values.name)}${input('email','Correo de acceso','email','required maxlength="180" autocomplete="email"',values.email)}</div>
-    ${editor(null,values)}<div class="team-save">${button('Crear acceso')}<span>La persona elegirá su contraseña con un código de activación.</span></div>`))}`;
+    <p class="team-help">Después elige las tareas que podrá realizar.</p><div class="team-save">${button('Continuar')}</div>`))}`;
 }
 export function teamPage(actor, company, directory) {
   const {rows,counts,q,state,area,page,more,total} = directory;
   const link = page => '/equipo?'+new URLSearchParams({q,estado:state,area,pagina:String(page)});
   const list = table(['Persona','Puede acceder a','Estado',''],rows.map(member=>{
     const scopes=Object.entries(areas).filter(([scope])=>member.grants.some(g=>g.action==='VIEW'&&(g.scope===scope||scope==='SOCIAL'&&socialChannels.includes(g.scope)))).map(([,title])=>title);
-    if(member.cash_status==='ACTIVE')scopes.push('Caja · '+member.branch_name);
+    if(member.cash_status==='ACTIVE'){const wallet=scopes.indexOf(areas.WALLET);if(wallet>=0)scopes.splice(wallet,1);scopes.unshift('Wallet · Caja · '+member.branch_name);}
     return [`<strong>${localLink('/equipo/'+member.id,member.name)}</strong><span class="team-email">${esc(member.email)}</span>`,
       scopes.length?scopes.map(s=>`<span class="team-area-tag">${esc(s)}</span>`).join(''):'Sin áreas asignadas',
       `<span class="team-state ${memberState(member).toLowerCase()}">${states[memberState(member)]}</span>${member.cash_status==='REVOKING'?'<span class="team-email">Caja bloqueada · retiro pendiente</span>':''}`,
@@ -41,7 +44,7 @@ export function teamPage(actor, company, directory) {
     <div class="team-stats">${[[counts.total,'Personas'],[counts.active,'Accesos activos'],[counts.pending,'Por activar'],[counts.inactive,'Desactivados']].map(([value,title])=>`<div><strong>${value}</strong><span>${title}</span></div>`).join('')}</div>
     <form method="get" action="/equipo" class="team-filters">${input('q','Buscar persona','search','maxlength="100"',q)}${select('estado','Estado',[['','Todos'],...Object.entries(states)],state)}${select('area','Área',[['','Todas'],['CASH','Caja'],...Object.entries(areas)],area)}${button('Buscar','secondary')}${q||state||area?localLink('/equipo','Quitar filtros'):''}</form>
     ${card('Tu equipo',`<p class="team-help">${total} ${total===1?'persona':'personas'}${total?' · Página '+(page+1):''}</p>${list}<div class="team-pagination">${page?localLink(link(page-1),'← Anterior','btn secondary'):''}${more?localLink(link(page+1),'Siguiente →','btn secondary'):''}</div>`)}
-    ${localLink('/wallet/accesos','Revisar accesos de Wallet','team-support')}`;
+    ${disclosure('Ayuda de acceso',localLink('/wallet/accesos','Revisar conexión con Wallet','team-support'))}`;
 }
 function auditDetails(details) {
   let parsed;try{parsed=JSON.parse(details);}catch{return `<p>${esc(details)}</p>`;}
@@ -70,28 +73,24 @@ export function memberPage(actor, company, member, branches = null, options = {}
   const revision = type => hidden('revision',section===type&&values.revision!==undefined?values.revision:member.revision);
   const status=memberState(member);
   const fold=(kind,title,body)=>disclosure(title,body).replace('<details ',error&&section===kind?'<details open ':'<details ');
-  const value=(name,original)=>section==='caja'?(values[name]??''):original;
-  const cashStatus=member.cash_status==='ACTIVE'?'Caja activa':member.cash_status==='REVOKING'?'Caja bloqueada · retiro pendiente':member.cash_status==='PENDING'?'Asignación pendiente':'Sin acceso a Caja';
-  let cash=`<p class="team-help">${esc(cashStatus)}${member.branch_name?' · '+esc(member.branch_name):''}</p>`;
-  if(branchError)cash+=alert(branchError)+localLink(base+'#caja','Volver a consultar','btn secondary');
-  if(member.active&&member.cash_status!=='REVOKING'&&branches?.length)cash+=teamForm(base+'/caja/guardar',actor,`${revision('caja')}${select('branch','Sucursal de trabajo',branches.map(b=>[b.id,b.name]),value('branch',member.branch_id),'required')}<fieldset class="team-cash-options"><legend>Qué puede hacer en Caja</legend><div class="team-presets"><button type="button" class="secondary" data-cash-preset="both">Compras y canjes</button><button type="button" class="secondary" data-cash-preset="purchases">Solo compras</button><button type="button" class="secondary" data-cash-preset="rewards">Solo canjes</button></div><div class="team-permission-options">${check('purchases','Registrar compras',value('purchases',member.purchases?'yes':'')==='yes')}${check('rewards','Canjear premios y aplicar descuentos',value('rewards',member.rewards?'yes':'')==='yes')}</div></fieldset><p class="team-help" data-cash-preview role="status"></p>${button(member.cash_status==='ACTIVE'?'Guardar acceso de Caja':'Habilitar Caja')}`);
-  else if(member.active&&!branches&&!branchError&&member.cash_status!=='REVOKING')cash+=form(base+'/caja/sucursales',actor,button('Cargar sucursales','secondary'));
-  if(['ACTIVE','REVOKING'].includes(member.cash_status))cash+=fold('revocar',member.cash_status==='REVOKING'?'Completar retiro de Caja':'Retirar Caja',teamForm(base+'/caja/revocar',actor,`${revision('revocar')}${input('reason','Motivo','text','required minlength="5" maxlength="500"',section==='revocar'?values.reason:'')}${button(member.cash_status==='REVOKING'?'Reintentar retiro':'Retirar Caja','danger')}`));
-  if(!member.active)cash+='<p class="team-help">Esta persona no puede entrar. Sus permisos se conservan para revisarlos antes de reactivarla.</p>';
+  let draft=null;
+  if(section==='acceso')draft=values;
+  if(section==='permisos')draft={...values,cash_mode:cashMode(member),branch:member.branch_id};
+  if(section==='caja')draft={...grantValues(member),...values,cash_mode:values.purchases==='yes'?(values.rewards==='yes'?'BOTH':'PURCHASES'):'REWARDS'};
+  if(section==='revocar')draft={...grantValues(member),...values,cash_mode:'OFF',branch:member.branch_id};
+  const accessRevision=['acceso','permisos','caja','revocar'].includes(section)&&values.revision!==undefined?values.revision:member.revision;
   const invitationCopy=member.activated?'Cierra sus sesiones y reemplaza su contraseña por una nueva activación.':!member.active?'Reactiva su cuenta con los permisos que ves arriba.':'El código anterior dejará de funcionar.';
   const activity=history.length?`<ol class="team-history">${history.map(row=>`<li><div><strong>${esc(auditLabels[row.action]||row.action)}</strong><time>${timestamp(row.happened_at)}</time></div><span class="team-help">${esc(row.actor_name)}</span>${auditDetails(row.details)}</li>`).join('')}</ol>`:'<p class="team-help">Todavía no hay cambios registrados.</p>';
   return `<div class="team-heading">${localLink('/equipo','← Volver al equipo')}<span class="team-state ${status.toLowerCase()}">${states[status]}</span></div>
     <p class="team-contact">${esc(member.email)}</p>${notice?`<p class="team-success" role="status">${esc(notice)}</p>`:''}${alert(error)}${error?localLink(base,'Descartar el borrador y cargar el acceso actual','team-support'):''}
-    <nav class="team-sections" aria-label="Configuración de la persona"><a href="#caja">Wallet · Caja</a><a href="#permisos">Servicios y otras tareas</a><a href="#datos">Datos y acceso</a><a href="#historial">Historial</a></nav>
     ${!member.active?'<p class="team-alert">Acceso desactivado. Guardar permisos no reactiva la cuenta.</p>':''}
-    <section id="caja" class="card team-cash-card"><h2>Wallet · Compras y canjes</h2><p class="team-help">Al abrir Wallet entrará directamente a Caja. Este acceso no permite cambiar tarjetas, promociones ni equipo.</p>${cash}</section>
-    <section id="permisos" class="card"><h2>Servicios y otras tareas</h2>${teamForm(base+'/permisos',actor,`${revision('permisos')}${editor(member,section==='permisos'?values:null)}<div class="team-save">${button('Guardar permisos')}<span>Se aplican en su próxima acción, incluso si ya inició sesión.</span></div>`)}</section>
-    <section id="datos" class="card"><h2>Datos y acceso</h2>${fold('datos','Nombre y correo',teamForm(base+'/datos',actor,`${revision('datos')}<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100"',section==='datos'?values.name:member.name)}${input('email','Correo de acceso','email','required maxlength="180"',section==='datos'?values.email:member.email)}</div><p class="team-help">Cambiar el correo cierra sus sesiones y anula los códigos anteriores.</p>${button('Guardar datos','secondary')}`))}
+    <section id="permisos" class="card team-access-card"><h2>Qué puede hacer</h2><p class="team-help">Elige sus tareas y guarda una sola vez.</p>${teamForm(base+'/acceso',actor,`${hidden('revision',accessRevision)}${editor(member,branches,draft,branchError)}<div class="team-save team-save-sticky"><span data-save-status role="status">Los cambios se aplican al guardar.</span>${button(member.cash_status==='REVOKING'?'Guardar y completar retiro':'Guardar acceso')}</div>`)}</section>
+    <details id="datos" class="card team-secondary"${['datos','invitar','desactivar'].includes(section)?' open':''}><summary>Datos y acceso</summary>${fold('datos','Nombre y correo',teamForm(base+'/datos',actor,`${revision('datos')}<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100"',section==='datos'?values.name:member.name)}${input('email','Correo de acceso','email','required maxlength="180"',section==='datos'?values.email:member.email)}</div><p class="team-help">Cambiar el correo cierra sus sesiones y anula los códigos anteriores.</p>${button('Guardar datos','secondary')}`))}
       ${member.activation_expires&&status==='PENDING'?`<p class="team-help">Código válido hasta ${timestamp(member.activation_expires)}.</p>`:''}
       ${fold('invitar',!member.active?'Reactivar persona':member.activated?'Restablecer acceso':'Renovar código',form(base+'/invitar',actor,`${revision('invitar')}<p>${invitationCopy}</p>${check('confirm','Confirmo que la persona deberá activar su acceso de nuevo.',false,true)}${button(!member.active?'Reactivar y generar código':'Generar nuevo código','secondary')}`))}
       ${member.active?fold('desactivar','Desactivar persona',form(base+'/desactivar',actor,`${revision('desactivar')}<p>Se cerrarán sus sesiones y se bloqueará todo su acceso, incluida Caja. El historial se conserva.</p>${check('confirm','Confirmo la baja del acceso completo.',false,true)}${button('Desactivar persona','danger')}`)):''}
-    </section><section id="historial" class="card"><h2>Historial de acceso</h2><p class="team-help">Últimos 30 cambios.</p>${activity}</section>`;
+    </details><details id="historial" class="card team-secondary"><summary>Historial de acceso</summary><p class="team-help">Últimos 30 cambios.</p>${activity}</details>`;
 }
 export function invitePage(member, code) {
-  return card('Acceso listo para activar',`<p>Entrega este código a <strong>${esc(member.name)}</strong> (${esc(member.email)}). Debe abrir <strong>Activar un acceso</strong> y elegir su contraseña.</p><div class="team-code"><code class="secret">${esc(code)}</code><button type="button" class="secondary" data-copy-activation>Copiar código</button></div><p class="team-help" role="status" data-copy-status>Un solo uso · Válido por 48 horas.</p>${member.cash_status!=='ACTIVE'?'<p>¿Atenderá en Wallet? Asigna su sucursal y habilita compras o canjes.</p>':''}<div class="actions">${localLink('/equipo/'+member.id+'#caja',member.cash_status==='ACTIVE'?'Revisar permisos y Caja':'Asignar compras y canjes','btn')}${localLink('/equipo','Volver al equipo','btn secondary')}</div>`);
+  return card('Acceso listo para activar',`<p>Entrega este código a <strong>${esc(member.name)}</strong> (${esc(member.email)}). Debe abrir <strong>Activar un acceso</strong> y elegir su contraseña.</p><div class="team-code"><code class="secret">${esc(code)}</code><button type="button" class="secondary" data-copy-activation>Copiar código</button></div><p class="team-help" role="status" data-copy-status>Un solo uso · Válido por 48 horas.</p><div class="actions">${localLink('/equipo/'+member.id+'#permisos','Elegir tareas y permisos','btn')}${localLink('/equipo','Volver al equipo','btn secondary')}</div>`);
 }

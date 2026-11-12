@@ -1,62 +1,91 @@
 'use strict';
 for (const editor of document.querySelectorAll('[data-team-editor]')) {
-  const {rules,titles,presets}=JSON.parse(editor.dataset.definitions);
+  const {rules,titles}=JSON.parse(editor.dataset.definitions),form=editor.closest('form');
   const inputs=[...editor.querySelectorAll('input[type=checkbox]')];
   const has=(scope,action)=>inputs.some(input=>input.name===`${scope}.${action}`&&input.checked);
   const set=(scope,action,value)=>{const input=inputs.find(input=>input.name===`${scope}.${action}`);if(input)input.checked=value;};
-  const render=()=>{
-    const list=editor.querySelector('[data-access-preview]');list.replaceChildren();
-    for(const [scope,rule] of Object.entries(rules)){
-      const selected=rule.actions.filter(action=>has(scope,action));
-      if(!selected.length)continue;
-      if(['INSTAGRAM','TIKTOK','FACEBOOK','YOUTUBE'].includes(scope)&&selected.every(action=>has('SOCIAL',action)))continue;
-      const item=document.createElement('li');item.textContent=`${rule.title}: ${selected.map(action=>titles[action].toLowerCase()).join(', ')}`;list.append(item);
+  const nativeScopes=Object.keys(rules).filter(scope=>scope.startsWith('WALLET_'));
+  const combos={NONE:[],VIEW:['VIEW'],REQUEST:['VIEW','REQUEST'],ALL:['VIEW','REQUEST','APPROVE'],EDIT:['VIEW','EDIT']};
+  const selectors=[...editor.querySelectorAll('[data-access-level]')];
+  for(const select of selectors){
+    const scope=select.dataset.accessLevel,actions=rules[scope].actions;
+    const entries=[['NONE','Sin acceso'],['VIEW','Solo consultar']];
+    if(actions.includes('REQUEST'))entries.push(['REQUEST','Consultar y solicitar'],['ALL','Solicitar y aprobar'],['CUSTOM','Personalizar']);
+    if(actions.includes('EDIT'))entries.push(['EDIT','Consultar y modificar']);
+    for(const [value,label] of entries){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);}
+    select.parentElement.hidden=false;
+  }
+  function render(){
+    for(const select of selectors){
+      const scope=select.dataset.accessLevel,chosen=rules[scope].actions.filter(action=>has(scope,action));
+      const match=Object.keys(combos).find(key=>combos[key].join(',')===chosen.join(','))||'CUSTOM';
+      select.value=select.dataset.custom==='yes'?'CUSTOM':match;
+      if(scope==='WALLET'){
+        const required=nativeScopes.some(key=>has(key,'VIEW'));
+        select.querySelector('option[value=NONE]').disabled=required;
+        let hint=select.closest('[data-team-scope]').querySelector('[data-wallet-dependency]');
+        if(!hint){hint=document.createElement('p');hint.dataset.walletDependency='';hint.className='team-help';hint.textContent='La consulta está incluida en las tareas de Wallet elegidas.';select.closest('[data-team-scope]').append(hint);}
+        hint.hidden=!required;
+      }
+      const detail=editor.querySelector(`[data-custom="${scope}"]`);
+      detail.hidden=select.value!=='CUSTOM';detail.open=select.value==='CUSTOM';
     }
-    if(!list.childElementCount){const item=document.createElement('li');item.textContent='Sin acceso a servicios. Caja se asigna por separado.';list.append(item);}
+    const mode=form.elements.cash_mode.value,branch=form.elements.branch;
+    editor.querySelector('[data-cash-branch]').hidden=mode==='OFF';branch.required=mode!=='OFF';
+    const list=editor.querySelector('[data-access-preview]');list.replaceChildren();
+    const add=text=>{const item=document.createElement('li');item.textContent=text;list.append(item);};
+    if(mode!=='OFF')add('Wallet · '+({BOTH:'compras y canjes',PURCHASES:'solo compras',REWARDS:'solo canjes'}[mode])+(branch.value?' · '+branch.selectedOptions[0].textContent:''));
+    for(const [scope,rule] of Object.entries(rules)){
+      const selected=rule.actions.filter(action=>has(scope,action));if(!selected.length)continue;
+      if(['INSTAGRAM','TIKTOK','FACEBOOK','YOUTUBE'].includes(scope)&&selected.every(action=>has('SOCIAL',action)))continue;
+      add(`${rule.title}: ${selected.map(action=>titles[action].toLowerCase()).join(', ')}`);
+    }
+    if(!list.childElementCount)add('Sin tareas asignadas.');
+    for(const module of editor.querySelectorAll('[data-module]')){
+      module.dataset.enabled=String([...module.querySelectorAll('input[type=checkbox]')].some(input=>input.checked)||(module.dataset.module==='WALLET'&&mode!=='OFF'));
+    }
+    for(const details of editor.querySelectorAll('.team-more,.team-platforms')){
+      const count=[...details.querySelectorAll('[data-access-level]')].filter(select=>rules[select.dataset.accessLevel].actions.some(action=>has(select.dataset.accessLevel,action))).length;
+      const label=details.classList.contains('team-more')?'Más opciones de Wallet':'Permisos por red';
+      details.querySelector('summary').textContent=label+(count?' · '+count+' con acceso':'');
+    }
+  }
+  const syncDependency=(scope,action,checked)=>{
+    if(checked){set(scope,'VIEW',true);if(scope.startsWith('WALLET_'))set('WALLET','VIEW',true);}
+    else if(action==='VIEW'){
+      if(scope==='WALLET'&&nativeScopes.some(key=>has(key,'VIEW'))){set('WALLET','VIEW',true);return;}
+      for(const input of inputs)if(input.name.startsWith(scope+'.'))input.checked=false;
+    }
   };
   editor.addEventListener('change',event=>{
-    if(!inputs.includes(event.target))return;
-    const [scope,action]=event.target.name.split('.');
-    if(event.target.checked){
-      set(scope,'VIEW',true);
-      if(scope.startsWith('WALLET_'))set('WALLET','VIEW',true);
-    }else if(action==='VIEW'){
-      for(const input of inputs)if(input.name.startsWith(scope+'.'))input.checked=false;
-      if(scope==='WALLET')for(const input of inputs)if(input.name.startsWith('WALLET_'))input.checked=false;
+    const select=event.target.closest('[data-access-level]');
+    if(select){
+      const scope=select.dataset.accessLevel;select.dataset.custom=select.value==='CUSTOM'?'yes':'';
+      if(select.value!=='CUSTOM'){
+        for(const action of rules[scope].actions)set(scope,action,combos[select.value].includes(action));
+        if(scope.startsWith('WALLET_')&&has(scope,'VIEW'))set('WALLET','VIEW',true);
+        // Native tasks require the base read grant; removing service requests must
+        // never silently remove unrelated design/customer permissions.
+        if(nativeScopes.some(key=>has(key,'VIEW')))set('WALLET','VIEW',true);
+      }
+    } else if(inputs.includes(event.target)) {
+      const [scope,action]=event.target.name.split('.');syncDependency(scope,action,event.target.checked);
     }
-    editor.querySelector('[data-preset-note]').textContent='Configuración personalizada. Revisa el resumen antes de guardar.';
     render();
   });
-  for(const button of editor.querySelectorAll('[data-team-preset]'))button.addEventListener('click',()=>{
-    const preset=presets[button.dataset.teamPreset];
-    const current=inputs.filter(input=>input.checked).map(input=>input.name).sort().join(',');
-    const next=[...(preset?.grants||[])].sort().join(',');
-    if(current&&current!==next&&!window.confirm('Esta base reemplazará los permisos del formulario. No se guardará todavía.'))return;
-    for(const input of inputs)input.checked=(preset?.grants||[]).includes(input.name);
-    editor.querySelector('[data-preset-note]').textContent=preset?.note||'No tendrá acceso a servicios. Caja se configura por separado.';
-    editor.dispatchEvent(new Event('change',{bubbles:true}));render();
-  });
+  // Keep optional tasks compact while making existing assignments visible in
+  // their summary. No grant changes when opening or closing these sections.
   render();
-}
-for(const form of document.querySelectorAll('form[action$="/caja/guardar"]')){
-  const f=form.elements,preview=form.querySelector('[data-cash-preview]');
-  const update=()=>{
-    const actions=[f.purchases.checked?'registrar compras':null,f.rewards.checked?'canjear premios y descuentos':null].filter(Boolean);
-    preview.textContent=actions.length?'Podrá '+actions.join(' y ')+' en '+f.branch.selectedOptions[0].textContent+'. Se aplicará al guardar.':'Elige al menos una operación para habilitar Caja.';
-    f.purchases.setCustomValidity(actions.length?'':'Selecciona compras, canjes o ambas operaciones.');
-  };
-  for(const button of form.querySelectorAll('[data-cash-preset]'))button.addEventListener('click',()=>{
-    f.purchases.checked=button.dataset.cashPreset!=='rewards';f.rewards.checked=button.dataset.cashPreset!=='purchases';form.dispatchEvent(new Event('change',{bubbles:true}));
-  });
-  form.addEventListener('change',update);update();
 }
 const edited=new Set();
 for(const form of document.querySelectorAll('[data-team-form]')){
   const signature=()=>JSON.stringify([...new FormData(form)]);
   const initial=signature();
-  form.addEventListener('input',()=>{if(signature()!==initial)edited.add(form);else edited.delete(form);});
-  form.addEventListener('change',()=>{if(signature()!==initial)edited.add(form);else edited.delete(form);});
-  form.addEventListener('submit',event=>{if(!event.defaultPrevented)edited.delete(form);});
+  const status=form.querySelector('[data-save-status]');
+  const mark=()=>{const changed=signature()!==initial;if(changed)edited.add(form);else edited.delete(form);if(status)status.textContent=changed?'Cambios sin guardar':'Los cambios se aplican al guardar.';};
+  form.addEventListener('input',mark);
+  form.addEventListener('change',mark);
+  form.addEventListener('submit',event=>{if(!event.defaultPrevented){edited.delete(form);for(const button of form.querySelectorAll('button[type=submit]')){button.disabled=true;button.textContent='Guardando…';}form.setAttribute('aria-busy','true');}});
 }
 window.addEventListener('beforeunload',event=>{if(edited.size){event.preventDefault();event.returnValue='';}});
 document.addEventListener('click',event=>{

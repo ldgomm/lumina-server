@@ -28,13 +28,13 @@ test('acceso mixto abre Caja primero y conserva sólo las áreas expresamente as
 });
 test('consultar Wallet no concede compras o canjes ni crea credenciales al abrir la página',async t=>{
  const w=await setup(t,{'WALLET.VIEW':'yes'}),before=w.native.staff.size;
- const r=await w.person.session.get('/wallet');assert.equal(r.status,200);assert.match(r.body,/Falta asignarte compras o canjes/);assert.match(r.body,/Wallet · Compras y canjes/);
+ const r=await w.person.session.get('/wallet');assert.equal(r.status,200);assert.match(r.body,/Falta asignarte compras o canjes/);assert.match(r.body,/Wallet → Atención en Caja/);
  assert.equal((await w.person.session.get('/caja')).status,403);assert.equal((await w.person.session.get('/api/staff/dashboard')).status,403);
  assert.equal(w.native.staff.size,before);assert.equal(w.db.get('SELECT COUNT(*) AS n FROM cash_grants').n,0);
 });
 test('el dueño ve la asignación de Caja antes de otros servicios; no se seleccionan operaciones sin su decisión',async t=>{
  const w=await setup(t),r=await w.business.client.get('/equipo/'+w.person.id);assert.equal(r.status,200);
- assert.ok(r.body.indexOf('id="caja"')<r.body.indexOf('id="permisos"'));assert.match(r.body,/Habilitar Caja/);assert.match(r.body,/data-cash-preset="both"/);
+ assert.ok(r.body.indexOf('data-module="WALLET"')<r.body.indexOf('data-module="SOCIAL"'));assert.match(r.body,/Guardar acceso/);assert.match(r.body,/<option value="OFF" selected>/);assert.equal((r.body.match(/data-module="WALLET"/g)||[]).length,1);
  assert.doesNotMatch(r.body,/name="(?:purchases|rewards)"[^>]*checked/);
  assert.equal((await w.admin.get('/equipo/'+w.person.id)).status,403);assert.equal((await w.person.session.get('/equipo/'+w.person.id)).status,403);
 });

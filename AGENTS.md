@@ -187,7 +187,7 @@ El gate exige 178 pruebas generales y 196 PostgreSQL (374 en total), incluidas d
 
 BusinessProfile.category es un identificador explícito del catálogo business-categories.json, separado de activity. Nuevos registros desde el panel requieren elegir categoría. El servidor acepta ausencia para clientes anteriores y la conserva en ediciones antiguas. La categoría es un dato protegido: solo plataforma puede corregirla, con razón, versión y auditoría como el resto de identidad fiscal. No guardar secretos ni datos de clientes en el catálogo.
 
-42 categorías y 168 ejemplos editables. Una categoría elegida prevalece sobre actividad; GENERAL elegido no se reemplaza por inferencias. Sin categoría explícita, coincidencia exacta normalizada de actividad con nombre/alias, nunca nombre comercial, diseño o fragmentos ambiguos. Caso desconocido: GENERAL. Consultar sugerencias no modifica el perfil ni crea promociones. Mantener contexto por tenant; catálogo de alta solo plataforma; sugerencias solo dueño.
+42 categorías y 169 ejemplos editables. Una categoría elegida prevalece sobre actividad; GENERAL elegido no se reemplaza por inferencias. Sin categoría explícita, coincidencia exacta normalizada de actividad con nombre/alias, nunca nombre comercial, diseño o fragmentos ambiguos. Caso desconocido: GENERAL. Consultar sugerencias no modifica el perfil ni crea promociones. Mantener contexto por tenant; catálogo de alta solo plataforma; sugerencias solo dueño.
 
 El asistente ofrece únicamente ejemplos de la categoría resuelta, con productos correspondientes y todas las mecánicas disponibles desde cero. Elegir un ejemplo prepara un borrador, permite cambiar meta, porcentaje, conteo, nombre y premio y exige revisión final para crear. No sobrescribir ediciones sin elección explícita; conservar fechas/sucursales. Los puntos y cashback crean premios de entrega en caja, sin simular descuentos automáticos.
 
@@ -523,3 +523,12 @@ Black Friday metadata belongs to a single November/year. Server admission and re
 - El resumen de campañas de Caja filtra por sucursal, vigencia y estado activo. No calcula elegibilidad ni saldos. El motor nativo sigue decidiendo acumulación y canje, incluido el cierre de noviembre.
 - Gates: 16 suites / 152 pruebas HTTP, 130 Python, 596 nativas, PostgreSQL, Docker y gateway antes del commit local. Interacciones DOM de equipo, campañas y Caja no equivalen a prueba visual ni de dispositivos. Conservar una línea RESULTADO y URL sólo después de arranque comprobado.
 - No hay cambios Kotlin ni SQL en v052. Conservar configuraciones privadas, credenciales, saldos, historial, identidades Wallet y conexión HTTPS. Guía: `docs/lumina-wallet-equipo-v052.md`.
+
+## Lúmina v014 / Loyalty v053 — equipo unificado
+
+- Una sola sección Wallet y un formulario `/equipo/:id/acceso` para Caja y permisos de servicios. Sin roles que eleven privilegios del colaborador; opciones simples conservan combinaciones personalizadas y límites por plataforma. Datos, recuperación e historial quedan secundarios. Rutas anteriores compatibles.
+- Validar todas las entradas y revisión antes de preparar Caja. Publicar asignación y permisos en una transacción local. Sin cambios: no rotar credenciales ni aumentar revisión. Servicios sin cambios de Caja se pueden editar si el motor no responde.
+- Retiro: bloquear Caja y guardar los permisos locales antes de contactar al motor. REVOKING bloquea operaciones durante fallos y reintentos. Conservar la revisión propia del cambio local en el error, nunca reemplazarla por la de otro guardado concurrente. Resolver altas pendientes con su requestId original sin publicar el token recuperado.
+- Formularios sin JavaScript conservan controles nativos; interfaz con JS usa opciones compactas, mantiene borradores y bloquea envío duplicado. No almacenar información privada en el navegador.
+- Gates: 17 suites / 169 pruebas HTTP, 130 Python, 596 nativas, PostgreSQL, Docker y gateway antes del commit local. Sin push. DOM no equivale a navegador visual ni recepción en teléfonos. Mantener una línea RESULTADO y URL tras arranque verificado.
+- Sin cambios de Kotlin, SQL, identidades Wallet, configuraciones privadas ni HTTPS. Guía: `docs/lumina-equipo-simple-v053.md`.

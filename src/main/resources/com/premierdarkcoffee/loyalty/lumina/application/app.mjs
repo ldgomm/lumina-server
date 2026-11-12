@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { activate, approveCompany, authenticate, can, changePassword, companyFor, createAgency, createSession, createTeamMember,
   getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamMember, updateGrants, updateMember } from '../access/accounts.mjs';
 import { teamDirectory, teamHistory } from '../access/team-directory.mjs';
+import { saveTeamAccess } from '../access/team-access.mjs';
 import { equal } from '../access/security.mjs';
 import { acceptQuote, cancelContract, contractsFor, createPlan, currentQuote, getPlan, hidePlan, listPlans, offerQuote } from '../memberships/billing.mjs';
 import { channels, areas, integer, isId, now, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
@@ -400,7 +401,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return render({title:'Añadir persona',body:newMemberPage(actor,data,issue.message)},issue.status);
         }
       }
-      const teamMatch = path.match(/^\/equipo\/([^/]+)(?:\/(permisos|datos|invitar|desactivar|caja\/(?:sucursales|guardar|revocar)))?$/);
+      const teamMatch = path.match(/^\/equipo\/([^/]+)(?:\/(acceso|permisos|datos|invitar|desactivar|caja\/(?:sucursales|guardar|revocar)))?$/);
       if (teamMatch && isId(teamMatch[1])) {
         const [,id,action] = teamMatch;
         teamMember(db,actor,id);
@@ -419,11 +420,15 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return {title:current.name,body:memberPage(actor,company,current,branches,{...options,history:teamHistory(db,actor,id)})};
         };
         if (method==='GET' && !action) {
-          const notices={permisos:'Permisos guardados.',datos:'Datos guardados.',caja:'Acceso de Caja guardado.',baja:'Acceso desactivado.',retiro:'Caja retirada.'};
+          const notices={acceso:'Acceso guardado.',permisos:'Permisos guardados.',datos:'Datos guardados.',caja:'Acceso de Caja guardado.',baja:'Acceso desactivado.',retiro:'Caja retirada.'};
           return render(await memberView({notice:notices[target.searchParams.get('guardado')]||''}));
         }
         if (method==='POST') {
           try {
+            if (action==='acceso') {
+              limit(db,'loyalty:'+actor.id,40);
+              await saveTeamAccess({db,bridge,wallets},actor,id,data);
+            }
             if (action==='permisos') updateGrants(db,actor,id,data);
             if (action==='datos') updateMember(db,actor,id,data);
             if (action==='invitar') return render(teamInvitation(db,actor,id,manageAccount(db,actor,id,'INVITE',data)));
@@ -441,13 +446,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
             if (action==='caja/guardar') await bridge.configure(actor,id,{...data,credential:await wallets.ownerCredential(actor)});
             if (action==='caja/revocar') await bridge.revoke(actor,id,{...data,credential:()=>wallets.ownerCredential(actor)});
             requireThat(action,'Acción no encontrada.',404);
-            const notice={permisos:'permisos',datos:'datos',desactivar:'baja','caja/guardar':'caja','caja/revocar':'retiro'}[action];
+            const notice={acceso:'acceso',permisos:'permisos',datos:'datos',desactivar:'baja','caja/guardar':'caja','caja/revocar':'retiro'}[action];
             return redirect(res,'/equipo/'+id+(notice?'?guardado='+notice:''));
           } catch(issue) {
             if(!(issue instanceof Problem)||![400,409,503].includes(issue.status))throw issue;
             const section=action==='caja/guardar'?'caja':action==='caja/revocar'?'revocar':action;
-            const values=issue.localAccessBlocked?{...data,revision:String(teamMember(db,actor,id).revision)}:data;
-            return render(await memberView({values,error:issue.message,section},issue.status<500),issue.status);
+            const values=issue.localAccessBlocked?{...data,revision:String(issue.committedRevision)}:data;
+            const message=issue.localAccessBlocked&&action==='acceso'?'El cambio de permisos se guardó. '+issue.message:issue.message;
+            return render(await memberView({values,error:message,section},issue.status<500),issue.status);
           }
         }
       }

@@ -23,11 +23,12 @@ try{
  const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',business.id).loyalty_tenant,branch=native.branches.get(tenant)[0].id;
  const assign=async values=>{const r=await business.client.post('/equipo/'+person.id+'/caja/guardar',{revision:teamRevision(world,person.id),branch,...values});assert.equal(r.status,303,r.body);};
  const team=dom((await business.client.get('/equipo/'+person.id)).body,world.origin+'/equipo/'+person.id);load(team,'team.js');
- const cashForm=team.document.querySelector('form[action$="/caja/guardar"]');assert.equal(cashForm.checkValidity(),false);
- team.document.querySelector('[data-cash-preset=both]').click();assert.equal(cashForm.elements.purchases.checked,true);assert.equal(cashForm.elements.rewards.checked,true);assert.equal(cashForm.checkValidity(),true);
+ const cashForm=team.document.querySelector('form[action$="/acceso"]');assert.equal(cashForm.checkValidity(),true);
+ const choose=mode=>{cashForm.elements.cash_mode.value=mode;cashForm.elements.cash_mode.dispatchEvent(new team.Event('change',{bubbles:true}));};
+ choose('BOTH');assert.equal(cashForm.elements.cash_mode.value,'BOTH');assert.equal(cashForm.checkValidity(),true);
  let before=new team.Event('beforeunload',{cancelable:true});team.dispatchEvent(before);assert.equal(before.defaultPrevented,true);
- team.document.querySelector('[data-cash-preset=rewards]').click();assert.equal(cashForm.elements.purchases.checked,false);assert.equal(cashForm.elements.rewards.checked,true);assert.equal(world.db.get('SELECT COUNT(*) n FROM cash_grants').n,0);
- checks.push('Owner quick choices set only the form; no permission granted before explicit save; empty and unsaved changes protected');
+ choose('REWARDS');assert.equal(cashForm.elements.cash_mode.value,'REWARDS');assert.equal(world.db.get('SELECT COUNT(*) n FROM cash_grants').n,0);
+ checks.push('Owner operations use one selector and one Save; changing the draft never grants permissions');
  async function open(values){
   await assign(values);assert.equal((await person.session.get('/wallet')).location,'/caja');
   const w=dom((await person.session.get('/caja')).body,world.origin+'/caja');

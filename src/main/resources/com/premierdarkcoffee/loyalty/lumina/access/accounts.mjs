@@ -201,13 +201,17 @@ export function updateGrants(db, actor, id, input) {
     const target = teamMember(db,actor,id);
     requireTeamRevision(target,input);
     const next = parseGrants(input);
-    const before=grantsSnapshot(target.grants), after=grantsSnapshot(next);
-    if (JSON.stringify(before)===JSON.stringify(after)) return;
-    db.run('DELETE FROM grants WHERE account_id=?',id);
-    for(const grant of next) db.run('INSERT INTO grants VALUES(?,?,?)',id,grant.scope,grant.action);
-    db.run('UPDATE accounts SET revision=revision+1 WHERE id=?',id);
-    auditTeamChange(db,actor,target,'PERMISOS_ACTUALIZADOS',{grants:before},{grants:after});
+    if (replaceTeamGrants(db,actor,target,next)) db.run('UPDATE accounts SET revision=revision+1 WHERE id=?',id);
   });
+}
+// Called only inside a transaction, after validation and revision checks.
+export function replaceTeamGrants(db, actor, target, next) {
+  const before=grantsSnapshot(target.grants), after=grantsSnapshot(next);
+  if (JSON.stringify(before)===JSON.stringify(after)) return false;
+  db.run('DELETE FROM grants WHERE account_id=?',target.id);
+  for(const grant of next) db.run('INSERT INTO grants VALUES(?,?,?)',target.id,grant.scope,grant.action);
+  auditTeamChange(db,actor,target,'PERMISOS_ACTUALIZADOS',{grants:before},{grants:after});
+  return true;
 }
 export function updateMember(db, actor, id, input) {
   const name=text(input.name,'nombre',2,100),email=emailAddress(input.email);

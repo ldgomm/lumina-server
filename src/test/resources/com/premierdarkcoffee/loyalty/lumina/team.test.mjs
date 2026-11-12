@@ -126,7 +126,7 @@ test('Caja valida revisión, sucursal y operaciones antes de crear credenciales;
 test('retirar Caja durante caída de Wallet bloquea inmediatamente y permite completar el retiro sin reactivarla',async t=>{
   const w=await setup(t),m=await person(w),grant=await activeCash(w,m);w.loyalty.unavailable(true);
   const r=await write(w,m.id,'caja/revocar',{reason:'Cambio de tareas'});assert.equal(r.status,503);assert.match(r.body,/Caja ya está bloqueada/);
-  assert.match(r.body,new RegExp('action="/equipo/'+m.id+'/caja/revocar"[^>]*>[\\s\\S]*?name="revision" value="'+teamRevision(w,m.id)+'"'));
+  assert.match(r.body,new RegExp('action="/equipo/'+m.id+'/acceso"[^>]*>[\\s\\S]*?name="revision" value="'+teamRevision(w,m.id)+'"'));
   assert.equal(w.db.get('SELECT status FROM cash_grants WHERE account_id=?',m.id).status,'REVOKING');assert.equal((await m.session.get('/caja')).status,403);assert.equal((await m.session.get('/api/staff/dashboard')).status,403);
   assert.equal((await m.session.get('/contenido')).status,200);w.loyalty.unavailable(false);
   assert.equal((await write(w,m.id,'caja/revocar',{reason:'Completar el retiro'})).status,303);assert.equal(w.loyalty.staff.get(grant.staff_id).state,'INACTIVE');assert.equal(w.db.get('SELECT sealed_token FROM cash_grants WHERE account_id=?',m.id).sealed_token,null);
