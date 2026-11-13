@@ -1,3 +1,4 @@
+import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { acceptedContract } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -78,7 +79,8 @@ test('una solicitud conserva fecha, visita, evidencia, aprobación y estadístic
   assert.doesNotMatch((await other.get('/solicitudes?empresa='+id)).body,/Campaña de noviembre/);
 });
 test('membresía Premium y paquete individual mantienen precio, cupos y cotización',async t=>{
-  const world = await portal(t);
+  const loyalty=await fakeLoyalty(t);
+  const world = await portal(t,loyalty.origin,{platformToken:loyalty.platformToken});
   const admin = await agency(world);
   const {client,id} = await owner(world,'Negocio de planes','4');
   await admin.post(selected('/clientes/verificar',id));

@@ -1,3 +1,4 @@
+import { requireOperating } from '../businesses/control.mjs';
 import { isManagementPath, managementRouteAllowed } from './management-policy.mjs';
 import { createWalletOnboarding } from './onboarding.mjs';
 import { can, requireOwner } from '../access/accounts.mjs';
@@ -63,9 +64,9 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     const bytes=Buffer.concat(chunks);
     if(raw)return {status:response.status,bytes,type:response.headers.get('content-type')||'application/octet-stream'};
     let value;try{value=JSON.parse(bytes);}catch{throw new Problem('Loyalty devolvió una respuesta inesperada.',502);}
-    if(!response.ok)throw new Problem(response.status===401?'El acceso interno fue retirado en Loyalty. El dueño puede revisar el acceso desde Lúmina.':
+    if(!response.ok){const failure=new Problem(response.status===401?'El acceso interno fue retirado en Loyalty. El dueño puede revisar el acceso desde Lúmina.':
       typeof value.message==='string'&&value.message.length<500?value.message:'Loyalty no pudo completar la operación.',
-      [400,401,403,404,409,422,429].includes(response.status)?response.status:503);
+      [400,401,403,404,409,422,423,429].includes(response.status)?response.status:503);failure.code=value.code;throw failure;}
     return value;
   }
   const ensureCompany=createWalletOnboarding({db,remote,configured});
@@ -148,13 +149,16 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     const allowed=who=>surface==='management'?managementRouteAllowed(who,method,path):!isManagementPath(path)&&delegatedRouteAllowed(who,method,path);
     requireThat(walletRouteAllowed('OWNER',method,path)&&allowed(fresh),message,403);
     requireThat(!/^\/api\/staff\/(team(?:\/|$)|credentials(?:\/|$))/.test(path),'Administra las personas y sus permisos desde Equipos y roles de Lúmina.',403);
+    if(method!=='GET')requireOperating(db,fresh.company_id);
     const {item}=await validated(actor);
     fresh=current(actor);
+    if(method!=='GET')requireOperating(db,fresh.company_id);
     requireThat(allowed(fresh),message,403);
     requireThat(!query||(query.startsWith('?')&&query.length<=3000),'Filtro inválido.');
     requireThat(!key||/^[A-Za-z0-9_:-]{8,128}$/.test(key),'Referencia de operación inválida.');
     const result=await remote(path+query,{method,body,key,token:item.token,raw:true});
     const latest=current(actor);
+    if(method!=='GET')requireOperating(db,latest.company_id);
     requireThat(latest.revision===fresh.revision && latest.approved===fresh.approved && latest.loyalty_tenant===fresh.loyalty_tenant && allowed(latest),message,403);
     requireThat(/^(application\/json|text\/csv)/i.test(result.type),'Formato de respuesta no permitido.',502);
     if(item.account_id && result.status===401)db.run("UPDATE wallet_access SET status='BLOCKED',sealed_token=NULL WHERE account_id=? AND company_id=?",item.account_id,item.company_id);
@@ -206,12 +210,27 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     const result=await remote(path+query,{raw:true});requireThat(result.status===200&&result.type.startsWith('image/'),'No se pudo cargar la imagen.',502);current(actor);return result;
   }
   async function subscription(actor,action='status',body,key) {
-    requireOwner(actor);const {item,fresh}=await validated(actor);
+    requireOwner(actor);if(action==='accept')requireOperating(db,actor.company_id);const {item,fresh}=await validated(actor);
     requireThat(['status','offer','accept','cancel'].includes(action),'Acción no encontrada.',404);
     const result=await remote('/api/staff/lumina-subscription'+(action==='status'?'':'/'+action),{method:action==='status'?'GET':'POST',token:item.token,body,key});
     const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);
     return result;
   }
-  return {subscription,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
+  async function controlRemote(tenant,action,options={}) {
+    requireThat(isId(tenant)&&['access','account','payments','charges','reverse','void'].includes(action),'Acción inválida.');
+    const suffix=action==='reverse'?'/payments/'+options.id+'/reverse':action==='void'?'/charges/'+options.id+'/void':'/'+action;
+    if(['reverse','void'].includes(action))requireThat(isId(options.id),'Registro inválido.');
+    const offset=options.offset??0;requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000,'Página inválida.');
+    return remote('/api/platform/tenants/'+tenant+suffix+(action==='account'?'?offset='+offset:''),{...options,token:configured()});
+  }
+  async function administration(actor,companyId,action,options={}) {
+    const fresh=current(actor);requireThat(fresh.kind==='AGENCY','Acceso exclusivo de administración.',403);
+    const company=db.get('SELECT * FROM companies WHERE id=?',companyId);requireThat(company?.loyalty_tenant,'Abre la ficha de Wallet antes de continuar.',409);
+    const result=await controlRemote(company.loyalty_tenant,action,options);
+    requireThat(current(actor).revision===fresh.revision,message,403);
+    return result;
+  }
+  async function account(actor,offset=0){requireOwner(actor);const {item}=await validated(actor);const result=await remote('/api/staff/account?offset='+offset,{token:item.token});current(actor);return result;}
+  return {controlRemote,administration,account,subscription,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
     forget:()=>{},ownerCredential:async actor=>{requireOwner(actor);const {item}=await validated(actor);return item.token;}};
 }

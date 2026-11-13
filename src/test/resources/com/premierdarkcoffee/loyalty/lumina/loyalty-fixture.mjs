@@ -55,6 +55,12 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
     }
     if(req.headers.authorization==='Bearer '+platformToken && path.startsWith('/api/platform/')) {
       calls.push({path,method:req.method,role:'PLATFORM'});
+      if(configuration.administration&&/^\/api\/platform\/tenants\/[^/]+\/(access|account|payments|charges)(\/|$)/.test(path)){
+        let raw='';for await(const chunk of req)raw+=chunk;
+        const answer=await configuration.administration({path,url:new URL(req.url,'http://127.0.0.1'),method:req.method,payload:raw?JSON.parse(raw):null,key:req.headers['idempotency-key']});
+        if(answer.drop)return res.destroy();return json(res,answer.status||200,answer.body);
+      }
+
       if(path==='/api/platform/lumina/businesses'&&req.method==='POST'){
         let body='';for await(const chunk of req)body+=chunk;const data=JSON.parse(body);
         if(unavailable)return fail(res,503,'UNAVAILABLE');
@@ -104,6 +110,8 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
       const answer=await configuration.subscription({path,method:req.method,payload:raw?JSON.parse(raw):null,company:p.company,staff:p,key:req.headers['idempotency-key']});
       return json(res,answer.status||200,answer.body);
     }
+    if(path==='/api/staff/account'&&configuration.account&&p.role==='OWNER')return json(res,200,await configuration.account(p.company,new URL(req.url,'http://127.0.0.1')));
+    if(req.method==='GET'&&path==='/api/staff/account'&&p.role==='OWNER')return json(res,200,{membership:null,summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0,offset:0,today:'2026-11-13'});
     const b = branches.get(p.company.id);
     if (req.method==='GET' && path==='/api/staff/dashboard') return json(res,200,{
       business:p.company,role:p.role,branchId:p.branchId,permissions:p.permissions,

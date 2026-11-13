@@ -69,7 +69,7 @@ fun WalletPass.summary(): String {
 
 fun WalletPass.appleJson(passType: String, team: String, origin: String): JsonObject {
     val design = design()
-    return obj("formatVersion" to 1, "passTypeIdentifier" to passType, "serialNumber" to serial, "teamIdentifier" to team,
+    return obj("voided" to !snapshot.getValue("canOperate").jsonPrimitive.boolean, "formatVersion" to 1, "passTypeIdentifier" to passType, "serialNumber" to serial, "teamIdentifier" to team,
         "organizationName" to snapshot.getValue("businessName"), "description" to "Tarjeta de fidelización de ${snapshot.getValue("businessName").jsonPrimitive.content}",
         "logoText" to design.displayName.ifBlank { snapshot.getValue("businessName").jsonPrimitive.content }, "backgroundColor" to walletRgb(design.background), "foregroundColor" to walletRgb(design.foreground), "labelColor" to walletRgb(design.label),
         "sharingProhibited" to true, "webServiceURL" to "$origin/wallet/apple", "authenticationToken" to token,
@@ -78,7 +78,7 @@ fun WalletPass.appleJson(passType: String, team: String, origin: String): JsonOb
 }
 
 fun WalletPass.googleJson(objectId: String, classId: String, origin: String): JsonObject = JsonObject(obj(
-    "id" to objectId, "classId" to classId, "state" to "ACTIVE", "accountId" to serial.take(8),
+    "id" to objectId, "classId" to classId, "state" to if(snapshot.getValue("canOperate").jsonPrimitive.boolean)"ACTIVE" else "INACTIVE", "accountId" to serial.take(8),
     "barcode" to obj("type" to "QR_CODE", "value" to snapshot.getValue("cardCode")),
     "hexBackgroundColor" to design().background,
     "heroImage" to googleArtwork(origin),

@@ -1,3 +1,4 @@
+import { requireOperating } from '../businesses/control.mjs';
 import { requireOwner, teamMember, requireTeamRevision, auditTeamChange } from '../access/accounts.mjs';
 import { seal, unseal } from '../access/security.mjs';
 import { event, isId, now, Problem, requireThat, text, uuid } from '../shared/domain.mjs';
@@ -41,6 +42,7 @@ function contract(condition) {
   requireThat(condition,'El servidor de Loyalty no respondió con el contrato de equipo esperado.',502);
 }
 function currentSession(db, actor) {
+  requireOperating(db,actor.company_id);
   requireThat(db.get(`SELECT 1 FROM sessions s JOIN accounts a ON a.id=s.account_id
     WHERE s.digest=? AND s.expires_at>? AND a.id=? AND a.active=1 AND a.kind=? AND a.company_id=? AND a.revision=?`,actor.session_id,now(),actor.id,actor.kind,actor.company_id,actor.revision),
   'Vuelve a iniciar sesión.',401);

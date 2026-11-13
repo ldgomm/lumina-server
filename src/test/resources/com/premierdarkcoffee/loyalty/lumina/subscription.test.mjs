@@ -5,16 +5,16 @@ import {portal,agency,owner,colleague,acceptedContract} from './helpers.mjs';
 import {fakeLoyalty} from './loyalty-fixture.mjs';
 const legal={revision:'0',legalName:'Agencia de prueba',ruc:'1234567890001',address:'Dirección ficticia en Quito',email:'legal@example.test',phone:'0991234567',privacyUrl:'https://example.test/privacidad',confirm:'yes'};
 async function world(t){
- const calls=[];let active=false;
- const loyalty=await fakeLoyalty(t,null,{subscription:async call=>{
+ const calls=[];let active=false,cycle='MONTHLY';
+ const loyalty=await fakeLoyalty(t,null,{account:async()=>({membership:active?{plan:{walletAgreement:{},recurring:true}}:null}),subscription:async call=>{
   calls.push(call);
   if(call.path.endsWith('/accept')){
    if(!call.payload.accepted)return {status:400,body:{message:'Aceptación requerida'}};
    if(call.payload.expectedHash!=='hash-oferta')return {status:409,body:{message:'La oferta cambió'}};
-   active=true;return {body:{version:1,accepted:true}};
+   active=true;cycle=call.payload.offer.cycle;return {body:{version:1,accepted:true}};
   }
-  if(call.path.endsWith('/offer'))return {body:{hash:'hash-oferta',paidFrom:'2027-01-01',trialUntil:'2026-12-31',totalMinor:499,branches:[{name:'Principal'}],terms:'Condiciones de prueba. Cargo de $4,99.'}};
-  return {body:{version:active?1:0,accepted:active,recurring:active,legacy:false,trialUntil:active?'2026-12-31':null,nextChargeOn:active?'2027-01-01':null,monthlyMinor:499,branches:[{name:'Principal'}],agreement:active?{ownerName:'Dueño de Ejemplo',acceptedAt:'2026-11-19T15:00:00Z',terms:'Condiciones aceptadas de prueba'}:null}};
+  if(call.path.endsWith('/offer'))return {body:{hash:'hash-oferta',paidFrom:'2027-01-01',trialUntil:'2026-12-31',cycle:call.payload.cycle||'MONTHLY',unitMinor:call.payload.cycle==='ANNUAL'?5000:499,totalMinor:call.payload.cycle==='ANNUAL'?5000:499,branches:[{name:'Principal'}],terms:'Condiciones de prueba. Cargo de $4,99.'}};
+  return {body:{version:active?1:0,accepted:active,recurring:active,legacy:false,trialUntil:active?'2026-12-31':null,nextChargeOn:active?'2027-01-01':null,cycle,unitMinor:cycle==='ANNUAL'?5000:499,periodMinor:cycle==='ANNUAL'?5000:499,monthlyMinor:499,branches:[{name:'Principal'}],agreement:active?{ownerName:'Dueño de Ejemplo',acceptedAt:'2026-11-19T15:00:00Z',terms:'Condiciones aceptadas de prueba'}:null}};
  }});
  const w=await portal(t,loyalty.origin,{platformToken:loyalty.platformToken});
  const admin=await agency(w),o=await owner(w,'Ejemplo',1,{category:'CAFE'});
@@ -76,4 +76,35 @@ test('an existing included Wallet agreement blocks a second automatic subscripti
  assert.equal((await w.admin.post('/planes',offer)).status,303);
  const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,w.client,w.id,plan);
  const page=await w.client.get('/planes/wallet');assert.equal(page.status,200,page.body);assert.match(page.body,/evitar cobrar dos veces/);assert.doesNotMatch(page.body,/action="\/planes\/wallet\/aceptar"/);
+});
+
+test('annual choice shows one fifty dollar charge and sends only the selected cycle',async t=>{
+ const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);
+ const page=await w.client.get('/planes/wallet?ciclo=ANNUAL');assert.equal(page.status,200);assert.match(page.body,/\$50,00/);assert.match(page.body,/Un solo pago por doce meses/);assert.match(page.body,/name="cycle" value="ANNUAL"/);
+ const accepted=await w.client.post('/planes/wallet/aceptar',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'ANNUAL',accept:'yes',amount:'0'});assert.equal(accepted.status,303);
+ assert.equal(w.calls.at(-1).payload.offer.cycle,'ANNUAL');assert.equal(w.calls.at(-1).payload.offer.amount,undefined);
+});
+test('invalid billing cycle cannot reach the native subscription endpoint',async t=>{
+ const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);const before=w.calls.length;
+ assert.equal((await w.client.post('/planes/wallet/aceptar',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'FREE',accept:'yes'})).status,400);assert.equal(w.calls.length,before);
+});
+
+test('a native Wallet agreement blocks an overlapping package and preserves the quote',async t=>{
+ const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);
+ assert.equal((await w.client.post('/planes/wallet/aceptar',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'ANNUAL',accept:'yes'})).status,303);
+ await w.admin.post('/planes',{name:'Video y Wallet',term:'MONTHLY',price:'100',VIDEO:'2',wallet:'GIFT'});
+ const plan=w.db.get('SELECT id FROM plans').id;
+ const requested=await w.client.post('/planes/solicitar',{key:randomUUID(),['qty_'+plan]:'1'});assert.equal(requested.status,303);
+ const order=w.db.get('SELECT * FROM package_orders'),line=w.db.get('SELECT * FROM package_order_lines');
+ const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guayaquil',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ assert.equal((await w.admin.post('/agencia'+requested.location+'/cotizar?empresa='+w.id,{revision:String(order.revision),['price_'+line.id]:'100',['start_'+line.id]:day,['end_'+line.id]:day,terms:'Dos videos y Wallet incluida.'})).status,303);
+ const rejected=await w.client.post(requested.location+'/aceptar',{revision:String(order.revision+1),confirm:'yes'});assert.equal(rejected.status,409);assert.match(rejected.body,/evitar cargos duplicados/);
+ assert.equal(w.db.get('SELECT status FROM package_orders').status,'QUOTED');assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
+});
+test('an accepted future Wallet package prevents a second automatic agreement before activation',async t=>{
+ const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);await w.admin.post('/agencia/clientes/verificar?empresa='+w.id);
+ await w.admin.post('/planes',{name:'Wallet incluido',term:'MONTHLY',price:'50',VIDEO:'1',wallet:'GIFT'});
+ const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,w.client,w.id,plan);
+ w.db.run("UPDATE package_orders SET status='ACCEPTED'");w.db.run('DELETE FROM contracts');
+ const page=await w.client.get('/planes/wallet');assert.match(page.body,/evitar cobrar dos veces/);assert.doesNotMatch(page.body,/action="\/planes\/wallet\/aceptar"/);
 });

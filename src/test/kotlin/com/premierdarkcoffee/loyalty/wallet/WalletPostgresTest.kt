@@ -455,5 +455,25 @@ class WalletPostgresTest {
         override fun saveLink(objectId:String,origin:String)="https://pay.google.com/gp/v/save/$objectId"
     }
     private class TestClock(@Volatile var value:Instant):Clock(){override fun getZone()=ZoneOffset.UTC;override fun withZone(zone:ZoneId)=Clock.fixed(value,zone);override fun instant()=value}
+
+    @Test fun `suspend and resume retain both provider identities balances and registrations`() {
+        val f=fixture();earn(f);val original=wallet.materialize(f.member,"apple");register(original)
+        wallet.materialize(f.member,"google")
+        val initial=service.commercial.accessState(f.staff.tenant).getValue("version").jsonPrimitive.int
+        service.commercial.changeAccess(f.staff.tenant,AccessChange("SUSPENDED","Estado administrativo",initial,id()))
+        assertEquals(423,assertFailsWith<Problem>{earn(f)}.status)
+        val inactive=wallet.materialize(f.member)
+        assertTrue(inactive.appleJson(apple.passType,"ABCDEFGHIJ",origin).getValue("voided").jsonPrimitive.boolean)
+        assertEquals("INACTIVE",inactive.googleJson(inactive.googleId!!,inactive.googleClass!!,origin).str("state"))
+        service.commercial.changeAccess(f.staff.tenant,AccessChange("ACTIVE","Servicio reactivado",initial+1,id()))
+        val active=wallet.materialize(f.member)
+        assertEquals(original.serial,active.serial);assertEquals(original.token,active.token)
+        assertEquals(original.appleType,active.appleType);assertEquals(inactive.googleId,active.googleId);assertEquals(inactive.googleClass,active.googleClass)
+        assertEquals(original.snapshot.getValue("balances"),active.snapshot.getValue("balances"))
+        assertFalse(active.appleJson(apple.passType,"ABCDEFGHIJ",origin).getValue("voided").jsonPrimitive.boolean)
+        assertEquals("ACTIVE",active.googleJson(active.googleId!!,active.googleClass!!,origin).str("state"))
+        assertEquals(1,count("SELECT count(*) FROM wallet_apple_registrations WHERE serial=?",original.serial));earn(f)
+    }
+
 }
 private fun JsonObject.str(key:String)=getValue(key).jsonPrimitive.content

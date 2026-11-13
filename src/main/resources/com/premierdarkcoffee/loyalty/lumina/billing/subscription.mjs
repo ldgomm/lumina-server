@@ -18,14 +18,16 @@ export function saveLegalProfile(db,actor,data) {
   event(db,actor,null,'AGENCY','legal','IDENTIFICACION_LEGAL_ACTUALIZADA','Versión '+((current?.revision||0)+1));
  });
 }
-export function subscriptionOfferInput(db,actor) {
+export function subscriptionOfferInput(db,actor,cycle="MONTHLY") {
  requireOwner(actor);
+ requireThat(["MONTHLY","ANNUAL"].includes(cycle),"Elige mensual o anual.");
  const currentDay=localDay();
  const previous=db.get(`SELECT c.id FROM contracts c JOIN plan_items i ON i.plan_id=c.plan_id AND i.service='WALLET'
-   WHERE c.company_id=? AND c.cancelled_at IS NULL AND c.starts_on<=? AND c.ends_before>? LIMIT 1`,actor.company_id,currentDay,currentDay);
- requireThat(!previous,'Tienes Wallet incluida en un acuerdo vigente. Lúmina debe revisar ese acuerdo antes de añadir una suscripción para evitar cobrar dos veces.',409);
+   WHERE c.company_id=? AND c.cancelled_at IS NULL AND c.ends_before>? LIMIT 1`,actor.company_id,currentDay);
+ const accepted=db.get(`SELECT l.id FROM package_order_lines l JOIN package_orders o ON o.id=l.order_id WHERE o.company_id=? AND o.status='ACCEPTED' AND l.ends_before>? AND (l.wallet<>'NONE' OR EXISTS(SELECT 1 FROM json_each(l.items_json) i WHERE json_extract(i.value,'$.service')='WALLET')) LIMIT 1`,actor.company_id,currentDay);
+ requireThat(!previous&&!accepted,'Tienes Wallet incluida en un acuerdo vigente. Lúmina debe revisar ese acuerdo antes de añadir una suscripción para evitar cobrar dos veces.',409);
  const provider=legalProfile(db);
  requireThat(provider,'Lúmina está completando la identificación del proveedor. Aún no se activan cargos automáticos.',409);
  const {revision,...identity}=provider;
- return {companyId:actor.company_id,ownerId:actor.id,ownerName:actor.name,ownerEmail:actor.email,provider:identity};
+ return {companyId:actor.company_id,ownerId:actor.id,ownerName:actor.name,ownerEmail:actor.email,provider:identity,cycle};
 }

@@ -83,7 +83,7 @@ test('migración v2 preserva todos los accesos cifrados y realiza un respaldo pr
   raw.prepare("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'OWNER')").run(account,company,'Persona','existente@example.test');
   raw.prepare("INSERT INTO wallet_access VALUES(?,?,?,?,?,?,?,'ACTIVE',?)").run(account,company,tenant,uuid(),'Lúmina · Persona',uuid(),'unchanged-ciphertext','2026-10-01');
   const before=raw.prepare('SELECT * FROM wallet_access').all();raw.close();
-  let db=openDatabase(path);assert.deepEqual(db.all('SELECT * FROM wallet_access'),before);assert.equal(db.get('PRAGMA user_version').user_version,7);db.close();
+  let db=openDatabase(path);assert.deepEqual(db.all('SELECT * FROM wallet_access'),before);assert.equal(db.get('PRAGMA user_version').user_version,8);db.close();
   assert.equal(readdirSync(join(folder,'migrations')).length,1);db=openDatabase(path);assert.deepEqual(db.all('SELECT * FROM wallet_access'),before);db.close();assert.equal(readdirSync(join(folder,'migrations')).length,1);
  }finally{rmSync(folder,{recursive:true,force:true});}
 });

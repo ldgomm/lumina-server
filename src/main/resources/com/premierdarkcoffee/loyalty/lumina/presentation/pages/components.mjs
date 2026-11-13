@@ -63,7 +63,8 @@ function navLinks(actor,company,url,cash) {
   if((actor.kind!=='AGENCY'||company)&&can(actor,'MAPS'))items.push([url('/mapas'),'Reseñas y ubicaciones','maps']);
   if(actor.kind==='OWNER')items.push(['/gestion','Administración','settings']);
   if(actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&can(actor,'WALLET')&&can(actor,'WALLET_REPORTS'))items.push(['/gestion/informes','Informes de fidelización','metrics']);
-  items.push(['/cuenta','Mi cuenta','settings']);
+  if(actor.kind==='OWNER')items.push(['/mi-estado-cuenta','Mi cuenta y pagos','plans']);
+  items.push(['/ayuda','Ayuda','content'],['/cuenta','Mi cuenta','settings']);
   return items;
 }
 const mark = `<img class="lumina-symbol" src="/assets/lumina-symbol.png" width="44" height="44" alt=""><span>Lúmina <strong>Digital</strong></span>`;

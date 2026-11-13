@@ -134,8 +134,8 @@ class WalletDomainTest {
     }
     @Test fun `paused business retains card with generic status and migration accepts format`() {
         val paused=pass().copy(snapshot=JsonObject(pass().snapshot+("canOperate" to JsonPrimitive(false))))
-        val apple=paused.appleJson(paused.appleType!!,"ABCDEFGHIJ",origin);assertFalse(apple.toString().contains("voided"));assertTrue(apple.toString().contains("pausadas"))
-        assertEquals("ACTIVE",paused.googleJson(paused.googleId!!,paused.googleClass!!,origin).getValue("state").jsonPrimitive.content)
+        val apple=paused.appleJson(paused.appleType!!,"ABCDEFGHIJ",origin);assertTrue(apple.getValue("voided").jsonPrimitive.boolean);assertTrue(apple.toString().contains("pausadas"))
+        assertEquals("INACTIVE",paused.googleJson(paused.googleId!!,paused.googleClass!!,origin).getValue("state").jsonPrimitive.content)
         val sql=requireNotNull(javaClass.getResource("/com/premierdarkcoffee/loyalty/infrastructure/persistence/migrations/V003.sql")).readText();assertEquals(SqlFingerprint.checksum(sql),SqlFingerprint.checksum(sql.replace("CREATE TABLE","create   table")))
     }
 }

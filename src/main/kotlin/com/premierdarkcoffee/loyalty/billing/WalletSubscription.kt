@@ -15,8 +15,13 @@ import java.sql.Connection
 import java.sql.Timestamp
 import java.time.*
 
-const val WALLET_TERMS_VERSION = "wallet-2026-11-13-v1"
+const val WALLET_TERMS_VERSION = "wallet-2026-11-13-v2"
 const val WALLET_BRANCH_PRICE = 499L
+const val WALLET_ANNUAL_PRICE = 5000L
+fun walletUnitPrice(cycle:String):Long {
+    need(cycle in setOf("MONTHLY","ANNUAL"),"INVALID_CYCLE","Elige mensual o anual.")
+    return if(cycle=="ANNUAL")WALLET_ANNUAL_PRICE else WALLET_BRANCH_PRICE
+}
 val WALLET_PROMOTION_END: LocalDate = LocalDate.of(2027,1,1) // Exclusive; never roll this campaign forward.
 fun walletPaidFrom(activation:LocalDate):LocalDate = maxOf(activation,WALLET_PROMOTION_END)
 
@@ -28,13 +33,16 @@ fun walletPaidFrom(activation:LocalDate):LocalDate = maxOf(activation,WALLET_PRO
         need(url?.scheme=="https" && !url.host.isNullOrBlank() && url.userInfo==null && privacyUrl.length<=500,"PRIVACY_REQUIRED","Lúmina debe publicar su política de privacidad.")
     }
 }
-@Serializable data class WalletOfferInput(val companyId:String,val ownerId:String,val ownerName:String,val ownerEmail:String,val provider:WalletProviderLegal)
+@Serializable data class WalletOfferInput(val companyId:String,val ownerId:String,val ownerName:String,val ownerEmail:String,val provider:WalletProviderLegal,val cycle:String="MONTHLY")
 @Serializable data class WalletAcceptInput(val offer:WalletOfferInput,val expectedHash:String,val accepted:Boolean)
 @Serializable data class WalletCancelInput(val expectedVersion:Int,val confirmed:Boolean)
 @Serializable data class WalletAgreement(val version:String,val terms:String,val hash:String,val acceptedAt:String,val ownerId:String,val ownerName:String,val ownerEmail:String,
     val companyId:String,val activationOn:String,val paidFrom:String,val firstBranchIds:List<String>,val provider:WalletProviderLegal)
 
-fun walletTerms(provider:WalletProviderLegal,business:String,activation:LocalDate,paidFrom:LocalDate,branchCount:Int):String = """
+fun walletTerms(provider:WalletProviderLegal,business:String,activation:LocalDate,paidFrom:LocalDate,branchCount:Int,cycle:String="MONTHLY"):String {
+    val unit=walletUnitPrice(cycle);val annual=cycle=="ANNUAL"
+    val price=if(annual)"50,00" else "4,99";val period=if(annual)"año" else "mes"
+    return """
 LÚMINA DIGITAL · CONDICIONES DE WALLET
 Versión $WALLET_TERMS_VERSION
 Proveedor: ${provider.legalName}, RUC ${provider.ruc}. Domicilio: ${provider.address}.
@@ -45,16 +53,19 @@ Negocio contratante: $business. Inicio: $activation. Sucursales registradas: $br
 
 2. Promoción. Las activaciones hasta el 31 de diciembre de 2026 tienen tarifa de plataforma de USD 0,00 desde su activación hasta ese día inclusive. La promoción termina el 1 de enero de 2027 a las 00:00 de Ecuador continental y no se renueva cada año. Si el alta ocurre después, el servicio es de pago desde la activación. Primer cargo previsto: $paidFrom.
 
-3. Tarifa y cargo automático. La tarifa final es USD 4,99 por mes por sucursal registrada, con los impuestos aplicables incluidos. Con $branchCount sucursal(es), el total mensual inicial es USD ${java.math.BigDecimal.valueOf(Math.multiplyExact(branchCount.toLong(),WALLET_BRANCH_PRICE),2).toPlainString()}. Al aceptar, el representante autoriza la renovación mensual y el registro automático del cargo en la cuenta del negocio mientras mantenga la suscripción. No hace falta una nueva orden cada mes. Esto no autoriza débitos en cuentas bancarias ni tarjetas de pago. Un registro de cuenta no sustituye la factura tributaria que corresponda emitir.
+3. Tarifa y cargo automático. La tarifa final es USD $price por $period por sucursal registrada, con los impuestos aplicables incluidos. Con $branchCount sucursal(es), el total por período inicial es USD ${java.math.BigDecimal.valueOf(Math.multiplyExact(branchCount.toLong(),unit),2).toPlainString()}. Al aceptar, el representante autoriza la renovación ${if(annual)"anual" else "mensual"} y el registro automático del cargo en la cuenta del negocio mientras mantenga la suscripción. No hace falta una nueva orden cada $period. ${if(annual)"El año se paga en un solo cargo de USD 50,00 por sucursal, no en doce cuotas; son doce meses de servicio." else "Puedes elegir la modalidad anual antes de aceptar."} Esto no autoriza débitos en cuentas bancarias ni tarjetas de pago. Un registro de cuenta no sustituye la factura tributaria que corresponda emitir.
 
-4. Períodos y sucursales. El primer período de pago comienza en la fecha indicada y termina en el mismo día del mes siguiente; si ese día no existe, termina el último día de ese mes. Después se conserva el día de corte original. Cada sucursal nueva queda incluida sin costo adicional hasta el siguiente corte y desde entonces suma USD 4,99 por mes. Crear una sucursal muestra este efecto antes de guardar. Los cambios de nombre no crean otra sucursal ni otro cargo. Los cargos vencen siete días después de su emisión; esta tarifa no añade intereses ni recargos automáticos. Servicios de contenido, web, diseño y trabajos adicionales solo se contratan por separado con su propio precio.
+4. Períodos y sucursales. El primer período de pago comienza en la fecha indicada y termina en el mismo día ${if(annual)"del año siguiente" else "del mes siguiente"}; si ese día no existe, termina el último día de ese mes. Después se conserva el día de corte original. Cada sucursal nueva queda incluida sin costo adicional hasta el siguiente corte y desde entonces suma USD $price por $period. Crear una sucursal muestra este efecto antes de guardar. Los cambios de nombre no crean otra sucursal ni otro cargo. Los cargos vencen siete días después de su emisión; esta tarifa no añade intereses ni recargos automáticos. Servicios de contenido, web, diseño y trabajos adicionales solo se contratan por separado con su propio precio.
 
 5. Cancelación. El dueño puede desactivar la renovación desde Paquetes y servicios → Wallet, sin penalidad. La solicitud queda registrada inmediatamente y el servicio continúa hasta el final del período vigente; durante la promoción, hasta el 31 de diciembre de 2026. No se emiten períodos posteriores. Para terminación inmediata, devolución o corrección de un cargo, escribe al contacto del proveedor: se aplicarán los derechos y ajustes que correspondan por servicios efectivamente prestados. Esta opción no limita derechos de devolución, reclamación ni terminación reconocidos por la ley. Los saldos legítimamente pendientes no se borran al cancelar.
 
 6. Datos y continuidad. El negocio es responsable de informar a sus clientes y contar con una base legítima para el programa y las comunicaciones. Lúmina trata la información de cuenta y aceptación para ejecutar el contrato, atender solicitudes y cumplir obligaciones legales; los registros de operación de clientes se tratan para prestar el servicio al negocio bajo sus instrucciones. Las finalidades, destinatarios, transferencias, plazos de conservación y medios para ejercer acceso, rectificación, eliminación, oposición y demás derechos constan en ${provider.privacyUrl}. La aceptación comercial no habilita publicidad opcional ni usos ajenos al servicio. La terminación no elimina automáticamente tarjetas, identidades ni historial; cesan las nuevas operaciones al concluir el período y se atienden conservación legal, exportación y solicitudes de derechos. Las actualizaciones del sistema deben preservar las identidades y conexiones existentes; pueden existir incidencias técnicas que deban ser corregidas.
 
 7. Aceptación y cambios. Se conserva una copia descargable de estas condiciones, su versión, el resumen económico, la cuenta que acepta y la fecha. Abrir Wallet, visitar una página o crear una cuenta no equivale a aceptar cargos. Los negocios existentes solo se incorporan mediante aceptación expresa, sin cargos retroactivos anteriores a ella. Cambios de precio o condiciones comerciales requieren una nueva aceptación; el proveedor no puede modificar unilateralmente lo ya acordado. El servicio y las reclamaciones se rigen por la normativa ecuatoriana aplicable, sin renuncia a derechos ni arbitraje obligatorio.
+
+8. Estado del negocio. Lúmina puede pausar o suspender la operación por revisión de seguridad, incumplimiento acreditado o solicitud del negocio, dejando el motivo en su cuenta y un canal para resolverlo. Estos estados bloquean nuevas compras, canjes y solicitudes; no borran saldos ni tarjetas. Las plataformas de Wallet controlan cuándo reflejan u ocultan la tarjeta inactiva. La pausa o suspensión no cancela por sí sola la renovación acordada; el dueño conserva acceso a cuenta, pagos y cancelación. El cierre administrativo detiene los próximos cargos de Wallet. Se revisarán los ajustes y devoluciones que correspondan por servicios no prestados, sin limitar derechos legales. Reactivar el negocio no restablece una renovación terminada sin nueva aceptación.
 """.trimIndent()
+}
 
 private fun walletBranches(c:Connection,tenant:String) = c.rows("SELECT id,name FROM branches WHERE tenant_id=? ORDER BY id",tenant) { obj("id" to it.getString(1),"name" to it.getString(2)) }
 private fun LoyaltyService.offer(c:Connection,s:Staff,input:WalletOfferInput):JsonObject {
@@ -67,30 +78,32 @@ private fun LoyaltyService.offer(c:Connection,s:Staff,input:WalletOfferInput):Js
     val branches=walletBranches(c,s.tenant)
     need(branches.isNotEmpty(),"BRANCH_REQUIRED","El negocio necesita una sucursal.",409)
     val name=c.one("SELECT name FROM tenants WHERE id=?",s.tenant){it.getString(1)}!!
-    val paid=maxOf(walletPaidFrom(date),current?.first?.walletEndsOn?.let(::billingDate)?:date)
-    val terms=walletTerms(input.provider,name,date,paid,branches.size)
+    val paid=maxOf(walletPaidFrom(date),if(current?.first?.recurring==true)current.third else current?.first?.walletEndsOn?.let(::billingDate)?:date)
+    val unit=walletUnitPrice(input.cycle)
+    val terms=walletTerms(input.provider,name,date,paid,branches.size,input.cycle)
     val summary=obj("version" to (current?.second?:0),"activationOn" to date,"paidFrom" to paid,"trialUntil" to if(date<WALLET_PROMOTION_END)"2026-12-31" else null,
-        "unitMinor" to WALLET_BRANCH_PRICE,"totalMinor" to Math.multiplyExact(branches.size.toLong(),WALLET_BRANCH_PRICE),"branches" to branches,"terms" to terms,"termsVersion" to WALLET_TERMS_VERSION)
+        "cycle" to input.cycle,"intervalMonths" to if(input.cycle=="ANNUAL")12 else 1,"unitMinor" to unit,"totalMinor" to Math.multiplyExact(branches.size.toLong(),unit),"branches" to branches,"terms" to terms,"termsVersion" to WALLET_TERMS_VERSION)
     val hash=Security.hash(summary.toString()+json.encodeToString(input))
     return JsonObject(summary+("hash" to JsonPrimitive(hash)))
 }
-fun LoyaltyService.walletSubscriptionOffer(s:Staff,input:WalletOfferInput):JsonObject {s.owner();return db.tx {c->authorizeStaff(c,s);offer(c,s,input)}}
+fun LoyaltyService.walletSubscriptionOffer(s:Staff,input:WalletOfferInput):JsonObject {s.owner();return db.tx {c->authorizeStaff(c,s,true);commercial.sync(c,s.tenant,commercial.today(c,s.tenant));offer(c,s,input)}}
 fun LoyaltyService.acceptWalletSubscription(s:Staff,input:WalletAcceptInput,key:String):JsonObject {
-    s.owner();need(input.accepted,"CONSENT_REQUIRED","Acepta las condiciones y el cargo mensual antes de continuar.")
+    s.owner();need(input.accepted,"CONSENT_REQUIRED","Acepta las condiciones y el cargo del período elegido antes de continuar.")
     return db.tx {c->
         authorizeStaff(c,s,true)
         commercial.once(c,s.tenant,"wallet-subscribe:${s.id}",key,json.encodeToString(input)) {
             val quote=offer(c,s,input.offer)
             need(Security.equal(quote.getValue("hash").jsonPrimitive.content,input.expectedHash),"OFFER_CHANGED","Cambió la fecha, el número de sucursales o las condiciones. Revisa el resumen actualizado antes de aceptar.",409)
             val previous=commercial.plan(c,s.tenant)
-            need(previous==null || !previous.first.recurring,"ALREADY_ACTIVE","La suscripción ya está activa.",409)
+            need(previous==null || !previous.first.recurring || previous.first.intervalMonths!=(if(input.offer.cycle=="ANNUAL")12 else 1),"ALREADY_ACTIVE","La suscripción ya está activa.",409)
             val date=commercial.today(c,s.tenant)
             // A cancelled period remains paid/available; resuming cannot charge it a second time.
-            val paid=maxOf(walletPaidFrom(date),previous?.first?.walletEndsOn?.let(::billingDate)?:date)
+            val paid=maxOf(walletPaidFrom(date),if(previous?.first?.recurring==true)previous.third else previous?.first?.walletEndsOn?.let(::billingDate)?:date)
             need(paid.toString()==quote.getValue("paidFrom").jsonPrimitive.content,"PERIOD_STILL_ACTIVE","El período actual sigue disponible. Puedes volver a activar la renovación al finalizarlo.",409)
             val agreement=WalletAgreement(WALLET_TERMS_VERSION,quote.getValue("terms").jsonPrimitive.content,input.expectedHash,commercial.clock.instant().toString(),input.offer.ownerId,input.offer.ownerName,input.offer.ownerEmail,
                 input.offer.companyId,date.toString(),paid.toString(),quote.getValue("branches").jsonArray.map{it.jsonObject.getValue("id").jsonPrimitive.content},input.offer.provider)
-            val plan=MembershipPlan("Wallet · USD 4,99 por sucursal",WALLET_BRANCH_PRICE,date.toString(),paid.toString(),anchorDay=if(previous?.first?.walletEndsOn==paid.toString())previous.first.anchorDay else paid.dayOfMonth,walletAgreement=agreement)
+            val annual=input.offer.cycle=="ANNUAL"
+            val plan=MembershipPlan(if(annual)"Wallet · USD 50,00 al año por sucursal" else "Wallet · USD 4,99 al mes por sucursal",walletUnitPrice(input.offer.cycle),date.toString(),paid.toString(),intervalMonths=if(annual)12 else 1,anchorDay=if(previous?.third==paid)previous.first.anchorDay else paid.dayOfMonth,walletAgreement=agreement)
             val access=commercial.lock(c,s.tenant)
             need(access.getValue("state").jsonPrimitive.content=="ACTIVE","BUSINESS_SUSPENDED","El negocio debe estar activo antes de contratar.",409)
             val version=(previous?.second?:0)+1
@@ -123,7 +136,7 @@ fun LoyaltyService.walletSubscriptionStatus(s:Staff):JsonObject {s.owner();retur
     obj("today" to date,"version" to (current?.second?:0),"accepted" to (agreement!=null),"legacy" to (current!=null&&agreement==null),
         "recurring" to (current?.first?.recurring?:false),"trialUntil" to if(agreement!=null && date<WALLET_PROMOTION_END)"2026-12-31" else null,
         "endsOn" to current?.first?.walletEndsOn,"nextChargeOn" to if(current?.first?.recurring==true)current.third else null,
-        "unitMinor" to (current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"monthlyMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"branches" to branches,
+        "cycle" to if(current?.first?.intervalMonths==12)"ANNUAL" else "MONTHLY","intervalMonths" to (current?.first?.intervalMonths?:1),"periodMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"unitMinor" to (current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"monthlyMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"branches" to branches,
         "agreement" to agreement?.let { json.encodeToJsonElement(it) })
 }}
 /** Historical branch timestamps make catch-up billing deterministic after downtime. */

@@ -14,9 +14,9 @@ const scheduleDate = (name,caption,extra='required',value='') => input(name,capt
 const stat = (caption,value) => `<div class="stat"><span>${esc(caption)}</span><strong>${number(value)}</strong></div>`;
 export function companiesPage(companies, q) {
   const filter = `<form class="filter" action="/clientes"><div>${input('q','Buscar negocio','search','maxlength="100"',q)}</div>${button('Buscar','secondary')}</form>`;
-  return card('Cartera de clientes',filter + table(['Negocio','Verificación','Contacto','Registro','Equipo'],companies.map(company=>[
+  return card('Cartera de clientes',filter + table(['Negocio','Verificación','Contacto','Registro','Administración'],companies.map(company=>[
     localLink('/inicio?empresa='+company.id,company.name),company.approved ? badge('Verificado','success') : badge('Por verificar'),
-    esc(company.phone),esc(timestamp(company.created_at)),localLink('/equipos?empresa='+company.id,'Ver equipo →'),
+    esc(company.phone),esc(timestamp(company.created_at)),localLink('/administracion/negocios/'+company.id,'Administrar →')+' · '+localLink('/equipos?empresa='+company.id,'Ver equipo'),
   ]),'Los negocios que se registren aparecerán aquí.'));
 }
 export function requestForm(actor,url,courtesy = false,selected='',onlySocial=false,values={}) {
@@ -41,7 +41,7 @@ export function homePage({actor,company,url,groups,videoRequested,videoDelivered
     `<p>Cédula terminada en <strong>${esc(company.document_hint)}</strong> · ${esc(company.phone)}</p>
     ${form(url('/clientes/verificar'),actor,button('Marcar negocio verificado'))}`,
   'Confirma con el responsable que el negocio y sus datos le corresponden antes de iniciar producción o delegar Caja.') : '';
-  return `${approval}${actor.readOnlyCompany?`<div class="actions">${localLink('/agencia/inicio?empresa='+company.id,'Abrir tareas de Lúmina','btn secondary')}</div>`:''}
+  return `${localLink('/administracion/negocios/'+company.id,'Estado, suscripción y pagos','btn')}${approval}${actor.readOnlyCompany?`<div class="actions">${localLink('/agencia/inicio?empresa='+company.id,'Abrir tareas de Lúmina','btn secondary')}</div>`:''}
     ${hasScopes ? `<section class="stat-grid" aria-label="Resumen de actividad">
       ${stat('Solicitudes abiertas',open)}${stat('Videos solicitados',videoRequested)}
       ${stat('Videos entregados',videoDelivered)}${stat('Próximas visitas',upcoming)}</section>` : ''}

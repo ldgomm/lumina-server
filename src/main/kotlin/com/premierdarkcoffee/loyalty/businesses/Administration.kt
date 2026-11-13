@@ -113,6 +113,7 @@ fun LoyaltyService.branchDirectory(s: Staff, q: BranchDirectoryQuery = BranchDir
         val subscription=commercial.plan(c,s.tenant)
         obj("business" to business,"items" to items,"total" to total,"offset" to q.offset,"hasMore" to (q.offset+items.size<total),"from" to since,"asOf" to at,"days" to 30,
             "walletRecurring" to (subscription?.first?.walletAgreement!=null && subscription.first.recurring),
+            "walletIntervalMonths" to (subscription?.first?.intervalMonths?:1),
             "walletUnitMinor" to (subscription?.first?.feeMinor?:com.premierdarkcoffee.loyalty.billing.WALLET_BRANCH_PRICE))
     }
 }

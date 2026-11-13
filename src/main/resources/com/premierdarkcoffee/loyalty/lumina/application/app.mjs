@@ -1,3 +1,7 @@
+import { businessControl, requireOperating, requestBusinessChange, createBusinessControlSync, businessStates } from '../businesses/control.mjs';
+import { controlPage, accountPage as billingAccountPage } from '../presentation/pages/business-control-pages.mjs';
+import { paymentInput, chargeInput } from '../billing/payment-input.mjs';
+import { walletComparison } from '../presentation/pages/wallet-benefits.mjs';
 import { campaignPage, campaignBanner } from '../presentation/pages/campaign-pages.mjs';
 import { campaignBases, createCampaignOffer } from '../campaigns/offers.mjs';
 import { legalProfile, saveLegalProfile, subscriptionOfferInput } from '../billing/subscription.mjs';
@@ -18,7 +22,7 @@ import { teamsConsultationPage } from '../presentation/pages/team-consultation-p
 import { saveTeamAccess } from '../access/team-access.mjs';
 import { equal } from '../access/security.mjs';
 import { acceptQuote, cancelContract, contractsFor, createPlan, currentQuote, getPlan, hidePlan, listPlans, offerQuote } from '../memberships/billing.mjs';
-import { channels, areas, integer, isId, now, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
+import { event, channels, areas, integer, isId, now, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
 import { cashierAssets, createLoyaltyBridge } from '../wallet/bridge.mjs';
 import { createWalletWorkspace } from '../wallet/wallet.mjs';
 import { addEvidence, addPiece, addPublication, addVisit, createRequest, editPiece, finishVisit, getPiece, getRequest,
@@ -112,7 +116,10 @@ function getRequestPage(db,actor,company,url,request) {
 export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {}, readiness = null }) {
   const bridge = createLoyaltyBridge({db,key,origin:loyaltyUrl});
   const wallets = createWalletWorkspace({db,key,origin:loyaltyUrl,integration});
-  return createServer({requestTimeout:20_000,headersTimeout:10_000},async (req,res) => {
+  const commercialWork=new Map();
+  const commercialTurn=async(companyId,work)=>{const previous=commercialWork.get(companyId)||Promise.resolve();const next=previous.catch(()=>{}).then(work);commercialWork.set(companyId,next);try{return await next;}finally{if(commercialWork.get(companyId)===next)commercialWork.delete(companyId);}};
+  const controls=createBusinessControlSync({db,remote:wallets.controlRemote,ensureCompany:wallets.ensureCompany});
+  const server=createServer({requestTimeout:20_000,headersTimeout:10_000},async (req,res) => {
     let actor = null;
     let company = null;
     let path = '/';
@@ -182,6 +189,17 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (!actor) {
         if (method==='GET' && !api) return redirect(res,'/');
         throw new Problem('Inicia sesión para continuar.',401);
+      }
+      const serviceAllowed=()=>path==='/salir'||path.startsWith('/cuenta')||path==='/ayuda'||path==='/mi-estado-cuenta'||path==='/planes/wallet/cancelar'||method==='GET'&&(path.startsWith('/planes/wallet')||path==='/inicio'||path==='/wallet/ventajas');
+      const scopedCompany=actor.kind==='AGENCY'?(target.searchParams.get('empresa')||req.headers['x-lumina-company']):actor.company_id;
+      if(scopedCompany) {
+        const state=businessControl(db,scopedCompany);
+        if(actor.kind!=='AGENCY'&&(state.state!=='ACTIVE'||state.pending_id)) {
+          const permitted=serviceAllowed();
+          if(!permitted)requireOperating(db,scopedCompany);
+          if(method==='GET'&&path==='/inicio')return render({title:businessStates[state.state],body:card('Estado de tus servicios',`<p>${esc(state.reason)}</p><p>${state.pending_id?'Cambio pendiente de sincronización.':''} Tu información y saldos se conservan.</p><div class="actions"><a class="btn" href="/mi-estado-cuenta">Ver cuenta y pagos</a><a class="btn secondary" href="/ayuda">Contactar a Lúmina</a><a class="btn secondary" href="/cuenta">Mi cuenta</a></div>`)});
+        }
+        if(actor.kind==='AGENCY'&&method!=='GET')requireOperating(db,scopedCompany);
       }
       if(path.startsWith('/agencia/')) {
         requireAgency(actor);
@@ -259,6 +277,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         requireThat(actor,'Tu sesión terminó. Vuelve a iniciar sesión.',401);
         actor={...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('empresa'))&&!agencyWork};
         requireThat(equal(actor.csrf,data._csrf),'El formulario venció. Abre la página y reintenta.',403);
+        if(!serviceAllowed())requireOperating(db,actor.kind==='AGENCY'?target.searchParams.get('empresa'):actor.company_id);
       }
       if(method==='POST'&&actor.kind==='AGENCY'&&target.searchParams.get('empresa')&&!agencyWork&&!['/salir','/cuenta/clave'].includes(path)) {
         throw new Problem('La ficha del negocio es de solo lectura para la agencia.',403);
@@ -268,6 +287,42 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         logout(db,actor);
         res.setHeader('Set-Cookie',sessionCookie('',trusted.protocol==='https:'));
         return redirect(res,'/');
+      }
+      if(path==='/wallet/ventajas'&&method==='GET')return render({title:'Lúmina Wallet',body:walletComparison()});
+      if(path==='/ayuda'&&method==='GET') {
+        const provider=legalProfile(db);
+        return render({title:'Ayuda de Lúmina',body:card('Soporte prioritario de Wallet',`<p>Indica el negocio, la sucursal y qué operación necesitas resolver. Damos prioridad a incidencias que impiden registrar compras o canjear.</p>${provider?`<div class="actions"><a class="btn" href="mailto:${esc(provider.email)}?subject=Soporte%20Wallet">${esc(provider.email)}</a><a class="btn secondary" href="tel:${esc(provider.phone.replace(/[^+0-9]/g,''))}">${esc(provider.phone)}</a></div>`:'<p>El contacto de Lúmina está pendiente de configuración.</p>'}<p class="muted">No compartas contraseñas ni datos completos de clientes.</p>`)});
+      }
+      if(path==='/mi-estado-cuenta'&&method==='GET') {
+        requireOwner(actor);company=companyFor(db,actor);
+        const offset=Number(target.searchParams.get('offset')||0);requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000,'Página inválida.');
+        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,await wallets.account(actor,offset))});
+      }
+      const administration=path.match(/^\/administracion\/negocios\/([0-9a-f-]{36})(?:\/(estado|reintentar|pago|revertir|cargo|anular))?$/i);
+      if(administration) {
+        requireAgency(actor);company=companyFor(db,actor,administration[1]);
+        const base='/administracion/negocios/'+company.id;let issueText='';
+        const offset=Number(target.searchParams.get('offset')||0);requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000,'Página inválida.');
+        const view=async(status=200)=>{
+          let account=null;try{account=await wallets.administration(actor,company.id,'account',{offset});}catch(error){issueText=issueText||error.message;}
+          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{})},status);
+        };
+        if(method==='POST')try {
+          if(['pago','revertir','cargo','anular'].includes(administration[2])&&isId(data.requestKey)&&!db.get("SELECT seq FROM audit WHERE subject='BILLING_ATTEMPT' AND subject_id=? AND company_id=?",data.requestKey,company.id))event(db,actor,company.id,'BILLING_ATTEMPT',data.requestKey,'CUENTA_SOLICITADA',JSON.stringify({action:administration[2],invoice:data.invoiceId||null,payment:data.paymentId||null,reference:data.reference||null,reason:data.reason||null}),'WALLET');
+          if(administration[2]==='estado'){requestBusinessChange(db,actor,company.id,data);await controls.sync(company.id);}
+          else if(administration[2]==='reintentar'){requireThat(data.confirm==='yes','Confirma que deseas aplicar el cambio pendiente.');await controls.reconcile(company.id);}
+          else if(administration[2]==='pago'){const payment=paymentInput(data);await wallets.administration(actor,company.id,'payments',{method:'POST',body:payment,key:data.requestKey});}
+          else if(administration[2]==='revertir'){requireThat(data.confirm==='yes'&&isId(data.paymentId)&&isId(data.requestKey),'Confirma la corrección.');await wallets.administration(actor,company.id,'reverse',{id:data.paymentId,method:'POST',body:{reason:text(data.reason,'motivo',5,500)},key:data.requestKey});}
+          else if(administration[2]==='cargo'){await wallets.administration(actor,company.id,'charges',{method:'POST',body:chargeInput(data),key:data.requestKey});}
+          else if(administration[2]==='anular'){requireThat(data.confirm==='yes'&&isId(data.invoiceId)&&isId(data.requestKey),'Confirma la anulación.');await wallets.administration(actor,company.id,'void',{id:data.invoiceId,method:'POST',body:{reason:text(data.reason,'motivo',5,500)},key:data.requestKey});}
+          else throw new Problem('Acción no encontrada.',404);
+          if(['pago','revertir','cargo','anular'].includes(administration[2])&&!db.get("SELECT seq FROM audit WHERE subject='BILLING' AND subject_id=? AND company_id=?",data.requestKey,company.id))event(db,actor,company.id,'BILLING',data.requestKey,'CUENTA_'+administration[2].toUpperCase(),JSON.stringify({invoice:data.invoiceId||null,payment:data.paymentId||null,reference:data.reference||null,reason:data.reason||null}),'WALLET');
+          return redirect(res,base);
+        }catch(issue){if(!(issue instanceof Problem))throw issue;issueText=issue.message;return view(issue.status);}
+        requireThat(!administration[2],'Página no encontrada.',404);
+        try{await wallets.ensureCompany(company.id);}catch(issue){issueText=issue.message;}
+        company=companyFor(db,actor,company.id);
+        return view();
       }
       if(path==='/cuenta/proveedor') {
         requireAgency(actor);
@@ -281,14 +336,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           const action=path==='/planes/wallet/aceptar'?'accept':path==='/planes/wallet/cancelar'?'cancel':null;
           requireThat(action,'Acción no encontrada.',404);
           requireThat(/^[0-9a-f-]{36}$/i.test(data.requestKey||''),'Recarga el formulario antes de continuar.');
-          const payload=action==='accept'?{offer:subscriptionOfferInput(db,actor),expectedHash:data.hash||'',accepted:data.accept==='yes'}:{expectedVersion:Number(data.version),confirmed:data.confirm==='yes'};
-          try { await wallets.subscription(actor,action,payload,data.requestKey);return redirect(res,action==='accept'?'/wallet':'/planes/wallet'); }
+          const payload=action==='accept'?{offer:subscriptionOfferInput(db,actor,data.cycle||"MONTHLY"),expectedHash:data.hash||'',accepted:data.accept==='yes'}:{expectedVersion:Number(data.version),confirmed:data.confirm==='yes'};
+          try { await commercialTurn(actor.company_id,async()=>{if(action==='accept')payload.offer=subscriptionOfferInput(db,actor,data.cycle||'MONTHLY');return wallets.subscription(actor,action,payload,data.requestKey);});return redirect(res,action==='accept'?'/wallet':'/planes/wallet'); }
           catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Revisa tu suscripción',body:`<section class="card"><h2>No pudimos confirmar el cambio</h2><p role="alert">${esc(issue.message)}</p><a class="btn" href="/planes/wallet">Revisar condiciones actuales</a></section>`},issue.status);}
         }
         const status=await wallets.subscription(actor);
-        if(path==='/planes/wallet/estado')return json(res,200,{accepted:status.accepted,recurring:status.recurring,trialUntil:status.trialUntil,endsOn:status.endsOn,nextChargeOn:status.nextChargeOn,monthlyMinor:status.monthlyMinor});
+        if(path==='/planes/wallet/estado')return json(res,200,{accepted:status.accepted,recurring:status.recurring,trialUntil:status.trialUntil,endsOn:status.endsOn,nextChargeOn:status.nextChargeOn,monthlyMinor:status.monthlyMinor,periodMinor:status.periodMinor,cycle:status.cycle,unitMinor:status.unitMinor});
         let offer=null,error='';
-        if(!status.recurring&&!status.legacy)try{offer=await wallets.subscription(actor,'offer',subscriptionOfferInput(db,actor));}catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
+        if(!status.legacy&&(!status.recurring||target.searchParams.has('ciclo')&&target.searchParams.get('ciclo')!==(status.cycle||'MONTHLY')))try{offer=await wallets.subscription(actor,'offer',subscriptionOfferInput(db,actor,target.searchParams.get('ciclo')||'MONTHLY'));}catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
         if(path==='/planes/wallet/condiciones') {
           const expected=target.searchParams.get('oferta');
           requireThat(expected?offer&&expected===offer.hash:status.agreement,'Las condiciones cambiaron. Vuelve al resumen para descargar la versión vigente.',409);
@@ -604,7 +659,18 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
             body:orderPage({actor,company,url,order,audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})});
           if(method==='POST'&&action) {
             try {
-              ({cotizar:offerOrder,aceptar:acceptOrder,activar:activateOrder,cancelar:cancelOrder})[action](db,actor,company,id,data);
+              await commercialTurn(company.id,async()=>{
+                actor=getSession(db,cookie);requireThat(actor&&equal(actor.csrf,data._csrf),'Tu sesión cambió. Recarga para continuar.',403);
+                requireOperating(db,company.id);
+                const latest=getOrder(db,actor,company,id);
+                if(['aceptar','activar'].includes(action)&&latest.lines.some(line=>line.wallet!=='NONE'||line.items?.some(item=>item.service==='WALLET'))) {
+                  const account=actor.kind==='AGENCY'?await wallets.administration(actor,company.id,'account'):await wallets.account(actor);
+                  const plan=account.membership?.plan;
+                  requireThat(!plan?.recurring&&(!plan?.walletEndsOn||latest.lines.every(line=>line.starts_on>=plan.walletEndsOn)),'Wallet ya tiene una suscripción. Desactiva su renovación y programa el paquete después del período vigente para evitar cargos duplicados.',409);
+                  requireOperating(db,company.id);
+                }
+                ({cotizar:offerOrder,aceptar:acceptOrder,activar:activateOrder,cancelar:cancelOrder})[action](db,actor,company,id,data);
+              });
               return redirect(res,url('/planes/pedidos/'+id));
             } catch(issue) {
               if (!(issue instanceof Problem) || ![400,409].includes(issue.status)) throw issue;
@@ -655,4 +721,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         body:card('Detalle',`<p role="alert">${esc(message)}</p><p>${localLink(back,'Volver al portal','btn secondary')}</p>`)},status);
     }
   });
+  let retryRunning=false;
+  const retry=()=>{if(retryRunning)return;retryRunning=true;controls.sweep().catch(()=>{}).finally(()=>{retryRunning=false;});};
+  const timer=setInterval(retry,30000);timer.unref();server.once('listening',retry);server.once('close',()=>clearInterval(timer));
+  return server;
 }

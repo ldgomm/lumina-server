@@ -26,7 +26,7 @@ class LuminaRunnerTests(unittest.TestCase):
         self.temp.cleanup()
 
     def output(self, **changes):
-        values = dict(tests=218, passed=218, fail=0, cancelled=0, skipped=0, todo=0)
+        values = dict(tests=runner.EXPECTED_TESTS, passed=runner.EXPECTED_TESTS, fail=0, cancelled=0, skipped=0, todo=0)
         values.update(changes)
         return ''.join(f'# {"pass" if key == "passed" else key} {value}\n' for key, value in values.items())
 
@@ -37,7 +37,7 @@ class LuminaRunnerTests(unittest.TestCase):
             runner.main(root or self.root)
         return run.call_args, printed.getvalue()
 
-    def test_current_suite_catalog_executes_all_218_contracts(self):
+    def test_current_suite_catalog_executes_all_declared_contracts(self):
         files = sorted((runner.ROOT/runner.SUITE_PATH).glob('*.test.mjs'))
         self.assertEqual(len(files), runner.EXPECTED_SUITES)
         self.assertIn('subscription.test.mjs', [p.name for p in files])
@@ -48,13 +48,13 @@ class LuminaRunnerTests(unittest.TestCase):
 
     def test_missing_suite_blocks_before_running_node(self):
         next(self.suites.glob('*.test.mjs')).unlink()
-        with patch.object(runner.subprocess, 'run') as run, self.assertRaisesRegex(SystemExit, '22.*21'):
+        with patch.object(runner.subprocess, 'run') as run, self.assertRaisesRegex(SystemExit, rf'{runner.EXPECTED_SUITES}.*{runner.EXPECTED_SUITES-1}'):
             runner.main(self.root)
         run.assert_not_called()
 
     def test_unexpected_suite_requires_review(self):
         (self.suites/'extra.test.mjs').write_text('// unexpected\n')
-        with patch.object(runner.subprocess, 'run') as run, self.assertRaisesRegex(SystemExit, '22.*23'):
+        with patch.object(runner.subprocess, 'run') as run, self.assertRaisesRegex(SystemExit, rf'{runner.EXPECTED_SUITES}.*{runner.EXPECTED_SUITES+1}'):
             runner.main(self.root)
         run.assert_not_called()
 
@@ -63,15 +63,15 @@ class LuminaRunnerTests(unittest.TestCase):
             self.invoke(returncode=1)
 
     def test_missing_test_or_extra_test_cannot_pass(self):
-        for count in [217, 219]:
+        for count in [runner.EXPECTED_TESTS-1, runner.EXPECTED_TESTS+1]:
             with self.subTest(count=count), self.assertRaises(SystemExit):
                 self.invoke(output=self.output(tests=count, passed=count))
 
     def test_success_count_must_match_the_complete_run(self):
         with self.assertRaises(SystemExit):
-            self.invoke(output=self.output(passed=217))
+            self.invoke(output=self.output(passed=runner.EXPECTED_TESTS-1))
         with self.assertRaises(SystemExit):
-            self.invoke(output='# tests 218\n# pass 218\n')
+            self.invoke(output=f'# tests {runner.EXPECTED_TESTS}\n# pass {runner.EXPECTED_TESTS}\n')
 
     def test_failed_cancelled_skipped_or_todo_tests_block_success(self):
         for key in ['fail', 'cancelled', 'skipped', 'todo']:

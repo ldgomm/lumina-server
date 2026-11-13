@@ -113,18 +113,24 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         savePlan(c, tenant, input.plan, version); sync(c, tenant, date); audit(c, tenant, "BILLING_PLAN", version.toString())
         obj("version" to version)
     }
+    fun accessState(tenant:String):JsonObject = db.tx { c -> effective(c,tenant,lock(c,tenant,false),today(c,tenant)) }
     fun changeAccess(tenant: String, input: AccessChange): JsonObject = db.tx { c ->
         need(input.state in setOf("ACTIVE", "SUSPENDED", "CLOSED"), "INVALID_STATE", "Estado inválido."); text(input.reason, 500)
         val access = lock(c, tenant)
-        need(input.expectedVersion == access.getValue("version").jsonPrimitive.int, "VERSION_CONFLICT", "El estado cambió. Recarga antes de editar.", 409)
-        sync(c, tenant, today(c, tenant))
-        if (input.state == "CLOSED") plan(c, tenant)?.let { p ->
-            if (p.first.recurring) savePlan(c, tenant, p.first.copy(recurring = false, nextChargeOn = p.third.toString(), walletEndsOn = if(p.first.walletAgreement!=null)today(c,tenant).toString() else null), p.second + 1)
+        val change = {
+            need(input.expectedVersion == access.getValue("version").jsonPrimitive.int, "VERSION_CONFLICT", "El estado cambió. Recarga antes de editar.", 409)
+            sync(c, tenant, today(c, tenant))
+            if (input.state == "CLOSED") plan(c, tenant)?.let { p ->
+                if (p.first.recurring) savePlan(c, tenant, p.first.copy(recurring = false, nextChargeOn = p.third.toString(), walletEndsOn = if(p.first.walletAgreement!=null)p.third.toString() else null), p.second + 1)
+            }
+            c.exec("UPDATE business_access SET state=?,reason=?,version=version+1,changed_at=? WHERE tenant_id=?", input.state, input.reason.trim(), stamp(), tenant)
+            c.exec("INSERT INTO business_access_history(tenant_id,version,state,reason,created_at) VALUES(?,?,?,?,?)", tenant, input.expectedVersion + 1, input.state, input.reason.trim(), stamp())
+            // Same transaction: durable refresh of both providers, no network or identity rotation.
+            c.exec("UPDATE wallet_passes SET next_scan_at=LEAST(next_scan_at,?) WHERE tenant_id=?",stamp(),tenant)
+            audit(c, tenant, "BUSINESS_${input.state}", tenant)
+            obj("state" to input.state, "version" to input.expectedVersion + 1)
         }
-        c.exec("UPDATE business_access SET state=?,reason=?,version=version+1,changed_at=? WHERE tenant_id=?", input.state, input.reason.trim(), stamp(), tenant)
-        c.exec("INSERT INTO business_access_history(tenant_id,version,state,reason,created_at) VALUES(?,?,?,?,?)", tenant, input.expectedVersion + 1, input.state, input.reason.trim(), stamp())
-        audit(c, tenant, "BUSINESS_${input.state}", tenant)
-        obj("state" to input.state, "version" to input.expectedVersion + 1)
+        if(input.commandId==null) change() else once(c,tenant,"access",input.commandId,json.encodeToString(input),change)
     }
     internal fun once(c: Connection, tenant: String, operation: String, key: String, payload: String, action: () -> JsonObject): JsonObject {
         need(key.matches(Regex("[A-Za-z0-9._:-]{8,100}")), "IDEMPOTENCY_REQUIRED", "Falta una clave única de operación.")

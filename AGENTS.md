@@ -582,3 +582,15 @@ Black Friday metadata belongs to a single November/year. Server admission and re
 - Mantener los 627 tests nativos, Docker y gateway antes del commit local. Esta revisión no cambia lógica de Wallet, SQL, claves, identidades ni conexiones.
 
 - El paquete de producción incluye `businesses/business-categories.json` junto a `portal`, conservando la ruta relativa del catálogo compartido. Su prueba carga el módulo Node desde la candidata después de retirar el checkout ficticio. No afirmar despliegue por esta verificación.
+
+## Lúmina v019 / Loyalty v058 — negocios, tarifas y pagos
+
+- La agencia controla estados y pagos desde `/administracion/negocios/:id` con su identidad; no se convierte en dueño ni acepta suscripciones. El dueño conserva Equipos y roles y tiene Mi cuenta y pagos. Colaboradores no tienen autoridad comercial.
+- SQLite008 guarda estados y comandos idempotentes. Bloquear el portal antes de transmitir una suspensión; reactivar solo tras confirmación nativa. Fallos quedan pendientes visibles y se reintentan. Conflictos independientes exigen revisión explícita. Conservar atribución de las operaciones y de intentos de pago.
+- Google INACTIVE / Apple voided para negocios sin operación. Reactivar conserva seriales, claves, objetos, saldos y registros. No prometer borrado remoto ni entrega inmediata a teléfonos. La autorización del servidor es independiente del aspecto del pase.
+- Wallet USD 4,99/mes o USD 50/año por sucursal; promoción fija hasta 31-12-2026. Términos v2 aceptados por el dueño. Cambios en el próximo corte; conservar períodos pagados incluso tras cierre/reactivación. Cierre detiene renovación, pausa/suspensión no la cancelan.
+- Evitar acuerdos Wallet duplicados en paquetes y suscripción. El portal es un solo proceso escritor; la coordinación comercial local no autoriza escalar a múltiples escritores sin revisión distribuida.
+- Cargos/pagos en centavos, comprobación de pertenencia, claves de reintento, correcciones auditadas y ningún débito bancario implícito. Cargos individuales requieren acuerdo y confirmación administrativa; no equivalen a facturas tributarias.
+- Gates: 23 suites / 234 HTTP, 169 Python, 304 unidades/HTTP nativos y 333 PostgreSQL (637 nativas), Docker/gateway antes del commit. 16 suites DOM y teléfonos son verificaciones independientes. Terminal: RESULTADO y URL solo tras arranque confirmado.
+- No modificar PostgreSQL V001–V016, SQLite001–007 ni identidades/material privado. Esquema nuevo SQLite8; transición de producción según docs/production/transicion-v058.md, nunca sobrescribir sellos ni restaurar bases activas para volver a código antiguo.
+- Ventajas y comparación comercial con fuentes oficiales en docs/lumina-control-pagos-v058.md. Clientes ilimitados no es una exclusividad. Soporte prioritario requiere contacto real; no prometer 24/7 ni tiempos garantizados.

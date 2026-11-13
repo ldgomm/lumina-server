@@ -39,4 +39,14 @@ class WalletSubscriptionTest {
     @Test fun `unknown historical categories receive a valid neutral design`() {
         assertEquals(initialWalletDesign("GENERAL","Ejemplo",0),initialWalletDesign("UNKNOWN","Ejemplo",0))
     }
+
+    @Test fun `annual terms disclose one fifty dollar charge and twelve months`() {
+        val terms=walletTerms(provider,"Ejemplo",LocalDate.parse("2026-12-03"),LocalDate.parse("2027-01-01"),3,"ANNUAL")
+        for(value in listOf("150.00","50,00","renovación anual","un solo cargo","doce meses","sin penalidad"))assertTrue(terms.contains(value),value)
+        assertEquals(5000L,walletUnitPrice("ANNUAL"));assertEquals(499L,walletUnitPrice("MONTHLY"))
+    }
+    @Test fun `unknown or injected billing interval is rejected`() {
+        for(cycle in listOf("YEAR","FREE","MONTHLY ",""))assertFailsWith<Problem>{walletUnitPrice(cycle)}
+    }
+
 }
