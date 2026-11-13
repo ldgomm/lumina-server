@@ -37,7 +37,7 @@ export const card = (heading,body,description='') =>
   `<section class="card"><h2>${esc(heading)}</h2>${description ? `<p class="muted">${esc(description)}</p>` : ''}${body}</section>`;
 export const disclosure = (heading,body) => `<details class="disclosure"><summary>${esc(heading)}</summary><div>${body}</div></details>`;
 export const table = (headers,rows,empty='Todavía no hay registros.') => rows.length ?
-  `<div class="table-wrap"><table><thead><tr>${headers.map(col=>`<th scope="col">${esc(col)}</th>`).join('')}</tr></thead>
+  `<div class="table-wrap" tabindex="0" role="region" aria-label="${esc(headers.join(', '))}"><table><thead><tr>${headers.map(col=>`<th scope="col">${esc(col)}</th>`).join('')}</tr></thead>
     <tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : message(empty);
 export function pathFor(actor,company) {
   return (path, query = {}) => {
@@ -70,9 +70,10 @@ const mark = `<img class="lumina-symbol" src="/assets/lumina-symbol.png" width="
 export function page({actor,company,path='/',title,description='',body,cash=false,notice=''}) {
   const url=pathFor(actor,company);
   const links=actor?navLinks(actor,company,url,cash):[];
-  const activeBase=links.map(([href])=>href.split('?')[0]).filter(base=>path===base||path.startsWith(base+'/')).sort((a,b)=>b.length-a.length)[0];
+  const navBase=href=>href.split('?')[0].replace(/^\/agencia(?=\/)/,'');
+  const activeBase=links.map(([href])=>navBase(href)).filter(base=>path===base||path.startsWith(base+'/')).sort((a,b)=>b.length-a.length)[0];
   const menu=actor?links.map(([href,name,mark,group])=>{
-    const base=href.split('?')[0],active=base===activeBase;
+    const base=navBase(href),active=base===activeBase;
     return `${group?`<p class="nav-label">${esc(group)}</p>`:''}<a href="${esc(href)}"${active?' aria-current="page"':''}>${icon(mark)}<span>${esc(name)}</span>${mark==='wallet'?'<span class="nav-dot" aria-hidden="true"></span>':''}</a>`;
   }).join(''):'';
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1f3a">${actor?`<meta name="lumina-csrf" content="${esc(actor.csrf)}">`:""}

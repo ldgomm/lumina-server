@@ -4,7 +4,7 @@ import { badge, button, card, disclosure, displayAmount, esc, external, form, hi
   number, select, table, textarea, timestamp } from './components.mjs';
 
 export function metricsPage(actor,url,data,route='/reportes') {
-  const filters = `<form action="${esc(route)}" class="filter">${actor.kind==='AGENCY'&&!actor.readOnlyCompany ? hidden('empresa',new URL(url('/reportes'),'http://localhost').searchParams.get('empresa')) : ''}
+  const filters = `<form action="${esc(url(route).split('?')[0])}" class="filter">${actor.kind==='AGENCY' ? hidden('empresa',new URL(url('/reportes'),'http://localhost').searchParams.get('empresa')) : ''}
     ${route==='/contenido'?hidden('vista','metricas'):''}${input('desde','Desde','date','required',data.from)}${input('hasta','Hasta','date','required',data.to)}
     ${button('Actualizar','secondary')}</form>`;
   const blocks = data.rows.map(row=>card(channels[row.channel],`
@@ -43,7 +43,7 @@ export function mapsPage(actor,url,locations) {
         <div class="fields three">${input('reference','Referencia única','text','required maxlength="400"')}
         ${input('date','Fecha','date','required')}${input('stars','Estrellas','number','required min="1" max="5"')}</div>
         ${textarea('summary','Resumen','maxlength="1500"')}${textarea('response','Respuesta o borrador','maxlength="1500"')}
-        ${select('status','Estado',labels(['PENDING','DRAFT','ANSWERED']))}${button('Guardar reseña')}`)) : ''}`);
+        ${select('status','Estado',['PENDING','DRAFT','ANSWERED'].map(value=>[value,label(value)]))}${button('Guardar reseña')}`)) : ''}`);
   }).join('');
   return `${admin ? disclosure('Añadir ubicación',form(url('/mapas/ubicacion'),actor,`<div class="fields two">
     ${input('name','Nombre de la ubicación','text','required maxlength="120"')}

@@ -553,3 +553,12 @@ Black Friday metadata belongs to a single November/year. Server admission and re
 - Gates locales: 20 suites / 198 pruebas Node, 160 Python, 608 Kotlin/HTTP/PostgreSQL, Docker y gateway antes del commit local. Sin push. Ensayo de restauración real, HTTPS, visual de navegador y continuidad en teléfonos son verificaciones distintas: informar pendientes sin convertir simulaciones en PASS.
 - Guías: `docs/lumina-cuenta-produccion-v055.md` y `docs/production/README.md`. Conservar una línea RESULTADO y la URL únicamente tras arranque comprobado. No prometer disponibilidad absoluta ni declarar producción aceptada por pasar los gates locales.
 - Desde v016r1, los datos ficticios de las pruebas de producción usan la ruta real de su directorio temporal. Comprobar las suites con un `TMPDIR` enlazado para cubrir la configuración de macOS. La validación de rutas privadas sigue rechazando enlaces simbólicos.
+
+## Lúmina v017 / Loyalty v056 — revisión de flujos
+
+- Mantener el acceso por rol en los enlaces de Web/Maps/Marca, el contexto de métricas y la selección activa de rutas de agencia. Una consulta del cliente nunca se convierte implícitamente en trabajo de agencia.
+- `request_key` identifica el envío de un formulario de solicitud. Un reintento idéntico conserva el registro y la auditoría; un contenido o actor distinto se rechaza. Los formularios antiguos sin clave continúan admitidos. Sin nueva migración.
+- Los errores de cotización conservan el borrador y su revisión original. No actualizar automáticamente una revisión obsoleta para hacerla aceptable. Registro conserva contacto, nunca contraseñas ni códigos.
+- El manejador común de envío se ejecuta después de los validadores y restaura los botones al volver. No persistir datos de borradores en localStorage/sessionStorage. Equipo mantiene su propio seguimiento de cambios.
+- Gate: 21 suites / 210 pruebas del portal, 160 Python y 608 Kotlin/HTTP/PostgreSQL, más Docker/gateway, antes del auto commit. Ocho suites DOM y prueba visual separada en `scripts/ui`. Guía: `docs/lumina-revision-integral-v056.md`.
+- No modificar identidades, esquemas ni material privado de Wallet en esta revisión. Despliegue pausado; recrear el paquete de producción solo después del checkpoint local y al retomar esa tarea.

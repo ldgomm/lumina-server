@@ -59,13 +59,64 @@ if(navigationButton){
 document.addEventListener('invalid',event=>{
   for(let parent=event.target.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
 },true);
-for(const form of document.querySelectorAll('form[method="post"]'))form.addEventListener('submit',event=>{
-  if(form.dataset.busy==='yes'){event.preventDefault();return;}
-  form.dataset.busy='yes';form.setAttribute('aria-busy','true');
-  const button=form.querySelector('button[type="submit"],button:not([type])');
-  if(button){button.dataset.caption=button.textContent;button.textContent='Guardando…';button.disabled=true;}
+// Run after form-level validators, so a cancelled submission remains editable.
+const pendingButtons = new WeakMap();
+const restoreForm = form => {
+  delete form.dataset.busy;
+  form.removeAttribute('aria-busy');
+  const saved = pendingButtons.get(form);
+  if (saved) {
+    saved.button.textContent = saved.caption;
+    saved.button.disabled = saved.disabled;
+    pendingButtons.delete(form);
+  }
+};
+document.addEventListener('submit', event => {
+  const form = event.target;
+  if (!form.matches('form[method="post"]') || event.defaultPrevented) return;
+  if (form.dataset.busy === 'yes') { event.preventDefault(); return; }
+  form.dataset.busy = 'yes';
+  form.setAttribute('aria-busy', 'true');
+  const button = event.submitter || form.querySelector('button[type="submit"],button:not([type])');
+  if (button) {
+    pendingButtons.set(form, {button,caption:button.textContent,disabled:button.disabled});
+    button.textContent = 'Guardando…';
+    // Keep named submitters in the submitted payload.
+    if (!button.name) button.disabled = true;
+  }
 });
-window.addEventListener('pageshow',()=>{for(const form of document.querySelectorAll('form[data-busy]')){delete form.dataset.busy;form.removeAttribute('aria-busy');for(const button of form.querySelectorAll('button[data-caption]')){button.textContent=button.dataset.caption;button.disabled=false;}}});
+window.addEventListener('pageshow', () => {
+  for (const form of document.querySelectorAll('form[data-busy]')) restoreForm(form);
+});
+
+// Drafts stay in the current page only; never persist customer details in storage.
+const draftForms = new Map();
+const draftSignature = form => JSON.stringify([...new FormData(form)].filter(([name]) =>
+  name !== '_csrf' && !name.startsWith('catalog_')));
+for (const form of document.querySelectorAll('form[method="post"]')) {
+  if (form.matches('[data-team-form]') || form.querySelector('input[type="password"]')) continue;
+  if (!form.querySelector('textarea,[data-request-composer],[data-package-quantity]')) continue;
+  const original = draftSignature(form);
+  const mark = () => {
+    if (draftSignature(form) !== original) draftForms.set(form, original);
+    else draftForms.delete(form);
+  };
+  form.addEventListener('input', mark);
+  form.addEventListener('change', mark);
+}
+const hasDrafts = () => [...draftForms].some(([form,original]) =>
+  form.dataset.busy !== 'yes' && draftSignature(form) !== original);
+window.addEventListener('beforeunload', event => {
+  if (hasDrafts()) { event.preventDefault(); event.returnValue = ''; }
+});
+document.addEventListener('click', event => {
+  const link = event.target.closest('a[href]');
+  if (event.defaultPrevented || !link || !hasDrafts() || link.target === '_blank' || link.hasAttribute('download') || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  const destination = new URL(link.href, location.href);
+  if (destination.pathname === location.pathname && destination.search === location.search && destination.origin === location.origin) return;
+  if (!window.confirm('Tienes cambios sin enviar. ¿Quieres salir y descartarlos?')) event.preventDefault();
+  else draftForms.clear();
+});
 
 for(const form of document.querySelectorAll('form:has([name="term"])')) {
   if(form.querySelector('[data-offer-editor]'))continue;
@@ -79,3 +130,6 @@ for(const form of document.querySelectorAll('form:has([name="individual_service"
   const sync=()=>{const brand=['LOGO','IDENTITY','BRAND_GUIDE'].includes(service.value);const monthly=term.querySelector('option[value=MONTHLY]');monthly.disabled=brand;if(brand)term.value='ONE_OFF';};
   service.addEventListener('change',sync);sync();
 }
+
+const validationMessage=document.querySelector('[role=alert]');
+if(validationMessage){validationMessage.tabIndex=-1;validationMessage.focus();}

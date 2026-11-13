@@ -4,7 +4,7 @@ import { composer, serviceChoices, requestCards } from './request-composer.mjs';
 import { contentOptions, contentName, compatibleContentQuota } from '../../content/service-options.mjs';
 import { canRequest } from '../../access/content-policy.mjs';
 import { can } from '../../access/accounts.mjs';
-import { areas, channels, formats, localDay, services, socialChannels } from '../../shared/domain.mjs';
+import { areas, channels, formats, localDay, services, socialChannels, uuid } from '../../shared/domain.mjs';
 import { metrics } from '../../analytics/reporting.mjs';
 import { badge, button, card, disclosure, displayAmount, esc, external, form, hidden, input, label, localLink, localValue, message,
   number, select, table, textarea, timestamp } from './components.mjs';
@@ -23,7 +23,7 @@ export function requestForm(actor,url,courtesy = false,selected='',onlySocial=fa
   if (actor.kind==='AGENCY') return '';
   if(courtesy && actor.kind!=='OWNER')return '';
   if (courtesy) return form(url('/solicitudes'),actor,`
-    ${hidden('type','COURTESY')}${hidden('channel','SOCIAL')}${hidden('service','VIDEO')}
+    ${hidden('request_key',values.request_key||uuid())}${hidden('type','COURTESY')}${hidden('channel','SOCIAL')}${hidden('service','VIDEO')}
     ${input('title','¿Qué quieres mostrar en tu video?','text','required maxlength="150"',values.title||'')}
     ${textarea('brief','Cuéntanos tu idea','maxlength="4000" rows="3"',values.brief||'')}${contactField(values.phone)}
     ${button('Solicitar mi video gratis')}`);
@@ -65,7 +65,7 @@ export function requestsPage({actor,url,rows,channel,page,more,q='',state=''}) {
     <section class="card"><div class="split"><h2>Tus solicitudes</h2><span class="muted">Hasta 30 por página</span></div>
     <form action="${esc(url('/solicitudes').split('?')[0])}" class="request-filter">${actor.kind==='AGENCY'?hidden('empresa',new URL(url('/solicitudes'),'http://localhost').searchParams.get('empresa')):''}
     ${input('q','Buscar solicitud','search','maxlength="100" placeholder="Nombre o idea…"',q)}${select('canal','Servicio',filters,channel)}${select('estado','Estado',states,state)}${button('Buscar','secondary')}</form>
-    ${requestCards(rows,url)}<div class="actions">${page>0?localLink(url('/solicitudes',{...query,pagina:page-1}),'← Anterior','btn secondary'):''}${more?localLink(url('/solicitudes',{...query,pagina:page+1}),'Siguiente →','btn secondary'):''}</div></section>`;
+    ${q||state||channel?`<p class="filter-result">Filtros aplicados · ${localLink(url('/solicitudes'),'Ver todas las solicitudes')}</p>`:''}${!rows.length&&(q||state||channel)?message('No encontramos solicitudes con estos filtros.'):requestCards(rows,url)}<div class="actions">${page>0?localLink(url('/solicitudes',{...query,pagina:page-1}),'← Anterior','btn secondary'):''}${more?localLink(url('/solicitudes',{...query,pagina:page+1}),'Siguiente →','btn secondary'):''}</div></section>`;
 }
 export function agendaPage(rows,url) {
   return card('Agenda de grabaciones',table(['Fecha y hora','Solicitud','Lugar','Estado','Grabación real'],rows.map(visit=>[
@@ -126,7 +126,7 @@ function pieceView({actor,url,request,piece}) {
   const reviewForm = actor.kind!=='AGENCY' && piece.status==='REVIEW' && canRequest(actor,request,'APPROVE') ?
     disclosure('Revisar entregable',form(route('/revisar'),actor,`${hidden('revision',piece.revision)}
     ${select('status','Decisión',[['APPROVED','Aprobar entrega'],['PRODUCTION','Solicitar ajustes']])}
-    ${textarea('notes','Observaciones','maxlength="1000"')}${button('Guardar decisión')}`)) : '';
+    ${textarea('notes','Observaciones','maxlength="1000"')}${button('Guardar decisión')}`)).replace('<details class="disclosure">','<details class="disclosure review-ready" open>') : '';
   const attachForm = actor.kind==='AGENCY' && !actor.readOnlyCompany && piece.status!=='CANCELLED' ?
     disclosure('Adjuntar evidencia o entrega',form(route('/evidencia'),actor,`${input('label','Nombre del enlace','text','required maxlength="100"')}
       ${input('url','Enlace HTTPS','url','required maxlength="1500"')}${button('Adjuntar enlace')}`)) : '';
@@ -142,7 +142,7 @@ function pieceView({actor,url,request,piece}) {
       ${publications.map(pub=>publicationView(actor,route,pub)).join('')}</div></details>`;
   }).join('');
   return `<article class="subcard"><div class="split"><h3>${esc(piece.title)}</h3>${badge(piece.status)}</div>
-    <p class="piece-common-label">Contenido común · archivos, grabación y revisión</p><p class="muted">Grabado el ${esc(timestamp(piece.recorded_at))}</p><p class="prewrap">${esc(piece.observations)}</p>
+    <p class="piece-common-label">Contenido común · archivos y revisión</p>${piece.recorded_at?`<p class="muted">Grabado el ${esc(timestamp(piece.recorded_at))}</p>`:''}<p class="prewrap">${esc(piece.observations)}</p>
     ${piece.evidence.length ? `<ul class="evidence">${piece.evidence.map(item=>`<li>${external(item.url,item.label)}</li>`).join('')}</ul>` : ''}
     ${editForm}${reviewForm}${attachForm}${platformPanels||publishForm?`<section class="piece-platforms"><h4>Publicaciones y métricas</h4><p class="muted">Esta pieza cuenta una sola vez en el plan. Cada plataforma conserva su enlace y sus resultados; las audiencias pueden coincidir.</p>${publishForm}<div class="platform-grid">${platformPanels}</div></section>`:''}</article>`;
 }
@@ -157,7 +157,17 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
     (company.approved && (!plan || plan.price_minor!==null)));
   const step=({NEW:0,REVIEW:1,QUOTED:1,APPROVED:1,SCHEDULED:1,PRODUCTION:2,DELIVERED:3})[request.status];
   const timeline=step===undefined||request.type==='VISIT'?'':`<ol class="request-timeline" aria-label="Avance de la solicitud">${['Recibida','Coordinación','Producción','Entrega'].map((name,index)=>`<li${index===step?' aria-current="step"':''}><span>${index<step?'✓':index+1}</span>${name}</li>`).join('')}</ol>`;
-  const details = timeline+card('Ficha de la solicitud',`<div class="tags">${badge(request.type)}${badge(request.channel)}${badge(request.status)}</div>
+  const next = actor.kind==='AGENCY' ? null : ({
+    NEW:'Recibimos tu solicitud. Lúmina revisará tu idea y te contactará para coordinar.',
+    REVIEW:'Lúmina está revisando los detalles de tu solicitud.',
+    QUOTED:'Tu cotización está lista. Revisa el importe y las condiciones antes de aceptar.',
+    APPROVED:'Tu solicitud está aprobada. Lúmina coordinará el inicio del trabajo.',
+    SCHEDULED:'Tu grabación tiene una fecha confirmada. Revisa los datos de la visita.',
+    PRODUCTION:pieces.some(p=>p.status==='REVIEW')?'Tienes una entrega por revisar. Abre sus archivos y aprueba o solicita ajustes.':'Lúmina está preparando tu trabajo. Aquí aparecerán los archivos para revisar.',
+    DELIVERED:'Tu trabajo está entregado. Puedes abrir los archivos y consultar el historial.',
+    CANCELLED:'La solicitud está cancelada. Su historial permanece disponible.',
+  })[request.status];
+  const details = timeline+(next?`<aside class="request-next"><strong>Estado de tu solicitud</strong><p>${esc(next)}</p></aside>`:'')+card('Ficha de la solicitud',`<div class="tags">${badge(request.type)}${badge(request.channel)}${badge(request.status)}</div>
     <p>${esc(request.channel==='SOCIAL'&&actor.kind!=='AGENCY'?contentName(request.service):label(request.service))} · Cantidad ${request.quantity} · Recibida ${esc(timestamp(request.created_at))}</p>
     <p class="prewrap">${esc(request.brief)}</p>${contactLine(request.contact_phone,company.phone)}
     ${admin && stateOptions.length ? disclosure('Cambiar estado',form(base('/estado'),actor,
@@ -174,8 +184,8 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
         [['','Sin asignar a un cupo'],...availableContracts.flatMap(contract=>contract.items.filter(i=>(request.channel==='SOCIAL'?compatibleContentQuota(request.service,i.service):i.service===request.service)&&i.quantity>i.used+i.reserved).map(i=>[contract.id+':'+i.service,contract.name+' · '+label(i.service)+' · '+(i.quantity-i.used-i.reserved)+' disponibles']))]) : '')+
       button('Añadir pieza'))) : pieces.length ? '' : message('Los entregables aparecerán al iniciar producción.')));
   return `<p>${localLink(url(request.channel==='SOCIAL'?'/contenido':'/solicitudes',request.channel==='SOCIAL'?{vista:'solicitudes'}:{}),'← Todas las solicitudes')}</p>${details}
-    ${quotePanel({actor,base,quote,request})}${visitsPanel({actor,base,visits,request,company})}${piecePanel}
-    ${card('Historial',table(['Momento','Responsable','Movimiento','Detalle'],audit.map(row=>[
+    ${quotePanel({actor,base,quote,request})}${piecePanel}${visitsPanel({actor,base,visits,request,company})}
+    ${disclosure('Historial de la solicitud',table(['Momento','Responsable','Movimiento','Detalle'],audit.map(row=>[
       esc(timestamp(row.happened_at)),esc(row.actor_name),esc(row.action.replaceAll('_',' ')),esc(row.details),
-    ])), 'Últimos 100 movimientos de la solicitud.')}`;
+    ])))}`;
 }

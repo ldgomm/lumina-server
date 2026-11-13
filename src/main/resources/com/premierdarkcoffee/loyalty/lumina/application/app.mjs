@@ -160,15 +160,21 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         requireThat(!actor,'Cierra la sesión actual para usar otra cuenta.',409);
         limit(db,path+':'+req.socket.remoteAddress,path==='/entrar' ? 50 : 16);
         const data = await readForm(req);
-        if (path==='/entrar') return startSession(await authenticate(db,data));
-        if (path==='/registro') {
-          const account=await register(db,key,data);
-          const created=db.get('SELECT company_id FROM accounts WHERE id=?',account);
-          try{await wallets.ensureCompany(created.company_id);}catch{} // Account survives an outage; opening Wallet retries the durable registration.
-          return startSession(account);
+        try {
+          if (path==='/entrar') return startSession(await authenticate(db,data));
+          if (path==='/registro') {
+            const account=await register(db,key,data);
+            const created=db.get('SELECT company_id FROM accounts WHERE id=?',account);
+            try{await wallets.ensureCompany(created.company_id);}catch{} // Account survives an outage; opening Wallet retries the durable registration.
+            return startSession(account);
+          }
+          if (path==='/activar') return startSession(await activate(db,data));
+          return startSession(await createAgency(db,data));
+        } catch(issue) {
+          if (!(issue instanceof Problem) || ![400,401,409].includes(issue.status)) throw issue;
+          const setupAvailable=!db.get("SELECT id FROM accounts WHERE kind='AGENCY'");
+          return render(publicPage(path==='/entrar'?'/':path,setupAvailable,{values:data,error:issue.message}),issue.status);
         }
-        if (path==='/activar') return startSession(await activate(db,data));
-        return startSession(await createAgency(db,data));
       }
       if (!actor) {
         if (method==='GET' && !api) return redirect(res,'/');
@@ -334,7 +340,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           AND (? IS NULL OR r.company_id=?)
           ORDER BY r.created_at DESC,r.id LIMIT 100`,channel,...policy.params,company?.id||null,company?.id||null);
         return render({title:areas[channel],description:channel==='SOCIAL'?'Solicitudes, producción y entregas en un solo lugar.':'Servicios, proyectos y seguimiento.',
-          body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'))});
+          body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'),actor)});
       }
       const accountView=options=>({title:'Mi cuenta',body:accountPage(actor,{otherSessions:db.get('SELECT count(*) n FROM sessions WHERE account_id=? AND digest<>? AND expires_at>?',actor.id,actor.session_id,now()).n,...options})});
       if (path==='/cuenta' && method==='GET') return render(accountView({notice:target.searchParams.get('estado')==='clave'?'Contraseña actualizada.':target.searchParams.get('estado')==='sesiones'?'Se cerraron tus otras sesiones.':''}));
@@ -565,8 +571,15 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           if(method==='GET'&&!action)return render({title:'Tu combinación de servicios',description:company.name,
             body:orderPage({actor,company,url,order,audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})});
           if(method==='POST'&&action) {
-            ({cotizar:offerOrder,aceptar:acceptOrder,activar:activateOrder,cancelar:cancelOrder})[action](db,actor,company,id,data);
-            return redirect(res,url('/planes/pedidos/'+id));
+            try {
+              ({cotizar:offerOrder,aceptar:acceptOrder,activar:activateOrder,cancelar:cancelOrder})[action](db,actor,company,id,data);
+              return redirect(res,url('/planes/pedidos/'+id));
+            } catch(issue) {
+              if (!(issue instanceof Problem) || ![400,409].includes(issue.status)) throw issue;
+              return render({title:'Revisa tu propuesta',body:orderPage({actor,company,url,order,
+                values:action==='cotizar'?data:{revision:data.revision},error:issue.message,
+                audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})},issue.status);
+            }
           }
         }
         if (method==='POST') {

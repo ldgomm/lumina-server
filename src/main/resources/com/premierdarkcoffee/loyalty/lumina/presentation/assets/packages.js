@@ -32,7 +32,7 @@ for(const catalog of document.querySelectorAll('.catalog-layout')) {
       const row=document.createElement('div');row.className='basket-line';
       const name=document.createElement('span');name.textContent=`${units} × ${card.dataset.name}`;
       const amount=document.createElement('strong');amount.textContent=card.dataset.price===''?'Por cotizar':format(Number(card.dataset.price)*units)+(card.dataset.term==='MONTHLY'?' / mes':'');
-      const remove=document.createElement('button');remove.type='button';remove.className='basket-remove';remove.textContent='Quitar';remove.setAttribute('aria-label','Quitar '+card.dataset.name);remove.addEventListener('click',()=>{field.value='0';update();});
+      const remove=document.createElement('button');remove.type='button';remove.className='basket-remove';remove.textContent='Quitar';remove.setAttribute('aria-label','Quitar '+card.dataset.name);remove.addEventListener('click',()=>{field.value='0';field.dispatchEvent(new Event('input',{bubbles:true}));});
       row.append(name,amount,remove);lines.append(row);
       if(card.dataset.price==='')pending[card.dataset.term]++;else{totals[card.dataset.term]+=Number(card.dataset.price)*units;known[card.dataset.term]++;}
     }
@@ -50,7 +50,7 @@ for(const catalog of document.querySelectorAll('.catalog-layout')) {
     if(!selected){const empty=document.createElement('p');empty.textContent='Elige una o varias ofertas para comenzar.';lines.append(empty);}
     if(submit&&!catalog.dataset.busy)submit.disabled=!selected;
   }
-  for(const card of cards)for(const b of card.querySelectorAll('[data-quantity-change]'))b.addEventListener('click',()=>{const field=card.querySelector('[data-package-quantity]');field.value=String(Math.max(0,Math.min(10,Number(field.value||0)+Number(b.dataset.quantityChange))));update();});
+  for(const card of cards)for(const b of card.querySelectorAll('[data-quantity-change]'))b.addEventListener('click',()=>{const field=card.querySelector('[data-package-quantity]');field.value=String(Math.max(0,Math.min(10,Number(field.value||0)+Number(b.dataset.quantityChange))));field.dispatchEvent(new Event('input',{bubbles:true}));});
   catalog.querySelector('[data-selection-jump]')?.addEventListener('click',()=>catalog.querySelector('#tu-seleccion').focus());
   catalog.addEventListener('input',update);window.addEventListener('pageshow',update);update();
 }

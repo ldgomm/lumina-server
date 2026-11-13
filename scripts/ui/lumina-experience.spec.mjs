@@ -22,7 +22,7 @@ try {
  const context=await browser.newContext({reducedMotion:'reduce'});
  await context.addCookies([{name:'lumina_session',value:a.client.cookie.split('=')[1],url:w.origin,httpOnly:true,sameSite:'Strict'}]);
  await context.route('**/*',route=>new URL(route.request().url()).origin===w.origin?route.continue():route.abort());
- const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>dialog.accept());
  const fit=async()=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Horizontal overflow');
  if(out)await mkdir(out,{recursive:true});
  for(const width of [320,390,1024,1440]) {

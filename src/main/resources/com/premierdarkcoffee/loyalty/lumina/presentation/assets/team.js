@@ -85,7 +85,7 @@ for(const form of document.querySelectorAll('[data-team-form]')){
   const mark=()=>{const changed=signature()!==initial;if(changed)edited.add(form);else edited.delete(form);if(status)status.textContent=changed?'Cambios sin guardar':'Los cambios se aplican al guardar.';};
   form.addEventListener('input',mark);
   form.addEventListener('change',mark);
-  form.addEventListener('submit',event=>{if(!event.defaultPrevented){edited.delete(form);for(const button of form.querySelectorAll('button[type=submit]')){button.disabled=true;button.textContent='Guardando…';}form.setAttribute('aria-busy','true');}});
+  form.addEventListener('submit',event=>{if(!event.defaultPrevented){edited.delete(form);}});
 }
 window.addEventListener('beforeunload',event=>{if(edited.size){event.preventDefault();event.returnValue='';}});
 document.addEventListener('click',event=>{

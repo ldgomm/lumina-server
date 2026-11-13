@@ -3,7 +3,7 @@ import { compatibleContentQuota } from '../content/service-options.mjs';
 import { canRequest, platformTargets, requestAccessSql } from '../access/content-policy.mjs';
 import { can, requireAccess, requireAgency, requireOwner, requireBusinessActor } from '../access/accounts.mjs';
 import { checkCapacity, getPlan } from '../memberships/billing.mjs';
-import { channels, areas, choice, event, formats, httpsUrl, integer, localInstant, now, requireThat, socialChannels, text, uuid } from '../shared/domain.mjs';
+import { channels, areas, choice, event, formats, httpsUrl, integer, isId, localInstant, now, requireThat, socialChannels, text, uuid } from '../shared/domain.mjs';
 
 const productionStates = ['APPROVED','SCHEDULED','PRODUCTION'];
 const finalStates = ['DELIVERED','CANCELLED'];
@@ -56,12 +56,24 @@ export function createRequest(db, actor, company, data) {
   const brief = text(data.brief || '', 'indicaciones',0,4000);
   const phone=requestPhone(data,company);
   const preferred = type === 'VISIT' ? localInstant(data.preferred,'horario sugerido',true) : null;
+  const requestKey = data.request_key || uuid();
+  requireThat(isId(requestKey),'Vuelve a abrir el formulario para enviar esta solicitud.');
   return db.transaction(() => {
+    // A retry of the same form must not create a second job or audit event.
+    // The existing primary key makes this durable without changing the schema.
+    const existing = db.get('SELECT * FROM requests WHERE id=?',requestKey);
+    if (existing) {
+      const expected = {company_id:company.id,owner_id:actor.id,type,channel,service,quantity,title,brief,
+        contact_phone:phone,requested_at:preferred,plan_id:plan?.id ?? null};
+      requireThat(Object.entries(expected).every(([key,value])=>existing[key]===value),
+        'Este formulario ya fue enviado. Abre una nueva solicitud para pedir otro trabajo.',409);
+      return existing.id;
+    }
     if (type === 'COURTESY') {
       const prior = db.get("SELECT id FROM requests WHERE company_id=? AND type='COURTESY'",company.id);
       if (prior) return prior.id;
     }
-    const id = uuid();
+    const id = requestKey;
     db.run(`INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,plan_id,requested_at,created_at,contact_phone)
       VALUES(?,?,?,?,?,?,?,?,?,'NEW',?,?,?,?)`,id,company.id,actor.id,type,channel,service,quantity,title,brief,plan?.id ?? null,preferred,now(),phone);
     event(db,actor,company.id,'REQUEST',id,'SOLICITUD_RECIBIDA',title,channel);

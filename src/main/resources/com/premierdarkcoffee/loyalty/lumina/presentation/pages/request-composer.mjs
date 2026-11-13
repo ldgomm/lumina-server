@@ -1,6 +1,6 @@
 import { contactField } from './contact.mjs';
 import { can } from '../../access/accounts.mjs';
-import { areas, formats, services } from '../../shared/domain.mjs';
+import { areas, formats, services, uuid } from '../../shared/domain.mjs';
 import { offerGroups } from '../../memberships/offers.mjs';
 import { contentOptions } from '../../content/service-options.mjs';
 import { requestCommercial, serviceName } from '../../memberships/catalog.mjs';
@@ -29,7 +29,7 @@ export function composer(actor,url,{area='SOCIAL',onlySocial=false,values={}}={}
   const extraOpen=!!values.type&&values.type!=='CONTENT'||!!values.quantity&&values.quantity!=='1'||!!values.preferred;
   const examples={SOCIAL:'Por ejemplo: presentar nuestro nuevo menú',WEB:'Por ejemplo: un catálogo con nuestros productos',MAPS:'Por ejemplo: actualizar horarios y fotografías',BRAND:'Por ejemplo: renovar el logo de mi negocio',WALLET:'Por ejemplo: premiar a quienes regresan'};
   return form(url('/solicitudes'),actor,`<div data-request-composer>
-    ${hidden('channel',area)}${hidden('composer',onlySocial?'content':'service')}${onlySocial?hidden('type','CONTENT'):''}
+    ${hidden('request_key',values.request_key||uuid())}${hidden('channel',area)}${hidden('composer',onlySocial?'content':'service')}${onlySocial?hidden('type','CONTENT'):''}
     ${serviceControl}
     ${input('title','¿Qué quieres lograr?','text',`required minlength="2" maxlength="150" placeholder="${examples[area]}"`,values.title||'')}
     ${textarea('brief','Cuéntanos tu idea','maxlength="4000" rows="4" placeholder="Describe lo que necesitas. Nosotros te ayudamos con los detalles."',values.brief||'')}

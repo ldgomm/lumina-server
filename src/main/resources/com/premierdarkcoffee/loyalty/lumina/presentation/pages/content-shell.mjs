@@ -5,7 +5,7 @@ import { esc, label, localLink, pathFor } from './components.mjs';
 import { icon } from './icons.mjs';
 
 const marks={resumen:'home',solicitudes:'content',produccion:'social',revisiones:'check',entregas:'plans',publicaciones:'web',metricas:'metrics',agenda:'calendar'};
-export function contentShell({actor,company,title,description='',body,contentView='resumen'}) {
+export function contentShell({actor,company,title,description='',body,contentView='resumen',notice=''}) {
   const url=pathFor(actor,company);
   const back=actor.kind==='AGENCY'?(company?'/inicio?empresa='+company.id:'/resumen'):'/inicio';
   const context=company?.name||(actor.kind==='AGENCY'?'Producción de Lúmina':'Mi negocio');
@@ -20,7 +20,7 @@ export function contentShell({actor,company,title,description='',body,contentVie
       <div class="content-person">${localLink(back,'← Volver a Lúmina','content-back')}<strong>${esc(actor.name)}</strong><span>${esc(label(actor.kind))}</span>${localLink('/cuenta','Mi cuenta','content-back')}</div></aside>
     <button class="navigation-backdrop" type="button" aria-label="Cerrar navegación" hidden></button><main id="contenido"><div class="content-breadcrumb">${esc(context)}<span>/</span>Contenido<span>/</span>${esc(title)}</div>
       <header class="content-title"><div><p class="eyebrow">${esc(mode)}</p><h1>${esc(title)}</h1>${description?`<p>${esc(description)}</p>`:''}</div>
-        ${can(actor,'SOCIAL','REQUEST')&&contentView!=='solicitudes'?localLink(url('/contenido',{vista:'solicitudes'}),'Solicitar contenido','btn'):''}</header>
+        ${can(actor,'SOCIAL','REQUEST')&&contentView!=='solicitudes'?localLink(url('/solicitudes/nueva',{area:'SOCIAL'}),'Solicitar contenido','btn'):''}</header>
       ${actor.readOnlyCompany?`<aside class="consultation-notice" role="note"><strong>Estás consultando como agencia.</strong><p>Las solicitudes y aprobaciones pertenecen al negocio. Desde aquí solo puedes consultar su información.</p>${localLink('/agencia/contenido?empresa='+company.id,'Ir al trabajo de Lúmina →')}</aside>`:actor.kind==='AGENCY'?'<aside class="consultation-notice" role="note"><strong>Trabajo de Lúmina</strong><p>Registra producción, entregas y resultados a nombre de la agencia. El negocio realiza sus propias solicitudes y aprobaciones.</p></aside>':''}
-      ${body}</main><footer class="content-footer">Contenido · Lúmina Digital${brandSocial()}<span>Ecuador continental · UTC−5</span></footer></body></html>`;
+      ${notice?`<p class="notice" role="status">${esc(notice)}</p>`:''}${body}</main><footer class="content-footer">Contenido · Lúmina Digital${brandSocial()}<span>Ecuador continental · UTC−5</span></footer></body></html>`;
 }

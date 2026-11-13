@@ -37,7 +37,7 @@ export function contentPage({actor,company,url,data,metricsHtml='',plans=[],cont
   const stats=view==='resumen'?`<div class="metric-grid">${[['Solicitudes abiertas',counts.open,'solicitudes'],['En producción',counts.production,'produccion'],['Por aprobar',counts.review,'revisiones'],['Piezas entregadas',counts.delivered,'entregas']].map(([caption,value,target])=>
     `<a class="metric-card" href="${esc(url('/contenido',{vista:target,q:data.q}))}"><span>${caption}</span><strong>${value}</strong></a>`).join('')}</div>
     <p class="muted">${counts.publications} publicaciones registradas${data.q?' · resultados de la búsqueda':''}.</p>`:'';
-  const create=view==='solicitudes'&&company&&can(actor,'SOCIAL','REQUEST')?'<div class="request-workspace">'+card('Nueva solicitud de contenido',requestForm(actor,url,false,'SOCIAL',true,{phone:company.phone}),'')+priceGuide(actor,url,'SOCIAL',plans,contracts)+'</div>' : '';
+  const create=view==='solicitudes'&&company&&can(actor,'SOCIAL','REQUEST')?'<details class="disclosure content-create"'+(!rows.length&&!data.q?' open':'')+'><summary>Nueva solicitud de contenido</summary><div class="request-workspace">'+card('Cuéntanos tu idea',requestForm(actor,url,false,'SOCIAL',true,{phone:company.phone}),'')+priceGuide(actor,url,'SOCIAL',plans,contracts)+'</div></details>' : '';
   const recording=view==='agenda'&&company&&can(actor,'SOCIAL','REQUEST')?`<div class="actions">${localLink(url('/contenido/grabacion'),'Solicitar una grabación','btn')}</div>`:'';
-  return stats+create+recording+(view==='metricas'?'':filter)+body;
+  return stats+create+recording+(view==='metricas'?'':filter)+(data.q?`<p class="filter-result">Resultados para «${esc(data.q)}» · ${localLink(url('/contenido',{vista:view}),'Limpiar búsqueda')}</p>`:'')+body;
 }
