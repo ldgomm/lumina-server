@@ -44,6 +44,7 @@ const assets = {
   '/assets/black-friday.css':['black-friday.css','text/css; charset=utf-8'],
   '/assets/black-friday.js':['black-friday.js','text/javascript; charset=utf-8'],
   '/assets/wallet-season.js':['wallet-season.js','text/javascript; charset=utf-8'],
+  '/assets/account.css': ['account.css','text/css; charset=utf-8'],
   '/assets/team.css': ['team.css','text/css; charset=utf-8'],
   '/assets/team.js': ['team.js','text/javascript; charset=utf-8'],
   '/assets/instagram.webp': ['instagram.webp','image/webp'],
@@ -105,7 +106,7 @@ function getRequestPage(db,actor,company,url,request) {
     body:requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan})};
 }
 
-export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {} }) {
+export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {}, readiness = null }) {
   const bridge = createLoyaltyBridge({db,key,origin:loyaltyUrl});
   const wallets = createWalletWorkspace({db,key,origin:loyaltyUrl,integration});
   return createServer({requestTimeout:20_000,headersTimeout:10_000},async (req,res) => {
@@ -136,13 +137,17 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const asset = sourceAssets[path];
         return send(res,200,asset.body,asset.type);
       }
+      if(method==='GET'&&path==='/salud/listo'){
+        try {return json(res,200,readiness?await readiness():(db.get('SELECT 1'),{status:'UP',service:'lumina-agency'}));}
+        catch {return json(res,503,{status:'UNAVAILABLE',service:'lumina-agency'});}
+      }
       if (method==='GET' && path==='/salud') return json(res,200,{status:'UP',service:'lumina-agency'});
       const cookie = cookieFrom(req);
       actor = getSession(db,cookie);
-      const startSession = id => {
+      const startSession = (id,destination='/inicio') => {
         if (actor) { wallets.forget(actor); logout(db,actor); }
         res.setHeader('Set-Cookie',sessionCookie(createSession(db,id),trusted.protocol==='https:'));
-        return redirect(res,'/inicio');
+        return redirect(res,destination);
       };
       const publicPaths = ['/','/registro','/activar','/configurar'];
       if (method==='GET' && publicPaths.includes(path)) {
@@ -331,10 +336,22 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return render({title:areas[channel],description:channel==='SOCIAL'?'Solicitudes, producción y entregas en un solo lugar.':'Servicios, proyectos y seguimiento.',
           body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'))});
       }
-      if (path==='/cuenta' && method==='GET') return render({title:'Mi cuenta',body:accountPage(actor)});
+      const accountView=options=>({title:'Mi cuenta',body:accountPage(actor,{otherSessions:db.get('SELECT count(*) n FROM sessions WHERE account_id=? AND digest<>? AND expires_at>?',actor.id,actor.session_id,now()).n,...options})});
+      if (path==='/cuenta' && method==='GET') return render(accountView({notice:target.searchParams.get('estado')==='clave'?'Contraseña actualizada.':target.searchParams.get('estado')==='sesiones'?'Se cerraron tus otras sesiones.':''}));
+      if (path==='/cuenta/sesiones/cerrar' && method==='POST') {
+        db.run('DELETE FROM sessions WHERE account_id=? AND digest<>?',actor.id,actor.session_id);
+        return redirect(res,'/cuenta?estado=sesiones');
+      }
       if (path==='/cuenta/clave' && method==='POST') {
-        await changePassword(db,actor,data);
-        return startSession(actor.id);
+        try {
+          limit(db,'account-password:'+actor.id,6);
+          requireThat(data.confirmation===data.password,'Las contraseñas nuevas no coinciden.');
+          await changePassword(db,actor,data);
+          return startSession(actor.id,'/cuenta?estado=clave');
+        } catch(error) {
+          if(!(error instanceof Problem))throw error;
+          return render(accountView({error:error.message}),error.status);
+        }
       }
       if (path==='/clientes' && method==='GET') {
         requireAgency(actor);

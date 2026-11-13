@@ -1,5 +1,6 @@
 package com.premierdarkcoffee.loyalty.application
 
+import com.premierdarkcoffee.loyalty.infrastructure.production.ProductionGuard
 import com.premierdarkcoffee.loyalty.businesses.LuminaRegistration
 import com.premierdarkcoffee.loyalty.businesses.registerLuminaBusiness
 
@@ -63,6 +64,7 @@ import java.util.concurrent.TimeUnit
 
 fun Application.configureRouting() {
     val environment = System.getenv()
+    val production = ProductionGuard.load(environment)
     val url = requireNotNull(environment["DATABASE_URL"]) { "Set DATABASE_URL to a PostgreSQL JDBC URL." }
     val pepper = requireNotNull(environment["IDENTITY_PEPPER"]) { "Set IDENTITY_PEPPER (32+ characters)." }
     val admin = requireNotNull(environment["PLATFORM_ADMIN_TOKEN"]) { "Set PLATFORM_ADMIN_TOKEN (32+ characters)." }
@@ -70,9 +72,12 @@ fun Application.configureRouting() {
     val publicUrl = (environment["PUBLIC_BASE_URL"] ?: "http://localhost:8080").trimEnd('/')
     require(publicUrl.startsWith("https://") || publicUrl.startsWith("http://localhost:") || publicUrl.startsWith("http://127.0.0.1:")) { "PUBLIC_BASE_URL requires HTTPS except localhost." }
     val db = Database.connect(url,environment["DATABASE_USER"] ?: "loyalty",environment["DATABASE_PASSWORD"] ?: "")
-    try { db.migrate() } catch (e: Throwable) { db.close(); throw e }
+    try { if (production == null) db.migrate() else ProductionGuard.verifyDatabase(db, production, environment) } catch (e: Throwable) { db.close(); throw e }
     val service = LoyaltyService(db, pepper)
-    service.wallets = WalletService.fromEnvironment(service, publicUrl, environment)
+    try {
+        service.wallets = WalletService.fromEnvironment(service, publicUrl, environment)
+        if (production != null) check(service.wallets.availability().values.all { it.jsonPrimitive.boolean }) { "PRODUCTION_WALLET_CONFIGURATION_FAILED" }
+    } catch (e: Throwable) { db.close(); throw e }
     loyaltyRoutes(service,admin,publicUrl,localWalletOrigin(environment))
     localStagingRoutes(environment)
     val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r,"redemption-expiry").apply { isDaemon = true } }
@@ -140,7 +145,8 @@ fun Application.loyaltyRoutes(service: LoyaltyService, platformToken: String, pu
         get("/health/ready") { io { service.db.tx { c -> c.one("SELECT 1") { it.getInt(1) } } }; call.respond(
             obj(
                 "status" to "UP",
-                "wallet" to service.wallets.availability()
+                "wallet" to service.wallets.availability(),
+                "release" to (System.getenv("SOURCE_SHA") ?: "development")
             )
         ) }
         get("/") { call.web("index.html",ContentType.Text.Html) }

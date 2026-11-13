@@ -31,7 +31,7 @@ export function browser(origin) {
     async get(path,options={}) {
       const res = await fetch(origin+path,{headers:{Cookie:cookie,'X-Lumina-CSRF':csrf,...options.headers},redirect:'manual'});
       const body = await res.text();
-      const match = body.match(/name="_csrf" value="([^"]+)"/);
+      const match = body.match(/name="(?:_csrf|lumina-csrf)" (?:value|content)="([^"]+)"/);
       if (match) csrf = match[1];
       return {status:res.status,body,location:res.headers.get('location'),headers:res.headers};
     },
@@ -44,7 +44,7 @@ export function browser(origin) {
       const set = res.headers.get('set-cookie');
       if (set) cookie = set.split(';')[0];
       const html = await res.text();
-      const match = html.match(/name="_csrf" value="([^"]+)"/);
+      const match = html.match(/name="(?:_csrf|lumina-csrf)" (?:value|content)="([^"]+)"/);
       if (match) csrf = match[1];
       return {status:res.status,body:html,location:res.headers.get('location'),headers:res.headers};
     },

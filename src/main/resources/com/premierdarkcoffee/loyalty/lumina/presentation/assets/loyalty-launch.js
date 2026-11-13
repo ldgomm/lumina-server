@@ -1,8 +1,9 @@
 'use strict';
 (async()=>{
  const back=document.querySelector('meta[name="lumina-wallet-back"]')?.content||'/inicio';
+ document.addEventListener('click',event=>{if(event.target.closest('[data-lumina-account]')){event.preventDefault();leave('/cuenta');}},true);
  const central={administration:'/gestion',business:'/gestion/negocio',branches:'/gestion/sucursales',team:'/equipo',activity:'/gestion/actividad',operations:'/gestion/operacion',account:'/planes?vista=acuerdos',reports:'/gestion/informes'};
- const leave=path=>{if(document.querySelector('form[aria-busy=true]')){notice('Espera a que termine el guardado.');return;}const go=()=>location.assign(path),design=()=>window.loyaltyDesignLeave?window.loyaltyDesignLeave(go):go(),operation=()=>window.loyaltyOperationLeave?window.loyaltyOperationLeave(design):design();window.loyaltyAdminLeave(operation);};
+ const leave=path=>{if(document.querySelector('form[aria-busy=true]')){notice('Espera a que termine el guardado.');return;}const go=()=>location.assign(path),design=()=>window.loyaltyDesignLeave?window.loyaltyDesignLeave(go):go(),operation=()=>window.loyaltyOperationLeave?window.loyaltyOperationLeave(design):design();window.loyaltyAdminLeave?window.loyaltyAdminLeave(operation):operation();};
  try{
   const company=document.querySelector('meta[name="lumina-wallet-company"]')?.content;
   renderJoinQR=function(){const slug=encodeURIComponent(state.data.business.slug),scope=company?'?empresa='+encodeURIComponent(company):'';document.querySelector('#content').innerHTML=`<section class="panel narrow"><h2>Invita a tus clientes</h2><p>Coloca este QR en tu local para que tus clientes se registren y añadan su tarjeta. La misma tarjeta funciona en todas tus sucursales.</p><img class="qr" alt="QR de registro" src="/api/public/${slug}/qr${scope}"><a class="button" href="/join/${slug}${scope}" target="_blank" rel="noopener">Abrir formulario</a></section>`;};

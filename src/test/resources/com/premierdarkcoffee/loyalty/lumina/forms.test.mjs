@@ -47,7 +47,7 @@ test('formulario nativo: configurar agencia, cierre definitivo de configuración
   assert.equal(setupCode(world.db),null,'Restarting bootstrap must not create a second administrator.');
   const dashboard = await client.get('/clientes');
   assert.equal(dashboard.status,200);
-  assert.equal((await client.submit(dashboard,'/salir')).status,303);
+  assert.equal((await client.submit(await client.get('/cuenta'),'/salir')).status,303);
   assert.equal((await client.get('/configurar')).status,404);
   assert.equal((await client.submit(form,'/configurar',data)).status,403,'Consumed setup code cannot be reused.');
   assert.equal(world.db.get("SELECT count(*) AS n FROM accounts WHERE kind='AGENCY'").n,1);
@@ -71,7 +71,7 @@ test('formulario nativo: registro, sesión y rechazo de orígenes extraños o CS
   const registered = await client.submit(form,'/registro',data);
   assert.equal(registered.status,303,registered.body);
   const account = await client.get('/cuenta');
-  const changed = {current:password,password:'Otra contraseña de pruebas 456!'};
+  const changed = {current:password,password:'Otra contraseña de pruebas 456!',confirmation:'Otra contraseña de pruebas 456!'};
   assert.equal((await client.submit(account,'/cuenta/clave',{...changed,_csrf:'incorrecto'})).status,403);
   assert.equal((await client.submit(account,'/cuenta/clave',changed,{origin:'null'})).status,403);
   assert.equal((await client.submit(account,'/cuenta/clave',changed)).status,303);

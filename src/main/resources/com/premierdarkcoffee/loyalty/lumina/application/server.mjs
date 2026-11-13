@@ -7,7 +7,10 @@ import { dataDirectory, openDatabase } from '../infrastructure/database.mjs';
 import { loadIntegration } from '../wallet/integration.mjs';
 import { loyaltyOrigin } from '../wallet/bridge.mjs';
 
+import { productionGuard, productionReadiness } from '../infrastructure/production.mjs';
+
 process.umask(0o077);
+const production=productionGuard();
 const port = Number(process.env.LUMINA_PORT || 8099);
 if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) throw new Error('Puerto LUMINA_PORT inválido.');
 const loyaltyUrl = loyaltyOrigin(process.env.LUMINA_LOYALTY_URL);
@@ -24,7 +27,9 @@ const exists = existsSync(databasePath);
 if (exists && !lstatSync(databasePath).isFile()) throw new Error('La base de Lúmina debe ser un archivo privado.');
 const key = loadKey(directory,exists);
 const db = openDatabase(databasePath);
-const server = createPortal({db,key,loyaltyUrl,publicOrigin,integration});
+const readiness=production?()=>productionReadiness(db,loyaltyUrl,process.env.SOURCE_SHA):null;
+if(readiness)try{await readiness();}catch(error){db.close();throw error;}
+const server = createPortal({db,key,loyaltyUrl,publicOrigin,integration,readiness});
 server.on('error',error=>{
   db.close();
   process.stderr.write(error.code==='EADDRINUSE' ? 'El puerto de Lúmina ya está ocupado.\n' : 'No se pudo iniciar Lúmina.\n');

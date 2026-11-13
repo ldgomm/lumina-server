@@ -40,3 +40,8 @@ __pycache__/
 # loyalty-wallet-local-v007
 .local-wallet/
 .loyalty-wallet.lock/
+
+# Production material lives outside the repository
+.production/
+.lumina-digital/
+*.dump

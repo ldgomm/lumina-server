@@ -67,7 +67,7 @@ test('la ficha del negocio es de solo lectura, incluyendo solicitudes, Maps, paq
   const plan=w.db.get('SELECT id FROM plans').id;
   const order=await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+plan]:'1'});
   const pages=['/inicio','/solicitudes',req.location,'/contenido?vista=solicitudes','/contenido?vista=agenda','/planes','/planes?vista=acuerdos',order.location,'/mapas','/wallet'];
-  for(const path of pages){const r=await w.admin.get(path+(path.includes('?')?'&':'?')+'empresa='+w.id);assert.equal(r.status,200,path);assert.match(r.body,/Solo lectura|solo lectura/);assert.deepEqual(postActions(r.body),['/salir'],path);assert.doesNotMatch(r.body,/>Dueño</);}
+  for(const path of pages){const r=await w.admin.get(path+(path.includes('?')?'&':'?')+'empresa='+w.id);assert.equal(r.status,200,path);assert.match(r.body,/Solo lectura|solo lectura/);assert.deepEqual(postActions(r.body),[],path);assert.doesNotMatch(r.body,/>Dueño</);}
   for(const path of ['/clientes/verificar',req.location+'/estado','/mapas/ubicacion','/planes/activar','/planes/cancelar'])assert.equal((await w.admin.post(path+'?empresa='+w.id,{status:'APPROVED',name:'Cambio'})).status,403);
   assert.equal(w.db.get('SELECT approved FROM companies WHERE id=?',w.id).approved,0);
 });

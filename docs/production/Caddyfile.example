@@ -1,0 +1,10 @@
+# Replace these hosts with the established domains; never replace a live pass URL.
+# The Caddy admin endpoint must stay private. No access log for URLs carrying pass tokens.
+app.YOUR_DOMAIN {
+    reverse_proxy 127.0.0.1:8100
+    header Strict-Transport-Security "max-age=31536000"
+}
+wallet.YOUR_DOMAIN {
+    reverse_proxy 127.0.0.1:8101
+    header Strict-Transport-Security "max-age=31536000"
+}

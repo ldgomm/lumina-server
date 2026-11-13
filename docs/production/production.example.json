@@ -1,0 +1,30 @@
+{
+  "native": {
+    "DATABASE_URL": "jdbc:postgresql://127.0.0.1:5432/lumina_production",
+    "DATABASE_USER": "lumina",
+    "DATABASE_PASSWORD": "USE_THE_EXISTING_DATABASE_PASSWORD",
+    "IDENTITY_PEPPER": "KEEP_THE_ORIGINAL_IDENTITY_PEPPER",
+    "PLATFORM_ADMIN_TOKEN": "KEEP_THE_ORIGINAL_PLATFORM_TOKEN",
+    "PUBLIC_BASE_URL": "https://wallet.YOUR_DOMAIN",
+    "WALLET_DATA_KEY": "KEEP_THE_ORIGINAL_BASE64_KEY",
+    "APPLE_WALLET_ENABLED": "true",
+    "APPLE_PASS_TYPE_ID": "KEEP_THE_ORIGINAL_PASS_TYPE_ID",
+    "APPLE_TEAM_ID": "KEEP_THE_ORIGINAL_TEAM_ID",
+    "APPLE_P12_PATH": "/etc/lumina/apple.p12",
+    "APPLE_P12_PASSWORD": "USE_THE_EXISTING_P12_PASSWORD",
+    "APPLE_WWDR_CERT_PATH": "/etc/lumina/wwdr.cer",
+    "GOOGLE_WALLET_ENABLED": "true",
+    "GOOGLE_WALLET_ISSUER_ID": "KEEP_THE_ORIGINAL_ISSUER_ID",
+    "GOOGLE_WALLET_SERVICE_ACCOUNT_PATH": "/etc/lumina/google.json"
+  },
+  "portal": {
+    "LUMINA_ORIGIN": "https://app.YOUR_DOMAIN",
+    "LUMINA_DATA_DIR": "/var/lib/lumina/agency",
+    "LUMINA_LOYALTY_ADMIN_TOKEN": "SAME_PLATFORM_ADMIN_TOKEN_AS_NATIVE"
+  },
+  "identity_file": "/var/lib/lumina/continuity.json",
+  "backup_dir": "/var/backups/lumina",
+  "release_root": "/opt/lumina/releases",
+  "runtime_dir": "/var/lib/lumina/runtime",
+  "postgres_image": "postgres:16"
+}

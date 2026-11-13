@@ -38,9 +38,19 @@ export function publicPage(path,setupAvailable) {
       <div class="actions">${localLink('/registro','Registrar mi negocio','btn secondary')}${localLink('/activar','Activar un acceso','btn secondary')}${setupAvailable ? localLink('/configurar','Configurar la agencia','btn secondary') : ''}</div>`)}</div>`,
   };
 }
-export function accountPage(actor) {
-  return card('Cambia tu contraseña',`<p class="muted">${esc(actor.email)} · ${esc(label(actor.kind))}</p>
+export function accountPage(actor,{otherSessions=0,error='',notice=''}={}) {
+  const workspace=actor.kind==='AGENCY'?'Lúmina Digital':actor.company_name||'Mi negocio';
+  return `<div class="account-layout">
+    <section class="card account-profile" aria-label="Tu perfil"><span class="account-avatar" aria-hidden="true">${esc(actor.name.trim().charAt(0).toUpperCase())}</span><div><p class="eyebrow">TU PERFIL</p><h2>${esc(actor.name)}</h2><p>${esc(actor.email)}</p><span class="badge">${esc(label(actor.kind))}</span></div>
+    <dl><div><dt>Espacio de trabajo</dt><dd>${esc(workspace)}</dd></div><div><dt>Acceso</dt><dd>Una cuenta para Lúmina y tus módulos</dd></div></dl></section>
+    ${notice?`<p class="notice account-feedback" role="status">${esc(notice)}</p>`:''}
+    <section class="card account-security"><p class="eyebrow">SEGURIDAD</p><h2>Cambiar contraseña</h2>
+    ${error?`<p class="error" role="alert">${esc(error)}</p>`:''}
     ${form('/cuenta/clave',actor,`${password('current','Contraseña actual','required maxlength="128" autocomplete="current-password"')}
-    ${password('password','Nueva contraseña')}${button('Actualizar contraseña')}`)}`,
-  'Al guardarla se cierran tus otras sesiones.');
+    <div class="fields two">${password('password','Nueva contraseña')}${password('confirmation','Repite la nueva contraseña')}</div>
+    <p class="muted">Usa al menos 12 caracteres. Al cambiarla se cierran tus otras sesiones.</p>${button('Guardar contraseña')}`)}</section>
+    <section class="card account-session"><p class="eyebrow">TU SESIÓN</p><h2>Acceso a tu cuenta</h2><p class="session-state"><span aria-hidden="true"></span>Sesión actual activa</p>
+    ${otherSessions?`<p>${otherSessions===1?'Tienes otra sesión abierta.':'Tienes '+otherSessions+' sesiones más abiertas.'}</p>${form('/cuenta/sesiones/cerrar',actor,button('Cerrar las otras sesiones','secondary'))}`:'<p class="muted">No tienes otras sesiones abiertas.</p>'}
+    <div class="account-signout"><h3>Terminar esta sesión</h3><p class="muted">Cerrarás tu acceso a Lúmina y sus módulos en este navegador.</p>${form('/salir',actor,button('Cerrar sesión','account-exit'))}</div></section>
+    </div>`;
 }

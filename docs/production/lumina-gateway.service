@@ -1,0 +1,24 @@
+[Unit]
+Description=Lumina private production gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=lumina
+Group=lumina
+PIDFile=/var/lib/lumina/runtime/gateway.pid
+ExecStartPre=/usr/sbin/nginx -t -c /var/lib/lumina/runtime/nginx.conf
+ExecStart=/usr/sbin/nginx -c /var/lib/lumina/runtime/nginx.conf
+ExecReload=/usr/sbin/nginx -s reload -c /var/lib/lumina/runtime/nginx.conf
+ExecStop=/usr/sbin/nginx -s quit -c /var/lib/lumina/runtime/nginx.conf
+Restart=on-failure
+TimeoutStopSec=60
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/lumina/runtime
+
+[Install]
+WantedBy=multi-user.target

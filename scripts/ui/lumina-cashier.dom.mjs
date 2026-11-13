@@ -43,6 +43,11 @@ try{
  }
  async function lookup(w){const f=w.document.querySelector('#lookup');f.elements.value.value='FICTIONAL-CARD';f.requestSubmit(f.querySelector('button'));await settle(()=>w.document.querySelector('#counterChoose')&&!f.hasAttribute('aria-busy'));}
  const w=await open({purchases:'yes',rewards:'yes'});await lookup(w);
+ const account=w.document.querySelector('[data-lumina-account]');assert.equal(account.getAttribute('href'),'/cuenta');
+ const pending=w.document.querySelector('#purchase');pending.setAttribute('aria-busy','true');account.click();assert.match(w.document.querySelector('#notice').textContent,/Espera a que termine/);pending.removeAttribute('aria-busy');
+ const originalLeave=w.loyaltyOperationLeave;let protectedLeave=false;w.loyaltyOperationLeave=()=>{protectedLeave=true;};account.click();assert.equal(protectedLeave,true);w.loyaltyOperationLeave=originalLeave;
+ checks.push('Mi cuenta keeps the pending-operation guard; no sign-out control appears inside Caja');
+
  const f=w.document.querySelector('#purchase');f.elements.receipt.value='FIXTURE-ONE';f.elements.amount.value='20';f.requestSubmit([...f.querySelectorAll('button')].find(b=>b.type==='submit'));
  await settle(()=>w.document.querySelector('#finishSimplePurchase')&&!f.hasAttribute('aria-busy'));
  const finish=w.document.querySelector('#finishSimplePurchase');finish.requestSubmit();await settle(()=>w.document.querySelector('.counter-receipt'));

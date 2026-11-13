@@ -33,7 +33,7 @@ test('registro, cortesía idempotente, privacidad de cédula y credencial',async
   assert.equal((await client.post('/solicitudes',{...data,_csrf:'incorrecto'})).status,403);
   const another = world.session();
   assert.equal((await another.post('/entrar',{email:'negocio1@example.test',password})).status,303);
-  const changed = await client.post('/cuenta/clave',{current:password,password:'Otra contraseña larga 1!'});
+  const changed = await client.post('/cuenta/clave',{current:password,password:'Otra contraseña larga 1!',confirmation:'Otra contraseña larga 1!'});
   assert.equal(changed.status,303);
   assert.equal((await another.get('/inicio')).status,303);
 });

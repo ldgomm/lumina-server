@@ -1,5 +1,9 @@
 # loyalty
 
+Lúmina Digital integra la agencia y los módulos de contenido y fidelización. La cuenta, permisos y contratación se administran desde Lúmina.
+
+Antes de abrir al público, seguir [la preparación y validación de producción](docs/production/README.md). La producción utiliza bases, claves y dominios persistentes fuera del checkout; no se actualiza reiniciando el entorno de pruebas. Cambios de esta versión: [Mi cuenta y continuidad de Wallet](docs/lumina-cuenta-produccion-v055.md).
+
 This project was created using the [Ktor Project Generator](https://start.ktor.io).
 
 Here are some useful links to get you started:

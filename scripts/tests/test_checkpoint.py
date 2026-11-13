@@ -151,12 +151,26 @@ class CheckpointTests(unittest.TestCase):
         self.assertIn('indent_size = 2',(self.project/'.editorconfig').read_text())
 
     def test_sensitive_files_and_private_key_contents_are_blocked(self):
-        for name in ('.env','.env.local','.env.wallet','.env','.local-staging/access.html','.local-staging/logs/output.log','src/card.pkpass','src/passes.pkpasses','src/certificate.pfx','.local-demo.json','src/key.pem','src/service-account.json','.kotlin/sessions/a.salive'):
+        for name in ('.env','.env.local','.env.wallet','.env','.local-staging/access.html','.local-staging/logs/output.log','src/card.pkpass','src/passes.pkpasses','src/certificate.pfx','.local-demo.json','src/key.pem','src/service-account.json','.kotlin/sessions/a.salive','docs/production.json','src/continuity.json','src/agency.sqlite','src/wallet.dump','src/live.db'):
             self.assertFalse(c.allowed(name),name)
         self.assertTrue(c.allowed('.env.example'))
         self.write('src/config.txt','-----BEGIN '+'PRIVATE KEY-----\ndata\n')
         with self.assertRaises(RuntimeError):
             c.snapshot(self.project)
+
+    def test_local_checkpoint_rejects_production_environment_and_releases(self):
+        c.require_development_checkout(self.project,{})
+        for env in ({'LUMINA_PROFILE':'production'},{'LOYALTY_PROFILE':'production'},{'PRODUCTION_IDENTITY_PATH':'/private/seal.json'}):
+            with self.assertRaises(RuntimeError):c.require_development_checkout(self.project,env)
+        self.write('release.json','{}')
+        with self.assertRaises(RuntimeError):c.require_development_checkout(self.project,{})
+        self.assertEqual('{}',(self.project/'release.json').read_text())
+
+    def test_local_checkpoint_rejects_private_production_config_without_modifying_it(self):
+        for value in ('LOYALTY_PROFILE=production\n','export LUMINA_PROFILE="production"\n','PRODUCTION_IDENTITY_PATH=/private/seal.json\n'):
+            self.write('.env.wallet',value)
+            with self.assertRaises(RuntimeError):c.require_development_checkout(self.project,{})
+            self.assertEqual(value,(self.project/'.env.wallet').read_text())
 
     def test_symlinked_source_is_not_silently_omitted(self):
         external=self.root/'external'
