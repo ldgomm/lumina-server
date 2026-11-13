@@ -29,7 +29,9 @@ fun nextBillingDate(current: LocalDate, months: Int, anchor: Int): LocalDate {
     val graceDays: Int = 7,
     val autoSuspend: Boolean = false,
     val recurring: Boolean = true,
-    val anchorDay: Int = billingDate(nextChargeOn).dayOfMonth
+    val anchorDay: Int = billingDate(nextChargeOn).dayOfMonth,
+    val walletAgreement: WalletAgreement? = null,
+    val walletEndsOn: String? = null
 ) {
     fun validate(today: LocalDate) {
         text(name, 100)

@@ -1,3 +1,4 @@
+import { businessCategories } from '../../businesses/categories.mjs';
 import { button, card, check, esc, form, input, label, localLink } from './components.mjs';
 
 const password = (name,caption,extra='') => input(name,caption,'password',extra || 'required minlength="12" maxlength="128" autocomplete="new-password"');
@@ -6,7 +7,8 @@ function publicView(path,setupAvailable,values={}) {
     title:'Registra tu negocio como cliente', description:'Crea tu espacio de trabajo y recibe un video de cortesía de Lúmina Digital.',
     body:card('Datos del responsable',form('/registro',null,`<div class="fields two">
       ${input('company','Nombre del negocio','text','required maxlength="100" autocomplete="organization"',values.company||'')}
-      ${input('name','Nombre del responsable','text','required maxlength="100" autocomplete="name"',values.name||'')}
+      <label>¿Qué tipo de negocio tienes?<select name="category" required><option value="">Selecciona una opción</option>${[...new Set(businessCategories.map(c=>c.group))].map(group=>`<optgroup label="${esc(group)}">${businessCategories.filter(c=>c.group===group).map(c=>`<option value="${c.id}" ${values.category===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>`).join('')}</select></label>
+      ${input('name','Nombre del responsable' ,'text','required maxlength="100" autocomplete="name"',values.name||'')}
       ${input('document','Cédula','text','required inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="off"',values.document||'')}
       ${input('phone','Teléfono','tel','required maxlength="25" autocomplete="tel"',values.phone||'')}
       ${input('email','Correo','email','required maxlength="180" autocomplete="email"',values.email||'')}

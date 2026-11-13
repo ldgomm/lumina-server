@@ -48,20 +48,21 @@ object BusinessCategories {
     private fun normalized(value:String)=Normalizer.normalize(value.trim().lowercase(Locale.ROOT),Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"),"").replace(Regex("\\s+")," ")
     fun known(id:String)=id in byId
-    private fun resolve(profile:BusinessProfile?):Pair<BusinessCategory,String> {
+    private fun resolve(profile:BusinessProfile?, selectedCategory:String=""):Pair<BusinessCategory,String> {
         byId[profile?.category]?.let { return it to "SELECTED" }
+        byId[selectedCategory]?.let { return it to "SELECTED" }
         val activity=normalized(profile?.activity.orEmpty())
         val matches=all.filter { category -> (category.aliases+category.name).any{normalized(it)==activity} }
         return if(matches.size==1)matches.single() to "ACTIVITY" else byId.getValue("GENERAL") to "GENERAL"
     }
     fun options()=obj("version" to 1,"categories" to all.map{obj("id" to it.id,"name" to it.name,"group" to it.group)})
-    fun context(profile:BusinessProfile?):JsonObject {
-        val (category,source)=resolve(profile)
+    fun context(profile:BusinessProfile?, selectedCategory:String=""):JsonObject {
+        val (category,source)=resolve(profile,selectedCategory)
         return obj("id" to category.id,"name" to category.name,"source" to source)
     }
-    fun suggestions(profile:BusinessProfile?):JsonObject {
-        val (category,_)=resolve(profile)
-        return obj("version" to 1,"category" to context(profile),"productExamples" to category.productExamples,
+    fun suggestions(profile:BusinessProfile?, selectedCategory:String=""):JsonObject {
+        val (category,_)=resolve(profile,selectedCategory)
+        return obj("version" to 1,"category" to context(profile,selectedCategory),"productExamples" to category.productExamples,
             "examples" to category.examples.map{json.encodeToJsonElement(it)})
     }
 }
@@ -69,5 +70,5 @@ internal fun promotionSuggestions(c:Connection,tenant:String):JsonObject {
     val profile=c.one("SELECT config::text FROM business_profiles WHERE tenant_id=?",tenant) {
         json.decodeFromString<BusinessProfile>(it.getString(1))
     }
-    return BusinessCategories.suggestions(profile)
+    return BusinessCategories.suggestions(profile, c.one("SELECT category FROM lumina_business_registrations WHERE tenant_id=?",tenant){it.getString(1)} ?: "")
 }

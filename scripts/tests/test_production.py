@@ -22,7 +22,7 @@ class ProductionTests(unittest.TestCase):
         self.data = self.root/'agency'
         self.data.mkdir(mode=0o700)
         with sqlite3.connect(self.data/'agency.sqlite') as db:
-            db.executescript("PRAGMA user_version=6; CREATE TABLE accounts(id TEXT,kind TEXT); INSERT INTO accounts VALUES('a','AGENCY'); CREATE TABLE companies(id TEXT,loyalty_tenant TEXT);")
+            db.executescript("PRAGMA user_version=7; CREATE TABLE accounts(id TEXT,kind TEXT); INSERT INTO accounts VALUES('a','AGENCY'); CREATE TABLE companies(id TEXT,loyalty_tenant TEXT);")
         (self.data/'agency.sqlite').chmod(0o600);p.write_private(self.data/'agency.key',bytes([6])*32)
         self.n={k:'fictional-'+k for k in p.NATIVE_NAMES}
         self.n.update(DATABASE_URL='jdbc:postgresql://127.0.0.1:5432/lumina',DATABASE_USER='lumina',DATABASE_PASSWORD='fictional-db',IDENTITY_PEPPER='P'*48,PLATFORM_ADMIN_TOKEN='T'*48,WALLET_DATA_KEY=base64.b64encode(bytes([7])*32).decode(),PUBLIC_BASE_URL='https://wallet.example.com',APPLE_PASS_TYPE_ID='pass.com.example.lumina',APPLE_TEAM_ID='ABCDEFGHIJ',GOOGLE_WALLET_ISSUER_ID='123456',APPLE_WALLET_ENABLED='true',GOOGLE_WALLET_ENABLED='true',APPLE_P12_PASSWORD='fictional-p12')
@@ -32,7 +32,7 @@ class ProductionTests(unittest.TestCase):
         self.c={'native':self.n,'portal':{'LUMINA_ORIGIN':'https://portal.example.com','LUMINA_DATA_DIR':str(self.data),'LUMINA_LOYALTY_ADMIN_TOKEN':'T'*48},'identity_file':str(self.root/'identity/continuity.json'),'backup_dir':str(self.root/'backups'),'release_root':str(self.root/'releases'),'runtime_dir':str(self.root/'runtime')}
         self.config=self.root/'production.json';p.save_json(self.config,self.c);self.c['_path']=str(self.config)
     def pg(self,c,sql):
-        if 'json_build_object' in sql:return json.dumps({'name':'lumina','created':'123','versions':list(range(1,16))})
+        if 'json_build_object' in sql:return json.dumps({'name':'lumina','created':'123','versions':list(range(1,17))})
         if 'fingerprint' in sql:return p.digest(bytes([7])*32)
         return '0'
     def sealed(self):
@@ -133,7 +133,7 @@ class ProductionTests(unittest.TestCase):
         s=self.sealed();b=self.verified(s);calls=[]
         def run(argv,*args,**kw):
             calls.append(argv)
-            if 'SELECT count(*) FROM comeback_migrations' in argv:return b'15\n'
+            if 'SELECT count(*) FROM comeback_migrations' in argv:return b'16\n'
             if any('lumina_business_registrations' in a for a in argv):return b'[]\n'
             return b'container\n'
         with patch.object(p,'check',return_value=s),patch.object(p,'run',run):result=p.verify_backup(self.c,b)
@@ -150,5 +150,36 @@ class ProductionTests(unittest.TestCase):
     def test_package_requires_complete_matching_checkpoint(self):
         report=self.root/'receipt.json';p.save_json(report,{'core_status':'FAIL'})
         with self.assertRaises(p.Blocked):p.package(self.c,report)
+
+    def test_packaged_portal_loads_shared_business_categories_without_source_checkout(self):
+        import checkpoint
+        import shutil
+        import subprocess
+        source=self.root/'source';sql=source/'src/main/resources/com/premierdarkcoffee/loyalty'
+        shutil.copytree(p.SQL_ROOT/'lumina',sql/'lumina')
+        (sql/'businesses').mkdir()
+        shutil.copy2(p.SQL_ROOT/'businesses/business-categories.json',sql/'businesses/business-categories.json')
+        (source/'build/install/loyalty/bin').mkdir(parents=True)
+        (source/'build/install/loyalty/bin/loyalty').write_text('# fictional distribution\n')
+        (source/'scripts').mkdir()
+        for name in ('production.py','wallet_local.py','wallet_config.py','staging.py','checkpoint.py'):
+            shutil.copy2(p.ROOT/'scripts'/name,source/'scripts'/name)
+        (source/'.env').write_text('PRIVATE_TEST_MARKER=not-for-release\n')
+        commit='a'*40;manifest={'source':'checked'}
+        receipt=self.root/'complete.json'
+        p.save_json(receipt,{'core_status':'CORE_TESTS_PASS','auto_commit':{'status':'CREATED','hash':commit},'tested_manifest':manifest})
+        def run(argv,**kwargs):
+            if argv[0]=='git':return commit.encode()
+            self.assertEqual(argv[0],str(source/'gradlew'));return b''
+        with patch.object(p,'ROOT',source),patch.object(p,'SQL_ROOT',sql),patch.object(p,'run',run),patch.object(checkpoint,'snapshot',return_value={}),patch.object(checkpoint,'manifest',return_value=manifest):
+            result=p.package(self.c,receipt)
+        release=Path(result['release'])
+        shutil.rmtree(source)
+        checked=p.release_manifest(release)
+        self.assertIn('businesses/business-categories.json',checked['files'])
+        self.assertNotIn('.env',checked['files'])
+        loaded=subprocess.run(['node','--input-type=module','-e',"const m=await import(process.argv[1]);console.log(m.businessCategory('CAFE'));",(release/'portal/businesses/categories.mjs').as_uri()],capture_output=True,text=True,timeout=15)
+        self.assertEqual(loaded.returncode,0,loaded.stderr)
+        self.assertEqual(loaded.stdout,'CAFE\n')
 
 if __name__=='__main__':unittest.main()

@@ -9,7 +9,7 @@ export function managementPage() {
 export function managementFramePage(slug,params=new URLSearchParams()) {
  const section=Object.entries(managementSections).find(([,value])=>value===slug)?.[0];
  const query=new URLSearchParams({seccion:section});for(const key of ['days','branchId','actorId','fromDate','throughDate','kind']){const value=params.get(key);if(value&&value.length<=80)query.set(key,value);}
- return `<p>${localLink('/gestion','← Administración de Lúmina')}</p>${slug==='historial'?card('Historial conservado',`<p>Estos cargos y pagos pertenecen a acuerdos anteriores de Wallet. Si existe una programación anterior, se muestra aquí; no es una nueva contratación de Lúmina.</p><p>Toda contratación nueva se realiza desde Paquetes y servicios.</p>${localLink('/planes?vista=acuerdos','Ver mis servicios en Lúmina','btn')}`):''}<iframe class="management-frame" title="${esc(managementTitles[slug])}" src="/gestion/vista?${esc(query.toString())}" data-management-frame></iframe><p class="muted" data-frame-status role="status"></p>`;
+ return `<p>${localLink('/gestion','← Administración de Lúmina')}</p>${slug==='historial'?card('Cargos y pagos de Wallet',`<p>Consulta los cargos de tu suscripción y los acuerdos anteriores de Wallet.</p><p>Toda contratación nueva se realiza desde Paquetes y servicios.</p>${localLink('/planes/wallet','Ver mi suscripción Wallet','btn')}`):''}<iframe class="management-frame" title="${esc(managementTitles[slug])}" src="/gestion/vista?${esc(query.toString())}" data-management-frame></iframe><p class="muted" data-frame-status role="status"></p>`;
 }
 export function managementDocument(actor,company,section) {
  return loyaltyWorkspaceHtml(actor,section,[section],company)

@@ -1,3 +1,4 @@
+import { businessCategory } from '../businesses/categories.mjs';
 import { channels, areas, walletScopes, socialChannels, event, now, requireThat, text, uuid } from '../shared/domain.mjs';
 import { parseGrants, grantsSnapshot, permissions } from './team-policy.mjs';
 export { permissions };
@@ -53,6 +54,7 @@ export async function createAgency(db, data) {
 }
 export async function register(db, key, data) {
   const company = text(data.company, 'negocio', 2, 100);
+  const category = businessCategory(data.category);
   const name = text(data.name, 'responsable', 2, 100);
   const email = emailAddress(data.email);
   const document = text(data.document, 'cédula', 10, 10);
@@ -69,8 +71,8 @@ export async function register(db, key, data) {
       'Ya existe un registro con esos datos. Usa tu cuenta existente o contacta a Lúmina.', 409);
     const companyId = uuid();
     const accountId = uuid();
-    db.run(`INSERT INTO companies(id,name,registration_key,document_hint,phone,created_at)
-      VALUES(?,?,?,?,?,?)`, companyId, company, identity, document.slice(-4), phone, now());
+    db.run(`INSERT INTO companies(id,name,registration_key,document_hint,phone,created_at,category)
+      VALUES(?,?,?,?,?,?,?)`, companyId, company, identity, document.slice(-4), phone, now(),category);
     db.run(`INSERT INTO accounts(id,company_id,name,email,kind,password) VALUES(?,?,?,?,'OWNER',?)`,
       accountId, companyId, name, email, password);
     event(db, { id: accountId, name }, companyId, 'COMPANY', companyId, 'REGISTRO', 'Video de cortesía disponible.');

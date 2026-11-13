@@ -99,6 +99,11 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
     const p = tokens.get((req.headers.authorization || '').replace(/^Bearer /,''));
     calls.push({path,method:req.method,role:p?.role || null,actorId:p?.id || null,key:req.headers['idempotency-key']||null});
     if (!p || p.state!=='ACTIVE') return fail(res,401,'UNAUTHORIZED');
+    if(path.startsWith('/api/staff/lumina-subscription')&&configuration.subscription){
+      let raw='';for await(const chunk of req)raw+=chunk;
+      const answer=await configuration.subscription({path,method:req.method,payload:raw?JSON.parse(raw):null,company:p.company,staff:p,key:req.headers['idempotency-key']});
+      return json(res,answer.status||200,answer.body);
+    }
     const b = branches.get(p.company.id);
     if (req.method==='GET' && path==='/api/staff/dashboard') return json(res,200,{
       business:p.company,role:p.role,branchId:p.branchId,permissions:p.permissions,

@@ -53,8 +53,8 @@ object ProductionGuard {
 
     fun verifyDatabase(db: Database, seal: JsonObject, env: Map<String, String>) = db.tx { c ->
         val migrations = c.rows("SELECT version,checksum FROM comeback_migrations ORDER BY version") { it.getInt(1) to it.getString(2) }.toMap()
-        check(migrations.keys == (1..15).toSet()) { "PRODUCTION_SCHEMA_CHANGE_REQUIRES_PLANNED_MIGRATION" }
-        for (version in 1..15) {
+        check(migrations.keys == (1..16).toSet()) { "PRODUCTION_SCHEMA_CHANGE_REQUIRES_PLANNED_MIGRATION" }
+        for (version in 1..16) {
             val sql = requireNotNull(javaClass.getResource("/com/premierdarkcoffee/loyalty/infrastructure/persistence/migrations/V${version.toString().padStart(3, '0')}.sql")).readText()
             val expected = SqlFingerprint.checksum(sql)
             check(if (version == 1) SqlFingerprint.acceptsV001(migrations[version], expected) else migrations[version] == expected) { "PRODUCTION_MIGRATION_MISMATCH" }

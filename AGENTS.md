@@ -562,3 +562,23 @@ Black Friday metadata belongs to a single November/year. Server admission and re
 - El manejador común de envío se ejecuta después de los validadores y restaura los botones al volver. No persistir datos de borradores en localStorage/sessionStorage. Equipo mantiene su propio seguimiento de cambios.
 - Gate: 21 suites / 210 pruebas del portal, 160 Python y 608 Kotlin/HTTP/PostgreSQL, más Docker/gateway, antes del auto commit. Ocho suites DOM y prueba visual separada en `scripts/ui`. Guía: `docs/lumina-revision-integral-v056.md`.
 - No modificar identidades, esquemas ni material privado de Wallet en esta revisión. Despliegue pausado; recrear el paquete de producción solo después del checkpoint local y al retomar esa tarea.
+
+
+## Lúmina v018 / Loyalty v057 — registro y tarifa Wallet
+
+- La promoción termina definitivamente el 31-12-2026 en America/Guayaquil; no se vuelve a abrir cada noviembre. USD 4,99 finales por sucursal y mes desde 01-01-2027, o desde el alta si es posterior.
+- Solo el dueño acepta expresamente la tarifa y la renovación desde Lúmina; nada de casillas marcadas, agencia aceptando por otro, cobros por visitar Wallet ni cargos retroactivos. Se factura a la cuenta, no a una tarjeta bancaria.
+- Guardar términos y resumen versionados, identidad de quien acepta y fecha. No modificar acuerdos anteriores. Contratos que ya incluyen Wallet requieren revisión para evitar cobro duplicado.
+- El alta por categoría elige el diseño una vez. Reintentos, actualizaciones y cambios de categoría no vuelven a sortear diseños ni alteran identidades/saldos/pases.
+- V016 y SQLite007 son expansiones aditivas; todos los SQL anteriores son inmutables. Ver docs/production/transicion-v057.md: producción previamente sellada requiere transición ensayada y retorno compatible. No sobrescribir sellos ni restaurar una base anterior sobre nuevas operaciones.
+- Gates agregados: WalletSubscriptionTest (6) y WalletSubscriptionPostgresTest (13), además del portal subscription.test.mjs y wallet-registration.dom.cjs. Pruebas físicas Apple/Google continúan separadas.
+
+- Gate actualizado de esta revisión: 218 pruebas del portal, 160 Python y 627 Kotlin/HTTP/PostgreSQL. No crear commit sin Docker/gateway local. Los 16 escenarios DOM verificados no sustituyen navegador ni dispositivos físicos.
+
+## Lúmina v018r1 — corrección del verificador
+
+- El catálogo HTTP contiene 22 suites / 218 pruebas. La comprobación previa del instalador y el checkpoint ejecutan el mismo `scripts/test_lumina.py`; no verificar Node por otra ruta que omita este ejecutor.
+- El ejecutor exige los conteos completos, sin fallos, cancelaciones, omisiones ni pendientes. No convertir un error de catálogo o proceso en PASS. `test_lumina_runner.py` cubre estas condiciones y eleva Python a 168 pruebas; la regresión adicional del paquete de producción lleva el total a 169.
+- Mantener los 627 tests nativos, Docker y gateway antes del commit local. Esta revisión no cambia lógica de Wallet, SQL, claves, identidades ni conexiones.
+
+- El paquete de producción incluye `businesses/business-categories.json` junto a `portal`, conservando la ruta relativa del catálogo compartido. Su prueba carga el módulo Node desde la candidata después de retirar el checkout ficticio. No afirmar despliegue por esta verificación.

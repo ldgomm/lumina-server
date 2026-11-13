@@ -71,7 +71,9 @@ async function runEnv(detailed=false){
  const d=await runEnv(true);
  try{
   assert.equal(d.all('[name=program]:checked').length,0);assert.equal(d.q('.purchase-promotions').closest('details'),null);
-  d.input('#receipt','PRODUCTS-1');d.input('[data-name]','Café');d.input('[data-group]','cafe');d.input('[data-price]','5');d.input('[name=program][value=visits]',true,'change');
+  assert.deepEqual(d.all('[data-group-choice] option').map(n=>n.value),['cafe','Sin categoría','__custom']);
+  d.input('[data-group-choice]','__custom','change');assert.equal(d.q('[data-custom-group]').hidden,false);d.input('[data-group]','Otra prueba');
+  d.input('#receipt','PRODUCTS-1');d.input('[data-name]','Café');d.input('[data-group-choice]','cafe','change');d.input('[data-price]','5');d.input('[name=program][value=visits]',true,'change');
   d.q('#addProduct').click();assert.equal(d.all('[name=program]:checked').length,1);d.q('[data-remove="1"]').click();assert.equal(d.all('[name=program]:checked').length,1);
   d.input('[name=program][value=points]',true,'change');d.submit('#productPurchase');await d.settle(()=>d.q('#finishPurchase'));
   assert.deepEqual(d.calls.at(-1).payload.programIds,['points','visits']);
@@ -81,7 +83,7 @@ async function runEnv(detailed=false){
   assert.deepEqual(d.calls.at(-1).payload.programIds,[]);assert.match(d.q('#receiptReview').textContent,/Solo registrar compra/);assert.equal(d.q('#finishPurchase button').textContent,'Guardar compra');
   d.submit('#finishPurchase');await d.settle(()=>d.q('.counter-receipt'));assert.deepEqual(d.calls.at(-1).payload.programIds,[]);
   checks.push('Itemized flow: unchecked and visible choices, redraw preservation, branch invalidation, clear-all, empty selection on save');
-  await d.lookup();d.input('#receipt','ONE-STAMP');d.input('[data-name]','Café');d.input('[data-group]','cafe');d.input('[data-price]','5');d.input('[name=program][value=visits]',true,'change');
+  await d.lookup();d.input('#receipt','ONE-STAMP');d.input('[data-name]','Café');d.input('[data-group-choice]','cafe','change');d.input('[data-price]','5');d.input('[name=program][value=visits]',true,'change');
   d.submit('#productPurchase');await d.settle(()=>d.q('#finishPurchase'));d.submit('#finishPurchase');await d.settle(()=>d.q('.counter-receipt'));
   assert.deepEqual(d.calls.at(-1).payload.programIds,['visits']);assert.match(d.q('.purchase-earning-receipt').textContent,/\+1 sello/);assert.doesNotMatch(d.q('.purchase-earning-receipt').textContent,/1 sellos|Cashback del 5%/);
   checks.push('Selected visit promotion produces a named single-stamp receipt without other promotions');

@@ -1,4 +1,4 @@
-# Producción de Lúmina — v055
+# Producción de Lúmina — v057
 
 Este kit prepara el despliegue. No publica el sistema, no cambia DNS y no declara producción aprobada por haber pasado las pruebas locales. Requiere confirmar servidor Linux y los dos dominios HTTPS definitivos; Java 21, Node 24 LTS o posterior compatible, Python 3.10+, PostgreSQL 16, clientes psql/pg_dump/pg_restore 16, Nginx, Caddy, OpenSSL y Docker para restauraciones aisladas. Los binarios y las imágenes deben fijarse a versiones verificadas en el servidor.
 
@@ -13,7 +13,7 @@ Una URL temporal trycloudflare/ngrok no es un dominio de producción. Si las tar
 1. Crear un usuario de sistema `lumina`, carpetas privadas fuera del checkout y permisos 0700: `/var/lib/lumina/agency`, `/var/lib/lumina/runtime`, `/var/backups/lumina`, `/opt/lumina/releases`. Configuración en `/etc/lumina`, 0700; archivos 0600, accesibles sólo por el servicio/operador. PostgreSQL debe usar un volumen persistente propio, nunca `loyalty-staging-data`; aceptar conexiones sólo en red privada. Si es remoto, JDBC exige `sslmode=verify-full` y su CA.
 2. Copiar el ejemplo a `/etc/lumina/production.json`, con valores verdaderos recuperados de la configuración privada original. No generar sustitutos. El portal y Wallet usan dominios distintos: el dominio de Wallet permite únicamente registro y rutas públicas de tarjetas. No exponer Ktor, PostgreSQL ni el administrador de Caddy a Internet.
 3. Llevar PostgreSQL y SQLite al servidor mediante respaldo/restauración verificados, junto con `agency.key` y los materiales de firma. La migración inicial requiere un plan de corte coherente y conservar el origen de los pases. No se deben mantener dos bases independientes aceptando compras. Una instalación nueva se prepara explícitamente fuera del proceso público; el arranque de producción no crea esquemas ni una agencia vacía.
-4. La base restaurada debe estar en PostgreSQL V015 y SQLite v6, y tener la agencia configurada. El kit no convierte el demo en negocio ni copia credenciales de prueba. No importar clientes demo como reales. Nunca eliminar datos que tengan tarjetas sin un procedimiento explícito.
+4. La base restaurada debe estar en PostgreSQL V016 y SQLite v7, y tener la agencia configurada. El kit no convierte el demo en negocio ni copia credenciales de prueba. No importar clientes demo como reales. Nunca eliminar datos que tengan tarjetas sin un procedimiento explícito.
 5. Ejecutar `python3 scripts/production.py seal --config /etc/lumina/production.json` una sola vez, después de comprobar la identidad histórica. Registra huellas, identificadores de base y SQL; no modifica datos. No hay opción de sobrescribir el sello. `check` compara la instalación contra él y bloquea cualquier diferencia.
 6. Guardar copias cifradas fuera del servidor. Los respaldos locales del kit incluyen claves y configuración privada para permitir recuperación y tienen permisos restrictivos; eso no los cifra ni sustituye una copia externa. Definir cifrado, retención, frecuencia, acceso y responsable antes de abrir al público. Para recuperación a un instante se requiere además archivado WAL/PITR administrado de PostgreSQL.
 
@@ -68,3 +68,6 @@ Esperar que terminen las operaciones en vuelo antes de retirar manualmente la ve
 Resultado correcto del kit: preparada para validar/desplegar. **No equivale a PRODUCCIÓN VALIDADA** hasta obtener estas evidencias con el servidor, dominios y dispositivos reales. Las comunicaciones con Apple/Google y la infraestructura pueden fallar; ningún parche puede garantizar disponibilidad absoluta.
 
 Fuentes del protocolo: https://developer.apple.com/library/archive/documentation/UserExperience/Conceptual/PassKit_PG/Updating.html ; https://developers.google.com/wallet/retail/loyalty-cards/use-cases/updates ; https://www.postgresql.org/docs/16/backup.html ; https://caddyserver.com/docs/api ; https://ktor.io/docs/server-configuration-file.html .
+
+
+Para actualizar una producción previamente sellada en V015/v6, seguir primero `transicion-v057.md`. La candidata no migra ni sobrescribe su identidad automáticamente.

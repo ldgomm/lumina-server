@@ -1,6 +1,6 @@
 import { can } from '../access/accounts.mjs';
 export const managementSections=Object.freeze({business:'negocio',branches:'sucursales',activity:'actividad',operations:'operacion',account:'historial',reports:'informes'});
-export const managementTitles=Object.freeze({negocio:'Datos del negocio',sucursales:'Sucursales',actividad:'Actividad',operacion:'Operación por sucursal',historial:'Cargos anteriores de Wallet',informes:'Informes de fidelización'});
+export const managementTitles=Object.freeze({negocio:'Datos del negocio',sucursales:'Sucursales',actividad:'Actividad',operacion:'Operación por sucursal',historial:'Cargos y pagos de Wallet',informes:'Informes de fidelización'});
 export const centralPaths=Object.freeze({administration:'/gestion',business:'/gestion/negocio',branches:'/gestion/sucursales',team:'/equipo',activity:'/gestion/actividad',operations:'/gestion/operacion',account:'/planes?vista=acuerdos',reports:'/gestion/informes'});
 export const isManagementPath=path=>/^\/api\/staff\/(administration|branch-directory|branches|business-profile|activity(?:\.csv)?|operations|metrics|account|notices)(?:\/|$)/.test(path);
 export function canReadFidelityReport(actor){return actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&can(actor,'WALLET')&&can(actor,'WALLET_REPORTS');}

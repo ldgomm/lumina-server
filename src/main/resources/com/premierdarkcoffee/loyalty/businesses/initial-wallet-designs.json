@@ -1,0 +1,506 @@
+[
+  {
+    "category": "CAFE",
+    "background": "#34241f",
+    "foreground": "#fff8ed",
+    "label": "#e8bc82",
+    "symbol": "☕",
+    "compositions": [
+      "STAMPBOOK",
+      "EDITORIAL",
+      "PATH"
+    ]
+  },
+  {
+    "category": "PIZZERIA",
+    "background": "#702c28",
+    "foreground": "#fff9ed",
+    "label": "#f5d391",
+    "symbol": "🍕",
+    "compositions": [
+      "TICKET",
+      "MOSAIC",
+      "ATELIER"
+    ]
+  },
+  {
+    "category": "RESTAURANT",
+    "background": "#193f38",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🍴",
+    "compositions": [
+      "EDITORIAL",
+      "PANORAMA",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "BAKERY",
+    "background": "#614626",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🥐",
+    "compositions": [
+      "STAMPBOOK",
+      "ATELIER",
+      "TICKET"
+    ]
+  },
+  {
+    "category": "PASTRY",
+    "background": "#6c304c",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🎂",
+    "compositions": [
+      "ATELIER",
+      "STAMPBOOK",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "ICE_CREAM",
+    "background": "#e3f0e8",
+    "foreground": "#0b1f3a",
+    "label": "#0b1f3a",
+    "symbol": "🍦",
+    "compositions": [
+      "MOSAIC",
+      "ATELIER",
+      "PATH"
+    ]
+  },
+  {
+    "category": "BURGERS",
+    "background": "#792c20",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🍔",
+    "compositions": [
+      "TICKET",
+      "MOSAIC",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "FAST_FOOD",
+    "background": "#792c20",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🍔",
+    "compositions": [
+      "TICKET",
+      "MOSAIC",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "DRINKS",
+    "background": "#34241f",
+    "foreground": "#fff8ed",
+    "label": "#e8bc82",
+    "symbol": "●",
+    "compositions": [
+      "STAMPBOOK",
+      "EDITORIAL",
+      "PATH"
+    ]
+  },
+  {
+    "category": "BARBER",
+    "background": "#202936",
+    "foreground": "#ffffff",
+    "label": "#bdcedd",
+    "symbol": "✂",
+    "compositions": [
+      "PRECISION",
+      "TICKET",
+      "EDITORIAL"
+    ]
+  },
+  {
+    "category": "HAIR",
+    "background": "#efdfe5",
+    "foreground": "#0b1f3a",
+    "label": "#0b1f3a",
+    "symbol": "♥",
+    "compositions": [
+      "ATELIER",
+      "EDITORIAL",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "BEAUTY",
+    "background": "#efdfe5",
+    "foreground": "#0b1f3a",
+    "label": "#0b1f3a",
+    "symbol": "♥",
+    "compositions": [
+      "ATELIER",
+      "EDITORIAL",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "NAILS",
+    "background": "#efdfe5",
+    "foreground": "#0b1f3a",
+    "label": "#0b1f3a",
+    "symbol": "♥",
+    "compositions": [
+      "ATELIER",
+      "EDITORIAL",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "SPA",
+    "background": "#364b43",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🌿",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "PATH"
+    ]
+  },
+  {
+    "category": "COSMETICS",
+    "background": "#efdfe5",
+    "foreground": "#0b1f3a",
+    "label": "#0b1f3a",
+    "symbol": "♥",
+    "compositions": [
+      "ATELIER",
+      "EDITORIAL",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "CLOTHING",
+    "background": "#f2e9da",
+    "foreground": "#202c40",
+    "label": "#425a76",
+    "symbol": "🛍",
+    "compositions": [
+      "ATELIER",
+      "EDITORIAL",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "SHOES",
+    "background": "#3f3334",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "👟",
+    "compositions": [
+      "PATH",
+      "MOSAIC",
+      "EDITORIAL"
+    ]
+  },
+  {
+    "category": "ACCESSORIES",
+    "background": "#182f35",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "◆",
+    "compositions": [
+      "EDITORIAL",
+      "ATELIER",
+      "PRECISION"
+    ]
+  },
+  {
+    "category": "JEWELRY",
+    "background": "#182f35",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "◆",
+    "compositions": [
+      "EDITORIAL",
+      "ATELIER",
+      "PRECISION"
+    ]
+  },
+  {
+    "category": "OPTICS",
+    "background": "#2f4352",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "👓",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "ELECTRONICS",
+    "background": "#202b53",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "◆",
+    "compositions": [
+      "PRECISION",
+      "MOSAIC",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "PHONES",
+    "background": "#183765",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "📱",
+    "compositions": [
+      "MOSAIC",
+      "PRECISION",
+      "EDITORIAL"
+    ]
+  },
+  {
+    "category": "COMPUTERS",
+    "background": "#202b53",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "◆",
+    "compositions": [
+      "PRECISION",
+      "MOSAIC",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "APPLIANCES",
+    "background": "#202b53",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "◆",
+    "compositions": [
+      "PRECISION",
+      "MOSAIC",
+      "RIBBON"
+    ]
+  },
+  {
+    "category": "HOME",
+    "background": "#eae5de",
+    "foreground": "#0b1f3a",
+    "label": "#0b1f3a",
+    "symbol": "🏠",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "PET_SHOP",
+    "background": "#23566a",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🐾",
+    "compositions": [
+      "PATH",
+      "STAMPBOOK",
+      "PANORAMA"
+    ]
+  },
+  {
+    "category": "PET_GROOMING",
+    "background": "#23566a",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🐾",
+    "compositions": [
+      "PATH",
+      "STAMPBOOK",
+      "PANORAMA"
+    ]
+  },
+  {
+    "category": "GARAGE",
+    "background": "#283c50",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🔧",
+    "compositions": [
+      "PRECISION",
+      "PATH",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "OIL",
+    "background": "#283c50",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🔧",
+    "compositions": [
+      "PRECISION",
+      "PATH",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "TIRES",
+    "background": "#30353e",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🛞",
+    "compositions": [
+      "PRECISION",
+      "MOSAIC",
+      "TICKET"
+    ]
+  },
+  {
+    "category": "CAR_WASH",
+    "background": "#283c50",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🚗",
+    "compositions": [
+      "PRECISION",
+      "PATH",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "FUEL",
+    "background": "#273a3d",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "⛽",
+    "compositions": [
+      "PRECISION",
+      "PATH",
+      "TICKET"
+    ]
+  },
+  {
+    "category": "HARDWARE",
+    "background": "#4c3d27",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🔨",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "GROCERY",
+    "background": "#244c35",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🛒",
+    "compositions": [
+      "TICKET",
+      "STAMPBOOK",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "STATIONERY",
+    "background": "#4b3930",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "📚",
+    "compositions": [
+      "STAMPBOOK",
+      "EDITORIAL",
+      "ATELIER"
+    ]
+  },
+  {
+    "category": "BOOKS",
+    "background": "#4b3930",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "📚",
+    "compositions": [
+      "STAMPBOOK",
+      "EDITORIAL",
+      "ATELIER"
+    ]
+  },
+  {
+    "category": "FLOWERS",
+    "background": "#f1e3ec",
+    "foreground": "#0b1f3a",
+    "label": "#0b1f3a",
+    "symbol": "🌸",
+    "compositions": [
+      "ATELIER",
+      "PANORAMA",
+      "EDITORIAL"
+    ]
+  },
+  {
+    "category": "GIFTS",
+    "background": "#5e3057",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🎁",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "LAUNDRY",
+    "background": "#e2edf5",
+    "foreground": "#0b1f3a",
+    "label": "#0b1f3a",
+    "symbol": "🧺",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "FITNESS",
+    "background": "#153f43",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🏋",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "MOSAIC"
+    ]
+  },
+  {
+    "category": "HOTEL",
+    "background": "#1e3646",
+    "foreground": "#ffffff",
+    "label": "#ffffff",
+    "symbol": "🔑",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "TICKET"
+    ]
+  },
+  {
+    "category": "GENERAL",
+    "background": "#0b1f3a",
+    "foreground": "#ffffff",
+    "label": "#b8d8ff",
+    "symbol": "★",
+    "compositions": [
+      "PANORAMA",
+      "EDITORIAL",
+      "MOSAIC"
+    ]
+  }
+]

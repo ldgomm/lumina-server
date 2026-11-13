@@ -1,5 +1,7 @@
 import { campaignPage, campaignBanner } from '../presentation/pages/campaign-pages.mjs';
 import { campaignBases, createCampaignOffer } from '../campaigns/offers.mjs';
+import { legalProfile, saveLegalProfile, subscriptionOfferInput } from '../billing/subscription.mjs';
+import { subscriptionPage, legalProfilePage, walletPriceCard } from '../presentation/pages/subscription-pages.mjs';
 import { canReadFidelityReport, centralPaths, managementSections, managementTitles } from '../wallet/management-policy.mjs';
 import { managementPage, managementFramePage, managementDocument } from '../presentation/pages/management-pages.mjs';
 import { offerEditor } from '../presentation/pages/offer-editor.mjs';
@@ -43,6 +45,7 @@ const assets = {
   '/assets/wallet-campaigns.js':['wallet-campaigns.js','text/javascript; charset=utf-8'],
   '/assets/black-friday.css':['black-friday.css','text/css; charset=utf-8'],
   '/assets/black-friday.js':['black-friday.js','text/javascript; charset=utf-8'],
+  '/assets/wallet-subscription.js':['wallet-subscription.js','text/javascript; charset=utf-8'],
   '/assets/wallet-season.js':['wallet-season.js','text/javascript; charset=utf-8'],
   '/assets/account.css': ['account.css','text/css; charset=utf-8'],
   '/assets/team.css': ['team.css','text/css; charset=utf-8'],
@@ -166,7 +169,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
             const account=await register(db,key,data);
             const created=db.get('SELECT company_id FROM accounts WHERE id=?',account);
             try{await wallets.ensureCompany(created.company_id);}catch{} // Account survives an outage; opening Wallet retries the durable registration.
-            return startSession(account);
+            return startSession(account,legalProfile(db)?'/planes/wallet':'/inicio');
           }
           if (path==='/activar') return startSession(await activate(db,data));
           return startSession(await createAgency(db,data));
@@ -266,6 +269,35 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         res.setHeader('Set-Cookie',sessionCookie('',trusted.protocol==='https:'));
         return redirect(res,'/');
       }
+      if(path==='/cuenta/proveedor') {
+        requireAgency(actor);
+        if(method==='GET')return render({title:'Datos de Lúmina',body:legalProfilePage(actor,legalProfile(db))});
+        try{saveLegalProfile(db,actor,data);return redirect(res,'/cuenta');}
+        catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Revisa los datos',body:legalProfilePage(actor,data,issue.message)},issue.status);}
+      }
+      if(path.startsWith('/planes/wallet')) {
+        requireOwner(actor);
+        if(method==='POST') {
+          const action=path==='/planes/wallet/aceptar'?'accept':path==='/planes/wallet/cancelar'?'cancel':null;
+          requireThat(action,'Acción no encontrada.',404);
+          requireThat(/^[0-9a-f-]{36}$/i.test(data.requestKey||''),'Recarga el formulario antes de continuar.');
+          const payload=action==='accept'?{offer:subscriptionOfferInput(db,actor),expectedHash:data.hash||'',accepted:data.accept==='yes'}:{expectedVersion:Number(data.version),confirmed:data.confirm==='yes'};
+          try { await wallets.subscription(actor,action,payload,data.requestKey);return redirect(res,action==='accept'?'/wallet':'/planes/wallet'); }
+          catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Revisa tu suscripción',body:`<section class="card"><h2>No pudimos confirmar el cambio</h2><p role="alert">${esc(issue.message)}</p><a class="btn" href="/planes/wallet">Revisar condiciones actuales</a></section>`},issue.status);}
+        }
+        const status=await wallets.subscription(actor);
+        if(path==='/planes/wallet/estado')return json(res,200,{accepted:status.accepted,recurring:status.recurring,trialUntil:status.trialUntil,endsOn:status.endsOn,nextChargeOn:status.nextChargeOn,monthlyMinor:status.monthlyMinor});
+        let offer=null,error='';
+        if(!status.recurring&&!status.legacy)try{offer=await wallets.subscription(actor,'offer',subscriptionOfferInput(db,actor));}catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
+        if(path==='/planes/wallet/condiciones') {
+          const expected=target.searchParams.get('oferta');
+          requireThat(expected?offer&&expected===offer.hash:status.agreement,'Las condiciones cambiaron. Vuelve al resumen para descargar la versión vigente.',409);
+          res.setHeader('Content-Disposition','attachment; filename="condiciones-wallet-lumina.txt"');
+          return send(res,200,expected?offer.terms:status.agreement.terms,'text/plain; charset=utf-8');
+        }
+        requireThat(path==='/planes/wallet','Página no encontrada.',404);
+        return render({title:'Mi suscripción Wallet',body:subscriptionPage(actor,status,offer,error)});
+      }
       if (['/wallet/conectar','/wallet/desconectar','/equipo/loyalty/vincular','/wallet/vincular'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
       if(path==='/wallet/accesos'&&method==='GET') {
         requireOwner(actor);company=companyFor(db,actor,target.searchParams.get('empresa'));
@@ -342,7 +374,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         return render({title:areas[channel],description:channel==='SOCIAL'?'Solicitudes, producción y entregas en un solo lugar.':'Servicios, proyectos y seguimiento.',
           body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'),actor)});
       }
-      const accountView=options=>({title:'Mi cuenta',body:accountPage(actor,{otherSessions:db.get('SELECT count(*) n FROM sessions WHERE account_id=? AND digest<>? AND expires_at>?',actor.id,actor.session_id,now()).n,...options})});
+      const accountView=options=>({title:'Mi cuenta',body:(actor.kind==='AGENCY'?'<section class="card"><h2>Datos del proveedor</h2><a href="/cuenta/proveedor" class="btn secondary">Identificación legal de Lúmina</a></section>':'')+accountPage(actor,{otherSessions:db.get('SELECT count(*) n FROM sessions WHERE account_id=? AND digest<>? AND expires_at>?',actor.id,actor.session_id,now()).n,...options})});
       if (path==='/cuenta' && method==='GET') return render(accountView({notice:target.searchParams.get('estado')==='clave'?'Contraseña actualizada.':target.searchParams.get('estado')==='sesiones'?'Se cerraron tus otras sesiones.':''}));
       if (path==='/cuenta/sesiones/cerrar' && method==='POST') {
         db.run('DELETE FROM sessions WHERE account_id=? AND digest<>?',actor.id,actor.session_id);
@@ -553,7 +585,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           requireThat(['catalogo','acuerdos','contrataciones'].includes(view),'Vista no encontrada.',404);
           const orders=ordersFor(db,actor,company,integer(target.searchParams.get('pagina')||'0','página',{min:0,max:100000}));
           return render({title:'Paquetes y servicios',description:'Combina servicios mensuales y trabajos puntuales, con cada precio y cupo claro.',
-            body:packagesPage({actor,company,url,plans,contracts,orders,view})});
+            body:walletPriceCard(actor)+packagesPage({actor,company,url,plans,contracts,orders,view})});
         }
         if(method==='POST'&&path==='/planes/solicitar') {
           try{

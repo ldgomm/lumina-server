@@ -205,6 +205,13 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     requireThat(!path.includes('..')&&query.length<=5000,'Imagen no disponible.');
     const result=await remote(path+query,{raw:true});requireThat(result.status===200&&result.type.startsWith('image/'),'No se pudo cargar la imagen.',502);current(actor);return result;
   }
-  return {ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
+  async function subscription(actor,action='status',body,key) {
+    requireOwner(actor);const {item,fresh}=await validated(actor);
+    requireThat(['status','offer','accept','cancel'].includes(action),'Acción no encontrada.',404);
+    const result=await remote('/api/staff/lumina-subscription'+(action==='status'?'':'/'+action),{method:action==='status'?'GET':'POST',token:item.token,body,key});
+    const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);
+    return result;
+  }
+  return {subscription,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
     forget:()=>{},ownerCredential:async actor=>{requireOwner(actor);const {item}=await validated(actor);return item.token;}};
 }

@@ -110,7 +110,10 @@ fun LoyaltyService.branchDirectory(s: Staff, q: BranchDirectoryQuery = BranchDir
             obj("id" to it.getString("id"),"name" to it.getString("name"),"code" to it.getString("code"),"version" to it.getInt("version"),"updatedAt" to it.getTimestamp("updated_at")?.toInstant(),
                 "cashiers" to it.getLong("cashiers"),"purchases" to it.getLong("purchases"),"paidMinor" to it.getLong("paid"),"rewards" to it.getLong("rewards"))
         }
-        obj("business" to business,"items" to items,"total" to total,"offset" to q.offset,"hasMore" to (q.offset+items.size<total),"from" to since,"asOf" to at,"days" to 30)
+        val subscription=commercial.plan(c,s.tenant)
+        obj("business" to business,"items" to items,"total" to total,"offset" to q.offset,"hasMore" to (q.offset+items.size<total),"from" to since,"asOf" to at,"days" to 30,
+            "walletRecurring" to (subscription?.first?.walletAgreement!=null && subscription.first.recurring),
+            "walletUnitMinor" to (subscription?.first?.feeMinor?:com.premierdarkcoffee.loyalty.billing.WALLET_BRANCH_PRICE))
     }
 }
 

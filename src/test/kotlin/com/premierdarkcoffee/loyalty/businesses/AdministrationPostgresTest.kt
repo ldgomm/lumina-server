@@ -165,7 +165,7 @@ class AdministrationPostgresTest {
     }
     @Test fun `migration rerun preserves existing version labels and credentials`() {
         val f=fixture();rename(f);db.migrate();assertEquals(2,row(f).num("version"));assertEquals("Centro renovado",row(f).str("name"));assertEquals(f.owner.id,service.staff(f.token).id)
-        assertEquals(15,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        assertEquals(16,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
     }
     @Test fun `HTTP routes enforce authentication roles method input and no-store`()=testApplication {
         val f=fixture();val cashier=service.newStaff(f.owner,NewStaff("CASHIER",f.branch,"Cajera")).str("token");application{loyaltyRoutes(service,admin,"https://loyalty.test")}

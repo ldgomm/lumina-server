@@ -10,8 +10,8 @@ const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currenc
  const dom=new JSDOM(fs.readFileSync(path.join(web,'index.html'),'utf8').replace(/<script[^>]*src[^>]*><\/script>/g,''),{url:'https://loyalty.test/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc});const w=dom.window;
  try{
  w.HTMLElement.prototype.scrollIntoView=()=>{};w.scrollTo=()=>{};
- w.fetch=async(url,init)=>{const payload=init.body?JSON.parse(init.body):null;calls.push({url,method:init.method,payload});assert.equal(url,'/api/staff/wallet-design');if(init.method==='PUT'){if(blockSave)await new Promise(r=>resolveSave=r);Object.assign(design,payload.design);version++;}return{ok:true,json:async()=>({design,version})};};
- for(const name of ['app.js','engagement.js','experience.js']){const script=w.document.createElement('script');script.textContent=fs.readFileSync(path.join(web,name),'utf8');w.document.head.append(script);}
+ w.fetch=async(url,init)=>{const payload=init.body?JSON.parse(init.body):null;calls.push({url,method:init.method,payload});if(url==='/api/staff/access')return{ok:true,json:async()=>({canOperate:true,state:'ACTIVE',notices:[]})};assert.equal(url,'/api/staff/wallet-design');if(init.method==='PUT'){if(blockSave)await new Promise(r=>resolveSave=r);Object.assign(design,payload.design);version++;}return{ok:true,json:async()=>({design,version})};};
+ for(const name of ['app.js','engagement.js','commercial.js','experience.js']){const script=w.document.createElement('script');script.textContent=fs.readFileSync(path.join(web,name),'utf8');w.document.head.append(script);}
  const q=s=>w.document.querySelector(s),all=s=>[...w.document.querySelectorAll(s)];
  const wait=async condition=>{for(let i=0;i<100;i++){if(condition())return;await new Promise(r=>setTimeout(r,5));}throw Error('Timeout '+condition+' '+errors.join('; '));};
  const input=(name,value)=>{q('#'+name).value=value;q('#'+name).dispatchEvent(new w.Event('input',{bubbles:true}));};
@@ -34,7 +34,7 @@ const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currenc
  q('nav [data-tab=sales]').click();q('#studioDiscardAndLeave').click();assert.equal(w.eval('state.tab'),'sales');assert.equal(q('#walletDesign'),null);assert.equal(w.loyaltyDesignLeave,undefined);assert.ok(!unload());assert.equal(calls.filter(c=>c.method==='PUT').length,0);
  checks.push('Sidebar, quick counter and logout protect the same draft; cancel/Escape preserve edits; explicit discard navigates without saving and releases unload guard');
  await enter();input('welcome','Otro saludo');blockSave=true;submit();await wait(()=>resolveSave);assert.ok(unload());assert.ok(q('#designFields').disabled);q('#exit').click();assert.equal(w.eval('state.token'),'fake');assert.ok(!q('#studioLeaveDialog').open);resolveSave();await wait(()=>version===9 && q('#walletDesign') && !q('#designFields').disabled);blockSave=false;assert.ok(!unload());assert.equal(q('#designChangeStatus').textContent,'Diseño guardado');
- assert.equal(calls.filter(c=>c.method==='GET').length,2);assert.equal(q('#googleDesignPreview').hidden,true);
+ assert.equal(calls.filter(c=>c.method==='GET'&&c.url==='/api/staff/wallet-design').length,2);assert.equal(q('#googleDesignPreview').hidden,true);
  const payload=calls.find(c=>c.method==='PUT').payload;assert.equal(payload.expectedVersion,8);assert.equal(payload.design.welcome,'Otro saludo');assert.equal(payload.design.birthdayMessage,'Feliz cumpleaños');for(const key of ['studioStep','showAllSteps','previewProvider','samplePercent'])assert.equal(Object.hasOwn(payload.design,key),false);
  checks.push('Saving cannot be interrupted by navigation; success clears draft guard and preserves versioned provider-neutral payload');
  input('welcome','Un segundo cambio');assert.ok(unload());submit();await wait(()=>version===10 && !q('#designFields').disabled);assert.equal(calls.filter(c=>c.method==='PUT').at(-1).payload.expectedVersion,9);assert.ok(!unload());

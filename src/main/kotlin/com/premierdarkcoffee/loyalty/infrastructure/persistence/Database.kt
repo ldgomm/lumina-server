@@ -64,6 +64,7 @@ class Database(val source: DataSource) : AutoCloseable {
         AdministrationMigration.apply(c)
         LuminaRegistrationMigration.apply(c)
         BlackFridayMigration.apply(c)
+        com.premierdarkcoffee.loyalty.businesses.WalletOnboardingMigration.apply(c)
         
     }
     override fun close() { (source as? AutoCloseable)?.close() }

@@ -80,7 +80,7 @@ internal fun businessProfileView(c: Connection, tenant: String): JsonObject {
     } ?: obj("version" to 0, "profile" to null, "updatedAt" to null)
         val profile=row["profile"]?.takeIf{it!=JsonNull}?.let{json.decodeFromJsonElement<BusinessProfile>(it)}
     return JsonObject(row + obj("business" to business, "registration" to luminaContact(c,tenant), "rucVerification" to "NOT_VERIFIED", "protectedFields" to protectedBusinessFields,
-        "categoryContext" to BusinessCategories.context(profile), "categoryOptions" to BusinessCategories.options().getValue("categories"), "requests" to profileRequests(c,tenant)))
+        "categoryContext" to BusinessCategories.context(profile,c.one("SELECT category FROM lumina_business_registrations WHERE tenant_id=?",tenant){it.getString(1)}.orEmpty()), "categoryOptions" to BusinessCategories.options().getValue("categories"), "requests" to profileRequests(c,tenant)))
 }
 fun LoyaltyService.businessProfile(tenant: String): JsonObject = db.tx { businessProfileView(it,tenant) }
 fun LoyaltyService.saveBusinessProfile(tenant: String, input: BusinessProfileChange, actor: String): JsonObject {
@@ -92,7 +92,7 @@ fun LoyaltyService.saveBusinessProfile(tenant: String, input: BusinessProfileCha
         need(version == input.expectedVersion,"PROFILE_CHANGED","Otra persona actualizó los datos. Recarga la ficha antes de guardar.",409)
         val previous = c.one("SELECT config::text FROM business_profiles WHERE tenant_id=?",tenant) { json.decodeFromString<BusinessProfile>(it.getString(1)) }
                 // Older clients do not send category; preserve the administrator's selected category.
-        val profile=if(normalized.category.isEmpty()) normalized.copy(category=previous?.category.orEmpty()) else normalized
+        val profile=if(normalized.category.isEmpty()) normalized.copy(category=previous?.category?.takeIf{it.isNotEmpty()}?:c.one("SELECT category FROM lumina_business_registrations WHERE tenant_id=?",tenant){it.getString(1)}.orEmpty()) else normalized
         val identityChanged = previous?.normalized()?.identity() != profile.identity()
         need(actor == "platform" || !identityChanged, "PROFILE_ADMIN_REQUIRED", "Razón social, RUC, categoría, actividad y ubicación requieren revisión del administrador. Envía una solicitud desde Datos del negocio.", 403)
         if (identityChanged) {

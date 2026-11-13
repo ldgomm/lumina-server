@@ -93,6 +93,10 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
             post("/notices") { val input = call.body<BusinessNotice>(); call.respond(HttpStatusCode.Created, io { commercial.notify(call.parameters["tenant"]!!, input, call.key()) }) }
         }
     }
+    get("/api/staff/lumina-subscription") { val s=io {service.staff(call.bearer())};call.respond(io {service.walletSubscriptionStatus(s)}) }
+    post("/api/staff/lumina-subscription/offer") { val s=io {service.staff(call.bearer())};val input=call.body<WalletOfferInput>();call.respond(io {service.walletSubscriptionOffer(s,input)}) }
+    post("/api/staff/lumina-subscription/accept") { val s=io {service.staff(call.bearer())};val input=call.body<WalletAcceptInput>();call.respond(io {service.acceptWalletSubscription(s,input,call.key())}) }
+    post("/api/staff/lumina-subscription/cancel") { val s=io {service.staff(call.bearer())};val input=call.body<WalletCancelInput>();call.respond(io {service.cancelWalletSubscription(s,input,call.key())}) }
     get("/api/staff/account") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.ownerAccount(s, call.offset()) }) }
     get("/api/staff/business-profile") { val s=io { service.staff(call.bearer()).also { it.owner() } };call.respond(io { service.businessProfile(s.tenant) }) }
     put("/api/staff/business-profile") { val s=io { service.staff(call.bearer()).also { it.owner() } };val input=call.body<BusinessProfileChange>();call.respond(io { service.saveBusinessProfile(s.tenant,input,s.id) }) }

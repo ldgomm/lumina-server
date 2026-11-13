@@ -9,7 +9,7 @@ export function createWalletOnboarding({db,remote,configured}) {
     const owner=db.get("SELECT id,name,email FROM accounts WHERE company_id=? AND kind='OWNER' AND active=1",companyId);
     requireThat(owner,'El negocio no tiene un responsable activo.',409);
     const result=await remote('/api/platform/lumina/businesses',{method:'POST',token:configured(),body:{
-      companyId:company.id,name:company.name,contactName:owner.name,email:owner.email,phone:company.phone,
+      companyId:company.id,name:company.name,contactName:owner.name,email:owner.email,phone:company.phone,category:company.category||'',
     }});
     requireThat(result.companyId===company.id && isId(result.business?.id) && typeof result.business.name==='string' &&
       result.business.slug==='lumina-'+company.id.replaceAll('-',''),'No se pudo verificar el Wallet de este negocio.',502);

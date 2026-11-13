@@ -20,6 +20,7 @@ function fixture() {
   const project=join(directory,'project'),data=join(directory,'agency');
   mkdirSync(project,{mode:0o700});
   cpSync(join(root,namespace),join(project,namespace),{recursive:true});
+  cpSync(join(root,namespace,'../businesses'),join(project,namespace,'../businesses'),{recursive:true});
   mkdirSync(join(project,'lumina-agency/src'),{recursive:true});
   cpSync(join(root,'lumina-agency/src/server.mjs'),join(project,'lumina-agency/src/server.mjs'));
   writeFileSync(join(project,'settings.gradle.kts'),'rootProject.name = "loyalty-test"\n');
