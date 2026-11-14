@@ -1,6 +1,8 @@
-# Lúmina v025 / Loyalty v064
+# Lúmina v026 / Loyalty v065
 
-English routes and simplified access. [Installation and validation](docs/lumina-navigation-v064.md).
+Public agency homepage, English navigation, and a focused five-service offering. [Installation and validation](docs/lumina-homepage-v065.md).
+
+Open `/` for the agency website and `/login` to access the workspace. The public site does not activate services, create accounts, or change Wallet connections.
 
 # loyalty
 

@@ -13,8 +13,8 @@ async function context(t,link=true){
 }
 test('navegación unifica redes y mantiene servicios, cartera, agenda y Wallet',async t=>{
  const {admin,client,world}=await context(t);
- for(const path of ['/dashboard','/production','/agency-calendar','/wallet','/content','/services/maps','/services/web','/services/brand','/coming-soon'])assert.equal((await admin.get(path)).status,200,path);
- const page=await client.get('/home');assert.match(page.body,/Contenido para redes/);assert.match(page.body,/Diseño de marca/);assert.match(page.body,/Próximamente/);assert.doesNotMatch(page.body,/href="\/channels\/(instagram|tiktok|youtube|facebook)"/);
+ for(const path of ['/dashboard','/production','/agency-calendar','/wallet','/content','/services/maps','/services/web','/services/brand'])assert.equal((await admin.get(path)).status,200,path);
+ const page=await client.get('/home');assert.match(page.body,/Contenido para redes/);assert.match(page.body,/Diseño de marca/);assert.doesNotMatch(page.body,/WhatsApp Business|asistentes con IA|Próximamente/);assert.doesNotMatch(page.body,/href="\/channels\/(instagram|tiktok|youtube|facebook)"/);
  assert.equal((await client.get('/production')).status,403);
  const old=await client.get('/channels/instagram');assert.equal(old.status,303);assert.equal(old.location,'/content');
  assert.equal(world.db.get('SELECT count(*) AS n FROM requests').n,0);

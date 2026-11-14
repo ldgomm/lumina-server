@@ -19,7 +19,7 @@ test('cerrar otras sesiones conserva la actual y las cuentas ajenas',async t=>{
  const extra=w.session();assert.equal((await extra.post('/login',{document:'1748639844',password})).status,303);await extra.get('/account');
  assert.match((await a.client.get('/account')).body,/otra sesión abierta/);
  assert.equal((await a.client.post('/account/sessions/close',{account_id:w.db.get('SELECT id FROM accounts WHERE company_id=?',b.id).id})).status,303);
- assert.equal((await a.client.get('/account')).status,200);assert.equal((await extra.get('/account')).location,'/');assert.equal((await b.client.get('/account')).status,200);
+ assert.equal((await a.client.get('/account')).status,200);assert.equal((await extra.get('/account')).location,'/login');assert.equal((await b.client.get('/account')).status,200);
 });
 test('cerrar otras sesiones exige CSRF y no admite GET mutante',async t=>{
  const w=await portal(t);const a=await owner(w,'Primero',1);const count=()=>w.db.get('SELECT count(*) n FROM sessions').n;
@@ -42,7 +42,7 @@ test('cambiar contraseña mantiene identidad, negocio y permisos y renueva la se
 });
 test('cerrar sesión bloquea también el proxy de Wallet sin cambiar asociaciones',async t=>{
  const w=await portal(t);const a=await owner(w,'Cuenta',1);const company=w.db.get('SELECT * FROM companies WHERE id=?',a.id);
- assert.equal((await a.client.post('/logout')).status,303);assert.equal((await a.client.get('/wallet-api/api/staff/dashboard')).status,401);assert.equal((await a.client.get('/account')).location,'/');assert.deepEqual(w.db.get('SELECT * FROM companies WHERE id=?',a.id),company);
+ assert.equal((await a.client.post('/logout')).status,303);assert.equal((await a.client.get('/wallet-api/api/staff/dashboard')).status,401);assert.equal((await a.client.get('/account')).location,'/login');assert.deepEqual(w.db.get('SELECT * FROM companies WHERE id=?',a.id),company);
 });
 test('Wallet y Caja enlazan la cuenta central y conservan Volver a Lúmina',()=>{
  const actor={kind:'COLLABORATOR',name:'Equipo',company_id:'c',csrf:'test',grants:[{scope:'WALLET',action:'VIEW'},{scope:'WALLET_DESIGN',action:'VIEW'}]};

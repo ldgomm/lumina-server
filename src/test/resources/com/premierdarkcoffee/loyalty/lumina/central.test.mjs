@@ -94,5 +94,5 @@ test('cancelar un servicio no revoca Wallet ni los demás contratos y el histori
 
 test('logos se sirven como imágenes originales en acceso, Lúmina, Contenido y Wallet',async t=>{
  const w=await setup(t);for(const name of ['lumina-logo.png','lumina-symbol.png']){const r=await fetch(w.origin+'/assets/'+name);assert.equal(r.headers.get('content-type'),'image/png');const bytes=Buffer.from(await r.arrayBuffer()),file=readFileSync(new URL('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/assets/'+name,import.meta.url));assert.equal(createHash('sha256').update(bytes).digest('hex'),createHash('sha256').update(file).digest('hex'));}
- assert.match((await w.session().get('/')).body,/lumina-logo.png/);for(const path of ['/home','/content','/wallet'])assert.match((await w.client.get(path)).body,/lumina-symbol.png/);
+ assert.match((await w.session().get('/')).body,/lumina-symbol.png/);for(const path of ['/home','/content','/wallet'])assert.match((await w.client.get(path)).body,/lumina-symbol.png/);
 });

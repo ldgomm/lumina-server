@@ -37,7 +37,7 @@ test('WhatsApp normalizes Ecuador mobiles and international notation but not mal
  for(const value of ['','023456789','099123456','09912345678','+59321234567','call me','593+991234567','++593991234567','0991234\n567'])bad(()=>whatsappNumber(value));
 });
 test('public forms ask for personal cedula business RUC and WhatsApp without new account emails',async t=>{
- const w=await world(t);for(const path of ['/register','/setup','/']){const p=await w.session().get(path);if(path==='/setup')continue;assert.doesNotMatch(p.body,/name="email"/);assert.match(p.body,/name="document"/);}
+ const w=await world(t);for(const path of ['/register','/setup','/login']){const p=await w.session().get(path);if(path==='/setup')continue;assert.doesNotMatch(p.body,/name="email"/);assert.match(p.body,/name="document"/);}
  const p=await w.session().get('/register');assert.match(p.body,/name="ruc"[^>]+required/);assert.match(p.body,/WhatsApp del negocio/);assert.match(p.body,/data-identity="phone"/);
 });
 test('fresh signup creates no Wallet no service no charge and returns one-screen welcome',async t=>{
@@ -119,7 +119,7 @@ test('legacy email migration requires password proof preserves memberships and c
  const client=w.session();assert.equal((await client.post('/legacy-login',{email:'previous@example.test',password})).location,'/account/identity');await client.get('/account/identity');
  const data={document:documentFor('claim'),ruc:'1791234567001',phone:'0991234567',current:'wrong'};assert.equal((await client.post('/account/identity',data)).status,403);assert.equal(w.db.get('SELECT document FROM accounts WHERE id=?',acc.id).document,null);
  assert.equal((await client.post('/account/identity',{...data,current:password})).status,303);const after=w.db.get('SELECT * FROM companies WHERE id=?',existing.id);for(const key of ['id','registration_key','loyalty_tenant','loyalty_name'])assert.equal(after[key],before[key],key);
- assert.equal((await existing.client.get('/account')).location,'/');assert.equal((await w.session().post('/legacy-login',{email:'previous@example.test',password})).status,401);assert.equal((await w.session().post('/login',{document:data.document,password})).status,303);
+ assert.equal((await existing.client.get('/account')).location,'/login');assert.equal((await w.session().post('/legacy-login',{email:'previous@example.test',password})).status,401);assert.equal((await w.session().post('/login',{document:data.document,password})).status,303);
 });
 test('legacy claim rejects duplicate cedula and RUC without changing existing access',async t=>{
  const w=await world(t),o=await owner(w,'Viejo','claim-a'),other=await signup(w,'claim-b');w.db.run('UPDATE accounts SET document=NULL WHERE company_id=?',o.id);await o.client.get('/account');

@@ -64,7 +64,7 @@ test('el guardado requiere CSRF e ignora tokens o rol enviado por el navegador',
  assert.equal((await w.save({cash_mode:'BOTH',role:'OWNER',credential:'inventada'})).status,303);assert.equal(w.native.staff.get(w.cash().staff_id).role,'CASHIER');assert.equal(w.db.get('SELECT kind FROM accounts WHERE id=?',w.person.id).kind,'COLLABORATOR');
 });
 test('guardar los permisos de una cuenta desactivada no la reactiva',async t=>{
- const w=await setup(t);await w.business.client.post('/team/'+w.person.id+'/disable',{revision:teamRevision(w,w.person.id),confirm:'yes'});assert.equal((await w.save({'WEB.VIEW':'yes'})).status,303);assert.equal(w.db.get('SELECT active FROM accounts WHERE id=?',w.person.id).active,0);const denied=await w.person.session.get('/services/web');assert.equal(denied.status,303);assert.equal(denied.location,'/');assert.equal((await w.save({cash_mode:'BOTH'})).status,409);assert.deepEqual(w.grants(),['WEB.VIEW']);
+ const w=await setup(t);await w.business.client.post('/team/'+w.person.id+'/disable',{revision:teamRevision(w,w.person.id),confirm:'yes'});assert.equal((await w.save({'WEB.VIEW':'yes'})).status,303);assert.equal(w.db.get('SELECT active FROM accounts WHERE id=?',w.person.id).active,0);const denied=await w.person.session.get('/services/web');assert.equal(denied.status,303);assert.equal(denied.location,'/login');assert.equal((await w.save({cash_mode:'BOTH'})).status,409);assert.deepEqual(w.grants(),['WEB.VIEW']);
 });
 async function interrupted(w){
  let enter,release;const reached=new Promise(r=>enter=r),held=new Promise(r=>release=r);w.native.beforeRequest(async call=>{if(call.path==='/api/staff/credentials'){enter();await held;}});

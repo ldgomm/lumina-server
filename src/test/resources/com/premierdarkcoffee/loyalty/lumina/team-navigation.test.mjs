@@ -70,7 +70,7 @@ test('los colaboradores y las sesiones públicas no reciben enlaces ni acceso a 
   const w=await setup(t),m=await person(w);
   assert.doesNotMatch(nav((await m.session.get('/home')).body),/href="\/(team|teams)(?:["?])/);
   for(const path of ['/teams','/teams?company='+w.id,'/team'])assert.equal((await m.session.get(path)).status,403);
-  assert.equal((await w.session().get('/teams?company='+w.id)).location,'/');
+  assert.equal((await w.session().get('/teams?company='+w.id)).location,'/login');
   assert.equal((await w.session().post('/teams',{})).status,401);
   assert.throws(()=>consultTeams(w.db,actor(w,m.session)),error=>error.status===403);
 });

@@ -51,7 +51,7 @@ test('formulario nativo: configurar agencia, cierre definitivo de configuración
   assert.equal((await client.get('/setup')).status,404);
   assert.equal((await client.submit(form,'/setup',data)).status,403,'Consumed setup code cannot be reused.');
   assert.equal(world.db.get("SELECT count(*) AS n FROM accounts WHERE kind='AGENCY'").n,1);
-  const login = await client.get('/');
+  const login = await client.get('/login');
   assert.doesNotMatch(login.body,/href="\/setup"/);
   const entered = await client.submit(login,'/login',{document:data.document,password});
   assert.equal(entered.status,303,entered.body);
@@ -78,6 +78,6 @@ test('formulario nativo: registro, sesión y rechazo de orígenes extraños o CS
   const afterChange = await client.get('/account');
   assert.equal((await client.submit(afterChange,'/logout')).status,303);
   assert.equal((await client.get('/home')).status,303);
-  const login = await client.get('/');
+  const login = await client.get('/login');
   assert.equal((await client.submit(login,'/login',{document:data.document,password:changed.password})).status,303);
 });

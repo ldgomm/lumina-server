@@ -30,7 +30,7 @@ test('Wallet dirige al personal a su permiso operativo o Caja y conserva la revo
  const cashier=await colleague(w,w.client,{name:'Caja',document:'1731144158'}),tenant=w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant;
  assert.equal((await w.client.post('/team/'+cashier.id+'/cashier/save',{revision:teamRevision(w,cashier.id),branch:w.loyalty.branches.get(tenant)[0].id,purchases:'yes',rewards:'yes'})).status,303);
  assert.equal((await cashier.session.get('/wallet')).location,'/cashier');assert.equal((await cashier.session.get('/cashier')).status,200);
- w.db.run('UPDATE accounts SET active=0 WHERE id=?',designer.id);assert.equal((await designer.session.get('/wallet')).location,'/');
+ w.db.run('UPDATE accounts SET active=0 WHERE id=?',designer.id);assert.equal((await designer.session.get('/wallet')).location,'/login');
 });
 
 test('fallo de Wallet permite reintentar y reparar desde el dueño sin alterar el tenant',async t=>{

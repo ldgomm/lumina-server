@@ -61,14 +61,14 @@ test('permisos por plataforma filtran métricas y no permiten aprobar globalment
  assert.doesNotMatch((await member.session.get('/content')).body,/Video histórico TikTok/);
  const counts=await member.session.get('/home');assert.equal(counts.status,200);
 });
-test('diseño de marca es individual y WhatsApp IA no admite contratación anticipada',async t=>{
+test('brand projects remain individual and unsupported services stay unavailable',async t=>{
  const {world,admin,client}=await context(t);
  assert.equal((await client.post('/requests',{...social,channel:'BRAND',service:'LOGO',title:'Logo nuevo'})).status,303);
  assert.equal(world.db.get("SELECT channel FROM requests WHERE service='LOGO'").channel,'BRAND');
  const offer={name:'Diseño de logo',term:'MONTHLY',price:'250',wallet:'NONE',LOGO:'1'};
  assert.equal((await admin.post('/plans',offer)).status,400);assert.equal((await admin.post('/plans',{...offer,term:'ONE_OFF'})).status,303);
  assert.equal((await client.post('/requests',{...social,channel:'WHATSAPP',service:'AI'})).status,400);
- const page=await client.get('/coming-soon');assert.equal(page.status,200);assert.match(page.body,/no está disponible para contratar/);
+ const page=await client.get('/coming-soon');assert.equal(page.status,404);assert.doesNotMatch(page.body,/WhatsApp Business|asistentes con IA/);
  for(const service of ['WEBSITE','STORE','CATALOG','MENU','BOOKING','LANDING','MAINTENANCE'])assert.equal((await client.post('/requests',{...social,channel:'WEB',service})).status,303);
  for(const service of ['MAPS_PROFILE','MAPS_INFO','MAPS_PHOTO','MAPS_RESPONSES','MAPS_PERFORMANCE'])assert.equal((await client.post('/requests',{...social,channel:'MAPS',service})).status,303);
 });

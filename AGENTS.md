@@ -1,5 +1,16 @@
 # Loyalty
 
+## Lúmina v026 / Loyalty v065 — public agency homepage
+
+- Baseline: installed v025/v064, commit ed9442283aa339a347076ebdba958c8aac0498f3. This section supersedes prior version and gate counts.
+- `/` is the public agency homepage for every actor. `/login` is the login form, including failed POST responses. Unauthenticated private navigation redirects to `/login`; logout returns to `/`. The public page receives only a signed-in boolean and must not disclose account, company, session or billing data.
+- Present only Content, Web, Google Maps, Brand Design and Wallet. The retired coming-soon service has no navigation, page or ordering option. Its old URL returns 404. Preserve normal WhatsApp contact fields and existing telephone data.
+- All generated routes and anchors use English; user-facing copy stays Spanish. Legacy aliases remain solely for compatible bookmarks, forms, health probes and assets. Never translate QR slugs, provider URLs, identifiers or tokens.
+- Homepage styles and optional menu enhancement are isolated from the workspace. Core navigation, native service disclosures, FAQs and account entry work without scripts. No external trackers, font dependencies, invented client claims, fixed public prices or implicit subscriptions.
+- Preserve role boundaries, access grants and opt-in activation. No native Kotlin, Wallet assets, SQL, provider configuration, identity, subscription or account changes. SQLite10, PostgreSQLV017 and Wallet representation34 remain unchanged.
+- Gates: 30 suites / 340 portal tests, 170 Python, 312 native unit/HTTP, 347 PostgreSQL. Docker staging and gateway before local commit; no push. 24 DOM suites are separate from browser inspection and physical Wallet device verification.
+- Terminal output is limited to RESULTADO plus the URL after confirmed startup. The development installer blocks production and conflicting local edits. See docs/lumina-homepage-v065.md.
+
 ## Lúmina v025 / Loyalty v064 — English navigation and clear access
 
 - Baseline: installed v024r1/v063, commit a4d70e146ca785dcd73e6f9e9a37348112af3c20. This section supersedes previous version and gate counts.

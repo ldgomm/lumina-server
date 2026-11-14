@@ -1,3 +1,4 @@
+import { homepage } from '../presentation/pages/homepage.mjs';
 import { canonicalTarget, legacyRedirectAllowed } from '../shared/routes.mjs';
 import { serviceState, requireService, serviceCatalog, beginService, completeWalletActivation, finishWelcome, routeService } from '../businesses/services.mjs';
 import { welcomePage, servicesPage, inactiveServicePage } from '../presentation/pages/welcome-pages.mjs';
@@ -43,7 +44,7 @@ import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, 
 import { homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
 import { mapsPage, metricsPage } from '../presentation/pages/service-pages.mjs';
 import { cashierHtml, loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
-import { agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
+import { agencyOverview, agencyProduction, channelWorkspace } from '../presentation/pages/workspace-pages.mjs';
 
 import { contentData } from '../content/workspace.mjs';
 import { contentShell } from '../presentation/pages/content-shell.mjs';
@@ -54,6 +55,8 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/homepage.js':['homepage.js','text/javascript; charset=utf-8'],
+  '/assets/homepage.css':['homepage.css','text/css; charset=utf-8'],
   '/assets/deliveries.css':['deliveries.css','text/css; charset=utf-8'],
   '/assets/deliveries.js':['deliveries.js','text/javascript; charset=utf-8'],
   '/assets/welcome.css':['welcome.css','text/css; charset=utf-8'],
@@ -170,7 +173,9 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         res.setHeader('Set-Cookie',sessionCookie(createSession(db,id),trusted.protocol==='https:'));
         return redirect(res,destination);
       };
-      const publicPaths = ['/','/login','/register','/activate','/setup','/legacy-login'];
+      if (method==='GET' && path==='/') return send(res,200,homepage({signedIn:Boolean(actor)}));
+      if (path==='/coming-soon') throw new Problem('Página no encontrada.',404);
+      const publicPaths = ['/login','/register','/activate','/setup','/legacy-login'];
       if (method==='GET' && publicPaths.includes(path)) {
         if (actor) return redirect(res,'/home');
         const setupAvailable = !db.get("SELECT id FROM accounts WHERE kind='AGENCY'");
@@ -193,11 +198,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         } catch(issue) {
           if (!(issue instanceof Problem) || ![400,401,409].includes(issue.status)) throw issue;
           const setupAvailable=!db.get("SELECT id FROM accounts WHERE kind='AGENCY'");
-          return render(publicPage(path==='/login'?'/':path,setupAvailable,{values:data,error:issue.message}),issue.status);
+          return render(publicPage(path,setupAvailable,{values:data,error:issue.message}),issue.status);
         }
       }
       if (!actor) {
-        if (method==='GET' && !api) return redirect(res,'/');
+        if (method==='GET' && !api) return redirect(res,'/login');
         throw new Problem('Inicia sesión para continuar.',401);
       }
       const serviceAllowed=()=>path==='/logout'||path.startsWith('/account')||path==='/help'||(method==='GET'&&(path==='/billing'||path.startsWith('/billing/payments/')))||path==='/plans/wallet/cancel'||method==='GET'&&(path.startsWith('/plans/wallet')||path==='/home'||path==='/wallet/benefits');
@@ -442,10 +447,6 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const contact=company?db.get("SELECT a.name,c.phone FROM accounts a JOIN companies c ON c.id=a.company_id WHERE c.id=? AND a.kind='OWNER'",company.id):null;
         return render({title:'Fidelización digital',description:'Wallet de tu negocio, integrado en Lúmina.',
           body:walletPage({actor,company,contact,companies,data:information,error,blocked:actor.kind==='OWNER'&&company?db.all("SELECT w.account_id,a.name,a.revision FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[]})});
-      }
-      if(path==='/coming-soon'&&method==='GET') {
-        requireThat(actor.kind!=='COLLABORATOR','Área no asignada.',403);
-        return render({title:'WhatsApp Business y asistentes con IA',body:comingSoonPage()});
       }
       if (method==='GET' && ['/dashboard','/production','/agency-calendar'].includes(path)) {
         if(path==='/dashboard'&&actor.kind!=='AGENCY')return redirect(res,'/home');
