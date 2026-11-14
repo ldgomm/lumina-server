@@ -16,31 +16,31 @@ const when=days=>localDay(new Date(Date.now()-days*86400000));
 const published=when(2)+'T09:00',observed=when(1)+'T09:00';
 const platforms=['INSTAGRAM','TIKTOK','FACEBOOK','YOUTUBE'];
 const social={type:'CONTENT',channel:'SOCIAL',service:'VIDEO',title:'Un mismo video',quantity:'1',brief:'El mismo material para todas las redes.'};
-async function context(t){const world=await portal(t),admin=await agency(world),{client,id}=await owner(world,'Prueba de contenido','4');await admin.post('/agencia/clientes/verificar?empresa='+id);return {world,admin,client,id};}
-const selected= (path,id)=>'/agencia'+path+'?empresa='+id;
-async function produce(c,contract){const {world,admin,client,id}=c;const result=await client.post('/solicitudes',social);assert.equal(result.status,303);const path=result.location;await admin.post(selected(path+'/estado',id),{status:'APPROVED'});assert.equal((await admin.post(selected(path+'/piezas',id),{title:'Video común',...(contract?{contract}:{})})).status,303);const piece=world.db.get('SELECT * FROM pieces');const piecePath=path+'/piezas/'+piece.id;await admin.post(selected(piecePath+'/editar',id),{revision:String(piece.revision),status:'REVIEW',notes:'Lista para aprobación.'});return {path,piecePath,piece};}
+async function context(t){const world=await portal(t),admin=await agency(world),{client,id}=await owner(world,'Prueba de contenido','4');await admin.post('/agency/businesses/verify?company='+id);return {world,admin,client,id};}
+const selected= (path,id)=>'/agency'+path+'?company='+id;
+async function produce(c,contract){const {world,admin,client,id}=c;const result=await client.post('/requests',social);assert.equal(result.status,303);const path=result.location;await admin.post(selected(path+'/state',id),{status:'APPROVED'});assert.equal((await admin.post(selected(path+'/pieces',id),{title:'Video común',...(contract?{contract}:{})})).status,303);const piece=world.db.get('SELECT * FROM pieces');const piecePath=path+'/pieces/'+piece.id;await admin.post(selected(piecePath+'/edit',id),{revision:String(piece.revision),status:'REVIEW',notes:'Lista para aprobación.'});return {path,piecePath,piece};}
 test('una pieza, cuatro publicaciones y cuatro métricas consumen un solo cupo mensual',async t=>{
  const c=await context(t),{world,admin,client,id}=c;
- assert.equal((await admin.post('/planes',{name:'Contenido mensual',term:'MONTHLY',price:'100',wallet:'NONE',VIDEO:'1'})).status,303);
+ assert.equal((await admin.post('/plans',{name:'Contenido mensual',term:'MONTHLY',price:'100',wallet:'NONE',VIDEO:'1'})).status,303);
  const plan=world.db.get('SELECT id FROM plans').id;
  await acceptedContract(world,admin,client,id,plan);
  const contract=world.db.get('SELECT id FROM contracts').id;
  const {path,piecePath,piece}=await produce(c,contract);
  const revision=world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision;
- assert.equal((await client.post(piecePath+'/revisar',{revision:String(revision),status:'APPROVED'})).status,303);
+ assert.equal((await client.post(piecePath+'/review',{revision:String(revision),status:'APPROVED'})).status,303);
  for(const [index,platform] of platforms.entries()){
-   assert.equal((await admin.post(selected(piecePath+'/publicacion',id),{channel:platform,url:'https://example.test/'+platform,published})).status,303);
+   assert.equal((await admin.post(selected(piecePath+'/publication',id),{channel:platform,url:'https://example.test/'+platform,published})).status,303);
    const pub=world.db.get('SELECT id FROM publications WHERE channel=?',platform);
-   assert.equal((await admin.post(selected(piecePath+'/medir',id),{publication:pub.id,observed,views:String(100+index),likes:String(index),comments:'0'})).status,303);
+   assert.equal((await admin.post(selected(piecePath+'/measure',id),{publication:pub.id,observed,views:String(100+index),likes:String(index),comments:'0'})).status,303);
  }
  assert.equal(world.db.get('SELECT count(*) AS n FROM request_platforms').n,0);
  assert.equal(world.db.get('SELECT count(*) AS n FROM requests').n,1);assert.equal(world.db.get('SELECT count(*) AS n FROM pieces').n,1);assert.equal(world.db.get('SELECT count(*) AS n FROM publications').n,4);
  const view=await client.get(path);assert.equal(view.status,200);assert.equal((view.body.match(/class="delivery-card/g)||[]).length,1);assert.equal((view.body.match(/class="detail-publication"/g)||[]).length,4);
  for(const platform of platforms)assert.ok(view.body.includes('https://example.test/'+platform));
- const reports=await client.get('/reportes?desde='+when(2)+'&hasta='+localDay());for(const count of [100,101,102,103])assert.match(reports.body,new RegExp('>'+count+'<'));
- const extra=await client.post('/solicitudes',{...social,title:'Otra pieza'});
- await admin.post(selected(extra.location+'/estado',id),{status:'APPROVED'});
- assert.equal((await admin.post(selected(extra.location+'/piezas',id),{title:'Fuera de cupo',contract})).status,409);
+ const reports=await client.get('/reports?from='+when(2)+'&to='+localDay());for(const count of [100,101,102,103])assert.match(reports.body,new RegExp('>'+count+'<'));
+ const extra=await client.post('/requests',{...social,title:'Otra pieza'});
+ await admin.post(selected(extra.location+'/state',id),{status:'APPROVED'});
+ assert.equal((await admin.post(selected(extra.location+'/pieces',id),{title:'Fuera de cupo',contract})).status,409);
 });
 test('permisos por plataforma filtran métricas y no permiten aprobar globalmente una pieza compartida',async t=>{
  const c=await context(t),{world,client,admin,id}=c;
@@ -48,34 +48,34 @@ test('permisos por plataforma filtran métricas y no permiten aprobar globalment
  const {path,piecePath,piece}=await produce(c);
  const revision=world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision;
  assert.equal((await member.session.get(path)).status,200);
- assert.equal((await member.session.post(piecePath+'/revisar',{revision:String(revision),status:'APPROVED'})).status,403);
- assert.equal((await member.session.post('/solicitudes',social)).status,303);
- const oldFilter=await member.session.get('/contenido?plataforma=TIKTOK');assert.equal(oldFilter.status,303);assert.equal(oldFilter.location,'/contenido');
- await client.post(piecePath+'/revisar',{revision:String(revision),status:'APPROVED'});
- for(const channel of platforms)await admin.post(selected(piecePath+'/publicacion',id),{channel,url:'https://example.test/'+channel,published});
+ assert.equal((await member.session.post(piecePath+'/review',{revision:String(revision),status:'APPROVED'})).status,403);
+ assert.equal((await member.session.post('/requests',social)).status,303);
+ const oldFilter=await member.session.get('/content?platform=TIKTOK');assert.equal(oldFilter.status,303);assert.equal(oldFilter.location,'/content');
+ await client.post(piecePath+'/review',{revision:String(revision),status:'APPROVED'});
+ for(const channel of platforms)await admin.post(selected(piecePath+'/publication',id),{channel,url:'https://example.test/'+channel,published});
  const view=await member.session.get(path);assert.ok(view.body.includes('https://example.test/INSTAGRAM'));assert.ok(!view.body.includes('https://example.test/TIKTOK'));
- const onlyTikTok=await client.post('/solicitudes',{...social,title:'Video histórico TikTok',channel:'TIKTOK'});
+ const onlyTikTok=await client.post('/requests',{...social,title:'Video histórico TikTok',channel:'TIKTOK'});
  // Reproduce a destination stored by v042, before generic requests existed.
  const legacyId=onlyTikTok.location.split('/').pop();world.db.run('INSERT INTO request_platforms VALUES(?,?,?)',id,legacyId,'TIKTOK');
  assert.equal((await member.session.get(onlyTikTok.location)).status,404);
- assert.doesNotMatch((await member.session.get('/contenido')).body,/Video histórico TikTok/);
- const counts=await member.session.get('/inicio');assert.equal(counts.status,200);
+ assert.doesNotMatch((await member.session.get('/content')).body,/Video histórico TikTok/);
+ const counts=await member.session.get('/home');assert.equal(counts.status,200);
 });
 test('diseño de marca es individual y WhatsApp IA no admite contratación anticipada',async t=>{
  const {world,admin,client}=await context(t);
- assert.equal((await client.post('/solicitudes',{...social,channel:'BRAND',service:'LOGO',title:'Logo nuevo'})).status,303);
+ assert.equal((await client.post('/requests',{...social,channel:'BRAND',service:'LOGO',title:'Logo nuevo'})).status,303);
  assert.equal(world.db.get("SELECT channel FROM requests WHERE service='LOGO'").channel,'BRAND');
  const offer={name:'Diseño de logo',term:'MONTHLY',price:'250',wallet:'NONE',LOGO:'1'};
- assert.equal((await admin.post('/planes',offer)).status,400);assert.equal((await admin.post('/planes',{...offer,term:'ONE_OFF'})).status,303);
- assert.equal((await client.post('/solicitudes',{...social,channel:'WHATSAPP',service:'AI'})).status,400);
- const page=await client.get('/proximamente');assert.equal(page.status,200);assert.match(page.body,/no está disponible para contratar/);
- for(const service of ['WEBSITE','STORE','CATALOG','MENU','BOOKING','LANDING','MAINTENANCE'])assert.equal((await client.post('/solicitudes',{...social,channel:'WEB',service})).status,303);
- for(const service of ['MAPS_PROFILE','MAPS_INFO','MAPS_PHOTO','MAPS_RESPONSES','MAPS_PERFORMANCE'])assert.equal((await client.post('/solicitudes',{...social,channel:'MAPS',service})).status,303);
+ assert.equal((await admin.post('/plans',offer)).status,400);assert.equal((await admin.post('/plans',{...offer,term:'ONE_OFF'})).status,303);
+ assert.equal((await client.post('/requests',{...social,channel:'WHATSAPP',service:'AI'})).status,400);
+ const page=await client.get('/coming-soon');assert.equal(page.status,200);assert.match(page.body,/no está disponible para contratar/);
+ for(const service of ['WEBSITE','STORE','CATALOG','MENU','BOOKING','LANDING','MAINTENANCE'])assert.equal((await client.post('/requests',{...social,channel:'WEB',service})).status,303);
+ for(const service of ['MAPS_PROFILE','MAPS_INFO','MAPS_PHOTO','MAPS_RESPONSES','MAPS_PERFORMANCE'])assert.equal((await client.post('/requests',{...social,channel:'MAPS',service})).status,303);
 });
 test('formularios antiguos crean contenido común sin destinos y la ruta de añadir plataformas está retirada',async t=>{
  const {world,admin,client,id}=await context(t);
  for(const channel of ['SOCIAL',...platforms]){
-  const res=await client.post('/solicitudes',{...social,channel,'platform.INSTAGRAM':'yes','platform.TIKTOK':'yes'});
+  const res=await client.post('/requests',{...social,channel,'platform.INSTAGRAM':'yes','platform.TIKTOK':'yes'});
   assert.equal(res.status,303);
   const request=world.db.get('SELECT * FROM requests WHERE id=?',res.location.split('/').pop());
   assert.equal(request.channel,'SOCIAL');
@@ -87,40 +87,40 @@ test('formularios antiguos crean contenido común sin destinos y la ruta de aña
 });
 test('solicitudes, contenido y cortesía no solicitan una red; enlaces antiguos llevan al contenido común',async t=>{
  const {world,admin,client,id}=await context(t);
- for(const path of ['/inicio','/solicitudes','/solicitudes?canal=SOCIAL','/contenido']){
+ for(const path of ['/home','/requests','/requests?channel=SOCIAL','/content']){
   const view=await client.get(path);assert.equal(view.status,200);
   assert.doesNotMatch(view.body,/name="platform\.|data-platforms|content-platform-tabs|Publicar la misma pieza|dónde publicarás/);
   for(const platform of platforms)assert.doesNotMatch(view.body,new RegExp('<option[^>]*value="'+platform+'"'));
  }
  for(const channel of platforms){
-  const res=await client.get('/canales/'+channel.toLowerCase());assert.equal(res.status,303);assert.equal(res.location,'/contenido');
+  const res=await client.get('/channels/'+channel.toLowerCase());assert.equal(res.status,303);assert.equal(res.location,'/content');
  }
- const query=await admin.get('/contenido?empresa='+id+'&plataforma=INSTAGRAM');assert.equal(query.location,'/contenido?empresa='+id);
+ const query=await admin.get('/content?company='+id+'&platform=INSTAGRAM');assert.equal(query.location,'/content?company='+id);
  for(const type of ['CONTENT','QUOTE','VISIT']){
-  const res=await client.post('/solicitudes',{...social,type,...(type==='VISIT'?{preferred:published}:{})});assert.equal(res.status,303);
+  const res=await client.post('/requests',{...social,type,...(type==='VISIT'?{preferred:published}:{})});assert.equal(res.status,303);
  }
  assert.equal(world.db.get('SELECT count(*) AS n FROM request_platforms').n,0);
- const view=await client.get('/contenido');assert.match(view.body,/Un mismo video/);
+ const view=await client.get('/content');assert.match(view.body,/Un mismo video/);
 });
 test('cortesía sin destinos permite publicar después, conserva gratuidad y no se duplica',async t=>{
  const {world,admin,client,id}=await context(t);
  const gift={type:'COURTESY',channel:'SOCIAL',service:'VIDEO',title:'Nuestro primer video',brief:'Mostrar la cocina'};
- const first=await client.post('/solicitudes',gift);assert.equal(first.status,303);
- assert.equal((await client.post('/solicitudes',gift)).location,first.location);
+ const first=await client.post('/requests',gift);assert.equal(first.status,303);
+ assert.equal((await client.post('/requests',gift)).location,first.location);
  assert.equal(world.db.get("SELECT count(*) AS n FROM requests WHERE type='COURTESY'").n,1);
  const giftId=first.location.split('/').pop();
  assert.equal(world.db.get('SELECT count(*) AS n FROM request_platforms').n,0);
- await admin.post(selected(first.location+'/estado',id),{status:'APPROVED'});
- await admin.post(selected(first.location+'/piezas',id),{title:'Video de bienvenida'});
- const piece=world.db.get('SELECT * FROM pieces WHERE request_id=?',giftId),path=first.location+'/piezas/'+piece.id;
+ await admin.post(selected(first.location+'/state',id),{status:'APPROVED'});
+ await admin.post(selected(first.location+'/pieces',id),{title:'Video de bienvenida'});
+ const piece=world.db.get('SELECT * FROM pieces WHERE request_id=?',giftId),path=first.location+'/pieces/'+piece.id;
  assert.equal(piece.contract_id,null);
  const draft=await admin.get(selected(first.location,id));assert.doesNotMatch(draft.body,/Registrar publicación|Añadir plataformas/);
- assert.equal((await admin.post(selected(path+'/publicacion',id),{channel:'YOUTUBE',url:'https://example.test/gift',published})).status,409);
- await admin.post(selected(path+'/editar',id),{revision:String(piece.revision),status:'REVIEW'});
- await client.post(path+'/revisar',{revision:String(world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision),status:'APPROVED'});
+ assert.equal((await admin.post(selected(path+'/publication',id),{channel:'YOUTUBE',url:'https://example.test/gift',published})).status,409);
+ await admin.post(selected(path+'/edit',id),{revision:String(piece.revision),status:'REVIEW'});
+ await client.post(path+'/review',{revision:String(world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision),status:'APPROVED'});
  const approved=await admin.get(selected(first.location,id));assert.match(approved.body,/Registrar publicación/);assert.match(approved.body,/>Red social</);
  assert.doesNotMatch(approved.body,/Añadir plataformas|name="platform\./);
- for(const channel of platforms)assert.equal((await admin.post(selected(path+'/publicacion',id),{channel,url:'https://example.test/gift/'+channel,published})).status,303);
+ for(const channel of platforms)assert.equal((await admin.post(selected(path+'/publication',id),{channel,url:'https://example.test/gift/'+channel,published})).status,303);
  assert.equal(world.db.get('SELECT count(*) AS n FROM pieces').n,1);
  assert.equal(world.db.get('SELECT count(*) AS n FROM publications').n,4);
  assert.equal(world.db.get('SELECT count(*) AS n FROM request_platforms').n,0);
@@ -132,25 +132,25 @@ test('aprobar contenido común requiere autorización explícita y mantiene aisl
  const reviewer=await colleague(world,client,{name:'Revisión contenido',document:'1756287650','SOCIAL.VIEW':'yes','SOCIAL.APPROVE':'yes'});
  const {path,piecePath,piece}=await produce(c);
  assert.equal((await reader.session.get(path)).status,200);
- assert.equal((await reader.session.post('/solicitudes',social)).status,403);
+ assert.equal((await reader.session.post('/requests',social)).status,403);
  const stranger=await owner(world,'Otro negocio','8');
  assert.equal((await stranger.client.get(path)).status,404);
- assert.equal((await stranger.client.post(piecePath+'/revisar',{revision:'1',status:'APPROVED'})).status,404);
- assert.equal((await reader.session.post(piecePath+'/revisar',{revision:'1',status:'APPROVED'})).status,403);
- assert.equal((await reviewer.session.post(piecePath+'/revisar',{revision:String(world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision),status:'APPROVED'})).status,303);
- assert.equal((await reader.session.post(piecePath+'/publicacion',{channel:'TIKTOK',url:'https://example.test/not-allowed',published})).status,403);
+ assert.equal((await stranger.client.post(piecePath+'/review',{revision:'1',status:'APPROVED'})).status,404);
+ assert.equal((await reader.session.post(piecePath+'/review',{revision:'1',status:'APPROVED'})).status,403);
+ assert.equal((await reviewer.session.post(piecePath+'/review',{revision:String(world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision),status:'APPROVED'})).status,303);
+ assert.equal((await reader.session.post(piecePath+'/publication',{channel:'TIKTOK',url:'https://example.test/not-allowed',published})).status,403);
  assert.equal(world.db.get('SELECT count(*) AS n FROM publications').n,0);
 });
 test('publicación y medición validan red, fecha y enlace sin exigir destinos anticipados',async t=>{
  const c=await context(t),{world,admin,client,id}=c;const {path,piecePath,piece}=await produce(c);
- await client.post(piecePath+'/revisar',{revision:String(world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision),status:'APPROVED'});
+ await client.post(piecePath+'/review',{revision:String(world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision),status:'APPROVED'});
  const data={channel:'TIKTOK',url:'https://example.test/live',published};
- for(const change of [{channel:''},{channel:'SOCIAL'},{channel:'WHATSAPP'},{url:'http://example.test/video'},{published:'2099-12-01T09:00'}])assert.equal((await admin.post(selected(piecePath+'/publicacion',id),{...data,...change})).status,400);
+ for(const change of [{channel:''},{channel:'SOCIAL'},{channel:'WHATSAPP'},{url:'http://example.test/video'},{published:'2099-12-01T09:00'}])assert.equal((await admin.post(selected(piecePath+'/publication',id),{...data,...change})).status,400);
  assert.equal(world.db.get('SELECT count(*) AS n FROM publications').n,0);
- assert.equal((await admin.post(selected(piecePath+'/publicacion',id),data)).status,303);
- assert.equal((await admin.post(selected(piecePath+'/publicacion',id),data)).status,409);
+ assert.equal((await admin.post(selected(piecePath+'/publication',id),data)).status,303);
+ assert.equal((await admin.post(selected(piecePath+'/publication',id),data)).status,409);
  const pub=world.db.get('SELECT * FROM publications');assert.equal(pub.piece_id,piece.id);
- assert.equal((await admin.post(selected(piecePath+'/medir',id),{publication:pub.id,observed,views:'400',likes:'25',comments:'3'})).status,303);
+ assert.equal((await admin.post(selected(piecePath+'/measure',id),{publication:pub.id,observed,views:'400',likes:'25',comments:'3'})).status,303);
  const detail=await client.get(path);assert.match(detail.body,/https:\/\/example.test\/live/);assert.match(detail.body,/>400</);
  assert.equal(world.db.get('SELECT count(*) AS n FROM request_platforms').n,0);
 });
@@ -182,10 +182,10 @@ test('acceso único persiste cifrado al reiniciar servidor y no crea otro emplea
  let db=openDatabase(path),server=createPortal({db,key,loyaltyUrl:loyalty.origin,integration}),origin=await listen(server);
  try{
   const world={db,session:()=>browser(origin)};const admin=await agency(world),{client,id}=await owner(world,'Persistencia Wallet','2');
-  await admin.post('/agencia/clientes/verificar?empresa='+id);await client.get('/wallet');
+  await admin.post('/agency/businesses/verify?company='+id);await client.get('/wallet');
   const original={...db.get('SELECT * FROM wallet_access')};await close(server);db.close();
   db=openDatabase(path);server=createPortal({db,key,loyaltyUrl:loyalty.origin,integration});origin=await listen(server);
-  const session=browser(origin);await session.post('/entrar',{document:'1755536693',password});await session.get('/inicio');
+  const session=browser(origin);await session.post('/login',{document:'1755536693',password});await session.get('/home');
   assert.equal((await session.get('/wallet-api/api/staff/wallet-design')).status,200);
   assert.deepEqual({...db.get('SELECT * FROM wallet_access')},original);
   assert.equal([...loyalty.staff.values()].filter(p=>p.requestId===original.request_id).length,1);

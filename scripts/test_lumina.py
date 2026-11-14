@@ -7,8 +7,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITE_PATH = Path('src/test/resources/com/premierdarkcoffee/loyalty/lumina')
-EXPECTED_SUITES = 28
-EXPECTED_TESTS = 315
+EXPECTED_SUITES = 29
+EXPECTED_TESTS = 326
 
 
 def main(root=ROOT):

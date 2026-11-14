@@ -76,7 +76,7 @@ test('arranque real con .env generado por staging conserva clave, sesión y cred
     const session=createSession(db,account),csrf=getSession(db,session).csrf;db.close();
     const started=await launchOnFreePort(f,port);process=started.process;const luminaPort=started.port;
     const origin='http://127.0.0.1:'+luminaPort;
-    assert.equal((await fetch(origin+'/salud')).status,200);
+    assert.equal((await fetch(origin+'/health')).status,200);
     const response=await fetch(origin+'/wallet-api/api/platform/wallet/status',{headers:{Cookie:'lumina_session='+session,'X-Lumina-CSRF':csrf}});
     assert.equal(response.status,200);assert.equal((await response.json()).configuration.apple,'CONFIGURED_DEVICE_TEST_REQUIRED');
     assert.ok(loyalty.calls.some(call=>call.role==='PLATFORM'));
@@ -94,7 +94,7 @@ test('una colisión de puerto efímero se recupera sin omitir la comprobación r
     writeFileSync(join(f.project,'.env'),'STAGING_ADMIN_TOKEN='+'F'.repeat(48)+'\nLOYALTY_HTTP_PORT=8097\n',{mode:0o600});
     const started=await launchOnFreePort(f,8097,blocker.address().port);process=started.process;
     assert.equal(started.attempts,2);assert.notEqual(started.port,blocker.address().port);
-    assert.equal((await fetch('http://127.0.0.1:'+started.port+'/salud')).status,200);
+    assert.equal((await fetch('http://127.0.0.1:'+started.port+'/health')).status,200);
   }finally{await stop(process);await new Promise(resolve=>blocker.close(resolve));rmSync(f.directory,{recursive:true,force:true});}
 });
 test('una configuración inválida falla antes de crear o migrar la base de datos',async()=>{

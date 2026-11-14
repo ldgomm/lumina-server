@@ -6,9 +6,9 @@ import { businessStates } from './control.mjs';
 export function businessDirectory(db, actor, query = new URLSearchParams()) {
   requireAgency(actor);
   const q = text(query.get('q') || '', 'búsqueda', 0, 100);
-  const state = query.get('estado') || '';
-  const verification = query.get('verificacion') || '';
-  const sort = query.get('orden') || 'ATTENTION';
+  const state = query.get('state') || '';
+  const verification = query.get('verification') || '';
+  const sort = query.get('sort') || 'ATTENTION';
   requireThat(!state || state === 'PENDING' || Object.hasOwn(businessStates, state), 'Estado inválido.');
   requireThat(['', 'PENDING', 'VERIFIED'].includes(verification), 'Verificación inválida.');
   const orders = {
@@ -17,7 +17,7 @@ export function businessDirectory(db, actor, query = new URLSearchParams()) {
     RECENT: 'c.created_at DESC,c.id',
   };
   requireThat(Object.hasOwn(orders, sort), 'Orden inválido.');
-  const requestedPage = integer(query.get('pagina') || '0', 'página', { max: 100000 });
+  const requestedPage = integer(query.get('page') || '0', 'página', { max: 100000 });
   const from = 'FROM companies c LEFT JOIN business_controls b ON b.company_id=c.id';
   const where = `instr(search_text(c.name||' '||coalesce(c.ruc,'')||' '||c.phone||' '||COALESCE((SELECT group_concat(a.name||' '||coalesce(a.document,''),' ') FROM accounts a WHERE a.company_id=c.id AND a.kind='OWNER'),'')),search_text(?))>0
     AND (?='' OR (?='PENDING' AND b.pending_id IS NOT NULL) OR (COALESCE(b.state,'ACTIVE')=? AND (?<>'ACTIVE' OR b.pending_id IS NULL)))

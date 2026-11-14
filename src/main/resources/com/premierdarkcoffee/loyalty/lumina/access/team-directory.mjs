@@ -7,9 +7,9 @@ export function teamDirectory(db, actor, query = new URLSearchParams()) {
   let phoneQuery = q.replace(/[ ()-]/g, '');
   if (/^0[2-79]\d{1,8}$/.test(phoneQuery)) phoneQuery = '+593' + phoneQuery.slice(1);
   if (!/^\+?\d{3,15}$/.test(phoneQuery)) phoneQuery = '';
-  const state = query.get('estado') || '';
+  const state = query.get('state') || '';
   const area = query.get('area') || '';
-  const page = integer(query.get('pagina') || '0', 'página', { max: 100000 });
+  const page = integer(query.get('page') || '0', 'página', { max: 100000 });
   requireThat(['', 'ACTIVE', 'PENDING', 'INACTIVE', 'EXPIRED'].includes(state), 'Estado de acceso inválido.');
   requireThat(!area || area === 'CASH' || Object.hasOwn(areas, area), 'Área inválida.');
   const at = now();

@@ -2,14 +2,14 @@ import { can, requireAccess } from '../access/accounts.mjs';
 import { requestAccessSql } from '../access/content-policy.mjs';
 import { integer, requireThat, socialChannels, text } from '../shared/domain.mjs';
 
-export const contentViews=Object.freeze({resumen:'Resumen',solicitudes:'Solicitudes',produccion:'Producción',revisiones:'Por aprobar',entregas:'Entregas',publicaciones:'Publicaciones',metricas:'Métricas',agenda:'Grabaciones'});
+export const contentViews=Object.freeze({overview:'Resumen',requests:'Solicitudes',production:'Producción',reviews:'Por aprobar',deliveries:'Entregas',publications:'Publicaciones',metrics:'Métricas',calendar:'Grabaciones'});
 export function contentData(db,actor,company,query) {
   requireAccess(actor,'SOCIAL');
   requireThat(company||actor.kind==='AGENCY','Selecciona un negocio.',404);
   requireThat(actor.kind==='AGENCY'||company.id===actor.company_id,'Área no disponible.',403);
-  const view=query.get('vista')||'resumen';
+  const view=query.get('view')||'overview';
   requireThat(Object.hasOwn(contentViews,view),'Vista de contenido no encontrada.',404);
-  const page=integer(query.get('pagina')||'0','página',{min:0,max:100000});
+  const page=integer(query.get('page')||'0','página',{min:0,max:100000});
   const q=text(query.get('q')||'','búsqueda',0,100);
   const policy=requestAccessSql(actor);
   const where=`r.channel='SOCIAL' AND ${policy.sql} AND (? IS NULL OR r.company_id=?)
@@ -27,19 +27,19 @@ export function contentData(db,actor,company,query) {
     JOIN requests r ON r.id=p.request_id AND r.company_id=p.company_id JOIN companies c ON c.id=r.company_id`;
   const pubWhere=`${where} AND p.status<>'CANCELLED' AND pub.channel IN (${platforms.map(()=>'?').join(',')||"''"})`;
   counts.publications=db.get(`SELECT count(*) AS total FROM ${pubFrom} WHERE ${pubWhere}`,...params,...platforms).total;
-  let sql,values=[...params],title=view==='resumen'?'Solicitudes recientes':contentViews[view];
-  if(['produccion','revisiones','entregas'].includes(view)) {
-    const state=view==='revisiones'?"p.status='REVIEW'":view==='entregas'?"p.status='DELIVERED'":"p.status IN ('PRODUCTION','REVIEW','APPROVED')";
+  let sql,values=[...params],title=view==='overview'?'Solicitudes recientes':contentViews[view];
+  if(['production','reviews','deliveries'].includes(view)) {
+    const state=view==='reviews'?"p.status='REVIEW'":view==='deliveries'?"p.status='DELIVERED'":"p.status IN ('PRODUCTION','REVIEW','APPROVED')";
     sql=`SELECT p.*,r.title AS request_title,c.name AS company_name FROM ${pieceFrom} WHERE ${where} AND ${state} ORDER BY p.created_at DESC,p.id DESC`;
     title=contentViews[view];
-  } else if(view==='publicaciones') {
-    const platform=query.get('red')||'';
+  } else if(view==='publications') {
+    const platform=query.get('network')||'';
     requireThat(!platform||platforms.includes(platform),'No tienes acceso a esa plataforma.',403);
     sql=`SELECT pub.*,p.title,p.request_id,c.name AS company_name,
       (SELECT max(m.observed_at) FROM social_metrics m WHERE m.company_id=pub.company_id AND m.publication_id=pub.id) AS measured_at
       FROM ${pubFrom} WHERE ${pubWhere} AND (?='' OR pub.channel=?) ORDER BY pub.published_at DESC,pub.id DESC`;
     values.push(...platforms,platform,platform);title='Publicaciones registradas';
-  } else if(view==='agenda') {
+  } else if(view==='calendar') {
     sql=`SELECT v.*,r.title,c.name AS company_name FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id
       JOIN companies c ON c.id=r.company_id WHERE ${where} ORDER BY CASE WHEN v.status='SCHEDULED' THEN 0 ELSE 1 END,
       CASE WHEN v.status='SCHEDULED' THEN v.starts_at END,v.starts_at DESC,v.id DESC`;
@@ -48,5 +48,5 @@ export function contentData(db,actor,company,query) {
     sql=`SELECT r.*,c.name AS company_name FROM ${from} WHERE ${where} ORDER BY r.created_at DESC,r.id DESC`;
   }
   const rows=db.all(sql+' LIMIT 21 OFFSET ?',...values,page*20);
-  return {view,q,page,counts,title,platforms,platform:query.get('red')||'',rows:rows.slice(0,20),more:rows.length>20};
+  return {view,q,page,counts,title,platforms,platform:query.get('network')||'',rows:rows.slice(0,20),more:rows.length>20};
 }

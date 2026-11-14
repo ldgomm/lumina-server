@@ -52,9 +52,9 @@ export function browser(origin) {
 }
 export async function agency(world) {
   const admin = world.session();
-  const response = await admin.post('/configurar',{code:setupCode(world.db),name:'Equipo Lúmina',document:'1748225842',password});
+  const response = await admin.post('/setup',{code:setupCode(world.db),name:'Equipo Lúmina',document:'1748225842',password});
   if (response.status!==303) throw new Error('No se creó agencia de prueba.');
-  await admin.get('/clientes');
+  await admin.get('/businesses');
   return admin;
 }
 export function documentFor(alias) {
@@ -66,7 +66,7 @@ export function documentFor(alias) {
 // Existing workflow fixtures explicitly opt into all services. New onboarding is tested separately.
 export async function owner(world, name, identifier, override = {}) {
   const client=world.session(),document=documentFor('negocio'+identifier+'@example.test');
-  const response=await client.post('/registro',{company:name,name:'Dueño de '+name,document,ruc:document+'001',
+  const response=await client.post('/register',{company:name,name:'Dueño de '+name,document,ruc:document+'001',
     phone:'0991234567',password,consent:'yes',...override});
   if(response.status!==303)throw new Error('No se creó negocio de prueba: '+response.body);
   const id=world.db.get('SELECT id FROM companies WHERE name=?',name).id;
@@ -74,29 +74,29 @@ export async function owner(world, name, identifier, override = {}) {
   for(const service of ['SOCIAL','WALLET','MAPS','WEB','BRAND'])world.db.run("INSERT INTO company_services VALUES(?,?,'ACTIVE',NULL,?)",id,service,new Date().toISOString());
   // Simulate an already opted-in account for historical production/authorization tests.
   await client.get('/wallet');
-  await client.get('/inicio');
+  await client.get('/home');
   return {client,id};
 }
 export async function colleague(world,client,data) {
-  const result = await client.post('/equipo',data);
+  const result = await client.post('/team',data);
   const code = result.body.match(/<code class="secret">([A-Za-z0-9_-]{43})<\/code>/)?.[1];
   if (!code) throw new Error('No se creó invitación de prueba.');
   const accountId = world.db.get('SELECT id FROM accounts WHERE document=?',data.document).id;
   const session = world.session();
-  if ((await session.post('/activar',{code,password,phone:'0991234567'})).status!==303) throw new Error('No se activó prueba.');
+  if ((await session.post('/activate',{code,password,phone:'0991234567'})).status!==303) throw new Error('No se activó prueba.');
   world.db.run('UPDATE accounts SET welcome_done=1 WHERE id=?',accountId);
-  await session.get('/inicio');
+  await session.get('/home');
   return {id:accountId,session,code};
 }
 
 export async function acceptedContract(world,admin,client,company,plan,price) {
-  const selected=path=>'/agencia'+path+'?empresa='+company;
-  const request=await client.post('/planes/solicitar',{key:uuid(),['qty_'+plan]:'1'});assert.equal(request.status,303,request.body);
+  const selected=path=>'/agency'+path+'?company='+company;
+  const request=await client.post('/plans/request',{key:uuid(),['qty_'+plan]:'1'});assert.equal(request.status,303,request.body);
   const order=world.db.get('SELECT * FROM package_orders WHERE id=?',request.location.split('/').at(-1));
   const item=world.db.get('SELECT * FROM package_order_lines WHERE order_id=?',order.id);
-  const quoted=await admin.post(selected(request.location+'/cotizar'),{revision:String(order.revision),['price_'+item.id]:price??String(item.catalog_minor/100),['start_'+item.id]:localDay(),['end_'+item.id]:localDay(),terms:'Alcance acordado para esta prueba.'});assert.equal(quoted.status,303,quoted.body);
-  const revision=String(order.revision+1);assert.equal((await client.post(request.location+'/aceptar',{revision,confirm:'yes'})).status,303);
-  const activated=await admin.post(selected(request.location+'/activar'),{revision});assert.equal(activated.status,303,activated.body);
+  const quoted=await admin.post(selected(request.location+'/quote'),{revision:String(order.revision),['price_'+item.id]:price??String(item.catalog_minor/100),['start_'+item.id]:localDay(),['end_'+item.id]:localDay(),terms:'Alcance acordado para esta prueba.'});assert.equal(quoted.status,303,quoted.body);
+  const revision=String(order.revision+1);assert.equal((await client.post(request.location+'/accept',{revision,confirm:'yes'})).status,303);
+  const activated=await admin.post(selected(request.location+'/activate'),{revision});assert.equal(activated.status,303,activated.body);
   return world.db.get('SELECT * FROM contracts WHERE order_line_id=?',item.id);
 }
 

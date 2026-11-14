@@ -6,13 +6,13 @@ import {agency,owner,portal} from '../../src/test/resources/com/premierdarkcoffe
 const {JSDOM,VirtualConsole}=createRequire(import.meta.url)(process.env.LOYALTY_TEST_JSDOM||'jsdom');
 const cleanups=[],errors=[],checks=[],t={after:f=>cleanups.push(f)};
 const source=name=>readFileSync(new URL('../../src/main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/assets/'+name,import.meta.url),'utf8');
-function dom(html){const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));const d=new JSDOM(html.replace(/<script\b[^>]*src[^>]*><\/script>/g,''),{url:'https://lumina.test/planes/viernes-negro',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc});const w=d.window;w.confirm=()=>true;w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};cleanups.push(()=>w.close());return w;}
+function dom(html){const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));const d=new JSDOM(html.replace(/<script\b[^>]*src[^>]*><\/script>/g,''),{url:'https://lumina.test/plans/black-friday',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc});const w=d.window;w.confirm=()=>true;w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};cleanups.push(()=>w.close());return w;}
 const load=(w,name)=>w.eval(source(name));
 const settle=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}throw new Error('DOM not ready: '+errors.join('; '));};
 try{
  const world=await portal(t),admin=await agency(world);await owner(world,'Prueba campaña','1');
- await admin.post('/planes',{name:'Videos de prueba',term:'MONTHLY',price:'99.95',VIDEO:'2',wallet:'NONE'});
- const page=await admin.get('/planes/viernes-negro');assert.equal(page.status,200);const w=dom(page.body);load(w,'black-friday.js');const f=w.document.querySelector('[data-bf-editor]').closest('form').elements;
+ await admin.post('/plans',{name:'Videos de prueba',term:'MONTHLY',price:'99.95',VIDEO:'2',wallet:'NONE'});
+ const page=await admin.get('/plans/black-friday');assert.equal(page.status,200);const w=dom(page.body);load(w,'black-friday.js');const f=w.document.querySelector('[data-bf-editor]').closest('form').elements;
  const event=()=>new w.Event('beforeunload',{cancelable:true});let leave=event();w.dispatchEvent(leave);assert.equal(leave.defaultPrevented,false);
  f.discount.value='25';f.discount.dispatchEvent(new w.Event('input',{bubbles:true}));assert.match(w.document.querySelector('[data-bf-amount]').textContent,/74[.,]96/);assert.equal(f.price.disabled,true);
  f.name.value='<img src=x onerror=alert(1)>';f.name.dispatchEvent(new w.Event('input',{bubbles:true}));assert.equal(w.document.querySelector('[data-bf-title] img'),null);

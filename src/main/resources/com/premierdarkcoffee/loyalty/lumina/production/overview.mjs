@@ -27,23 +27,23 @@ export function businessOverview(db,actor,companyId) {
   return {recent,reviews,quotes,proposals,nextVisit};
 }
 
-export const attentionKinds={entregas:'Entregas por revisar',cotizaciones:'Cotizaciones',propuestas:'Propuestas de servicios'};
+export const attentionKinds={deliveries:'Entregas por revisar',quotes:'Cotizaciones',proposals:'Propuestas de servicios'};
 export function attentionRows(overview) {
   return [
-    ...overview.reviews.map(r=>({...r,kind:'entregas',path:'/solicitudes/'+r.id})),
-    ...overview.quotes.map(r=>({...r,kind:'cotizaciones',path:'/solicitudes/'+r.id})),
-    ...overview.proposals.map(r=>({...r,title:'Propuesta de servicios',kind:'propuestas',path:'/planes/pedidos/'+r.id})),
+    ...overview.reviews.map(r=>({...r,kind:'deliveries',path:'/requests/'+r.id})),
+    ...overview.quotes.map(r=>({...r,kind:'quotes',path:'/requests/'+r.id})),
+    ...overview.proposals.map(r=>({...r,title:'Propuesta de servicios',kind:'proposals',path:'/plans/orders/'+r.id})),
   ].sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.path.localeCompare(b.path)||a.kind.localeCompare(b.kind));
 }
 export function attentionData(db,actor,companyId,params=new URLSearchParams()) {
   requireBusinessActor(actor,{id:companyId});
-  const view=params.get('vista')||'todas';
-  requireThat(view==='todas'||Object.hasOwn(attentionKinds,view),'Vista de pendientes no disponible.',400);
-  const q=text(params.get('q')||'','búsqueda',0,100),requested=integer(params.get('pagina')||'0','página',{max:10000});
+  const view=params.get('view')||'all';
+  requireThat(view==='all'||Object.hasOwn(attentionKinds,view),'Vista de pendientes no disponible.',400);
+  const q=text(params.get('q')||'','búsqueda',0,100),requested=integer(params.get('page')||'0','página',{max:10000});
   const all=attentionRows(businessOverview(db,actor,companyId));
-  const counts={todas:all.length,...Object.fromEntries(Object.keys(attentionKinds).map(k=>[k,all.filter(r=>r.kind===k).length]))};
+  const counts={all:all.length,...Object.fromEntries(Object.keys(attentionKinds).map(k=>[k,all.filter(r=>r.kind===k).length]))};
   const fold=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
-  const filtered=all.filter(r=>(view==='todas'||r.kind===view)&&fold(r.title).includes(fold(q)));
+  const filtered=all.filter(r=>(view==='all'||r.kind===view)&&fold(r.title).includes(fold(q)));
   const total=filtered.length,page=Math.min(requested,Math.max(0,Math.ceil(total/20)-1));
   return {view,q,counts,total,page,rows:filtered.slice(page*20,(page+1)*20)};
 }

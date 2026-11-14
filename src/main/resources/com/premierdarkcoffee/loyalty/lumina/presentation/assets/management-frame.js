@@ -9,5 +9,5 @@
  // Preserve the native editor's dirty-form and in-flight guards when leaving the outer page.
  function leave(proceed){const w=frame.contentWindow;try{if(w.document.querySelector('form[aria-busy=true]')){status.textContent='Espera a que termine el guardado.';return;}if(typeof w.loyaltyAdminLeave==='function'){w.loyaltyAdminLeave(proceed);return;}}catch{}proceed();}
  document.addEventListener('click',event=>{const link=event.target.closest('a[href]');if(!link||link.target||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||event.button!==0)return;event.preventDefault();leave(()=>location.assign(link.href));},true);
- document.addEventListener('submit',event=>{if(event.target.action===location.origin+'/salir'&&!event.target.dataset.leaveChecked){event.preventDefault();event.stopImmediatePropagation();leave(()=>{event.target.dataset.leaveChecked='yes';event.target.requestSubmit();});}},true);
+ document.addEventListener('submit',event=>{if(event.target.action===location.origin+'/logout'&&!event.target.dataset.leaveChecked){event.preventDefault();event.stopImmediatePropagation();leave(()=>{event.target.dataset.leaveChecked='yes';event.target.requestSubmit();});}},true);
 })();

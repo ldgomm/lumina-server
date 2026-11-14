@@ -1,12 +1,12 @@
 'use strict';
 (async()=>{
- const back=document.querySelector('meta[name="lumina-wallet-back"]')?.content||'/inicio';
- document.addEventListener('click',event=>{if(event.target.closest('[data-lumina-account]')){event.preventDefault();leave('/cuenta');}},true);
- const central={administration:'/gestion',business:'/gestion/negocio',branches:'/gestion/sucursales',team:'/equipo',activity:'/gestion/actividad',operations:'/gestion/operacion',account:'/planes?vista=acuerdos',reports:'/gestion/informes'};
+ const back=document.querySelector('meta[name="lumina-wallet-back"]')?.content||'/home';
+ document.addEventListener('click',event=>{if(event.target.closest('[data-lumina-account]')){event.preventDefault();leave('/account');}},true);
+ const central={administration:'/management',business:'/management/business',branches:'/management/branches',team:'/team',activity:'/management/activity',operations:'/management/operations',account:'/plans?view=agreements',reports:'/management/reports'};
  const leave=path=>{if(document.querySelector('form[aria-busy=true]')){notice('Espera a que termine el guardado.');return;}const go=()=>location.assign(path),design=()=>window.loyaltyDesignLeave?window.loyaltyDesignLeave(go):go(),operation=()=>window.loyaltyOperationLeave?window.loyaltyOperationLeave(design):design();window.loyaltyAdminLeave?window.loyaltyAdminLeave(operation):operation();};
  try{
   const company=document.querySelector('meta[name="lumina-wallet-company"]')?.content;
-  renderJoinQR=function(){const slug=encodeURIComponent(state.data.business.slug),scope=company?'?empresa='+encodeURIComponent(company):'';document.querySelector('#content').innerHTML=`<section class="panel narrow"><h2>Invita a tus clientes</h2><p>Coloca este QR en tu local para que tus clientes se registren y añadan su tarjeta. La misma tarjeta funciona en todas tus sucursales.</p><img class="qr" alt="QR de registro" src="/api/public/${slug}/qr${scope}"><a class="button" href="/join/${slug}${scope}" target="_blank" rel="noopener">Abrir formulario</a></section>`;};
+  renderJoinQR=function(){const slug=encodeURIComponent(state.data.business.slug),scope=company?'?company='+encodeURIComponent(company):'';document.querySelector('#content').innerHTML=`<section class="panel narrow"><h2>Invita a tus clientes</h2><p>Coloca este QR en tu local para que tus clientes se registren y añadan su tarjeta. La misma tarjeta funciona en todas tus sucursales.</p><img class="qr" alt="QR de registro" src="/api/public/${slug}/qr${scope}"><a class="button" href="/join/${slug}${scope}" target="_blank" rel="noopener">Abrir formulario</a></section>`;};
   state.token='lumina-delegated-wallet-session';state.data=await api('/api/staff/dashboard');state.member=null;
   const allowed=JSON.parse(document.querySelector('meta[name="lumina-wallet-sections"]').content);
   if(!Array.isArray(allowed)||!allowed.length)throw new Error('No hay áreas de Wallet asignadas a tu cuenta.');
@@ -19,7 +19,7 @@
    app.querySelector('.workspace-search')?.remove();if(!allowed.includes('sales'))app.querySelector('#quickCounter')?.remove();
    const nav=app.querySelector('.workspace-nav');
    if(nav&&document.querySelector('meta[name="lumina-wallet-cash"]')?.content==='yes'&&!nav.querySelector('[data-lumina-cash]')){
-    const a=document.createElement('a');a.dataset.luminaCash='yes';a.className='wallet-section-link';a.href='/caja';a.textContent='Caja · Compras y canjes';a.onclick=e=>{e.preventDefault();leave('/caja');};nav.prepend(a);
+    const a=document.createElement('a');a.dataset.luminaCash='yes';a.className='wallet-section-link';a.href='/cashier';a.textContent='Caja · Compras y canjes';a.onclick=e=>{e.preventDefault();leave('/cashier');};nav.prepend(a);
    }
    const caption=app.querySelector('.workspace-business small');const text=owner?'Wallet de tu negocio':'Equipo · Mis áreas';if(caption&&caption.textContent!==text)caption.textContent=text;
    const content=app.querySelector('#content');

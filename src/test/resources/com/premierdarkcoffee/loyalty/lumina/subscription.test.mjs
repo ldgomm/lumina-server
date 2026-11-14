@@ -22,46 +22,46 @@ async function world(t){
 }
 test('registration asks and persists business category with compatibility for older callers',async t=>{
  const w=await world(t);assert.equal(w.db.get('SELECT category FROM companies WHERE id=?',w.id).category,'CAFE');
- const signup=await w.session().get('/registro');assert.match(signup.body,/name="category"[^>]*required/);assert.match(signup.body,/Cafetería/);
- const invalid=await w.session().post('/registro',{company:'Otra',name:'Dueño',document:'1234567895',phone:'0991234567',document:'1723016091',password:'Pruebas Lúmina 123!',consent:'yes',category:'INVENTADA'});assert.equal(invalid.status,400);
+ const signup=await w.session().get('/register');assert.match(signup.body,/name="category"[^>]*required/);assert.match(signup.body,/Cafetería/);
+ const invalid=await w.session().post('/register',{company:'Otra',name:'Dueño',document:'1234567895',phone:'0991234567',document:'1723016091',password:'Pruebas Lúmina 123!',consent:'yes',category:'INVENTADA'});assert.equal(invalid.status,400);
  assert.equal(w.db.get('SELECT count(*) AS n FROM companies').n,1);
 });
 test('operator identification is agency only and requires confirmed valid information',async t=>{
- const w=await world(t);assert.equal((await w.client.post('/cuenta/proveedor',legal)).status,403);
- assert.equal((await w.admin.post('/cuenta/proveedor',{...legal,confirm:''})).status,400);
- assert.equal((await w.admin.post('/cuenta/proveedor',{...legal,privacyUrl:'http://example.test'})).status,400);
- assert.equal((await w.admin.post('/cuenta/proveedor',legal)).status,303);
- assert.equal((await w.admin.post('/cuenta/proveedor',legal)).status,409);
+ const w=await world(t);assert.equal((await w.client.post('/account/provider',legal)).status,403);
+ assert.equal((await w.admin.post('/account/provider',{...legal,confirm:''})).status,400);
+ assert.equal((await w.admin.post('/account/provider',{...legal,privacyUrl:'http://example.test'})).status,400);
+ assert.equal((await w.admin.post('/account/provider',legal)).status,303);
+ assert.equal((await w.admin.post('/account/provider',legal)).status,409);
 });
 test('missing legal identity never exposes an acceptance form or invents consent',async t=>{
- const w=await world(t);const result=await w.client.get('/planes/wallet');assert.equal(result.status,200,result.body);
- assert.match(result.body,/No se han aceptado cargos/);assert.doesNotMatch(result.body,/action="\/planes\/wallet\/aceptar"/);
+ const w=await world(t);const result=await w.client.get('/plans/wallet');assert.equal(result.status,200,result.body);
+ assert.match(result.body,/No se han aceptado cargos/);assert.doesNotMatch(result.body,/action="\/plans\/wallet\/accept"/);
  assert.equal(w.calls.filter(x=>x.path.endsWith('/accept')).length,0);
 });
 test('owner sees an unchecked clear offer and downloads exact terms before acceptance',async t=>{
- const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);
- const page=await w.client.get('/planes/wallet');assert.equal(page.status,200,page.body);
+ const w=await world(t);await w.admin.post('/account/provider',legal);
+ const page=await w.client.get('/plans/wallet');assert.equal(page.status,200,page.body);
  assert.match(page.body,/\$4,99/);assert.match(page.body,/31 de diciembre de 2026/);
  const checkbox=page.body.match(/<input[^>]+name="accept"[^>]*>/)?.[0];assert.ok(checkbox);assert.doesNotMatch(checkbox,/checked/);assert.match(checkbox,/required/);
- const download=await w.client.get('/planes/wallet/condiciones?oferta=hash-oferta');assert.equal(download.body,'Condiciones de prueba. Cargo de $4,99.');assert.match(download.headers.get('content-disposition'),/attachment/);
- assert.equal((await w.client.get('/planes/wallet/condiciones?oferta=otra')).status,409);
+ const download=await w.client.get('/plans/wallet/terms?offer=hash-oferta');assert.equal(download.body,'Condiciones de prueba. Cargo de $4,99.');assert.match(download.headers.get('content-disposition'),/attachment/);
+ assert.equal((await w.client.get('/plans/wallet/terms?offer=otra')).status,409);
 });
 test('acceptance uses actual logged in business and no posted price or identity',async t=>{
- const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);
- const no=await w.client.post('/planes/wallet/aceptar',{requestKey:randomUUID(),hash:'hash-oferta'});assert.equal(no.status,400);
- const key=randomUUID();const yes=await w.client.post('/planes/wallet/aceptar',{requestKey:key,hash:'hash-oferta',accept:'yes',companyId:randomUUID(),ownerId:randomUUID(),feeMinor:'0',provider:'Inventado'});
+ const w=await world(t);await w.admin.post('/account/provider',legal);
+ const no=await w.client.post('/plans/wallet/accept',{requestKey:randomUUID(),hash:'hash-oferta'});assert.equal(no.status,400);
+ const key=randomUUID();const yes=await w.client.post('/plans/wallet/accept',{requestKey:key,hash:'hash-oferta',accept:'yes',companyId:randomUUID(),ownerId:randomUUID(),feeMinor:'0',provider:'Inventado'});
  assert.equal(yes.status,303,yes.body);assert.equal(yes.location,'/wallet');
  const call=w.calls.filter(c=>c.path.endsWith('/accept')).at(-1);assert.equal(call.key,key);assert.equal(call.payload.offer.companyId,w.id);assert.equal(call.payload.offer.provider.legalName,legal.legalName);assert.equal(call.payload.feeMinor,undefined);
- const terms=await w.client.get('/planes/wallet/condiciones');assert.equal(terms.body,'Condiciones aceptadas de prueba');
+ const terms=await w.client.get('/plans/wallet/terms');assert.equal(terms.body,'Condiciones aceptadas de prueba');
 });
 test('agency and collaborator cannot accept cancel or query a business subscription',async t=>{
  const w=await world(t);const member=await colleague(w,w.client,{name:'Colaborador',document:'1754634234',view:['WALLET']});
  const before=w.calls.length;
  for(const actor of [w.admin,member.session]){
-  assert.equal((await actor.get('/planes/wallet')).status,403);
-  assert.equal((await actor.get('/planes/wallet/estado')).status,403);
-  assert.equal((await actor.post('/planes/wallet/cancelar',{requestKey:randomUUID(),version:'1',confirm:'yes'})).status,403);
-  assert.equal((await actor.post('/planes/wallet/aceptar',{requestKey:randomUUID(),hash:'hash-oferta',accept:'yes'})).status,403);
+  assert.equal((await actor.get('/plans/wallet')).status,403);
+  assert.equal((await actor.get('/plans/wallet/state')).status,403);
+  assert.equal((await actor.post('/plans/wallet/cancel',{requestKey:randomUUID(),version:'1',confirm:'yes'})).status,403);
+  assert.equal((await actor.post('/plans/wallet/accept',{requestKey:randomUUID(),hash:'hash-oferta',accept:'yes'})).status,403);
  }
  assert.equal(w.calls.length,before);
 });
@@ -70,41 +70,41 @@ test('native subscription routes cannot be reached through the general Wallet pr
  assert.ok([403,404].includes(result.status));assert.equal(w.calls.filter(c=>c.path.endsWith('/accept')).length,0);
 });
 test('an existing included Wallet agreement blocks a second automatic subscription',async t=>{
- const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);
- await w.admin.post('/agencia/clientes/verificar?empresa='+w.id);
+ const w=await world(t);await w.admin.post('/account/provider',legal);
+ await w.admin.post('/agency/businesses/verify?company='+w.id);
  const offer={catalog_version:'SIMPLE',name:'Contenido con Wallet',term:'MONTHLY',price_type:'FIXED',price:'100',VIDEO:'2',WALLET:'1',wallet_gift:'yes',confirm_offer:'yes',description:'Dos videos y fidelización incluida.'};
- assert.equal((await w.admin.post('/planes',offer)).status,303);
+ assert.equal((await w.admin.post('/plans',offer)).status,303);
  const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,w.client,w.id,plan);
- const page=await w.client.get('/planes/wallet');assert.equal(page.status,200,page.body);assert.match(page.body,/evitar cobrar dos veces/);assert.doesNotMatch(page.body,/action="\/planes\/wallet\/aceptar"/);
+ const page=await w.client.get('/plans/wallet');assert.equal(page.status,200,page.body);assert.match(page.body,/evitar cobrar dos veces/);assert.doesNotMatch(page.body,/action="\/plans\/wallet\/accept"/);
 });
 
 test('annual choice shows one fifty dollar charge and sends only the selected cycle',async t=>{
- const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);
- const page=await w.client.get('/planes/wallet?ciclo=ANNUAL');assert.equal(page.status,200);assert.match(page.body,/\$50,00/);assert.match(page.body,/Un solo pago por doce meses/);assert.match(page.body,/name="cycle" value="ANNUAL"/);
- const accepted=await w.client.post('/planes/wallet/aceptar',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'ANNUAL',accept:'yes',amount:'0'});assert.equal(accepted.status,303);
+ const w=await world(t);await w.admin.post('/account/provider',legal);
+ const page=await w.client.get('/plans/wallet?cycle=ANNUAL');assert.equal(page.status,200);assert.match(page.body,/\$50,00/);assert.match(page.body,/Un solo pago por doce meses/);assert.match(page.body,/name="cycle" value="ANNUAL"/);
+ const accepted=await w.client.post('/plans/wallet/accept',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'ANNUAL',accept:'yes',amount:'0'});assert.equal(accepted.status,303);
  assert.equal(w.calls.at(-1).payload.offer.cycle,'ANNUAL');assert.equal(w.calls.at(-1).payload.offer.amount,undefined);
 });
 test('invalid billing cycle cannot reach the native subscription endpoint',async t=>{
- const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);const before=w.calls.length;
- assert.equal((await w.client.post('/planes/wallet/aceptar',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'FREE',accept:'yes'})).status,400);assert.equal(w.calls.length,before);
+ const w=await world(t);await w.admin.post('/account/provider',legal);const before=w.calls.length;
+ assert.equal((await w.client.post('/plans/wallet/accept',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'FREE',accept:'yes'})).status,400);assert.equal(w.calls.length,before);
 });
 
 test('a native Wallet agreement blocks an overlapping package and preserves the quote',async t=>{
- const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);
- assert.equal((await w.client.post('/planes/wallet/aceptar',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'ANNUAL',accept:'yes'})).status,303);
- await w.admin.post('/planes',{name:'Video y Wallet',term:'MONTHLY',price:'100',VIDEO:'2',wallet:'GIFT'});
+ const w=await world(t);await w.admin.post('/account/provider',legal);
+ assert.equal((await w.client.post('/plans/wallet/accept',{requestKey:randomUUID(),hash:'hash-oferta',cycle:'ANNUAL',accept:'yes'})).status,303);
+ await w.admin.post('/plans',{name:'Video y Wallet',term:'MONTHLY',price:'100',VIDEO:'2',wallet:'GIFT'});
  const plan=w.db.get('SELECT id FROM plans').id;
- const requested=await w.client.post('/planes/solicitar',{key:randomUUID(),['qty_'+plan]:'1'});assert.equal(requested.status,303);
+ const requested=await w.client.post('/plans/request',{key:randomUUID(),['qty_'+plan]:'1'});assert.equal(requested.status,303);
  const order=w.db.get('SELECT * FROM package_orders'),line=w.db.get('SELECT * FROM package_order_lines');
  const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guayaquil',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- assert.equal((await w.admin.post('/agencia'+requested.location+'/cotizar?empresa='+w.id,{revision:String(order.revision),['price_'+line.id]:'100',['start_'+line.id]:day,['end_'+line.id]:day,terms:'Dos videos y Wallet incluida.'})).status,303);
- const rejected=await w.client.post(requested.location+'/aceptar',{revision:String(order.revision+1),confirm:'yes'});assert.equal(rejected.status,409);assert.match(rejected.body,/evitar cargos duplicados/);
+ assert.equal((await w.admin.post('/agency'+requested.location+'/quote?company='+w.id,{revision:String(order.revision),['price_'+line.id]:'100',['start_'+line.id]:day,['end_'+line.id]:day,terms:'Dos videos y Wallet incluida.'})).status,303);
+ const rejected=await w.client.post(requested.location+'/accept',{revision:String(order.revision+1),confirm:'yes'});assert.equal(rejected.status,409);assert.match(rejected.body,/evitar cargos duplicados/);
  assert.equal(w.db.get('SELECT status FROM package_orders').status,'QUOTED');assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
 });
 test('an accepted future Wallet package prevents a second automatic agreement before activation',async t=>{
- const w=await world(t);await w.admin.post('/cuenta/proveedor',legal);await w.admin.post('/agencia/clientes/verificar?empresa='+w.id);
- await w.admin.post('/planes',{name:'Wallet incluido',term:'MONTHLY',price:'50',VIDEO:'1',wallet:'GIFT'});
+ const w=await world(t);await w.admin.post('/account/provider',legal);await w.admin.post('/agency/businesses/verify?company='+w.id);
+ await w.admin.post('/plans',{name:'Wallet incluido',term:'MONTHLY',price:'50',VIDEO:'1',wallet:'GIFT'});
  const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,w.client,w.id,plan);
  w.db.run("UPDATE package_orders SET status='ACCEPTED'");w.db.run('DELETE FROM contracts');
- const page=await w.client.get('/planes/wallet');assert.match(page.body,/evitar cobrar dos veces/);assert.doesNotMatch(page.body,/action="\/planes\/wallet\/aceptar"/);
+ const page=await w.client.get('/plans/wallet');assert.match(page.body,/evitar cobrar dos veces/);assert.doesNotMatch(page.body,/action="\/plans\/wallet\/accept"/);
 });

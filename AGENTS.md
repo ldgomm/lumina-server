@@ -1,5 +1,16 @@
 # Loyalty
 
+## Lúmina v025 / Loyalty v064 — English navigation and clear access
+
+- Baseline: installed v024r1/v063, commit a4d70e146ca785dcd73e6f9e9a37348112af3c20. This section supersedes previous version and gate counts.
+- English canonical routes, query keys, form actions and anchors. Spanish user-facing text. Legacy names belong only at compatibility boundaries; do not translate public QR slugs, API identifiers, free text or provider tokens.
+- Normalize old POST paths without replaying requests or changing the body, CSRF checks, actor or idempotency keys. Reject conflicting query aliases. Preserve cached assets and health-probe response types.
+- Keep owner, collaborator and agency permissions unchanged. Agency consultation remains read-only; team editing belongs to the owner. Preserve all existing Wallet/session grants and tenant isolation.
+- Password visibility is transient and resets on submit, tab hiding and page return. Never persist account form data in browser storage. Keep native forms usable without scripts.
+- No changes to native Kotlin/Wallet assets, SQL, SQLite10/PostgreSQLV017, Wallet representation34, identities, credentials, provider IDs, certificates, domains, balances, contracts or subscription terms.
+- Gates: 29 suites / 326 portal tests, 170 Python tests, 312 native unit/HTTP tests and 347 PostgreSQL tests. Docker staging and gateway before local commit; no push. 23 DOM suites are separate from visual browser and physical device verification.
+- Terminal output stays limited to RESULTADO and the URL after confirmed startup. Installer canonical flags are English; old flags remain aliases. Production is blocked. See docs/lumina-navigation-v064.md.
+
 ## Lúmina v024r1 / Loyalty v063 — entregas y revisión claras
 
 - Baseline: v023 instalada y validada, commit 90fd692782e391222416298ffa555f7fc9be46e0. Esta sección prevalece para versiones y gates.

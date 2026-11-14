@@ -53,14 +53,14 @@
 .team-history strong{font-size:14px}.team-history time{font-size:12px;color:#52677f}.team-history p{font-size:13px}
 .team-audit-diff{display:grid;grid-template-columns:65px minmax(0,1fr);gap:8px;font-size:12px;line-height:1.7}.team-audit-diff dt{color:#52677f}.team-audit-diff dd{margin:0;color:#294b6b;overflow-wrap:anywhere}
 .team-code{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin:20px 0}.team-code .secret{font-size:16px;padding:16px;margin:0;overflow-wrap:anywhere}.team-code button{min-height:48px}
-#permisos,#datos,#historial{scroll-margin-top:25px}
+#permissions,#details,#history{scroll-margin-top:25px}
 @media(max-width:760px){
  .team-heading{align-items:start;flex-direction:column}.team-heading>.btn{width:100%}.team-stats{grid-template-columns:1fr 1fr;gap:20px}
  .team-filters{display:grid;grid-template-columns:1fr 1fr}.team-filters label:first-child{grid-column:1/-1}.team-filters label{min-width:0}
  .team-module{padding:14px}.team-module>legend{font-size:14px}.team-cash-row{grid-template-columns:1fr;gap:10px}
  .team-level-heading{flex-direction:column;align-items:stretch;gap:7px}.team-level-select{width:100%;flex-shrink:1}.team-permission-options{gap:4px 14px}
  .team-save{display:grid}.team-save button{width:100%}.team-save-sticky{position:static;gap:12px}.team-secondary{padding:18px}
- .team-code{grid-template-columns:1fr}.team-code .secret{font-size:14px}#permisos,#datos,#historial{scroll-margin-top:90px}
+ .team-code{grid-template-columns:1fr}.team-code .secret{font-size:14px}#permissions,#details,#history{scroll-margin-top:90px}
 }
 
 .team-phone{display:inline-block;margin-top:6px;font-size:.875rem;text-decoration:none}.team-phone:hover{text-decoration:underline}.team-contact{overflow-wrap:anywhere}

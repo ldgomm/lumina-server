@@ -38,46 +38,46 @@ test('formulario nativo: configurar agencia, cierre definitivo de configuración
   const world = await portal(t);
   const client = nativeForms(world.origin);
   const code = setupCode(world.db);
-  const form = await client.get('/configurar');
+  const form = await client.get('/setup');
   const data = {code,name:'Agencia de prueba',document:'1729512507',password};
-  const created = await client.submit(form,'/configurar',data);
+  const created = await client.submit(form,'/setup',data);
   assert.equal(created.status,303,created.body);
-  assert.equal(created.headers.get('location'),'/inicio');
+  assert.equal(created.headers.get('location'),'/home');
   assert.equal(world.db.get("SELECT count(*) AS n FROM accounts WHERE kind='AGENCY'").n,1);
   assert.equal(setupCode(world.db),null,'Restarting bootstrap must not create a second administrator.');
-  const dashboard = await client.get('/clientes');
+  const dashboard = await client.get('/businesses');
   assert.equal(dashboard.status,200);
-  assert.equal((await client.submit(await client.get('/cuenta'),'/salir')).status,303);
-  assert.equal((await client.get('/configurar')).status,404);
-  assert.equal((await client.submit(form,'/configurar',data)).status,403,'Consumed setup code cannot be reused.');
+  assert.equal((await client.submit(await client.get('/account'),'/logout')).status,303);
+  assert.equal((await client.get('/setup')).status,404);
+  assert.equal((await client.submit(form,'/setup',data)).status,403,'Consumed setup code cannot be reused.');
   assert.equal(world.db.get("SELECT count(*) AS n FROM accounts WHERE kind='AGENCY'").n,1);
   const login = await client.get('/');
-  assert.doesNotMatch(login.body,/href="\/configurar"/);
-  const entered = await client.submit(login,'/entrar',{document:data.document,password});
+  assert.doesNotMatch(login.body,/href="\/setup"/);
+  const entered = await client.submit(login,'/login',{document:data.document,password});
   assert.equal(entered.status,303,entered.body);
-  assert.equal((await client.get('/clientes')).status,200);
+  assert.equal((await client.get('/businesses')).status,200);
 });
 
 test('formulario nativo: registro, sesión y rechazo de orígenes extraños o CSRF inválido',async t=>{
   const world = await portal(t);
   const client = nativeForms(world.origin);
-  const form = await client.get('/registro');
+  const form = await client.get('/register');
   const data = {company:'Cliente de prueba',name:'Responsable de prueba',document:'1747556593',ruc:'1747556593001',
     phone:'0991234567',password,consent:'yes'};
   for (const origin of ['null',null,'https://example.test',world.origin+'.example.test']) {
-    assert.equal((await client.submit(form,'/registro',data,{origin})).status,403);
+    assert.equal((await client.submit(form,'/register',data,{origin})).status,403);
   }
   assert.equal(world.db.get('SELECT count(*) AS n FROM companies').n,0);
-  const registered = await client.submit(form,'/registro',data);
+  const registered = await client.submit(form,'/register',data);
   assert.equal(registered.status,303,registered.body);
-  const account = await client.get('/cuenta');
+  const account = await client.get('/account');
   const changed = {current:password,password:'Otra contraseña de pruebas 456!',confirmation:'Otra contraseña de pruebas 456!'};
-  assert.equal((await client.submit(account,'/cuenta/clave',{...changed,_csrf:'incorrecto'})).status,403);
-  assert.equal((await client.submit(account,'/cuenta/clave',changed,{origin:'null'})).status,403);
-  assert.equal((await client.submit(account,'/cuenta/clave',changed)).status,303);
-  const afterChange = await client.get('/cuenta');
-  assert.equal((await client.submit(afterChange,'/salir')).status,303);
-  assert.equal((await client.get('/inicio')).status,303);
+  assert.equal((await client.submit(account,'/account/password',{...changed,_csrf:'incorrecto'})).status,403);
+  assert.equal((await client.submit(account,'/account/password',changed,{origin:'null'})).status,403);
+  assert.equal((await client.submit(account,'/account/password',changed)).status,303);
+  const afterChange = await client.get('/account');
+  assert.equal((await client.submit(afterChange,'/logout')).status,303);
+  assert.equal((await client.get('/home')).status,303);
   const login = await client.get('/');
-  assert.equal((await client.submit(login,'/entrar',{document:data.document,password:changed.password})).status,303);
+  assert.equal((await client.submit(login,'/login',{document:data.document,password:changed.password})).status,303);
 });

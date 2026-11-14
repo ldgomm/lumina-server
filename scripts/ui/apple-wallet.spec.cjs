@@ -112,7 +112,7 @@ async function run() {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         if (evidence) await page.screenshot({path: path.join(evidence, 'wallet-mobile.png'), fullPage: true});
         await page.locator('#saveDesign').click();
-        await page.waitForFunction(() => document.querySelector('#logoStatus')?.textContent.includes('guardado'));
+        await page.waitForFunction(() => document.querySelector('#logoStatus')?.textContent.includes('saved'));
         assert.equal(saved.length, 1); assert.equal(saved[0].expectedVersion, 3);
         assert.equal(saved[0].design.featuredProgramId, 'stamps');
         assert.equal(saved[0].design.stampSymbol, '★');

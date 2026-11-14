@@ -5,8 +5,8 @@ import { integer, isId, requireThat, text } from '../shared/domain.mjs';
 export function consultTeams(db, actor, query = new URLSearchParams()) {
   requireAgency(actor);
   const q = text(query.get('q') || '', 'búsqueda', 0, 100);
-  const page = integer(query.get('pagina') || '0', 'página', {max:100000});
-  const selected = query.get('empresa');
+  const page = integer(query.get('page') || '0', 'página', {max:100000});
+  const selected = query.get('company');
   if (!selected) {
     const total = db.get('SELECT count(*) AS n FROM companies WHERE instr(lower(name),lower(?))>0',q).n;
     const rows = db.all(`SELECT c.id,c.name,

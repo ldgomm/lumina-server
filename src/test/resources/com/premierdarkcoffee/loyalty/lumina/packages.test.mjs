@@ -8,20 +8,20 @@ import { agency, colleague, owner, portal } from './helpers.mjs';
 import { localDay, uuid } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 import { monthlyEnd } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/orders.mjs';
 import { openDatabase } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/database.mjs';
-const selected= (p,id)=>'/agencia'+p+'?empresa='+id;
+const selected= (p,id)=>'/agency'+p+'?company='+id;
 const identifier=response=>response.location?.split('?')[0].split('/').at(-1);
 async function setup(t) {
   const w=await portal(t),admin=await agency(w),{client,id}=await owner(w,'Comercio de prueba','1');
-  await admin.post(selected('/clientes/verificar',id));
+  await admin.post(selected('/businesses/verify',id));
   return {...w,admin,client,id};
 }
 async function plan(w,name,term,price,items={VIDEO:'2'},wallet='NONE') {
-  assert.equal((await w.admin.post('/planes',{name,term,price,...items,wallet})).status,303);
+  assert.equal((await w.admin.post('/plans',{name,term,price,...items,wallet})).status,303);
   return w.db.get('SELECT id FROM plans WHERE name=?',name).id;
 }
 async function submit(w,choices,extra={}) {
   const data={key:uuid(),...Object.fromEntries(choices.map(([p,n])=>['qty_'+p,String(n)])),...extra};
-  const result=await w.client.post('/planes/solicitar',data);assert.equal(result.status,303,result.body);
+  const result=await w.client.post('/plans/request',data);assert.equal(result.status,303,result.body);
   return {id:identifier(result),path:result.location,data};
 }
 function quotation(w,id,extra={}) {
@@ -33,9 +33,9 @@ function quotation(w,id,extra={}) {
   return {...data,...extra};
 }
 async function accepted(w,order,overrides={}) {
-  assert.equal((await w.admin.post(selected(order.path+'/cotizar',w.id),quotation(w,order.id,overrides))).status,303);
+  assert.equal((await w.admin.post(selected(order.path+'/quote',w.id),quotation(w,order.id,overrides))).status,303);
   const revision=String(w.db.get('SELECT revision FROM package_orders WHERE id=?',order.id).revision);
-  assert.equal((await w.client.post(order.path+'/aceptar',{revision,confirm:'yes'})).status,303);
+  assert.equal((await w.client.post(order.path+'/accept',{revision,confirm:'yes'})).status,303);
   return revision;
 }
 
@@ -45,20 +45,20 @@ test('combinación mensual y puntual: precios exactos, cantidades, aceptación y
   const o=await submit(w,[[monthly,2],[single,1]],{price:'0',amount:'0'});
   assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
   const view=await w.client.get(o.path);assert.equal(view.status,200);assert.match(view.body,/Por mes/);assert.match(view.body,/Una sola vez/);assert.match(view.body,/199,90|199\.90/);assert.match(view.body,/70,10|70\.10/);
-  assert.equal((await w.admin.post(selected(o.path+'/activar',w.id),{revision:'1'})).status,409);
+  assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision:'1'})).status,409);
   const rev=await accepted(w,o);
-  const activation=()=>w.admin.post(selected(o.path+'/activar',w.id),{revision:rev});
+  const activation=()=>w.admin.post(selected(o.path+'/activate',w.id),{revision:rev});
   assert.ok((await Promise.all([activation(),activation()])).every(r=>r.status===303));
   const contracts=w.db.all('SELECT * FROM contracts');assert.equal(contracts.length,2);
   assert.equal(contracts.find(c=>c.plan_id===monthly).agreed_minor,19990);assert.equal(contracts.find(c=>c.plan_id===monthly).units,2);
   assert.equal(w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant,tenant);
-  const overview=await w.client.get('/planes?vista=acuerdos');assert.equal(overview.status,200);assert.match(overview.body,/ambos días incluidos/);assert.doesNotMatch(overview.body,/fin exclusivo/);
-  const request=await w.client.post('/solicitudes',{type:'CONTENT',channel:'SOCIAL',service:'VIDEO',quantity:'5',title:'Producción con cupo',brief:''});
-  await w.admin.post(selected(request.location+'/estado',w.id),{status:'APPROVED'});
+  const overview=await w.client.get('/plans?view=agreements');assert.equal(overview.status,200);assert.match(overview.body,/ambos días incluidos/);assert.doesNotMatch(overview.body,/fin exclusivo/);
+  const request=await w.client.post('/requests',{type:'CONTENT',channel:'SOCIAL',service:'VIDEO',quantity:'5',title:'Producción con cupo',brief:''});
+  await w.admin.post(selected(request.location+'/state',w.id),{status:'APPROVED'});
   const contract=contracts.find(c=>c.plan_id===monthly);
-  for(let i=0;i<4;i++)assert.equal((await w.admin.post(selected(request.location+'/piezas',w.id),{title:'Pieza '+i,contract:contract.id})).status,303);
-  assert.equal((await w.admin.post(selected(request.location+'/piezas',w.id),{title:'Quinta sin cupo',contract:contract.id})).status,409);
-  await w.admin.post(selected('/planes/cancelar',w.id),{contract:contract.id,reason:'Cambio solicitado por cliente'});
+  for(let i=0;i<4;i++)assert.equal((await w.admin.post(selected(request.location+'/pieces',w.id),{title:'Pieza '+i,contract:contract.id})).status,303);
+  assert.equal((await w.admin.post(selected(request.location+'/pieces',w.id),{title:'Quinta sin cupo',contract:contract.id})).status,409);
+  await w.admin.post(selected('/plans/cancel',w.id),{contract:contract.id,reason:'Cambio solicitado por cliente'});
   assert.equal(w.db.get('SELECT count(*) n FROM contracts WHERE cancelled_at IS NULL').n,1);
   assert.equal(w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant,tenant);
 });
@@ -67,18 +67,18 @@ test('ofertas a medida, consentimiento y versiones: nunca se acepta un total inc
   const w=await setup(t),a=await plan(w,'Web a medida','ONE_OFF','',{WEBSITE:'1'}),b=await plan(w,'Redes mensual','MONTHLY','40');
   const o=await submit(w,[[a,1],[b,1]]);
   assert.match((await w.client.get(o.path)).body,/aún no hay total definitivo/);
-  assert.equal((await w.client.post(o.path+'/aceptar',{revision:'1',confirm:'yes'})).status,409);
+  assert.equal((await w.client.post(o.path+'/accept',{revision:'1',confirm:'yes'})).status,409);
   const custom=w.db.get('SELECT id FROM package_order_lines WHERE plan_id=?',a).id;
-  assert.equal((await w.admin.post(selected(o.path+'/cotizar',w.id),quotation(w,o.id,{['price_'+custom]:''}))).status,400);
+  assert.equal((await w.admin.post(selected(o.path+'/quote',w.id),quotation(w,o.id,{['price_'+custom]:''}))).status,400);
   assert.equal(w.db.get('SELECT status FROM package_orders').status,'REQUESTED');
-  const first=quotation(w,o.id);assert.equal((await w.admin.post(selected(o.path+'/cotizar',w.id),first)).status,303);
-  assert.equal((await w.client.post(o.path+'/aceptar',{revision:'2'})).status,400);
-  assert.equal((await w.admin.post(selected(o.path+'/cotizar',w.id),quotation(w,o.id,{['price_'+custom]:'55.15'}))).status,303);
-  assert.equal((await w.client.post(o.path+'/aceptar',{revision:'2',confirm:'yes'})).status,409);
-  await w.admin.post('/planes/retirar',{plan:a});
-  assert.equal((await w.client.post(o.path+'/aceptar',{revision:'3',confirm:'yes'})).status,303);
-  assert.equal((await w.admin.post(selected(o.path+'/cotizar',w.id),quotation(w,o.id))).status,409);
-  assert.equal((await w.admin.post(selected(o.path+'/activar',w.id),{revision:'3'})).status,303);
+  const first=quotation(w,o.id);assert.equal((await w.admin.post(selected(o.path+'/quote',w.id),first)).status,303);
+  assert.equal((await w.client.post(o.path+'/accept',{revision:'2'})).status,400);
+  assert.equal((await w.admin.post(selected(o.path+'/quote',w.id),quotation(w,o.id,{['price_'+custom]:'55.15'}))).status,303);
+  assert.equal((await w.client.post(o.path+'/accept',{revision:'2',confirm:'yes'})).status,409);
+  await w.admin.post('/plans/withdraw',{plan:a});
+  assert.equal((await w.client.post(o.path+'/accept',{revision:'3',confirm:'yes'})).status,303);
+  assert.equal((await w.admin.post(selected(o.path+'/quote',w.id),quotation(w,o.id))).status,409);
+  assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision:'3'})).status,303);
   assert.equal(w.db.get('SELECT agreed_minor FROM contracts WHERE plan_id=?',a).agreed_minor,5515);
   assert.equal(w.db.get('SELECT count(*) n FROM audit WHERE subject=? AND action=?','ORDER','PROPUESTA_PREPARADA').n,2);
 });
@@ -86,33 +86,33 @@ test('ofertas a medida, consentimiento y versiones: nunca se acepta un total inc
 test('contrataciones aisladas por negocio, dueño y CSRF; un permiso de contenido no concede acceso a precios',async t=>{
   const w=await setup(t),a=await plan(w,'Solo videos','MONTHLY','10'),o=await submit(w,[[a,1]]);
   const other=await owner(w,'Otro cliente','2');
-  assert.equal((await other.client.get(o.path+'?empresa='+w.id)).status,404);
-  assert.equal((await other.client.post(o.path+'/aceptar',{revision:'1',confirm:'yes'})).status,404);
-  assert.equal((await w.client.post(o.path+'/cotizar',quotation(w,o.id))).status,403);
-  assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+a]:'1',_csrf:'bad'})).status,403);
+  assert.equal((await other.client.get(o.path+'?company='+w.id)).status,404);
+  assert.equal((await other.client.post(o.path+'/accept',{revision:'1',confirm:'yes'})).status,404);
+  assert.equal((await w.client.post(o.path+'/quote',quotation(w,o.id))).status,403);
+  assert.equal((await w.client.post('/plans/request',{key:uuid(),['qty_'+a]:'1',_csrf:'bad'})).status,403);
   const collaborator=await colleague(w,w.client,{name:'Editor',document:'1743990283','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
-  assert.equal((await collaborator.session.get('/planes')).status,403);
+  assert.equal((await collaborator.session.get('/plans')).status,403);
   assert.equal((await collaborator.session.get(o.path)).status,403);
-  assert.equal((await collaborator.session.post('/planes/solicitar',{key:uuid(),['qty_'+a]:'1'})).status,403);
-  assert.equal((await w.admin.get('/planes?vista=contrataciones')).status,200);
+  assert.equal((await collaborator.session.post('/plans/request',{key:uuid(),['qty_'+a]:'1'})).status,403);
+  assert.equal((await w.admin.get('/plans?view=orders')).status,200);
 });
 
 test('selección valida límites y retiro; reintento del envío conserva una única combinación',async t=>{
   const w=await setup(t),a=await plan(w,'Servicio independiente','MONTHLY','10.25');
-  for(const qty of ['-1','1.5','11','NaN'])assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+a]:qty})).status,400);
-  assert.equal((await w.client.post('/planes/solicitar',{key:uuid()})).status,400);
+  for(const qty of ['-1','1.5','11','NaN'])assert.equal((await w.client.post('/plans/request',{key:uuid(),['qty_'+a]:qty})).status,400);
+  assert.equal((await w.client.post('/plans/request',{key:uuid()})).status,400);
   assert.equal(w.db.get('SELECT count(*) n FROM package_orders').n,0);
   const o=await submit(w,[[a,3]]);
-  assert.equal((await w.client.post('/planes/solicitar',o.data)).location,o.path);
+  assert.equal((await w.client.post('/plans/request',o.data)).location,o.path);
   assert.equal(w.db.get('SELECT count(*) n FROM package_order_lines').n,1);
-  await w.admin.post('/planes/retirar',{plan:a});
-  assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+a]:'1'})).status,409);
+  await w.admin.post('/plans/withdraw',{plan:a});
+  assert.equal((await w.client.post('/plans/request',{key:uuid(),['qty_'+a]:'1'})).status,409);
   assert.equal(w.db.get('SELECT count(*) n FROM package_orders').n,1);
 });
 
 test('el mismo paquete se puede añadir de nuevo: cada contratación tiene su propio cupo y cancelación',async t=>{
   const w=await setup(t),a=await plan(w,'Solo stories','MONTHLY','15',{STORY:'3'});
-  for(let i=0;i<2;i++){const o=await submit(w,[[a,1]]),revision=await accepted(w,o);assert.equal((await w.admin.post(selected(o.path+'/activar',w.id),{revision})).status,303);}
+  for(let i=0;i<2;i++){const o=await submit(w,[[a,1]]),revision=await accepted(w,o);assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision})).status,303);}
   assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,2);
   assert.equal(w.db.get('SELECT sum(agreed_minor) n FROM contracts').n,3000);
 });
@@ -122,31 +122,31 @@ test('renovación conserva el día de corte, evita duplicados y exige aceptació
   assert.equal(monthlyEnd('2027-02-28','2027-01-31'),'2027-03-31');assert.equal(monthlyEnd('2028-12-31'),'2029-01-31');
   const w=await setup(t),a=await plan(w,'Mensual renovable','MONTHLY','25');
   const o=await submit(w,[[a,2]]),line=w.db.get('SELECT id FROM package_order_lines WHERE order_id=?',o.id);
-  const revision=await accepted(w,o,{['start_'+line.id]:'2090-01-31'});await w.admin.post(selected(o.path+'/activar',w.id),{revision});
+  const revision=await accepted(w,o,{['start_'+line.id]:'2090-01-31'});await w.admin.post(selected(o.path+'/activate',w.id),{revision});
   const first=w.db.get('SELECT * FROM contracts');assert.equal(first.ends_before,'2090-02-28');
   const r=await submit(w,[],{renewal:first.id});
-  assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),renewal:first.id})).status,409);
-  const nextVersion=await accepted(w,r);await w.admin.post(selected(r.path+'/activar',w.id),{revision:nextVersion});
+  assert.equal((await w.client.post('/plans/request',{key:uuid(),renewal:first.id})).status,409);
+  const nextVersion=await accepted(w,r);await w.admin.post(selected(r.path+'/activate',w.id),{revision:nextVersion});
   const next=w.db.get('SELECT * FROM contracts WHERE renewal_of=?',first.id);
   assert.equal(next.starts_on,'2090-02-28');assert.equal(next.ends_before,'2090-03-31');assert.equal(next.units,2);assert.equal(next.agreed_minor,5000);
-  assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),renewal:first.id})).status,409);
+  assert.equal((await w.client.post('/plans/request',{key:uuid(),renewal:first.id})).status,409);
 });
 
 test('activar una combinación es atómico: un fallo en un acuerdo no deja otros activados',async t=>{
   const w=await setup(t),a=await plan(w,'A primero','MONTHLY','10'),b=await plan(w,'B segundo','MONTHLY','20');
   const o=await submit(w,[[a,1],[b,1]]),revision=await accepted(w,o);
   w.db.run(`CREATE TRIGGER reject_second BEFORE INSERT ON contracts WHEN NEW.plan_id='${b}' BEGIN SELECT RAISE(ABORT,'simulated'); END`);
-  assert.equal((await w.admin.post(selected(o.path+'/activar',w.id),{revision})).status,500);
+  assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision})).status,500);
   assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
   assert.equal(w.db.get('SELECT status FROM package_orders').status,'ACCEPTED');
-  w.db.run('DROP TRIGGER reject_second');assert.equal((await w.admin.post(selected(o.path+'/activar',w.id),{revision})).status,303);
+  w.db.run('DROP TRIGGER reject_second');assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision})).status,303);
   assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,2);
 });
 
 test('cancelar una propuesta conserva historia y no activa sus servicios',async t=>{
   const w=await setup(t),a=await plan(w,'Oferta cancelable','ONE_OFF','10'),o=await submit(w,[[a,1]]);
-  assert.equal((await w.client.post(o.path+'/cancelar',{revision:'1',reason:'Cambio de idea del cliente'})).status,303);
-  assert.equal((await w.admin.post(selected(o.path+'/cotizar',w.id),quotation(w,o.id))).status,409);
+  assert.equal((await w.client.post(o.path+'/cancel',{revision:'1',reason:'Cambio de idea del cliente'})).status,303);
+  assert.equal((await w.admin.post(selected(o.path+'/quote',w.id),quotation(w,o.id))).status,409);
   assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);assert.equal(w.db.get('SELECT count(*) n FROM package_order_lines').n,1);
 });
 

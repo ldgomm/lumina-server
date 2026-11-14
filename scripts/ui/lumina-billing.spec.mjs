@@ -33,7 +33,7 @@ try {
   });
   const world = await portal(t, native.origin, { platformToken: native.platformToken });
   const admin = await agency(world), company = await owner(world, 'Estudio Aurora · Café y pan artesanal', 1);
-  const base = '/administracion/negocios/' + company.id;
+  const base = '/admin/businesses/' + company.id;
   browser = await chromium.launch({ headless: true, ...(process.env.LOYALTY_UI_CHROMIUM ? { executablePath: process.env.LOYALTY_UI_CHROMIUM, args: ['--no-sandbox', '--disable-dev-shm-usage'] } : {}) });
   if (output) await mkdir(output, { recursive: true });
   const errors = [], contexts = [];
@@ -43,16 +43,16 @@ try {
     await context.route('**/*', route => new URL(route.request().url()).origin === world.origin ? route.continue() : route.abort());
     const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => d.accept());
     const fit = async () => assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${role}: overflow at ${page.url()}`);
-    const accountPath = role === 'agency' ? base : '/mi-estado-cuenta';
+    const accountPath = role === 'agency' ? base : '/billing';
     for (const width of [320, 390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
-      for (const [name, path] of [...(role === 'agency' ? [['directory', '/clientes']] : []), ['overview', accountPath], ['invoices', accountPath + '?vista=cargos'], ['payments', accountPath + '?vista=pagos'], ['receipt', accountPath + '/pagos/' + paymentId]]) {
+      for (const [name, path] of [...(role === 'agency' ? [['directory', '/businesses']] : []), ['overview', accountPath], ['invoices', accountPath + '?view=charges'], ['payments', accountPath + '?view=payments'], ['receipt', accountPath + '/payments/' + paymentId]]) {
         const response = await page.goto(world.origin + path); assert.equal(response.status(), 200); await fit();
         if (output && [390, 1440].includes(width)) await page.screenshot({ path: resolve(output, `${role}-${name}-${width}.png`), fullPage: true });
-        if (role === 'owner') assert.equal(await page.locator('form[action*="/administracion/"]').count(), 0);
+        if (role === 'owner') assert.equal(await page.locator('form[action*="/admin/"]').count(), 0);
       }
       if (role === 'agency') {
-        await page.goto(world.origin + base + '?vista=cargos');
+        await page.goto(world.origin + base + '?view=charges');
         await page.locator('.billing-action').first().locator('summary').click();
         await fit();
         assert.equal(await page.getByLabel('Importe recibido (USD)').first().inputValue(), '45.01');
@@ -65,11 +65,11 @@ try {
       }
     }
     if (role === 'agency') {
-      await page.goto(world.origin + '/clientes');
+      await page.goto(world.origin + '/businesses');
       await page.getByLabel('Buscar negocio o contacto').fill('aurora'); await page.getByRole('button', { name: 'Buscar', exact: true }).click();
       assert.equal(await page.locator('.business-directory-row').count(), 1);
-      assert.equal(await page.getByRole('link', { name: 'Ver equipo', exact: true }).getAttribute('href'), '/equipos?empresa=' + company.id);
-      await page.goto(world.origin + base + '?vista=cargos');
+      assert.equal(await page.getByRole('link', { name: 'Ver equipo', exact: true }).getAttribute('href'), '/teams?company=' + company.id);
+      await page.goto(world.origin + base + '?view=charges');
       const form = page.locator('.billing-action').first().locator('form');
       await page.locator('.billing-action').first().locator('summary').click();
       const requestKey = await form.locator('[name=requestKey]').inputValue();
@@ -82,7 +82,7 @@ try {
       assert.equal(await retry.getByLabel('Referencia o comprobante').inputValue(), 'BORRADOR-CONSERVADO');
       assert.equal(await retry.locator('[name=confirm]').isChecked(), false);
     }
-    await page.goto(world.origin + accountPath + '/pagos/' + paymentId);
+    await page.goto(world.origin + accountPath + '/payments/' + paymentId);
     await page.emulateMedia({ media: 'print' });
     assert.equal(await page.locator('.site-header').isVisible(), false);
     assert.equal(await page.locator('.payment-receipt').isVisible(), true);
@@ -97,7 +97,7 @@ try {
   // Native controls remain usable with scripts disabled.
   const nojs = await browser.newContext({ javaScriptEnabled: false });
   await nojs.addCookies([{ name: 'lumina_session', value: admin.cookie.split('=')[1], url: world.origin, httpOnly: true, sameSite: 'Strict' }]);
-  const page = await nojs.newPage(); await page.goto(world.origin + base + '?vista=cargos');
+  const page = await nojs.newPage(); await page.goto(world.origin + base + '?view=charges');
   await page.locator('.control-state-editor summary').click(); assert.equal(await page.locator('[data-state-effect]:visible').count(), 3);
   await page.locator('.billing-action').first().locator('summary').click(); assert.equal(await page.getByLabel('Importe recibido (USD)').first().isVisible(), true);
   assert.deepEqual(errors, []);

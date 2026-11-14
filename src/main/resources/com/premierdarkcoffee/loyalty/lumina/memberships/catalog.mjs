@@ -10,7 +10,7 @@ export const serviceName=service=>({WEBSITE:'Proyecto web',MAPS_PROFILE:'Gestió
 export function describeOffer(plan) {
   const individual=plan.items.length===1&&plan.items[0].quantity===1;
   const single=plan.items.length===1?plan.items[0]:null;
-  return {kind:individual?'individual':'paquete',areas:[...new Set(plan.items.map(i=>serviceArea(i.service)))],
+  return {kind:individual?'individual':'package',areas:[...new Set(plan.items.map(i=>serviceArea(i.service)))],
     // A reference average is never used for billing, mixed bundles or savings claims.
     unitMinor:single&&single.quantity>1&&plan.price_minor!==null?plan.price_minor/single.quantity:null,
     unitService:single?.service,quantity:single?.quantity};

@@ -22,14 +22,14 @@ function submit(w,form) {
 }
 try {
   const world=await portal(t),admin=await agency(world),a=await owner(world,'Prueba integral',1);
-  const path='/solicitudes/nueva?area=SOCIAL',w=render((await a.client.get(path)).body,path),d=w.document;
+  const path='/requests/new?area=SOCIAL',w=render((await a.client.get(path)).body,path),d=w.document;
   const form=d.querySelector('.request-composer'),button=form.querySelector('button[type=submit]'),caption=button.textContent;
   const cancel=e=>e.preventDefault();form.addEventListener('submit',cancel);
   assert.equal(submit(w,form).defaultPrevented,true);assert.equal(button.disabled,false);assert.equal(form.dataset.busy,undefined);
   form.removeEventListener('submit',cancel);
   const title=form.elements.title;title.value='Una idea que todavía no envío';title.dispatchEvent(new w.Event('input',{bubbles:true}));
   let unload=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
-  const link=d.querySelector('a[href="/inicio"]'),leave=new w.MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(leave);assert.equal(leave.defaultPrevented,true);
+  const link=d.querySelector('a[href="/home"]'),leave=new w.MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(leave);assert.equal(leave.defaultPrevented,true);
   assert.equal(w.localStorage.length,0);assert.equal(w.sessionStorage.length,0);
   assert.equal(submit(w,form).defaultPrevented,false);assert.equal(button.disabled,true);assert.equal(form.getAttribute('aria-busy'),'true');
   assert.equal(submit(w,form).defaultPrevented,true);
@@ -38,8 +38,8 @@ try {
   assert.equal(title.value,'Una idea que todavía no envío');
   checks.push('Invalid submission stays editable, drafts warn, duplicate submit blocked, return restores actions without losing data');
 
-  await admin.post('/planes',{name:'Video puntual',term:'ONE_OFF',price:'35.25',VIDEO:'1',wallet:'NONE'});
-  const c=render((await a.client.get('/planes')).body,'/planes'),catalog=c.document.querySelector('.package-selection');
+  await admin.post('/plans',{name:'Video puntual',term:'ONE_OFF',price:'35.25',VIDEO:'1',wallet:'NONE'});
+  const c=render((await a.client.get('/plans')).body,'/plans'),catalog=c.document.querySelector('.package-selection');
   catalog.querySelector('[data-quantity-change="1"]').click();
   unload=new c.Event('beforeunload',{cancelable:true});c.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
   catalog.querySelector('[name=catalog_term]').value='MONTHLY';catalog.querySelector('[name=catalog_term]').dispatchEvent(new c.Event('change',{bubbles:true}));
@@ -50,7 +50,7 @@ try {
   checks.push('Basket changes are protected across filters; removing all selections clears the draft');
 
   const member=await colleague(world,a.client,{name:'Equipo de pruebas',document:documentFor('equipo-pruebas@example.test'),'WEB.VIEW':'yes'});
-  const team=render((await a.client.get('/equipo/'+member.id)).body,'/equipo/'+member.id,['lumina.js','team.js']);
+  const team=render((await a.client.get('/team/'+member.id)).body,'/team/'+member.id,['lumina.js','team.js']);
   const teamForm=team.document.querySelector('[data-team-form]'),save=teamForm.querySelector('button[type=submit]'),original=save.textContent;
   submit(team,teamForm);assert.equal(save.disabled,true);team.dispatchEvent(new team.Event('pageshow'));assert.equal(save.disabled,false);assert.equal(save.textContent,original);
   checks.push('Unified team editor restores its save button after returning from submission');

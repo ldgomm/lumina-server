@@ -48,7 +48,7 @@ const movements=[{id:'p1',kind:'PURCHASE',at:'2026-11-10T15:30:00Z',actorId:'cas
   const shot=async(name)=>{if(evidence){fs.mkdirSync(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,name+'.png'),fullPage:true});}};
   for(const width of [1440,1024,390,320]){
     await page.setViewportSize({width,height:1080});await page.goto('https://loyalty.test/');await show('operations');await page.locator('#opsPeople').waitFor();await fit();
-    assert.equal(await page.locator('.ops-kpi').count(),4);assert.equal(await page.locator('.ops-cell').count(),168);assert.match(await page.locator('.ops-person').last().textContent(),/acceso retirado/);
+    assert.equal(await page.locator('.ops-kpi').count(),4);assert.equal(await page.locator('.ops-cell').count(),168);assert.match(await page.locator('.ops-person').last().textContent(),/access retirado/);
     if(width===1440||width===390)await shot('operations-'+width);
     await page.locator('#opsSearch').fill('perez');assert.equal(await page.locator('.ops-person').count(),1);await page.locator('#opsSearch').fill('');await page.locator('[data-group=branches]').click();assert.match(await page.locator('#opsPeople').textContent(),/Centro/);await page.locator('[data-hour="1-9"]').click();assert.match(await page.locator('#opsHourText').textContent(),/Lunes, 09:00/);
     await page.locator('[name=opsMetric]').selectOption('paidMinor');await page.locator('#opsDay').fill('0');await page.locator('#opsDay').dispatchEvent('input');assert.match(await page.locator('#opsDayText').textContent(),/12 oct/);

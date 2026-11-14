@@ -42,32 +42,32 @@ export const table = (headers,rows,empty='Todavía no hay registros.') => rows.l
 export function pathFor(actor,company) {
   return (path, query = {}) => {
     const params = new URLSearchParams(query);
-    if (actor?.kind === 'AGENCY' && company) params.set('empresa',company.id);
-    const provider=actor?.kind==='AGENCY'&&actor.agencyWork&&/^\/(inicio|contenido|solicitudes|agenda|planes|mapas|clientes\/verificar)(\/|$)/.test(path);
-    return (provider?'/agencia':'') + path + (params.size ? '?' + params : '');
+    if (actor?.kind === 'AGENCY' && company) params.set('company',company.id);
+    const provider=actor?.kind==='AGENCY'&&actor.agencyWork&&/^\/(home|content|requests|calendar|plans|maps|businesses\/verify)(\/|$)/.test(path);
+    return (provider?'/agency':'') + path + (params.size ? '?' + params : '');
   };
 }
 function navLinks(actor,company,url,cash) {
   const items=[];
-  if(actor.kind==='AGENCY')items.push(['/resumen','Vista general','home','Agencia'],['/clientes','Clientes','clients'],[url('/equipos'),'Equipos y roles','clients'],['/produccion','Producción','content'],['/agenda-general','Agenda','calendar']);
+  if(actor.kind==='AGENCY')items.push(['/dashboard','Vista general','home','Agencia'],['/businesses','Clientes','clients'],[url('/teams'),'Equipos y roles','clients'],['/production','Producción','content'],['/agency-calendar','Agenda','calendar']);
   if(actor.kind!=='AGENCY'||company){
-    items.push([url('/inicio'),company&&actor.kind==='AGENCY'?'Resumen del negocio':'Mi negocio','home',company&&actor.kind==='AGENCY'?'Negocio seleccionado':'Mi espacio']);
-    if(actor.kind==='OWNER')items.push(['/equipo','Equipos y roles','clients']);
-    if(actor.kind==='AGENCY'&&company)items.push(['/administracion/negocios/'+company.id,'Estado y pagos','plans']);
-    if(Object.keys(channels).some(scope=>can(actor,scope)))items.push([url('/solicitudes'),'Solicitudes','content'],[url('/agenda'),'Grabaciones','calendar']);
-    if(actor.kind!=='AGENCY'&&(actor.kind==='OWNER'||Object.keys(areas).some(scope=>can(actor,scope,'APPROVE'))))items.push([url('/pendientes'),'Pendientes','check']);
+    items.push([url('/home'),company&&actor.kind==='AGENCY'?'Resumen del negocio':'Mi negocio','home',company&&actor.kind==='AGENCY'?'Negocio seleccionado':'Mi espacio']);
+    if(actor.kind==='OWNER')items.push(['/team','Equipos y roles','clients']);
+    if(actor.kind==='AGENCY'&&company)items.push(['/admin/businesses/'+company.id,'Estado y pagos','plans']);
+    if(Object.keys(channels).some(scope=>can(actor,scope)))items.push([url('/requests'),'Solicitudes','content'],[url('/calendar'),'Grabaciones','calendar']);
+    if(actor.kind!=='AGENCY'&&(actor.kind==='OWNER'||Object.keys(areas).some(scope=>can(actor,scope,'APPROVE'))))items.push([url('/attention'),'Pendientes','check']);
   }
-  if(actor.kind==='OWNER')items.push(['/servicios','Mis servicios','plans','Servicios']);
+  if(actor.kind==='OWNER')items.push(['/services','Mis servicios','plans','Servicios']);
   if(can(actor,'WALLET')||cash)items.push([url('/wallet'),'Fidelización digital · Wallet','wallet',actor.kind==='OWNER'?undefined:'Servicios']);
-  for(const [scope,route,mark] of [['SOCIAL','/contenido','social'],['MAPS','/servicios/maps','maps'],['WEB','/servicios/web','web'],['BRAND','/servicios/brand','content']])if(can(actor,scope))items.push([url(route),areas[scope],mark]);
-  if(actor.kind!=='COLLABORATOR')items.push([url('/proximamente'),'WhatsApp Business e IA · Próximamente','social']);
-  if(actor.kind!=='COLLABORATOR')items.push([url('/planes'),'Paquetes y servicios','plans','Gestión']);
-  if((actor.kind!=='AGENCY'||company)&&socialChannels.some(scope=>can(actor,scope)))items.push([url('/reportes'),'Estadísticas','metrics']);
-  if((actor.kind!=='AGENCY'||company)&&can(actor,'MAPS'))items.push([url('/mapas'),'Reseñas y ubicaciones','maps']);
-  if(actor.kind==='OWNER')items.push(['/gestion','Administración','settings']);
-  if(actor.kind==='OWNER'&&can(actor,'WALLET')||actor.kind==='COLLABORATOR'&&can(actor,'WALLET')&&can(actor,'WALLET_REPORTS'))items.push(['/gestion/informes','Informes de fidelización','metrics']);
-  if(actor.kind==='OWNER')items.push(['/mi-estado-cuenta','Mi cuenta y pagos','plans']);
-  items.push(['/ayuda','Ayuda','content'],['/cuenta','Mi cuenta','settings']);
+  for(const [scope,route,mark] of [['SOCIAL','/content','social'],['MAPS','/services/maps','maps'],['WEB','/services/web','web'],['BRAND','/services/brand','content']])if(can(actor,scope))items.push([url(route),areas[scope],mark]);
+  if(actor.kind!=='COLLABORATOR')items.push([url('/coming-soon'),'WhatsApp Business e IA · Próximamente','social']);
+  if(actor.kind!=='COLLABORATOR')items.push([url('/plans'),'Paquetes y servicios','plans','Gestión']);
+  if((actor.kind!=='AGENCY'||company)&&socialChannels.some(scope=>can(actor,scope)))items.push([url('/reports'),'Estadísticas','metrics']);
+  if((actor.kind!=='AGENCY'||company)&&can(actor,'MAPS'))items.push([url('/maps'),'Reseñas y ubicaciones','maps']);
+  if(actor.kind==='OWNER')items.push(['/management','Administración','settings']);
+  if(actor.kind==='OWNER'&&can(actor,'WALLET')||actor.kind==='COLLABORATOR'&&can(actor,'WALLET')&&can(actor,'WALLET_REPORTS'))items.push(['/management/reports','Informes de fidelización','metrics']);
+  if(actor.kind==='OWNER')items.push(['/billing','Mi cuenta y pagos','plans']);
+  items.push(['/help','Ayuda','content'],['/account','Mi cuenta','settings']);
   return items;
 }
 export function navigationSearch() {
@@ -77,7 +77,7 @@ const mark = `<img class="lumina-symbol" src="/assets/lumina-symbol.png" width="
 export function page({actor,company,path='/',title,description='',body,cash=false,notice=''}) {
   const url=pathFor(actor,company);
   const links=actor?navLinks(actor,company,url,cash):[];
-  const navBase=href=>href.split('?')[0].replace(/^\/agencia(?=\/)/,'');
+  const navBase=href=>href.split('?')[0].replace(/^\/agency(?=\/)/,'');
   const activeBase=links.map(([href])=>navBase(href)).filter(base=>path===base||path.startsWith(base+'/')).sort((a,b)=>b.length-a.length)[0];
   const menu=actor?links.map(([href,name,mark,group])=>{
     const base=navBase(href),active=base===activeBase;
@@ -85,12 +85,12 @@ export function page({actor,company,path='/',title,description='',body,cash=fals
   }).join(''):'';
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1f3a">${actor?`<meta name="lumina-csrf" content="${esc(actor.csrf)}">`:""}
     <title>${esc(title)} · Lúmina Digital</title><link rel="stylesheet" href="/assets/lumina.css"><link rel="stylesheet" href="/assets/workspace.css"><link rel="stylesheet" href="/assets/modules.css"><link rel="stylesheet" href="/assets/experience.css"><script defer src="/assets/lumina.js"></script><script defer src="/assets/requests.js"></script><script defer src="/assets/packages.js"></script><script defer src="/assets/offers.js"></script><script defer src="/assets/management-frame.js"></script><link rel="stylesheet" href="/assets/central.css"><link rel="stylesheet" href="/assets/practical.css"><link rel="stylesheet" href="/assets/deliveries.css"><script defer src="/assets/deliveries.js"></script><link rel="stylesheet" href="/assets/black-friday.css"><link rel="stylesheet" href="/assets/team.css"><link rel="stylesheet" href="/assets/account.css"><link rel="stylesheet" href="/assets/billing-workspace.css"><script defer src="/assets/billing-workspace.js"></script><script defer src="/assets/team.js"></script><script defer src="/assets/black-friday.js"></script><link rel="stylesheet" href="/assets/welcome.css"><script type="module" src="/assets/identity.js"></script><link rel="icon" href="/assets/lumina-symbol.png"></head>
-    <body class="${actor?'signed-in':'signed-out'}"><a class="skip" href="#contenido">Saltar al contenido</a>
-    <header class="site-header"><div class="top"><a class="brand" href="${actor?esc(actor.kind==='AGENCY'?'/resumen':'/inicio'):'/'}">${mark}</a>
-    ${actor?`<button class="menu-toggle quiet" type="button" aria-label="Abrir navegación" aria-controls="workspace-nav" aria-expanded="false">${icon('menu')}</button>`:`<div class="top-links">${localLink('/','Ingresar')}${localLink('/registro','Registrar negocio cliente')}</div>`}</div>
+    <body class="${actor?'signed-in':'signed-out'}"><a class="skip" href="#content">Saltar al contenido</a>
+    <header class="site-header"><div class="top"><a class="brand" href="${actor?esc(actor.kind==='AGENCY'?'/dashboard':'/home'):'/'}">${mark}</a>
+    ${actor?`<button class="menu-toggle quiet" type="button" aria-label="Abrir navegación" aria-controls="workspace-nav" aria-expanded="false">${icon('menu')}</button>`:`<div class="top-links">${localLink('/login','Ingresar')}${localLink('/register','Registrar negocio cliente')}</div>`}</div>
     ${actor?`<nav class="lumina-sidebar-nav" id="workspace-nav" aria-label="Área de trabajo"><button class="navigation-close" type="button" aria-label="Cerrar navegación">Cerrar menú ×</button><div class="workspace-context"><small>ESPACIO DE TRABAJO</small><strong>${esc(company?.name||actor.company_name||(actor.kind==='AGENCY'?'Lúmina Digital':'Mi negocio'))}</strong><span>${esc(label(actor.kind))}</span></div>${navigationSearch()}${menu}<div class="nav-foot"><img class="lumina-symbol" src="/assets/lumina-symbol.png" alt="" width="28" height="28"><p>Marketing con propósito.<small>Lúmina Digital</small></p></div></nav>`:''}</header>
-    ${actor?`<div class="workspace-topbar"><span>${esc(company?.name||actor.company_name||'Lúmina Digital')}<small>${actor.kind==='AGENCY'&&company?(path.startsWith('/administracion/negocios/')?'Administración del negocio':'Consulta de cliente'):'Tu centro de trabajo'}</small></span><div class="identity"><span class="avatar" aria-hidden="true">${esc(actor.name.trim().charAt(0).toUpperCase())}</span><span>${esc(actor.name)}<small>${esc(label(actor.kind))}</small></span>${localLink('/cuenta','Mi cuenta','account-link')}</div></div>`:''}
-    <button class="navigation-backdrop" type="button" aria-label="Cerrar navegación" hidden></button><main id="contenido"><header class="page-title"><p class="eyebrow">${esc(company?.name||actor?.company_name||(actor?'LÚMINA / ESPACIO PRIVADO':'LÚMINA DIGITAL'))}</p><h1>${esc(title)}</h1>${description?`<p>${esc(description)}</p>`:''}</header>
-    ${actor?.kind==='AGENCY'&&company&&!path.startsWith('/administracion/negocios/')?`<aside class="consultation-notice" role="note"><strong>${actor.agencyWork?'Trabajo de Lúmina':'Consulta del negocio · Solo lectura'}</strong><p>${actor.agencyWork?'Las acciones se registran a nombre de la agencia. Las solicitudes y aprobaciones corresponden al negocio.':'Estás consultando '+esc(company.name)+' como administrador de Lúmina. Conservas tu identidad de agencia.'}</p></aside>`:''}
+    ${actor?`<div class="workspace-topbar"><span>${esc(company?.name||actor.company_name||'Lúmina Digital')}<small>${actor.kind==='AGENCY'&&company?(path.startsWith('/admin/businesses/')?'Administración del negocio':'Consulta de cliente'):'Tu centro de trabajo'}</small></span><div class="identity"><span class="avatar" aria-hidden="true">${esc(actor.name.trim().charAt(0).toUpperCase())}</span><span>${esc(actor.name)}<small>${esc(label(actor.kind))}</small></span>${localLink('/account','Mi cuenta','account-link')}</div></div>`:''}
+    <button class="navigation-backdrop" type="button" aria-label="Cerrar navegación" hidden></button><main id="content"><header class="page-title"><p class="eyebrow">${esc(company?.name||actor?.company_name||(actor?'LÚMINA / ESPACIO PRIVADO':'LÚMINA DIGITAL'))}</p><h1>${esc(title)}</h1>${description?`<p>${esc(description)}</p>`:''}</header>
+    ${actor?.kind==='AGENCY'&&company&&!path.startsWith('/admin/businesses/')?`<aside class="consultation-notice" role="note"><strong>${actor.agencyWork?'Trabajo de Lúmina':'Consulta del negocio · Solo lectura'}</strong><p>${actor.agencyWork?'Las acciones se registran a nombre de la agencia. Las solicitudes y aprobaciones corresponden al negocio.':'Estás consultando '+esc(company.name)+' como administrador de Lúmina. Conservas tu identidad de agencia.'}</p></aside>`:''}
     ${notice?`<p class="notice" role="status">${esc(notice)}</p>`:''}${body}</main><footer><div><span>Lúmina Digital <span class="footer-dot">·</span> Marketing y fidelización</span>${brandSocial()}<span>Ecuador continental · UTC−5</span></div></footer></body></html>`;
 }

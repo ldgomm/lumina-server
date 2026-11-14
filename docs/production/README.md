@@ -63,7 +63,7 @@ Esperar que terminen las operaciones en vuelo antes de retirar manualmente la ve
 - En un iPhone y un Android reales: instalar una tarjeta, conservarla, registrar compra/canje, desplegar candidata y repetir sin reinstalar ni registrar al cliente nuevamente. Comprobar actualización push y descarga por el mismo serial/token/Google Object ID, antes y después del despliegue y de un retorno de versión.
 - Verificar HTTPS público y rutas permitidas/denegadas a través del proxy. Verificar arranque completo del servidor y conservación de datos tras reiniciar.
 - Comprobar respaldo externo y restauración en un entorno aislado. Definir responsables, frecuencia y objetivos de recuperación. Restaurar también claves originales.
-- Monitorizar disponibilidad pública, `/salud/listo`, `/health/ready`, PostgreSQL, espacio de disco, edad del último respaldo, cola de entrega/reintentos Wallet, certificados Apple/HTTPS y acceso de servicio Google. Alertar antes del vencimiento; no esperar a que deje de firmar. Los endpoints privados de salud no se publican como API administrativa.
+- Monitorizar disponibilidad pública, `/health/ready`, `/health/ready`, PostgreSQL, espacio de disco, edad del último respaldo, cola de entrega/reintentos Wallet, certificados Apple/HTTPS y acceso de servicio Google. Alertar antes del vencimiento; no esperar a que deje de firmar. Los endpoints privados de salud no se publican como API administrativa.
 
 Resultado correcto del kit: preparada para validar/desplegar. **No equivale a PRODUCCIÓN VALIDADA** hasta obtener estas evidencias con el servidor, dominios y dispositivos reales. Las comunicaciones con Apple/Google y la infraestructura pueden fallar; ningún parche puede garantizar disponibilidad absoluta.
 

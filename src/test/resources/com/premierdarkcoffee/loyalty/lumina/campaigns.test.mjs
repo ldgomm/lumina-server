@@ -9,16 +9,16 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {openDatabase} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/database.mjs';
 import {fakeLoyalty} from './loyalty-fixture.mjs';
-const path='/planes/viernes-negro',boundary=Date.parse('2026-12-01T05:00:00Z');
-const selected=(p,id)=>'/agencia'+p+'?empresa='+id;
+const path='/plans/black-friday',boundary=Date.parse('2026-12-01T05:00:00Z');
+const selected=(p,id)=>'/agency'+p+'?company='+id;
 async function setup(t){
  t.mock.timers.enable({apis:['Date'],now:boundary-2000});
  const w=await portal(t),admin=await agency(w),{client,id}=await owner(w,'Negocio noviembre','1');
- await admin.post(selected('/clientes/verificar',id));
+ await admin.post(selected('/businesses/verify',id));
  return {...w,admin,client,id};
 }
 async function base(w,extra={}){
- const name='Base '+uuid();const result=await w.admin.post('/planes',{name,term:'ONE_OFF',price:'99.95',VIDEO:'2',wallet:'NONE',...extra});assert.equal(result.status,303,result.body);
+ const name='Base '+uuid();const result=await w.admin.post('/plans',{name,term:'ONE_OFF',price:'99.95',VIDEO:'2',wallet:'NONE',...extra});assert.equal(result.status,303,result.body);
  return w.db.get('SELECT id FROM plans WHERE name=?',name).id;
 }
 function data(base,extra={}){return {key:uuid(),base,year:'2026',starts_on:'2026-11-01',discount_mode:'PERCENT',discount:'25',name:'Viernes Negro <prueba>',description:'Producción del negocio',conditions:'Una revisión incluida. Entrega según propuesta.',theme:'GOLD',confirm:'yes',...extra};}
@@ -26,8 +26,8 @@ async function campaign(w,extra={},baseExtra={}){
  const original=await base(w,baseExtra),body=data(original,extra),res=await w.admin.post(path,body);assert.equal(res.status,303,res.body);
  return {original,body,id:w.db.get('SELECT plan_id FROM seasonal_offers WHERE submission_key=?',body.key).plan_id};
 }
-async function order(w,id){const r=await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+id]:'2',phone:'0991234567'});assert.equal(r.status,303,r.body);return {path:r.location,id:r.location.split('/').at(-1)};}
-async function quote(w,o,extra={}){const line=w.db.get('SELECT * FROM package_order_lines WHERE order_id=?',o.id);return w.admin.post(selected(o.path+'/cotizar',w.id),{revision:'1',terms:'Alcance confirmado con una revisión', ['price_'+line.id]:(line.unit_minor/100).toFixed(2),['start_'+line.id]:'2026-12-03',['end_'+line.id]:'2026-12-30',...extra});}
+async function order(w,id){const r=await w.client.post('/plans/request',{key:uuid(),['qty_'+id]:'2',phone:'0991234567'});assert.equal(r.status,303,r.body);return {path:r.location,id:r.location.split('/').at(-1)};}
+async function quote(w,o,extra={}){const line=w.db.get('SELECT * FROM package_order_lines WHERE order_id=?',o.id);return w.admin.post(selected(o.path+'/quote',w.id),{revision:'1',terms:'Alcance confirmado con una revisión', ['price_'+line.id]:(line.unit_minor/100).toFixed(2),['start_'+line.id]:'2026-12-03',['end_'+line.id]:'2026-12-30',...extra});}
 
 test('fechas de noviembre usan Ecuador y no reactivan campañas de otro año',()=>{
  assert.equal(campaignDates(2026).friday,'2026-11-27');assert.equal(campaignDates(2027).friday,'2027-11-26');
@@ -37,7 +37,7 @@ test('fechas de noviembre usan Ecuador y no reactivan campañas de otro año',()
 test('ninguna promoción ni precio ficticio se publica al instalar',async t=>{
  const w=await setup(t);assert.equal(w.db.get('SELECT count(*) n FROM seasonal_offers').n,0);
  const view=await w.admin.get(path);assert.equal(view.status,200);assert.match(view.body,/Comienza por tu precio habitual/);assert.doesNotMatch(view.body,/data-bf-editor/);
- assert.doesNotMatch((await w.client.get('/inicio')).body,/Ver promociones →/);
+ assert.doesNotMatch((await w.client.get('/home')).body,/Ver promociones →/);
 });
 test('la agencia publica descuento exacto e idempotente sin modificar la oferta habitual',async t=>{
  const w=await setup(t),c=await campaign(w),promo=w.db.get('SELECT * FROM plans WHERE id=?',c.id);
@@ -50,11 +50,11 @@ test('paquetes combinados de contenido web y diseño también admiten precio esp
  const w=await setup(t),c=await campaign(w,{discount_mode:'PRICE',price:'70.10',theme:'VIOLET'},{VIDEO:'3',WEBSITE:'1',LOGO:'1'});
  assert.equal(w.db.get('SELECT price_minor FROM plans WHERE id=?',c.id).price_minor,7010);assert.equal(w.db.get('SELECT count(*) n FROM plan_items WHERE plan_id=?',c.id).n,3);
  const view=await w.client.get(path);assert.equal(view.status,200);assert.match(view.body,/bf-VIOLET/);assert.match(view.body,/30 de noviembre de 2026/);assert.match(view.body,/1 de diciembre a las 00:00/);assert.match(view.body,/&lt;prueba&gt;/);assert.doesNotMatch(view.body,/<prueba>/);
- assert.match((await w.client.get('/inicio')).body,/Ver promociones →/);
+ assert.match((await w.client.get('/home')).body,/Ver promociones →/);
 });
 test('solo agencia global publica; dueño colaborador y agencia en consulta no pueden hacerlo',async t=>{
  const w=await setup(t),id=await base(w),body=data(id),team=await colleague(w,w.client,{name:'Editor',document:'1743990283','SOCIAL.VIEW':'yes'});
- assert.equal((await w.client.post(path,body)).status,403);assert.equal((await team.session.post(path,body)).status,403);assert.equal((await w.admin.post(path+'?empresa='+w.id,body)).status,403);
+ assert.equal((await w.client.post(path,body)).status,403);assert.equal((await team.session.post(path,body)).status,403);assert.equal((await w.admin.post(path+'?company='+w.id,body)).status,403);
  assert.equal((await w.admin.post(path,{...body,_csrf:'incorrecto'})).status,403);assert.equal(w.db.get('SELECT count(*) n FROM seasonal_offers').n,0);
 });
 test('el catálogo estacional rechaza otros servicios precios desconocidos y promoción sobre promoción',async t=>{
@@ -70,44 +70,44 @@ test('validación mantiene el borrador sin publicar ni permitir fechas fuera de 
  assert.equal(w.db.get('SELECT count(*) n FROM seasonal_offers').n,0);
 });
 test('catálogo y POST cierran exactamente a medianoche de Ecuador sin reiniciar servidor',async t=>{
- const w=await setup(t),c=await campaign(w);assert.match((await w.client.get('/planes')).body,new RegExp(c.id));
- t.mock.timers.setTime(boundary);assert.doesNotMatch((await w.client.get('/planes')).body,new RegExp(c.id));assert.doesNotMatch((await w.client.get('/inicio')).body,/Ver promociones →/);
+ const w=await setup(t),c=await campaign(w);assert.match((await w.client.get('/plans')).body,new RegExp(c.id));
+ t.mock.timers.setTime(boundary);assert.doesNotMatch((await w.client.get('/plans')).body,new RegExp(c.id));assert.doesNotMatch((await w.client.get('/home')).body,/Ver promociones →/);
  assert.match((await w.client.get(path)).body,/Esta campaña no está disponible/);
- assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+c.id]:'1'})).status,409);
+ assert.equal((await w.client.post('/plans/request',{key:uuid(),['qty_'+c.id]:'1'})).status,409);
  assert.equal((await w.admin.post(path,data(c.original))).status,409);
  assert.match((await w.admin.get(path)).body,/Finalizada/);assert.equal(w.db.get('SELECT count(*) n FROM seasonal_offers').n,1);
 });
 test('enlaces antiguos de solicitudes no eluden la aceptación comercial de la campaña',async t=>{
  const w=await setup(t),c=await campaign(w);
- const r=await w.client.post('/solicitudes',{type:'PLAN',plan:c.id,channel:'SOCIAL',service:'VIDEO',title:'Promoción',brief:''});assert.equal(r.status,409);assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
+ const r=await w.client.post('/requests',{type:'PLAN',plan:c.id,channel:'SOCIAL',service:'VIDEO',title:'Promoción',brief:''});assert.equal(r.status,409);assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
 });
 test('propuesta sin aceptar caduca aunque se hubiese solicitado antes',async t=>{
  const w=await setup(t),c=await campaign(w),o=await order(w,c.id);assert.equal((await quote(w,o)).status,303);
- t.mock.timers.setTime(boundary);assert.equal((await w.client.post(o.path+'/aceptar',{revision:'2',confirm:'yes'})).status,409);
+ t.mock.timers.setTime(boundary);assert.equal((await w.client.post(o.path+'/accept',{revision:'2',confirm:'yes'})).status,409);
  assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
 });
 test('aceptación conserva el precio para completar el trabajo después de noviembre',async t=>{
  const w=await setup(t),c=await campaign(w),o=await order(w,c.id);assert.equal((await quote(w,o)).status,303);
- assert.equal((await w.client.post(o.path+'/aceptar',{revision:'2',confirm:'yes'})).status,303);
- t.mock.timers.setTime(boundary);assert.equal((await w.admin.post(selected(o.path+'/activar',w.id),{revision:'2'})).status,303);
+ assert.equal((await w.client.post(o.path+'/accept',{revision:'2',confirm:'yes'})).status,303);
+ t.mock.timers.setTime(boundary);assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision:'2'})).status,303);
  const contract=w.db.get('SELECT * FROM contracts');assert.equal(contract.agreed_minor,14992);assert.equal(contract.plan_id,c.id);assert.equal(contract.units,2);
 });
 test('la agencia no puede aumentar el precio promocional en la propuesta ni aceptar por el cliente',async t=>{
  const w=await setup(t),c=await campaign(w),o=await order(w,c.id),line=w.db.get('SELECT id FROM package_order_lines WHERE order_id=?',o.id);
  assert.equal((await quote(w,o,{['price_'+line.id]:'95'})).status,409);
- assert.equal((await w.admin.post(selected(o.path+'/aceptar',w.id),{revision:'1',confirm:'yes'})).status,403);
+ assert.equal((await w.admin.post(selected(o.path+'/accept',w.id),{revision:'1',confirm:'yes'})).status,403);
  assert.equal(w.db.get('SELECT status FROM package_orders').status,'REQUESTED');
 });
 test('renovación de oferta mensual usa la tarifa habitual y requiere una nueva aceptación',async t=>{
- const w=await setup(t),c=await campaign(w,{}, {term:'MONTHLY'}),o=await order(w,c.id);const prices=await w.client.get('/solicitudes/nueva?area=SOCIAL');assert.match(prices.body,/primer período mensual/);assert.match(prices.body,/Después se desactiva/);await quote(w,o);await w.client.post(o.path+'/aceptar',{revision:'2',confirm:'yes'});await w.admin.post(selected(o.path+'/activar',w.id),{revision:'2'});
+ const w=await setup(t),c=await campaign(w,{}, {term:'MONTHLY'}),o=await order(w,c.id);const prices=await w.client.get('/requests/new?area=SOCIAL');assert.match(prices.body,/primer período mensual/);assert.match(prices.body,/Después se desactiva/);await quote(w,o);await w.client.post(o.path+'/accept',{revision:'2',confirm:'yes'});await w.admin.post(selected(o.path+'/activate',w.id),{revision:'2'});
  const contract=w.db.get('SELECT * FROM contracts');t.mock.timers.setTime(boundary);
- const renew=await w.client.post('/planes/solicitar',{key:uuid(),renewal:contract.id});assert.equal(renew.status,303,renew.body);
+ const renew=await w.client.post('/plans/request',{key:uuid(),renewal:contract.id});assert.equal(renew.status,303,renew.body);
  const next=w.db.get('SELECT * FROM package_order_lines WHERE renewal_of=?',contract.id);assert.equal(next.plan_id,c.original);assert.equal(next.unit_minor,9995);assert.equal(next.units,2);
- assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,1);assert.match((await w.client.get('/planes?vista=acuerdos')).body,/tarifa habitual/);
+ assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,1);assert.match((await w.client.get('/plans?view=agreements')).body,/tarifa habitual/);
 });
 test('retirar una campaña corta nuevas contrataciones sin eliminar historial ni la tarifa base',async t=>{
- const w=await setup(t),c=await campaign(w);assert.equal((await w.admin.post('/planes/retirar',{plan:c.id})).status,303);
- assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+c.id]:'1'})).status,409);assert.equal(w.db.get('SELECT published FROM plans WHERE id=?',c.original).published,1);
+ const w=await setup(t),c=await campaign(w);assert.equal((await w.admin.post('/plans/withdraw',{plan:c.id})).status,303);
+ assert.equal((await w.client.post('/plans/request',{key:uuid(),['qty_'+c.id]:'1'})).status,409);assert.equal(w.db.get('SELECT published FROM plans WHERE id=?',c.original).published,1);
  assert.equal(w.db.get('SELECT count(*) n FROM seasonal_offers').n,1);
 });
 test('migración v5 conserva los vínculos Wallet, realiza respaldo privado y puede abrirse de nuevo',()=>{
@@ -128,6 +128,6 @@ test('Wallet permite publicar solamente al dueño y al editor autorizado, y revo
  const own=await business.client.post(endpoint,payload,opts),edited=await editor.session.post(endpoint,payload,opts);assert.equal(own.status,200);assert.equal(edited.status,200);assert.equal(JSON.parse(own.body).company,JSON.parse(edited.body).company);
  const before=l.calls.filter(c=>c.path==='/api/staff/promotion-setups').length;
  assert.equal((await reader.session.post(endpoint,payload,opts)).status,403);assert.equal((await admin.post(endpoint,payload,opts)).status,403);
- await business.client.post('/equipo/'+editor.id+'/permisos',{revision:teamRevision(w,editor.id),'WALLET.VIEW':'yes','WALLET_PROGRAMS.VIEW':'yes'});
+ await business.client.post('/team/'+editor.id+'/permissions',{revision:teamRevision(w,editor.id),'WALLET.VIEW':'yes','WALLET_PROGRAMS.VIEW':'yes'});
  assert.equal((await editor.session.post(endpoint,payload,opts)).status,403);assert.equal(l.calls.filter(c=>c.path==='/api/staff/promotion-setups').length,before);
 });

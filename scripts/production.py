@@ -216,7 +216,7 @@ def ready(c,slot,sha):
     native_port,portal_port=SLOTS[slot]
     n=http_json(native_port,'/health/ready')
     need(n.get('status')=='UP' and n.get('wallet')=={'apple':True,'google':True} and n.get('release')==sha,'WALLET_NOT_READY')
-    p=http_json(portal_port,'/salud/listo',urllib.parse.urlsplit(c['portal']['LUMINA_ORIGIN']).netloc)
+    p=http_json(portal_port,'/health/ready',urllib.parse.urlsplit(c['portal']['LUMINA_ORIGIN']).netloc)
     need(p.get('status')=='UP' and p.get('release')==sha,'PORTAL_NOT_READY')
 
 def backup(c):
@@ -318,7 +318,7 @@ def switch(c,release,slot,backup_folder):
                 try:
                     probe=http_json(8101,'/health/public')
                     need(probe.get('probe')==m['sha'][:32],'GATEWAY_NOT_SWITCHED')
-                    p=http_json(8100,'/salud/listo',urllib.parse.urlsplit(c['portal']['LUMINA_ORIGIN']).netloc)
+                    p=http_json(8100,'/health/ready',urllib.parse.urlsplit(c['portal']['LUMINA_ORIGIN']).netloc)
                     need(p.get('release')==m['sha'] and p.get('status')=='UP','PORTAL_NOT_SWITCHED');break
                 except Exception:
                     if time.monotonic()>=deadline:raise

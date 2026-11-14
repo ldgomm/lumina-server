@@ -19,7 +19,7 @@ function dom(html){
 try{
   const w=await portal(t),admin=await agency(w),business=await owner(w,'Negocio de prueba','1');
   const member=await colleague(w,business.client,{name:'Persona de prueba',document:documentFor('persona@example.test'),'SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
-  for(const [client,path,index] of [[business.client,'/inicio',1],[admin,'/resumen',2]]){
+  for(const [client,path,index] of [[business.client,'/home',1],[admin,'/dashboard',2]]){
     const view=dom((await client.get(path)).body),d=view.document,menu=d.querySelector('#workspace-nav');
     const links=[...menu.querySelectorAll(':scope > a')],team=links[index];
     assert.equal(team.textContent.trim(),'Equipos y roles');assert.equal(team.hidden,false);assert.equal(team.closest('details,[hidden]'),null);
@@ -28,12 +28,12 @@ try{
     team.focus();assert.equal(d.activeElement,team);d.dispatchEvent(new view.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
     assert.equal(trigger.getAttribute('aria-expanded'),'false');assert.equal(d.activeElement,trigger);
   }
-  const home=dom((await business.client.get('/inicio')).body);assert.equal(home.document.querySelector('.home-intro a[href="/equipo"]').textContent,'Equipos y roles');
-  const own=dom((await business.client.get('/equipo/'+member.id)).body);
-  assert.equal(own.document.querySelectorAll('[data-module="WALLET"]').length,1);assert.ok(own.document.querySelector('form[action$="/acceso"] button[type="submit"]'));
-  const directory=dom((await admin.get('/equipos')).body),link=directory.document.querySelector('.team-company-card');assert.ok(link);
+  const home=dom((await business.client.get('/home')).body);assert.equal(home.document.querySelector('.home-intro a[href="/team"]').textContent,'Equipos y roles');
+  const own=dom((await business.client.get('/team/'+member.id)).body);
+  assert.equal(own.document.querySelectorAll('[data-module="WALLET"]').length,1);assert.ok(own.document.querySelector('form[action$="/access"] button[type="submit"]'));
+  const directory=dom((await admin.get('/teams')).body),link=directory.document.querySelector('.team-company-card');assert.ok(link);
   const selected=dom((await admin.get(link.getAttribute('href'))).body),d=selected.document;
-  assert.equal(d.querySelector('main form').method,'get');assert.equal(d.querySelector('main [name="empresa"]').value,business.id);
+  assert.equal(d.querySelector('main form').method,'get');assert.equal(d.querySelector('main [name="company"]').value,business.id);
   assert.equal(d.querySelector('main form[method="post"]'),null);assert.equal(d.querySelector('main input[type="checkbox"]'),null);assert.equal(d.querySelector('main input[type="password"]'),null);
   const tasks=d.querySelector('main details');assert.equal(tasks.open,false);tasks.querySelector('summary').click();assert.equal(tasks.open,true);assert.match(tasks.textContent,/consultar, solicitar/);
   assert.equal(d.querySelector('#workspace-nav a[aria-current="page"]').textContent.trim(),'Equipos y roles');

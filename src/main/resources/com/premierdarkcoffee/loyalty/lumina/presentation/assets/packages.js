@@ -51,6 +51,6 @@ for(const catalog of document.querySelectorAll('.catalog-layout')) {
     if(submit&&!catalog.dataset.busy)submit.disabled=!selected;
   }
   for(const card of cards)for(const b of card.querySelectorAll('[data-quantity-change]'))b.addEventListener('click',()=>{const field=card.querySelector('[data-package-quantity]');field.value=String(Math.max(0,Math.min(10,Number(field.value||0)+Number(b.dataset.quantityChange))));field.dispatchEvent(new Event('input',{bubbles:true}));});
-  catalog.querySelector('[data-selection-jump]')?.addEventListener('click',()=>catalog.querySelector('#tu-seleccion').focus());
+  catalog.querySelector('[data-selection-jump]')?.addEventListener('click',()=>catalog.querySelector('#your-selection').focus());
   catalog.addEventListener('input',update);window.addEventListener('pageshow',update);update();
 }

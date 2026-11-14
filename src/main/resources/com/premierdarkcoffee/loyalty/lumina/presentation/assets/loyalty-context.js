@@ -2,7 +2,7 @@
 (() => {
   const original=window.fetch.bind(window);
   const csrf=document.querySelector('meta[name="lumina-csrf"]').content;
-  const prefix=document.querySelector('meta[name=lumina-management]')?'/gestion-api':'/wallet-api';
+  const prefix=document.querySelector('meta[name=lumina-management]')?'/management-api':'/wallet-api';
   const company=document.querySelector('meta[name="lumina-wallet-company"]')?.content;
   window.fetch=(input,options={})=>{
     const originalUrl=input instanceof Request?input.url:String(input);

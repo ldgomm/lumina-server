@@ -1,9 +1,9 @@
 'use strict';
 (async()=>{
  const section=document.querySelector('meta[name=lumina-wallet-section]').content;
- const destinations={administration:'/gestion',business:'/gestion/negocio',branches:'/gestion/sucursales',team:'/equipo',activity:'/gestion/actividad',operations:'/gestion/operacion',account:'/planes?vista=acuerdos',reports:'/gestion/informes'};
+ const destinations={administration:'/management',business:'/management/business',branches:'/management/branches',team:'/team',activity:'/management/activity',operations:'/management/operations',account:'/plans?view=agreements',reports:'/management/reports'};
  const filterKeys=['days','branchId','actorId','fromDate','throughDate','kind'];
- const go=(tab,filters={})=>{const target=new URL(destinations[tab]||'/wallet/gestion?seccion='+encodeURIComponent(tab),location.origin);for(const key of filterKeys)if(filters[key]!=null)target.searchParams.set(key,String(filters[key]));const path=target.pathname+target.search;window.loyaltyAdminLeave(()=>{if(parent!==window)parent.location.assign(path);else location.assign(path);});};
+ const go=(tab,filters={})=>{const target=new URL(destinations[tab]||'/wallet/management?section='+encodeURIComponent(tab),location.origin);for(const key of filterKeys)if(filters[key]!=null)target.searchParams.set(key,String(filters[key]));const path=target.pathname+target.search;window.loyaltyAdminLeave(()=>{if(parent!==window)parent.location.assign(path);else location.assign(path);});};
  try{
   state.token='lumina-delegated-wallet-session';state.data=await api('/api/staff/dashboard');state.member=null;state.tab=section;
   if(section==='account'&&window.LoyaltyAdministration){const account=window.LoyaltyAdministration.account;window.LoyaltyAdministration.account=(root,opt,data)=>{account(root,opt,data);const card=root.querySelector('.admin-account-card');card.querySelector('.eyebrow').textContent='HISTORIAL ANTERIOR DE WALLET';if(!data.membership?.plan){card.querySelector('h2').textContent='Sin acuerdos anteriores';card.querySelector('p').textContent='Consulta tus servicios actuales en Paquetes y servicios de Lúmina.';}};}

@@ -16,7 +16,11 @@ if(requestDetail){
   };
   const fromHash=()=>{
     let id;try{id=decodeURIComponent(location.hash.slice(1));}catch{return;}
+    const previous=id;
+    const aliases={'cotizacion':'quote','visitas':'visits','entregables':'deliverables','detalle':'details','historial':'history','enviar-cotizacion':'send-quote','programar-visita':'schedule-visit','crear-entregable':'create-deliverable','estado-solicitud':'request-state'};
+    id=Object.hasOwn(aliases,id)?aliases[id]:id.replace(/^(pieza|titulo|cerrar|medir|publicar|cambios|editar|adjuntar)-/,(_,key)=>({pieza:'piece',titulo:'title',cerrar:'close',medir:'measure',publicar:'publish',cambios:'changes',editar:'edit',adjuntar:'attach'}[key])+'-');
     const target=id&&document.getElementById(id);
+    if(target&&requestDetail.contains(target)&&previous!==id)history.replaceState(history.state,'',location.pathname+location.search+'#'+encodeURIComponent(id));
     if(target&&requestDetail.contains(target))reveal(target);
   };
   requestDetail.addEventListener('click',event=>{

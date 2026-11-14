@@ -39,6 +39,6 @@ server.listen(port,'127.0.0.1',()=>{
   const origin = publicOrigin || `http://127.0.0.1:${port}`;
   process.stdout.write(`Lúmina Digital disponible en ${origin}\n`);
   const code = setupCode(db);
-  if (code) process.stdout.write(`Configuración inicial: ${origin}/configurar\nCódigo de un solo uso: ${code}\n`);
+  if (code) process.stdout.write(`Configuración inicial: ${origin}/setup\nCódigo de un solo uso: ${code}\n`);
 });
 for (const signal of ['SIGINT','SIGTERM']) process.once(signal,()=>server.close(()=>db.close()));

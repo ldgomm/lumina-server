@@ -22,29 +22,29 @@ try{
  const native=await fakeLoyalty(t,null,fixture),world=await portal(t,native.origin,{platformToken:native.platformToken});await agency(world);
  const business=await owner(world,'Negocio ficticio','9'),person=await colleague(world,business.client,{name:'Caja de prueba',document:documentFor('caja-dom@example.test')});
  const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',business.id).loyalty_tenant,branch=native.branches.get(tenant)[0].id;
- const assign=async values=>{const r=await business.client.post('/equipo/'+person.id+'/caja/guardar',{revision:teamRevision(world,person.id),branch,...values});assert.equal(r.status,303,r.body);};
- const team=dom((await business.client.get('/equipo/'+person.id)).body,world.origin+'/equipo/'+person.id);load(team,'team.js');
- const cashForm=team.document.querySelector('form[action$="/acceso"]');assert.equal(cashForm.checkValidity(),true);
+ const assign=async values=>{const r=await business.client.post('/team/'+person.id+'/cashier/save',{revision:teamRevision(world,person.id),branch,...values});assert.equal(r.status,303,r.body);};
+ const team=dom((await business.client.get('/team/'+person.id)).body,world.origin+'/team/'+person.id);load(team,'team.js');
+ const cashForm=team.document.querySelector('form[action$="/access"]');assert.equal(cashForm.checkValidity(),true);
  const choose=mode=>{cashForm.elements.cash_mode.value=mode;cashForm.elements.cash_mode.dispatchEvent(new team.Event('change',{bubbles:true}));};
  choose('BOTH');assert.equal(cashForm.elements.cash_mode.value,'BOTH');assert.equal(cashForm.checkValidity(),true);
  let before=new team.Event('beforeunload',{cancelable:true});team.dispatchEvent(before);assert.equal(before.defaultPrevented,true);
  choose('REWARDS');assert.equal(cashForm.elements.cash_mode.value,'REWARDS');assert.equal(world.db.get('SELECT COUNT(*) n FROM cash_grants').n,0);
  checks.push('Owner operations use one selector and one Save; changing the draft never grants permissions');
  async function open(values){
-  await assign(values);assert.equal((await person.session.get('/wallet')).location,'/caja');
-  const w=dom((await person.session.get('/caja')).body,world.origin+'/caja');
+  await assign(values);assert.equal((await person.session.get('/wallet')).location,'/cashier');
+  const w=dom((await person.session.get('/cashier')).body,world.origin+'/cashier');
   w.fetch=async(resource,options={})=>{
    const url=new URL(String(resource),w.location.href);assert.equal(url.origin,world.origin);
    const h=new Headers(options.headers);assert.equal(h.has('Authorization'),false);assert.equal(h.get('X-Lumina-CSRF'),person.session.csrf);h.set('Cookie',person.session.cookie);h.set('Origin',world.origin);
    return fetch(url,{...options,headers:h});
   };
   for(const name of ['app.js','commercial.js','promotion-editor.js','jsqr.js','scanner.js','wallet-ui.js','engagement.js','experience.js'])load(w,name,true);
-  load(w,'wallet-campaigns.js');load(w,'caja.js');await settle(()=>w.document.querySelector('#lookup'));
+  load(w,'wallet-campaigns.js');load(w,'cashier.js');await settle(()=>w.document.querySelector('#lookup'));
   assert.equal(w.document.querySelector('[data-tab=qr]'),null);assert.equal(w.document.querySelector('[data-tab=design]'),null);assert.equal(w.document.querySelector('#staffLogin'),null);assert.equal(w.document.querySelector('#exit').textContent,'Volver a Lúmina');return w;
  }
  async function lookup(w){const f=w.document.querySelector('#lookup');f.elements.value.value='FICTIONAL-CARD';f.requestSubmit(f.querySelector('button'));await settle(()=>w.document.querySelector('#counterChoose')&&!f.hasAttribute('aria-busy'));}
  const w=await open({purchases:'yes',rewards:'yes'});await lookup(w);
- const account=w.document.querySelector('[data-lumina-account]');assert.equal(account.getAttribute('href'),'/cuenta');
+ const account=w.document.querySelector('[data-lumina-account]');assert.equal(account.getAttribute('href'),'/account');
  const pending=w.document.querySelector('#purchase');pending.setAttribute('aria-busy','true');account.click();assert.match(w.document.querySelector('#notice').textContent,/Espera a que termine/);pending.removeAttribute('aria-busy');
  const originalLeave=w.loyaltyOperationLeave;let protectedLeave=false;w.loyaltyOperationLeave=()=>{protectedLeave=true;};account.click();assert.equal(protectedLeave,true);w.loyaltyOperationLeave=originalLeave;
  checks.push('Mi cuenta keeps the pending-operation guard; no sign-out control appears inside Caja');
@@ -61,7 +61,7 @@ try{
  const purchases=await open({purchases:'yes'});await lookup(purchases);assert.equal(purchases.document.querySelector('[data-counter-mode=redemption]').hidden,true);assert.equal(purchases.document.querySelector('#counterPurchase').hidden,false);
  const rewards=await open({rewards:'yes'});await lookup(rewards);assert.equal(rewards.document.querySelector('[data-counter-mode=purchase]').hidden,true);assert.equal(rewards.document.querySelector('#counterRedemption').hidden,false);
  checks.push('Purchases-only and rewards-only roles retain useful operations without design, recovery or unauthorized controls');
- const seasonal=dom('<div></div>',world.origin+'/caja');load(seasonal,'wallet-campaigns.js');
+ const seasonal=dom('<div></div>',world.origin+'/cashier');load(seasonal,'wallet-campaigns.js');
  const program=(name,extra={})=>({config:{name,kind:'STAMPS',active:true,blackFridayYear:2026,blackFridayMessage:'Condiciones propias',branchIds:[],...extra}});
  const seasonalData={branchId:branch,programs:[program('Vigente'),program('Pausada',{active:false}),program('Otra sucursal',{branchIds:['foreign']}),program('Futura',{window:{startsAt:'2026-11-29T05:00:00Z'}}),program('<img src=x>',{blackFridayYear:2025})]};
  const at=Date.parse('2026-11-20T15:00:00Z'),summary=seasonal.luminaCampaignSummary(seasonalData,{cashier:true,at});assert.equal(summary.querySelectorAll('article').length,1);assert.match(summary.textContent,/Vigente/);assert.doesNotMatch(summary.textContent,/Pausada|Otra sucursal|Futura/);

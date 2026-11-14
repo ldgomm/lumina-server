@@ -3,9 +3,9 @@ import { metrics } from '../../analytics/reporting.mjs';
 import { badge, button, card, disclosure, displayAmount, esc, external, form, hidden, input, label, message,
   number, select, table, textarea, timestamp } from './components.mjs';
 
-export function metricsPage(actor,url,data,route='/reportes') {
-  const filters = `<form action="${esc(url(route).split('?')[0])}" class="filter">${actor.kind==='AGENCY' ? hidden('empresa',new URL(url('/reportes'),'http://localhost').searchParams.get('empresa')) : ''}
-    ${route==='/contenido'?hidden('vista','metricas'):''}${input('desde','Desde','date','required',data.from)}${input('hasta','Hasta','date','required',data.to)}
+export function metricsPage(actor,url,data,route='/reports') {
+  const filters = `<form action="${esc(url(route).split('?')[0])}" class="filter">${actor.kind==='AGENCY' ? hidden('company',new URL(url('/reports'),'http://localhost').searchParams.get('company')) : ''}
+    ${route==='/content'?hidden('view','metrics'):''}${input('from','Desde','date','required',data.from)}${input('to','Hasta','date','required',data.to)}
     ${button('Actualizar','secondary')}</form>`;
   const blocks = data.rows.map(row=>card(channels[row.channel],`
     <p><strong>${row.measured}</strong> de ${row.publications} publicaciones con un corte en el período</p>
@@ -34,18 +34,18 @@ export function mapsPage(actor,url,locations) {
     ]),'Sin reseñas registradas.');
     return card(loc.name,`<p>${external(loc.url,'Abrir ficha de Google Maps')}</p>${view}
       ${disclosure('Historial de mediciones',cuts)}${disclosure('Registro de reseñas',reviews)}
-      ${admin ? disclosure('Añadir medición',form(url('/mapas/medicion'),actor,`${hidden('location',loc.id)}
+      ${admin ? disclosure('Añadir medición',form(url('/maps/measurement'),actor,`${hidden('location',loc.id)}
         <div class="fields three">${input('observed','Fecha y hora','datetime-local','required')}
         ${input('count','Reseñas totales','number','required min="0"')}
         ${input('rating','Calificación de 1 a 5','text','inputmode="decimal"')}</div>
         ${textarea('notes','Observaciones','maxlength="1000"')}${button('Guardar medición')}`)) : ''}
-      ${admin ? disclosure('Registrar o actualizar reseña',form(url('/mapas/resena'),actor,`${hidden('location',loc.id)}
+      ${admin ? disclosure('Registrar o actualizar reseña',form(url('/maps/review'),actor,`${hidden('location',loc.id)}
         <div class="fields three">${input('reference','Referencia única','text','required maxlength="400"')}
         ${input('date','Fecha','date','required')}${input('stars','Estrellas','number','required min="1" max="5"')}</div>
         ${textarea('summary','Resumen','maxlength="1500"')}${textarea('response','Respuesta o borrador','maxlength="1500"')}
         ${select('status','Estado',['PENDING','DRAFT','ANSWERED'].map(value=>[value,label(value)]))}${button('Guardar reseña')}`)) : ''}`);
   }).join('');
-  return `${admin ? disclosure('Añadir ubicación',form(url('/mapas/ubicacion'),actor,`<div class="fields two">
+  return `${admin ? disclosure('Añadir ubicación',form(url('/maps/location'),actor,`<div class="fields two">
     ${input('name','Nombre de la ubicación','text','required maxlength="120"')}
     ${input('url','Enlace HTTPS de la ficha','url','required maxlength="1500"')}</div>${button('Registrar ubicación')}`)) : ''}
     ${cards || card('Ubicaciones',message('Las fichas de tus sucursales aparecerán aquí.'))}`;

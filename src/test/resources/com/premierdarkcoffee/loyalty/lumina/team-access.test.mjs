@@ -7,7 +7,7 @@ async function setup(t,permissions={}){
  const native=await fakeLoyalty(t),world=await portal(t,native.origin,{platformToken:native.platformToken}),admin=await agency(world),business=await owner(world,'Equipo unificado','7');
  const person=await colleague(world,business.client,{name:'Operadora',document:'1736469675',...permissions});
  const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',business.id).loyalty_tenant,branch=native.branches.get(tenant)[0].id;
- const save=(data={})=>business.client.post('/equipo/'+person.id+'/acceso',{revision:teamRevision(world,person.id),cash_mode:'OFF',branch,...data});
+ const save=(data={})=>business.client.post('/team/'+person.id+'/access',{revision:teamRevision(world,person.id),cash_mode:'OFF',branch,...data});
  const grants=()=>world.db.all('SELECT scope,action FROM grants WHERE account_id=? ORDER BY scope,action',person.id).map(g=>g.scope+'.'+g.action);
  const cash=()=>world.db.get('SELECT * FROM cash_grants WHERE account_id=?',person.id);
  return {...world,native,admin,business,person,tenant,branch,save,grants,cash};
@@ -16,9 +16,9 @@ test('una decisión concede Caja y Contenido con una revisión, sin privilegios 
  const w=await setup(t),revision=Number(teamRevision(w,w.person.id));
  const r=await w.save({cash_mode:'BOTH','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});assert.equal(r.status,303,r.body);
  assert.equal(Number(teamRevision(w,w.person.id)),revision+1);assert.equal(w.cash().status,'ACTIVE');assert.deepEqual(w.grants(),['SOCIAL.REQUEST','SOCIAL.VIEW']);
- assert.equal((await w.person.session.get('/wallet')).location,'/caja');assert.equal((await w.person.session.get('/contenido')).status,200);
+ assert.equal((await w.person.session.get('/wallet')).location,'/cashier');assert.equal((await w.person.session.get('/content')).status,200);
  const data={branchId:w.branch,memberId:uuid(),amountMinor:1000};for(const path of ['/api/staff/purchases','/api/staff/counter-redemptions'])assert.equal((await w.person.session.post(path,data,{json:true})).status,200);
- assert.equal((await w.person.session.get('/wallet-api/api/staff/wallet-design')).status,403);assert.equal((await w.person.session.post('/planes/solicitar',{key:uuid()})).status,403);
+ assert.equal((await w.person.session.get('/wallet-api/api/staff/wallet-design')).status,403);assert.equal((await w.person.session.post('/plans/request',{key:uuid()})).status,403);
 });
 test('guardar sin cambios conserva permisos especiales, versión y credencial de Caja',async t=>{
  const grants={'WALLET.VIEW':'yes','WALLET.APPROVE':'yes','WALLET_CUSTOMERS.VIEW':'yes','WALLET_CUSTOMERS.EDIT':'yes','INSTAGRAM.VIEW':'yes','INSTAGRAM.APPROVE':'yes'};
@@ -42,14 +42,14 @@ test('formularios vencidos no sobrescriben Caja ni servicios y mantienen revisi�
 test('se pueden modificar servicios durante una caída sin tocar la Caja guardada',async t=>{
  const w=await setup(t);await w.save({cash_mode:'BOTH'});const cash=w.cash();w.native.unavailable(true);
  assert.equal((await w.save({cash_mode:'BOTH','SOCIAL.VIEW':'yes'})).status,303);assert.deepEqual(w.cash(),cash);assert.deepEqual(w.grants(),['SOCIAL.VIEW']);
- const page=await w.business.client.get('/equipo/'+w.person.id);assert.equal(page.status,200);assert.match(page.body,/No se pudieron consultar las sucursales/);assert.match(page.body,new RegExp('value="'+w.branch+'" selected'));assert.match(page.body,/<option value="BOTH" selected>/);
+ const page=await w.business.client.get('/team/'+w.person.id);assert.equal(page.status,200);assert.match(page.body,/No se pudieron consultar las sucursales/);assert.match(page.body,new RegExp('value="'+w.branch+'" selected'));assert.match(page.body,/<option value="BOTH" selected>/);
 });
 test('una caída al asignar Caja no publica los nuevos permisos de servicios',async t=>{
  const w=await setup(t,{'WEB.VIEW':'yes'});w.native.unavailable(true);const r=await w.save({cash_mode:'BOTH','SOCIAL.VIEW':'yes'});assert.equal(r.status,503);assert.deepEqual(w.grants(),['WEB.VIEW']);assert.equal(w.cash(),undefined);assert.match(r.body,/name="SOCIAL.VIEW" value="yes" checked/);
 });
 test('retirar Caja bloquea de inmediato y guarda el resto del acceso aunque Wallet esté caído',async t=>{
  const w=await setup(t);await w.save({cash_mode:'BOTH','WEB.VIEW':'yes'});const staff=w.cash().staff_id;w.native.unavailable(true);
- const r=await w.save({'SOCIAL.VIEW':'yes'});assert.equal(r.status,503);assert.equal(w.cash().status,'REVOKING');assert.deepEqual(w.grants(),['SOCIAL.VIEW']);assert.match(r.body,/Caja ya está bloqueada/);assert.equal((await w.person.session.get('/caja')).status,403);assert.equal((await w.person.session.get('/contenido')).status,200);assert.equal((await w.person.session.get('/servicios/web')).status,403);
+ const r=await w.save({'SOCIAL.VIEW':'yes'});assert.equal(r.status,503);assert.equal(w.cash().status,'REVOKING');assert.deepEqual(w.grants(),['SOCIAL.VIEW']);assert.match(r.body,/Caja ya está bloqueada/);assert.equal((await w.person.session.get('/cashier')).status,403);assert.equal((await w.person.session.get('/content')).status,200);assert.equal((await w.person.session.get('/services/web')).status,403);
  w.native.unavailable(false);assert.equal((await w.save({'SOCIAL.VIEW':'yes'})).status,303);assert.equal(w.cash().status,'INACTIVE');assert.equal(w.cash().sealed_token,null);assert.equal(w.native.staff.get(staff).state,'INACTIVE');
 });
 test('operaciones y sucursal se aplican a la sesión abierta sin permitir la anterior',async t=>{
@@ -57,21 +57,21 @@ test('operaciones y sucursal se aplican a la sesión abierta sin permitir la ant
  const body={branchId:other.id,memberId:uuid(),amountMinor:1000};assert.equal((await w.person.session.post('/api/staff/purchases',body,{json:true})).status,403);assert.equal((await w.person.session.post('/api/staff/counter-redemptions',body,{json:true})).status,200);assert.equal((await w.person.session.post('/api/staff/counter-redemptions',{...body,branchId:w.branch},{json:true})).status,403);
 });
 test('agencia, colaborador y dueño ajeno no pueden guardar el formulario unificado',async t=>{
- const w=await setup(t),other=await owner(w,'Otro dueño','5');for(const actor of [w.admin,w.person.session,other.client])assert.equal((await actor.post('/equipo/'+w.person.id+'/acceso',{revision:teamRevision(w,w.person.id),cash_mode:'BOTH',branch:w.branch})).status,actor===other.client?404:403);assert.equal(w.cash(),undefined);assert.deepEqual(w.grants(),[]);
+ const w=await setup(t),other=await owner(w,'Otro dueño','5');for(const actor of [w.admin,w.person.session,other.client])assert.equal((await actor.post('/team/'+w.person.id+'/access',{revision:teamRevision(w,w.person.id),cash_mode:'BOTH',branch:w.branch})).status,actor===other.client?404:403);assert.equal(w.cash(),undefined);assert.deepEqual(w.grants(),[]);
 });
 test('el guardado requiere CSRF e ignora tokens o rol enviado por el navegador',async t=>{
- const w=await setup(t);assert.equal((await w.business.client.post('/equipo/'+w.person.id+'/acceso',{revision:teamRevision(w,w.person.id),cash_mode:'BOTH',branch:w.branch,_csrf:'incorrecto'})).status,403);
+ const w=await setup(t);assert.equal((await w.business.client.post('/team/'+w.person.id+'/access',{revision:teamRevision(w,w.person.id),cash_mode:'BOTH',branch:w.branch,_csrf:'incorrecto'})).status,403);
  assert.equal((await w.save({cash_mode:'BOTH',role:'OWNER',credential:'inventada'})).status,303);assert.equal(w.native.staff.get(w.cash().staff_id).role,'CASHIER');assert.equal(w.db.get('SELECT kind FROM accounts WHERE id=?',w.person.id).kind,'COLLABORATOR');
 });
 test('guardar los permisos de una cuenta desactivada no la reactiva',async t=>{
- const w=await setup(t);await w.business.client.post('/equipo/'+w.person.id+'/desactivar',{revision:teamRevision(w,w.person.id),confirm:'yes'});assert.equal((await w.save({'WEB.VIEW':'yes'})).status,303);assert.equal(w.db.get('SELECT active FROM accounts WHERE id=?',w.person.id).active,0);const denied=await w.person.session.get('/servicios/web');assert.equal(denied.status,303);assert.equal(denied.location,'/');assert.equal((await w.save({cash_mode:'BOTH'})).status,409);assert.deepEqual(w.grants(),['WEB.VIEW']);
+ const w=await setup(t);await w.business.client.post('/team/'+w.person.id+'/disable',{revision:teamRevision(w,w.person.id),confirm:'yes'});assert.equal((await w.save({'WEB.VIEW':'yes'})).status,303);assert.equal(w.db.get('SELECT active FROM accounts WHERE id=?',w.person.id).active,0);const denied=await w.person.session.get('/services/web');assert.equal(denied.status,303);assert.equal(denied.location,'/');assert.equal((await w.save({cash_mode:'BOTH'})).status,409);assert.deepEqual(w.grants(),['WEB.VIEW']);
 });
 async function interrupted(w){
  let enter,release;const reached=new Promise(r=>enter=r),held=new Promise(r=>release=r);w.native.beforeRequest(async call=>{if(call.path==='/api/staff/credentials'){enter();await held;}});
- const pending=w.save({cash_mode:'BOTH','SOCIAL.VIEW':'yes'});await reached;assert.equal((await w.business.client.post('/equipo/'+w.person.id+'/permisos',{revision:teamRevision(w,w.person.id),'WEB.VIEW':'yes'})).status,303);release();assert.equal((await pending).status,409);w.native.beforeRequest(null);
+ const pending=w.save({cash_mode:'BOTH','SOCIAL.VIEW':'yes'});await reached;assert.equal((await w.business.client.post('/team/'+w.person.id+'/permissions',{revision:teamRevision(w,w.person.id),'WEB.VIEW':'yes'})).status,303);release();assert.equal((await pending).status,409);w.native.beforeRequest(null);
 }
 test('un cambio concurrente cancela el borrador; el alta pendiente se puede retirar sin activarla',async t=>{
- const w=await setup(t);await interrupted(w);assert.deepEqual(w.grants(),['WEB.VIEW']);assert.equal(w.cash().status,'PENDING');assert.equal((await w.person.session.get('/caja')).status,403);
+ const w=await setup(t);await interrupted(w);assert.deepEqual(w.grants(),['WEB.VIEW']);assert.equal(w.cash().status,'PENDING');assert.equal((await w.person.session.get('/cashier')).status,403);
  assert.equal((await w.save({'WEB.VIEW':'yes'})).status,303);assert.equal(w.cash().status,'INACTIVE');assert.equal([...w.native.staff.values()].filter(p=>p.role==='CASHIER').length,1);assert.equal(w.native.staff.get(w.cash().staff_id).state,'INACTIVE');
 });
 test('un alta pendiente se reintenta sin duplicar Caja ni auditorías de permisos',async t=>{
@@ -85,7 +85,7 @@ test('un fallo de retiro conserva su revisión propia y no autoriza sobrescribir
  const w=await setup(t);await w.save({cash_mode:'BOTH'});let enter,release;const reached=new Promise(r=>enter=r),held=new Promise(r=>release=r);
  w.native.beforeRequest(async call=>{if(call.path==='/api/staff/team'){enter();await held;w.native.unavailable(true);}});
  const pending=w.save({'SOCIAL.VIEW':'yes'});await reached;const committed=teamRevision(w,w.person.id);
- assert.equal((await w.business.client.post('/equipo/'+w.person.id+'/permisos',{revision:committed,'WEB.VIEW':'yes'})).status,303);
+ assert.equal((await w.business.client.post('/team/'+w.person.id+'/permissions',{revision:committed,'WEB.VIEW':'yes'})).status,303);
  release();const failed=await pending;assert.equal(failed.status,503);assert.match(failed.body,new RegExp('name="revision" value="'+committed+'"'));assert.notEqual(committed,teamRevision(w,w.person.id));
  w.native.beforeRequest(null);w.native.unavailable(false);assert.equal((await w.save({revision:committed,'SOCIAL.VIEW':'yes'})).status,409);assert.deepEqual(w.grants(),['WEB.VIEW']);assert.equal(w.cash().status,'REVOKING');
 });

@@ -2,11 +2,11 @@ import { event, now, requireThat } from '../shared/domain.mjs';
 import { requireOperating } from './control.mjs';
 
 export const serviceCatalog = Object.freeze({
-  SOCIAL: {name:'Contenido', description:'Videos, fotografías y diseños para tus redes.', icon:'social', path:'/contenido'},
+  SOCIAL: {name:'Contenido', description:'Videos, fotografías y diseños para tus redes.', icon:'social', path:'/content'},
   WALLET: {name:'Wallet', description:'Tarjetas, puntos y premios para tus clientes.', icon:'wallet', path:'/wallet'},
-  MAPS: {name:'Google Maps', description:'Tu negocio, sus reseñas y resultados.', icon:'maps', path:'/servicios/maps'},
-  WEB: {name:'Web', description:'Tu página, tienda o menú digital.', icon:'web', path:'/servicios/web'},
-  BRAND: {name:'Diseño de marca', description:'Tu logo e identidad visual.', icon:'content', path:'/servicios/brand'},
+  MAPS: {name:'Google Maps', description:'Tu negocio, sus reseñas y resultados.', icon:'maps', path:'/services/maps'},
+  WEB: {name:'Web', description:'Tu página, tienda o menú digital.', icon:'web', path:'/services/web'},
+  BRAND: {name:'Diseño de marca', description:'Tu logo e identidad visual.', icon:'content', path:'/services/brand'},
 });
 export function serviceState(db,companyId,service) {
   return db.get('SELECT status FROM company_services WHERE company_id=? AND service=?',companyId,service)?.status || 'INACTIVE';
@@ -41,8 +41,8 @@ export function finishWelcome(db,actor) {
   requireThat(db.run('UPDATE accounts SET welcome_done=1 WHERE id=? AND active=1 AND revision=?',actor.id,actor.revision).changes===1,'Tu cuenta cambió. Inicia sesión nuevamente.',409);
 }
 export function routeService(path) {
-  if(/^\/(wallet(?:-api)?|caja(?:-assets)?|loyalty-assets|join)(?:\/|$)/.test(path)||path.startsWith('/api/'))return 'WALLET';
-  if(/^\/(contenido|agenda|reportes)(?:\/|$)/.test(path))return 'SOCIAL';
-  if(path==='/mapas'||path.startsWith('/mapas/'))return 'MAPS';
-  return /^\/servicios\/(social|maps|web|brand)$/.exec(path)?.[1].toUpperCase()||null;
+  if(/^\/(wallet(?:-api)?|cashier(?:-assets)?|loyalty-assets|join)(?:\/|$)/.test(path)||path.startsWith('/api/'))return 'WALLET';
+  if(/^\/(content|calendar|reports)(?:\/|$)/.test(path))return 'SOCIAL';
+  if(path==='/maps'||path.startsWith('/maps/'))return 'MAPS';
+  return /^\/services\/(social|maps|web|brand)$/.exec(path)?.[1].toUpperCase()||null;
 }

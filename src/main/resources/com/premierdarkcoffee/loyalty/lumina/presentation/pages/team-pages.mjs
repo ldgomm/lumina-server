@@ -26,26 +26,26 @@ function editor(member, branches, values = null, branchError = '') {
   return `<div data-team-editor data-definitions="${esc(JSON.stringify({rules:permissionRules,titles:permissionTitles}))}"><div class="team-access-list">${wallet}${others}</div><details class="team-access-summary"><summary>Ver resumen del acceso</summary><ul data-access-preview>${describeGrants(Object.entries(selected).filter(([key,value])=>value==='yes'&&key.includes('.')&&permissionRules[key.split('.')[0]]).map(([key])=>{const [scope,action]=key.split('.');return {scope,action};})).map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details></div>`;
 }
 export function newMemberPage(actor, values = {}, error = '') {
-  return `<div class="team-heading">${localLink('/equipo','← Volver al equipo')}</div>${alert(error)}${card('Añadir persona',teamForm('/equipo',actor,
+  return `<div class="team-heading">${localLink('/team','← Volver al equipo')}</div>${alert(error)}${card('Añadir persona',teamForm('/team',actor,
     `<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100" autocomplete="name"',values.name)}${input('document','Cédula','text','required inputmode="numeric" maxlength="10" data-identity="document"',values.document)}${input('phone','Teléfono (si lo conoces)','tel','maxlength="30" autocomplete="tel" data-identity="contact" placeholder="099 123 4567"',values.phone)}</div>
     <p class="team-help">La persona confirmará su teléfono al activar el acceso. Después elige sus tareas.</p><div class="team-save">${button('Continuar')}</div>`))}`;
 }
 export function teamPage(actor, company, directory) {
   const {rows,counts,q,state,area,page,more,total} = directory;
-  const link = page => '/equipo?'+new URLSearchParams({q,estado:state,area,pagina:String(page)});
+  const link = page => '/team?'+new URLSearchParams({q,state:state,area,page:String(page)});
   const list = table(['Persona','Puede acceder a','Estado',''],rows.map(member=>{
     const scopes=Object.entries(areas).filter(([scope])=>member.grants.some(g=>g.action==='VIEW'&&(g.scope===scope||scope==='SOCIAL'&&socialChannels.includes(g.scope)))).map(([,title])=>title);
     if(member.cash_status==='ACTIVE'){const wallet=scopes.indexOf(areas.WALLET);if(wallet>=0)scopes.splice(wallet,1);scopes.unshift('Wallet · Caja · '+member.branch_name);}
-    return [`<strong>${localLink('/equipo/'+member.id,member.name)}</strong><span class="team-email">${esc(identityLabel(member))}</span>${member.contact_phone?`<a class="team-phone" href="tel:${esc(member.contact_phone)}">${esc(member.contact_phone)}</a>`:'<span class="team-email">Teléfono pendiente</span>'}`,
+    return [`<strong>${localLink('/team/'+member.id,member.name)}</strong><span class="team-email">${esc(identityLabel(member))}</span>${member.contact_phone?`<a class="team-phone" href="tel:${esc(member.contact_phone)}">${esc(member.contact_phone)}</a>`:'<span class="team-email">Teléfono pendiente</span>'}`,
       scopes.length?scopes.map(s=>`<span class="team-area-tag">${esc(s)}</span>`).join(''):'Sin áreas asignadas',
       `<span class="team-state ${memberState(member).toLowerCase()}">${states[memberState(member)]}</span>${member.cash_status==='REVOKING'?'<span class="team-email">Caja bloqueada · retiro pendiente</span>':''}`,
-      localLink('/equipo/'+member.id,'Gestionar →','team-manage')];
+      localLink('/team/'+member.id,'Gestionar →','team-manage')];
   }),q||state||area?'No hay personas con estos filtros.':'Añade a la primera persona de tu equipo.');
-  return `<div class="team-heading"><p>Cada persona, su cuenta y sus tareas.</p>${localLink('/equipo/nuevo','Añadir persona','btn')}</div>
+  return `<div class="team-heading"><p>Cada persona, su cuenta y sus tareas.</p>${localLink('/team/new','Añadir persona','btn')}</div>
     <div class="team-stats">${[[counts.total,'Personas'],[counts.active,'Accesos activos'],[counts.pending,'Por activar'],[counts.inactive,'Desactivados']].map(([value,title])=>`<div><strong>${value}</strong><span>${title}</span></div>`).join('')}</div>
-    <form method="get" action="/equipo" class="team-filters">${input('q','Buscar persona','search','maxlength="100"',q)}${select('estado','Estado',[['','Todos'],...Object.entries(states)],state)}${select('area','Área',[['','Todas'],['CASH','Caja'],...Object.entries(areas)],area)}${button('Buscar','secondary')}${q||state||area?localLink('/equipo','Quitar filtros'):''}</form>
+    <form method="get" action="/team" class="team-filters">${input('q','Buscar persona','search','maxlength="100"',q)}${select('state','Estado',[['','Todos'],...Object.entries(states)],state)}${select('area','Área',[['','Todas'],['CASH','Caja'],...Object.entries(areas)],area)}${button('Buscar','secondary')}${q||state||area?localLink('/team','Quitar filtros'):''}</form>
     ${card('Tu equipo',`<p class="team-help">${total} ${total===1?'persona':'personas'}${total?' · Página '+(page+1):''}</p>${list}<div class="team-pagination">${page?localLink(link(page-1),'← Anterior','btn secondary'):''}${more?localLink(link(page+1),'Siguiente →','btn secondary'):''}</div>`)}
-    ${disclosure('Ayuda de acceso',localLink('/wallet/accesos','Revisar conexión con Wallet','team-support'))}`;
+    ${disclosure('Ayuda de acceso',localLink('/wallet/access','Revisar conexión con Wallet','team-support'))}`;
 }
 function auditDetails(details) {
   let parsed;try{parsed=JSON.parse(details);}catch{return `<p>${esc(details)}</p>`;}
@@ -71,28 +71,28 @@ function auditDetails(details) {
 const auditLabels={ACCESO_CREADO:'Acceso creado',PERMISOS_ACTUALIZADOS:'Permisos actualizados',PERSONA_ACTUALIZADA:'Datos actualizados',ACCESO_DESACTIVADO:'Acceso desactivado',ACTIVACIÓN_EMITIDA:'Código renovado',CAJA_AUTORIZADA:'Caja asignada',CAJA_BLOQUEADA:'Caja bloqueada',CAJA_REVOCADA:'Caja retirada',ACCESO_WALLET_PREPARADO:'Wallet preparada',ACCESO_WALLET_REPARADO:'Wallet reparada',CONTRASEÑA_ACTUALIZADA:'Contraseña actualizada',CONTACTO_ACTUALIZADO:'Teléfono actualizado'};
 export function memberPage(actor, company, member, branches = null, options = {}) {
   const {values={},error='',section='',history=[],notice='',branchError=''}=options;
-  const base='/equipo/'+member.id;
+  const base='/team/'+member.id;
   const revision = type => hidden('revision',section===type&&values.revision!==undefined?values.revision:member.revision);
   const status=memberState(member);
   const fold=(kind,title,body)=>disclosure(title,body).replace('<details ',error&&section===kind?'<details open ':'<details ');
   let draft=null;
-  if(section==='acceso')draft=values;
-  if(section==='permisos')draft={...values,cash_mode:cashMode(member),branch:member.branch_id};
-  if(section==='caja')draft={...grantValues(member),...values,cash_mode:values.purchases==='yes'?(values.rewards==='yes'?'BOTH':'PURCHASES'):'REWARDS'};
-  if(section==='revocar')draft={...grantValues(member),...values,cash_mode:'OFF',branch:member.branch_id};
-  const accessRevision=['acceso','permisos','caja','revocar'].includes(section)&&values.revision!==undefined?values.revision:member.revision;
+  if(section==='access')draft=values;
+  if(section==='permissions')draft={...values,cash_mode:cashMode(member),branch:member.branch_id};
+  if(section==='cashier')draft={...grantValues(member),...values,cash_mode:values.purchases==='yes'?(values.rewards==='yes'?'BOTH':'PURCHASES'):'REWARDS'};
+  if(section==='revoke')draft={...grantValues(member),...values,cash_mode:'OFF',branch:member.branch_id};
+  const accessRevision=['access','permissions','cashier','revoke'].includes(section)&&values.revision!==undefined?values.revision:member.revision;
   const invitationCopy=member.activated?'Cierra sus sesiones y reemplaza su contraseña por una nueva activación.':!member.active?'Reactiva su cuenta con los permisos que ves arriba.':'El código anterior dejará de funcionar.';
   const activity=history.length?`<ol class="team-history">${history.map(row=>`<li><div><strong>${esc(auditLabels[row.action]||row.action)}</strong><time>${timestamp(row.happened_at)}</time></div><span class="team-help">${esc(row.actor_name)}</span>${auditDetails(row.details)}</li>`).join('')}</ol>`:'<p class="team-help">Todavía no hay cambios registrados.</p>';
-  return `<div class="team-heading">${localLink('/equipo','← Volver al equipo')}<span class="team-state ${status.toLowerCase()}">${states[status]}</span></div>
+  return `<div class="team-heading">${localLink('/team','← Volver al equipo')}<span class="team-state ${status.toLowerCase()}">${states[status]}</span></div>
     <p class="team-contact">${esc(identityLabel(member))}${member.contact_phone?` · <a href="tel:${esc(member.contact_phone)}">${esc(member.contact_phone)}</a>`:' · Teléfono pendiente'}</p>${notice?`<p class="team-success" role="status">${esc(notice)}</p>`:''}${alert(error)}${error?localLink(base,'Descartar el borrador y cargar el acceso actual','team-support'):''}
     ${!member.active?'<p class="team-alert">Acceso desactivado. Guardar permisos no reactiva la cuenta.</p>':''}
-    <section id="permisos" class="card team-access-card"><h2>Qué puede hacer</h2><p class="team-help">Elige sus tareas y guarda una sola vez.</p>${teamForm(base+'/acceso',actor,`${hidden('revision',accessRevision)}${editor(member,branches,draft,branchError)}<div class="team-save team-save-sticky"><span data-save-status role="status">Los cambios se aplican al guardar.</span>${button(member.cash_status==='REVOKING'?'Guardar y completar retiro':'Guardar acceso')}</div>`)}</section>
-    <details id="datos" class="card team-secondary"${['datos','invitar','desactivar'].includes(section)?' open':''}><summary>Datos y acceso</summary>${fold('datos','Datos de la persona',teamForm(base+'/datos',actor,`${revision('datos')}<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100"',section==='datos'?values.name:member.name)}${input('document','Cédula','text','required inputmode="numeric" maxlength="10" data-identity="document"',section==='datos'?values.document:member.document)}${input('phone','Teléfono','tel','required maxlength="30" autocomplete="tel" data-identity="contact" placeholder="099 123 4567"',section==='datos'?values.phone:member.contact_phone)}</div><p class="team-help">Cambiar la cédula cierra sus sesiones y anula los códigos anteriores.</p>${button('Guardar datos','secondary')}`))}
+    <section id="permissions" class="card team-access-card"><h2>Qué puede hacer</h2><p class="team-help">Elige sus tareas y guarda una sola vez.</p>${teamForm(base+'/access',actor,`${hidden('revision',accessRevision)}${editor(member,branches,draft,branchError)}<div class="team-save team-save-sticky"><span data-save-status role="status">Los cambios se aplican al guardar.</span>${button(member.cash_status==='REVOKING'?'Guardar y completar retiro':'Guardar acceso')}</div>`)}</section>
+    <details id="details" class="card team-secondary"${['details','invite','disable'].includes(section)?' open':''}><summary>Datos y acceso</summary>${fold('details','Datos de la persona',teamForm(base+'/details',actor,`${revision('details')}<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100"',section==='details'?values.name:member.name)}${input('document','Cédula','text','required inputmode="numeric" maxlength="10" data-identity="document"',section==='details'?values.document:member.document)}${input('phone','Teléfono','tel','required maxlength="30" autocomplete="tel" data-identity="contact" placeholder="099 123 4567"',section==='details'?values.phone:member.contact_phone)}</div><p class="team-help">Cambiar la cédula cierra sus sesiones y anula los códigos anteriores.</p>${button('Guardar datos','secondary')}`))}
       ${member.activation_expires&&status==='PENDING'?`<p class="team-help">Código válido hasta ${timestamp(member.activation_expires)}.</p>`:''}
-      ${fold('invitar',!member.active?'Reactivar persona':member.activated?'Restablecer acceso':'Renovar código',form(base+'/invitar',actor,`${revision('invitar')}<p>${invitationCopy}</p>${check('confirm','Confirmo que la persona deberá activar su acceso de nuevo.',false,true)}${button(!member.active?'Reactivar y generar código':'Generar nuevo código','secondary')}`))}
-      ${member.active?fold('desactivar','Desactivar persona',form(base+'/desactivar',actor,`${revision('desactivar')}<p>Se cerrarán sus sesiones y se bloqueará todo su acceso, incluida Caja. El historial se conserva.</p>${check('confirm','Confirmo la baja del acceso completo.',false,true)}${button('Desactivar persona','danger')}`)):''}
-    </details><details id="historial" class="card team-secondary"><summary>Historial de acceso</summary><p class="team-help">Últimos 30 cambios.</p>${activity}</details>`;
+      ${fold('invite',!member.active?'Reactivar persona':member.activated?'Restablecer acceso':'Renovar código',form(base+'/invite',actor,`${revision('invite')}<p>${invitationCopy}</p>${check('confirm','Confirmo que la persona deberá activar su acceso de nuevo.',false,true)}${button(!member.active?'Reactivar y generar código':'Generar nuevo código','secondary')}`))}
+      ${member.active?fold('disable','Desactivar persona',form(base+'/disable',actor,`${revision('disable')}<p>Se cerrarán sus sesiones y se bloqueará todo su acceso, incluida Caja. El historial se conserva.</p>${check('confirm','Confirmo la baja del acceso completo.',false,true)}${button('Desactivar persona','danger')}`)):''}
+    </details><details id="history" class="card team-secondary"><summary>Historial de acceso</summary><p class="team-help">Últimos 30 cambios.</p>${activity}</details>`;
 }
 export function invitePage(member, code) {
-  return card('Acceso listo para activar',`<p>Entrega este código a <strong>${esc(member.name)}</strong> (${esc(identityLabel(member))}). Debe abrir <strong>Activar un acceso</strong> y elegir su contraseña.</p><div class="team-code"><code class="secret">${esc(code)}</code><button type="button" class="secondary" data-copy-activation>Copiar código</button></div><p class="team-help" role="status" data-copy-status>Un solo uso · Válido por 48 horas.</p><div class="actions">${localLink('/equipo/'+member.id+'#permisos','Elegir tareas y permisos','btn')}${localLink('/equipo','Volver al equipo','btn secondary')}</div>`);
+  return card('Acceso listo para activar',`<p>Entrega este código a <strong>${esc(member.name)}</strong> (${esc(identityLabel(member))}). Debe abrir <strong>Activar un acceso</strong> y elegir su contraseña.</p><div class="team-code"><code class="secret">${esc(code)}</code><button type="button" class="secondary" data-copy-activation>Copiar código</button></div><p class="team-help" role="status" data-copy-status>Un solo uso · Válido por 48 horas.</p><div class="actions">${localLink('/team/'+member.id+'#permissions','Elegir tareas y permisos','btn')}${localLink('/team','Volver al equipo','btn secondary')}</div>`);
 }

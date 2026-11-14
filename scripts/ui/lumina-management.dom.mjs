@@ -23,7 +23,7 @@ function load(w,name,native=false){const script=w.document.createElement('script
 const settle=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}throw Error('UI not ready: '+predicate+'; '+errors.join('; '));};
 try{
  const l=await fakeLoyalty(t),world=await portal(t,l.origin,{platformToken:l.platformToken}),admin=await agency(world);await owner(world,'Prueba aislada','1');
- const w=dom((await admin.get('/planes/nueva')).body),q=s=>w.document.querySelector(s),form=q('.offer-publish-form'),field=n=>form.elements[n];
+ const w=dom((await admin.get('/plans/new')).body),q=s=>w.document.querySelector(s),form=q('.offer-publish-form'),field=n=>form.elements[n];
  for(const name of ['lumina.js','requests.js','packages.js','offers.js'])load(w,name);
  const edit=(name,value)=>{field(name).value=value;field(name).dispatchEvent(new w.Event('input',{bubbles:true}));};
  const click=s=>q(s).click(),submit=()=>form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
@@ -39,16 +39,16 @@ try{
  click('[data-offer-prev]');click('[data-offer-prev]');click('[data-offer-tab=BRAND]');edit('IDENTITY','1');assert.equal(field('term').value,'ONE_OFF');assert.equal(q('[name=term][value=MONTHLY]').disabled,true);edit('IDENTITY','0');assert.equal(q('[name=term][value=MONTHLY]').disabled,false);
  field('price_type').value='QUOTE';field('price_type')[1].dispatchEvent(new w.Event('change',{bubbles:true}));assert.ok(field('price').disabled);assert.equal(new w.FormData(form).has('price'),false);
  checks.push('Offer wizard: selection across areas, Enter, live review, exact price, brand one-off, quote, confirmation, duplicate submit and back navigation');
- const noJS=dom((await admin.get('/planes/nueva')).body);assert.equal(noJS.document.querySelectorAll('[data-offer-step][hidden]').length,0);assert.equal(noJS.document.querySelectorAll('[data-offer-area][hidden]').length,0);checks.push('No-JavaScript form retains all fields and server confirmation');
+ const noJS=dom((await admin.get('/plans/new')).body);assert.equal(noJS.document.querySelectorAll('[data-offer-step][hidden]').length,0);assert.equal(noJS.document.querySelectorAll('[data-offer-area][hidden]').length,0);checks.push('No-JavaScript form retains all fields and server confirmation');
  // Reuse the native administration suite’s fictional fixtures with no network.
  const source=readFileSync(new URL('./administration.spec.cjs',import.meta.url),'utf8');
  const f=runInNewContext(source.slice(source.indexOf('const business='),source.indexOf('(async()=>{'))+';({business,baseBranches,baseProfile,account,users,daily})');
  const actor={kind:'OWNER',company_id:'fictional',csrf:'fictional-csrf'},company={id:'fictional',name:f.business.name},calls=[];
  async function native(section,central=false){
-  const win=dom(central?managementDocument(actor,company,section):loyaltyWorkspaceHtml(actor,section,walletSections(actor),company),central?'/gestion/vista?seccion='+section+'&branchId=norte&days=7':'/wallet');
+  const win=dom(central?managementDocument(actor,company,section):loyaltyWorkspaceHtml(actor,section,walletSections(actor),company),central?'/management/view?section='+section+'&branchId=norte&days=7':'/wallet');
   win.fetch=async(url,opt={})=>{
    const u=new URL(String(url),win.location.href),headers=new Headers(opt.headers);calls.push({section,path:u.pathname,query:u.search,headers});assert.equal(headers.has('Authorization'),false);assert.equal(headers.get('X-Lumina-CSRF'),'fictional-csrf');assert.equal(headers.get('X-Lumina-Company'),'fictional');
-   assert.ok(u.pathname.startsWith(central?'/gestion-api/':'/wallet-api/'));const path=u.pathname.replace(/^\/(gestion|wallet)-api/,'');let data;
+   assert.ok(u.pathname.startsWith(central?'/management-api/':'/wallet-api/'));const path=u.pathname.replace(/^\/(management|wallet)-api/,'');let data;
    if(path.endsWith('/dashboard'))data={role:'OWNER',business:f.business,branches:f.baseBranches,programs:[],rewards:[]};
    else if(path.endsWith('/access'))data={canOperate:true};
    else if(path.endsWith('/branch-directory'))data={business:f.business,items:f.baseBranches,total:2,offset:0,hasMore:false};

@@ -1,3 +1,7 @@
+# Lúmina v025 / Loyalty v064
+
+English routes and simplified access. [Installation and validation](docs/lumina-navigation-v064.md).
+
 # loyalty
 
 Lúmina Digital integra la agencia y los módulos de contenido y fidelización. La cuenta, permisos y contratación se administran desde Lúmina.

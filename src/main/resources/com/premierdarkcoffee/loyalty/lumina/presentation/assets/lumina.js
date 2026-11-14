@@ -80,7 +80,7 @@ document.addEventListener('submit', event => {
   const button = event.submitter || form.querySelector('button[type="submit"],button:not([type])');
   if (button) {
     pendingButtons.set(form, {button,caption:button.textContent,disabled:button.disabled});
-    button.textContent = 'Guardando…';
+    button.textContent = button.dataset.pendingLabel || 'Guardando…';
     // Keep named submitters in the submitted payload.
     if (!button.name) button.disabled = true;
   }
@@ -150,6 +150,26 @@ for(const box of document.querySelectorAll('.navigation-find')) {
   };
   box.hidden=false;input.addEventListener('input',filter);
   clear.addEventListener('click',()=>{input.value='';filter();input.focus();});
-  input.addEventListener('keydown',event=>{if(event.key==='Escape'&&input.value){event.preventDefault();event.stopPropagation();input.value='';filter();}});
+  input.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&input.value){event.preventDefault();event.stopPropagation();input.value='';filter();}
+    else if(event.key==='ArrowDown'){event.preventDefault();links.find(link=>!link.hidden)?.focus();}
+    else if(event.key==='Enter'&&input.value.trim()){event.preventDefault();links.find(link=>!link.hidden)?.click();}
+  });
   window.addEventListener('pageshow',filter);
+}
+
+// Password visibility is temporary and never written to browser storage.
+for(const toggle of document.querySelectorAll('[data-password-toggle]')) {
+  const field=document.getElementById(toggle.getAttribute('aria-controls'));
+  if(!field||field.type!=='password')continue;
+  const caption=toggle.getAttribute('aria-label').replace(/^Mostrar /,'');
+  const setVisible=visible=>{
+    field.type=visible?'text':'password';toggle.textContent=visible?'Ocultar':'Mostrar';
+    toggle.setAttribute('aria-pressed',String(visible));toggle.setAttribute('aria-label',(visible?'Ocultar ':'Mostrar ')+caption);
+  };
+  toggle.hidden=false;
+  toggle.addEventListener('click',()=>setVisible(field.type==='password'));
+  field.form?.addEventListener('submit',()=>setVisible(false));
+  window.addEventListener('pageshow',()=>setVisible(false));
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)setVisible(false);});
 }
