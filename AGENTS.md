@@ -1,5 +1,16 @@
 # Loyalty
 
+## Lúmina v022 / Loyalty v061 — contacto y registro claros
+
+- Esta sección prevalece sobre números de versión y gates históricos. Baseline: resultado v021 validado, commit ae2c75bd459d21eccf88d26ab293791f6293a29f.
+- Teléfono obligatorio al activar colaborador y al crear cliente Wallet. Invitación del dueño admite teléfono opcional. Cuentas y clientes anteriores sin contacto siguen operando; nunca copiar el teléfono del negocio ni fabricar datos. E.164 normalizado, formato local Ecuador y extranjeros con +. Teléfono no es identidad, recuperación ni consentimiento publicitario.
+- Mi cuenta modifica únicamente el contacto de la sesión. Equipo y permisos exige dueño y revisión. Ficha de cliente exige permiso WALLET_CUSTOMERS.EDIT, confirmación y contact_version; VIEW no edita. No poner contactos en auditoría, Wallet, QR, métricas o exportaciones. Mismo teléfono puede pertenecer a varias personas.
+- SQLite010 y PostgreSQLV017 son aditivas; conservar todos los SQL anteriores. Guardar contacto no llama changed(), no reemite pases ni cambia saldos, claves, seriales, objetos Google, dispositivos, dominios o contratos. Mantener representación Wallet34.
+- Alta pública: teléfono, cumpleaños opcional con selectores, consentimiento de novedades sin marcar. Si join ya confirmó, un fallo al leer tarjeta solo reintenta lectura. Caja desde la ficha usa memberId interno con alcance de dueño y tenant; colaborador conserva Caja mediante su ruta y permisos actuales.
+- Gates: 26 suites / 283 pruebas portal, 170 Python, 312 unidades/HTTP y 347 PostgreSQL (659), Docker y gateway antes del commit; no push. 20 suites DOM, revisión visual y recepción física separadas. Terminal solo RESULTADO y URL tras salud confirmada.
+- Producción exige SQLite10/V017 y sello compatible; sin migración/reseñado automático. Ver docs/production/transicion-v061.md. Entrega: docs/lumina-contacto-simple-v061.md.
+
+
 ## Lúmina v021 / Loyalty v060 — identificación e inicio simple
 
 - La identidad de agencia/dueño/colaborador usa cédula y contraseña; empresas usan RUC y WhatsApp. Validar en servidor y navegador, preservar ceros iniciales y rechazar duplicados dentro de la transacción. RUC estructural no equivale a certificación SRI; no imponer módulo 11 a sociedades. Cédula consistente no prueba titularidad.

@@ -45,7 +45,7 @@ class BlackFridayPostgresTest {
     private data class F(val owner:Staff,val member:Member,val branch:String,val program:String,val reward:String)
     private fun fixture(config:Program=campaign()):F {
         val s=service();val slug="bf-"+id().take(12);val tenant=s.createTenant(NewTenant("Negocio noviembre",slug));val owner=s.staff(tenant.str("ownerToken"));val branch=s.newBranch(owner,NewBranch("Centro","C")).str("id")
-        val member=s.member(s.enrollWithoutPassword(slug,WalletEnrollment("Cliente","DEMO10001",true)).str("token"));val setup=s.createSimplePromotion(owner,SimplePromotionSetup(config,"Premio noviembre",1),id())
+        val member=s.member(s.enrollWithoutPassword(slug,WalletEnrollment("Cliente","DEMO10001",true, phone = "0991234567")).str("token"));val setup=s.createSimplePromotion(owner,SimplePromotionSetup(config,"Premio noviembre",1),id())
         return F(owner,member,branch,setup.str("programId"),setup.str("rewardId"))
     }
     private fun count(f:F,table:String)=db.tx{c->c.one("SELECT count(*) FROM $table WHERE tenant_id=?",f.owner.tenant){it.getLong(1)}!!}

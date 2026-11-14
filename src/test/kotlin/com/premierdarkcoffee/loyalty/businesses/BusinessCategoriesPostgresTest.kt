@@ -54,7 +54,7 @@ class BusinessCategoriesPostgresTest {
     private fun suggestions(b:JsonObject)=service.dashboard(staff(b)).getValue("promotionSuggestions").jsonObject
     private fun category(b:JsonObject)=suggestions(b).getValue("category").jsonObject.str("id")
     private fun count(b:JsonObject,table:String)=db.tx{c->c.one("SELECT count(*) FROM $table WHERE tenant_id=?",b.str("tenantId")){it.getLong(1)}!!}
-    private fun member(b:JsonObject)=service.member(service.enrollWithoutPassword(b.str("enrollmentPath").substringAfterLast('/'),WalletEnrollment("Cliente","DEMO10001",true)).str("token"))
+    private fun member(b:JsonObject)=service.member(service.enrollWithoutPassword(b.str("enrollmentPath").substringAfterLast('/'),WalletEnrollment("Cliente","DEMO10001",true, phone = "0991234567")).str("token"))
     private fun wallet()=WalletService(service,"https://example.test",WalletCipher(Base64.getEncoder().encodeToString(ByteArray(32){8})))
     @BeforeAll fun setup() {
         DriverManager.getConnection(url,user,password).use{it.createStatement().use{s->s.execute("CREATE SCHEMA $schema")}}

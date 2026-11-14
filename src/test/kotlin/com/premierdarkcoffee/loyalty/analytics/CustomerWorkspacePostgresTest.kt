@@ -15,6 +15,7 @@ import com.premierdarkcoffee.loyalty.marketing.PromotionTemplate
 import com.premierdarkcoffee.loyalty.marketing.PurchaseItem
 import com.premierdarkcoffee.loyalty.marketing.createPromotion
 import com.premierdarkcoffee.loyalty.shared.Enrollment
+import com.premierdarkcoffee.loyalty.shared.Lookup
 import com.premierdarkcoffee.loyalty.shared.Kind
 import com.premierdarkcoffee.loyalty.shared.NewBranch
 import com.premierdarkcoffee.loyalty.shared.NewStaff
@@ -35,6 +36,7 @@ import com.premierdarkcoffee.loyalty.wallet.summary
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.client.request.*
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.*
@@ -78,11 +80,11 @@ class CustomerWorkspacePostgresTest {
         val slug="activity-"+id().take(12)
         val t=service.createTenant(NewTenant("Negocio",slug));val token=t.str("ownerToken");val s=service.staff(token)
         val a=service.newBranch(s,NewBranch("Centro","A")).str("id");val b=service.newBranch(s,NewBranch("Norte","B")).str("id")
-        val m=service.member(service.enrollWithoutPassword(slug,WalletEnrollment(name,"DEMO10001",true)).str("token"))
+        val m=service.member(service.enrollWithoutPassword(slug,WalletEnrollment(name,"DEMO10001",true, phone = "0991234567")).str("token"))
         val p=service.createPromotion(s,PromotionTemplate("Sexta pizza","pizza",6,rewardName="Pizza gratis"),id())
         return F(s,token,slug,m,a,b,p.str("programId"),p.str("rewardId"))
     }
-    private fun member(f:F,name:String,doc:String)=service.member(service.enrollWithoutPassword(f.slug,WalletEnrollment(name,doc,true)).str("token"))
+    private fun member(f:F,name:String,doc:String)=service.member(service.enrollWithoutPassword(f.slug,WalletEnrollment(name,doc,true, phone = "0991234567")).str("token"))
     private fun buy(f:F,qty:Int=1,time:Instant=at,m:Member=f.member,branch:String=f.a):JsonObject {
         return atTime(time).purchase(f.owner,Purchase(m.id,branch,id(),qty*100L,"USD",listOf(PurchaseItem("Pizza","pizza",qty,100))),id())
     }
@@ -189,5 +191,55 @@ class CustomerWorkspacePostgresTest {
         for(q in listOf("offset=bad","offset=-1","offset=2147483648","kind=UNKNOWN","branchId=bad")) assertEquals(HttpStatusCode.BadRequest,client.get("$path?$q"){bearerAuth(f.token)}.status,q)
         assertEquals(HttpStatusCode.BadRequest,client.get("/api/staff/customer-activity?sort=bad"){bearerAuth(f.token)}.status)
         assertEquals(HttpStatusCode.OK,client.get(path){bearerAuth(f.token)}.status)
+    }
+
+    @Test fun `registration requires contact without creating partial member and allows shared family number`() {
+        val f=fixture()
+        for(phone in listOf(null,"","bad"))assertFailsWith<Problem>{service.enrollWithoutPassword(f.slug,WalletEnrollment("Nuevo","DEMO20001",true,phone=phone))}
+        val joined=service.enrollWithoutPassword(f.slug,WalletEnrollment("Nuevo","DEMO20001",true,phone="0991234567"));val m=service.member(joined.str("token"))
+        assertEquals("+593991234567",service.customerWorkspace(f.owner,m.id).getValue("member").jsonObject.str("contactPhone"))
+        assertNotEquals(m.id,f.member.id)
+        assertFailsWith<Problem>{service.enroll(f.slug,Enrollment("Otro","DEMO20002","test-password-123",true))}
+    }
+    @Test fun `contact change preserves installed card identity balances and public response`() {
+        val f=fixture();buy(f,5);val before=service.card(f.member);val summary=workspace(f).summary()
+        val updated=service.updateCustomerContact(f.owner,f.member.id,CustomerContactChange("0981234567",0,true))
+        assertEquals("+593981234567",updated.str("phone"));assertEquals(1,updated.num("version"))
+        assertEquals(before,service.card(f.member));assertEquals(summary,workspace(f).summary())
+        assertFalse(service.card(f.member).toString().contains("981234567"));assertFalse(service.customerSuggestions(f.owner,"Ana").toString().contains("981234567"))
+    }
+    @Test fun `contact needs explicit confirmation and safe version and supports lost response retry`() {
+        val f=fixture();assertFailsWith<Problem>{service.updateCustomerContact(f.owner,f.member.id,CustomerContactChange("0981234567",0))}
+        val input=CustomerContactChange("0981234567",0,true);val saved=service.updateCustomerContact(f.owner,f.member.id,input)
+        assertEquals(saved,service.updateCustomerContact(f.owner,f.member.id,input))
+        assertEquals(409,assertFailsWith<Problem>{service.updateCustomerContact(f.owner,f.member.id,CustomerContactChange("0971234567",0,true))}.status)
+        assertEquals("+593981234567",workspace(f).getValue("member").jsonObject.str("contactPhone"))
+    }
+    @Test fun `contact is business scoped and cashier cannot edit or use owner member lookup`() {
+        val f=fixture();val other=fixture();val cashier=service.staff(service.newStaff(f.owner,NewStaff("CASHIER",f.a)).str("token"))
+        assertEquals(404,assertFailsWith<Problem>{service.updateCustomerContact(other.owner,f.member.id,CustomerContactChange("0981234567",0,true))}.status)
+        assertEquals(403,assertFailsWith<Problem>{service.updateCustomerContact(cashier,f.member.id,CustomerContactChange("0981234567",0,true))}.status)
+        assertEquals(403,assertFailsWith<Problem>{service.lookup(cashier,Lookup(memberId=f.member.id))}.status)
+        assertEquals(404,assertFailsWith<Problem>{service.lookup(other.owner,Lookup(memberId=f.member.id))}.status)
+        assertEquals(f.member.id,service.lookup(f.owner,Lookup(memberId=f.member.id)).getValue("member").jsonObject.str("id"))
+    }
+    @Test fun `existing member without phone keeps card and migrations never backfill another phone`() {
+        val f=fixture();val before=service.card(f.member)
+        db.tx{it.exec("UPDATE members SET contact_phone=NULL WHERE tenant_id=? AND id=?",f.owner.tenant,f.member.id)};db.migrate();db.migrate()
+        assertEquals(before,service.card(f.member));assertEquals(JsonNull,workspace(f).getValue("member").jsonObject["contactPhone"])
+        service.updateCustomerContact(f.owner,f.member.id,CustomerContactChange("0991234567",0,true));assertEquals(before,service.card(f.member))
+    }
+    @Test fun `http contact update is authenticated and returns no identity material`()=testApplication {
+        environment{config=MapApplicationConfig()};application{loyaltyRoutes(service,"p".repeat(40),"http://localhost")};val f=fixture();val path="/api/staff/customer-workspace/${f.member.id}/contact"
+        assertEquals(HttpStatusCode.Unauthorized,client.put(path){contentType(ContentType.Application.Json);setBody("{}")}.status)
+        val result=client.put(path){bearerAuth(f.token);contentType(ContentType.Application.Json);setBody("""{"phone":"0981234567","expectedVersion":0,"customerConfirmed":true}""")}
+        assertEquals(HttpStatusCode.OK,result.status)
+        assertEquals(setOf("phone","version"),json.parseToJsonElement(result.bodyAsText()).jsonObject.keys)
+        val payload="""{"phone":"0971234567","expectedVersion":1,"customerConfirmed":true}"""
+        val cashier=service.newStaff(f.owner,NewStaff("CASHIER",f.a)).str("token")
+        assertEquals(HttpStatusCode.Forbidden,client.put(path){bearerAuth(cashier);contentType(ContentType.Application.Json);setBody(payload)}.status)
+        assertEquals(HttpStatusCode.NotFound,client.put(path){bearerAuth(fixture().token);contentType(ContentType.Application.Json);setBody(payload)}.status)
+        assertEquals(HttpStatusCode.NotFound,client.put("/api/platform/tenants/${f.owner.tenant}/customer-workspace/${f.member.id}/contact"){bearerAuth("p".repeat(40));contentType(ContentType.Application.Json);setBody(payload)}.status)
+        assertEquals("+593981234567",workspace(f).getValue("member").jsonObject.str("contactPhone"))
     }
 }

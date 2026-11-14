@@ -67,7 +67,7 @@ class ManagementPostgresTest {
     private fun fixture(currency:String="USD"):F {
         val slug="management-"+id().take(10);val t=service.createTenant(NewTenant("Negocio de prueba",slug,currency=currency))
         val token=t.str("ownerToken");val owner=service.staff(token);val branch=service.newBranch(owner,NewBranch("Centro","C")).str("id");val other=service.newBranch(owner,NewBranch("Norte","N")).str("id")
-        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente de prueba","DEMO12345",true)).str("token"))
+        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente de prueba","DEMO12345",true, phone = "0991234567")).str("token"))
         val program=service.newProgram(owner,Program("Puntos por compra",Kind.POINTS)).str("id");val reward=service.saveReward(owner,Reward(program,"Café de cortesía",5)).str("id")
         return F(owner,token,member,branch,other,program,reward)
     }
@@ -172,7 +172,7 @@ class ManagementPostgresTest {
     }
     @Test fun `migration rerun keeps old credentials and snapshots immutable`() {
         val f=fixture();val a=hire(f);purchase(f,service.staff(a.str("token")));db.migrate();assertEquals(f.owner.id,service.staff(f.token).id)
-        assertEquals(16,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        assertEquals(17,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
         assertFailsWith<java.sql.SQLException>{db.tx{it.exec("UPDATE audit_events SET actor_name='Changed' WHERE tenant_id=?",f.owner.tenant)}}
     }
     @Test fun `platform endpoints require platform authentication and never expose scannable customer cards`()=testApplication {

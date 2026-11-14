@@ -1245,7 +1245,9 @@
     let customerDrawer = null;
     const customerBusy = () => Boolean(document.querySelector('form[aria-busy="true"]'));
     function closeCustomerDrawer() {
-        if (customerBusy()) { const status = customerDrawer?.querySelector('#customerDrawerStatus'); if (status) status.textContent = 'Guardando preferencias. Espera a que termine para continuar.'; else notice('Espera a que termine la operación.'); return false; }
+        if (customerBusy()) { const status = customerDrawer?.querySelector('#customerDrawerStatus'); if (status) status.textContent = 'Guardando datos. Espera a que termine para continuar.'; else notice('Espera a que termine la operación.'); return false; }
+        const contact=customerDrawer?.querySelector('#customerContact');
+        if(contact && contact.dataset.customerContactDraft!==JSON.stringify([contact.elements.contactPhone.value,contact.elements.confirmed.checked]) && !window.confirm('Hay un teléfono sin guardar. ¿Cerrar la ficha y descartar el cambio?'))return false;
         customerDrawer?.close(); return true;
     }
     window.openCustomerWorkspace = async function (memberId, trigger = document.activeElement) {
@@ -1284,9 +1286,32 @@
                 const d = await request(0); if (!valid()) return;
                 dialog.querySelector('#profileTitle').textContent = d.member.name;
                 const s = d.summary, p = d.preferences;
+                const ownerMeta=document.querySelector('meta[name="lumina-wallet-owner"]');
+                const isOwner=!ownerMeta||ownerMeta.content==='yes';
+                const edits=JSON.parse(document.querySelector('meta[name="lumina-wallet-editable"]')?.content||'[]');
+                const mayEdit=isOwner||edits.includes('customers');
+                let contactVersion=d.member.contactVersion||0;
+                const contact=`<section class="profile-section customer-contact"><h3>Teléfono</h3><p id="customerPhoneValue">${d.member.contactPhone?`<a href="tel:${esc(d.member.contactPhone)}">${esc(d.member.contactPhone)}</a>`:'Aún no registrado'}</p>${mayEdit?`<details><summary>${d.member.contactPhone?'Actualizar teléfono':'Añadir teléfono'}</summary><form id="customerContact">${field('contactPhone','Teléfono del cliente','tel',d.member.contactPhone||'','required maxlength="30" autocomplete="off" placeholder="099 123 4567"')}<label class="check"><input name="confirmed" type="checkbox" required>Confirmé este teléfono con el cliente.</label><button>Guardar teléfono</button></form></details>`:''}</section>`;
                 const metric = (label, value) => `<div><span>${label}</span><strong>${esc(value)}</strong></div>`;
                 body.removeAttribute('role');
-                body.innerHTML = `<div class="profile-intro"><p>Cliente desde ${esc(date(d.member.joinedAt))}</p><div class="profile-primary-actions"><button type="button" id="serveCustomer">Atender en Caja →</button><button type="button" class="quiet" id="recoverCustomerWallet">Actualizar o recuperar tarjeta</button></div></div><div class="profile-metrics">${metric('Compras', s.purchases)}${metric('Total pagado', money(s.spentMinor))}${metric('Premios reclamados', s.claimedRewards)}${metric('Frecuencia media', s.averageDaysBetweenPurchases === null ? 'Aún sin calcular' : Number(s.averageDaysBetweenPurchases).toFixed(1) + ' días')}</div><p class="small">Todo el historial · Última compra: ${esc(date(s.lastPurchase))}. Descuentos registrados: ${esc(money(s.discountMinor))}.</p><section class="profile-section"><h3>Sus próximos premios</h3><div class="customer-reward-list">${d.rewardProgress.map(r => `<div><strong>${esc(r.name)}</strong><p>${esc(r.program)}</p><span class="${r.remaining === 0 ? 'customer-ready' : 'customer-near'}">${esc(rewardText(r))}</span></div>`).join('') || '<p>Aún no tiene saldo en promociones activas con premios.</p>'}</div><p class="small">Hasta 100 premios activos con saldo. Los de una misma promoción son alternativas. Caja comprueba identidad, condiciones y saldo vigente.</p></section><section class="profile-section"><h3>Historial de movimientos</h3><div class="row timeline-filters"><div>${select('timelineKind', 'Tipo de movimiento', [['ALL', 'Todos'], ['PURCHASE', 'Compras'], ['REWARD', 'Canjes']])}</div><div>${select('timelineBranch', 'Sucursal', [['', 'Todas las sucursales'], ...state.data.branches.map(b => [b.id, b.name])])}</div></div><div id="customerTimeline" aria-live="polite"></div><p class="small">El historial conserva las operaciones confirmadas aunque su promoción haya terminado. Filtrar movimientos no cambia los totales de la ficha.</p></section><details class="profile-section"><summary>Cumpleaños y preferencias</summary><form id="customerPreferences">${field('birthday', 'Mes y día de cumpleaños (MM-DD, opcional)', 'text', p.birthday || '', 'placeholder="11-04" pattern="[0-9]{2}-[0-9]{2}"')}<label class="check"><input name="marketingConsent" type="checkbox" ${checked(p.marketingConsent)}>El cliente quiere recibir felicitaciones y anuncios del negocio.</label><label class="check"><input name="confirmed" type="checkbox" required>El cliente autorizó estas preferencias.</label><button>Guardar preferencias</button></form></details>`;
+                body.innerHTML = `<div class="profile-intro"><p>Cliente desde ${esc(date(d.member.joinedAt))}</p><div class="profile-primary-actions"><button type="button" id="serveCustomer">Atender en Caja →</button><button type="button" class="quiet" id="recoverCustomerWallet">Actualizar o recuperar tarjeta</button></div></div><div class="profile-metrics">${metric('Compras', s.purchases)}${metric('Total pagado', money(s.spentMinor))}${metric('Premios reclamados', s.claimedRewards)}${metric('Frecuencia media', s.averageDaysBetweenPurchases === null ? 'Aún sin calcular' : Number(s.averageDaysBetweenPurchases).toFixed(1) + ' días')}</div>${contact}<p class="small">Todo el historial · Última compra: ${esc(date(s.lastPurchase))}. Descuentos registrados: ${esc(money(s.discountMinor))}.</p><section class="profile-section"><h3>Sus próximos premios</h3><div class="customer-reward-list">${d.rewardProgress.map(r => `<div><strong>${esc(r.name)}</strong><p>${esc(r.program)}</p><span class="${r.remaining === 0 ? 'customer-ready' : 'customer-near'}">${esc(rewardText(r))}</span></div>`).join('') || '<p>Aún no tiene saldo en promociones activas con premios.</p>'}</div><p class="small">Hasta 100 premios activos con saldo. Los de una misma promoción son alternativas. Caja comprueba identidad, condiciones y saldo vigente.</p></section><section class="profile-section"><h3>Historial de movimientos</h3><div class="row timeline-filters"><div>${select('timelineKind', 'Tipo de movimiento', [['ALL', 'Todos'], ['PURCHASE', 'Compras'], ['REWARD', 'Canjes']])}</div><div>${select('timelineBranch', 'Sucursal', [['', 'Todas las sucursales'], ...state.data.branches.map(b => [b.id, b.name])])}</div></div><div id="customerTimeline" aria-live="polite"></div><p class="small">El historial conserva las operaciones confirmadas aunque su promoción haya terminado. Filtrar movimientos no cambia los totales de la ficha.</p></section><details class="profile-section"><summary>Cumpleaños y preferencias</summary><form id="customerPreferences">${field('birthday', 'Mes y día de cumpleaños (MM-DD, opcional)', 'text', p.birthday || '', 'placeholder="11-04" pattern="[0-9]{2}-[0-9]{2}"')}<label class="check"><input name="marketingConsent" type="checkbox" ${checked(p.marketingConsent)}>El cliente quiere recibir felicitaciones y anuncios del negocio.</label><label class="check"><input name="confirmed" type="checkbox" required>El cliente autorizó estas preferencias.</label><button>Guardar preferencias</button></form></details>`;
+                if(!isOwner){dialog.querySelector('#serveCustomer').remove();dialog.querySelector('#recoverCustomerWallet').remove();}
+                if(!mayEdit)dialog.querySelector('#customerPreferences').closest('details').remove();
+                let contactDraft='';
+                const phoneForm=dialog.querySelector('#customerContact');
+                if(phoneForm){
+                    contactDraft=JSON.stringify([phoneForm.elements.contactPhone.value,false]);
+                    phoneForm.dataset.customerContactDraft=contactDraft;
+                    form('customerContact',async v=>{
+                        const phone=contactPhone(v.contactPhone);
+                        const result=await api('/api/staff/customer-workspace/'+encodeURIComponent(memberId)+'/contact',{phone,expectedVersion:contactVersion,customerConfirmed:v.confirmed==='on'},'PUT');
+                        if(!valid())return;
+                        contactVersion=result.version;phoneForm.elements.contactPhone.value=result.phone;phoneForm.elements.confirmed.checked=false;
+                        phoneForm.dataset.customerContactDraft=JSON.stringify([result.phone,false]);
+                        const value=dialog.querySelector('#customerPhoneValue');value.replaceChildren();const link=document.createElement('a');link.href='tel:'+result.phone;link.textContent=result.phone;value.append(link);
+                        dialog.querySelector('#customerDrawerStatus').textContent='Teléfono guardado.';
+                    });
+                }
                 drawTimeline(d.timeline);
                 dialog.querySelector('#timelineKind').onchange = e => { timelineKind = e.target.value; loadTimeline(0); };
                 dialog.querySelector('#timelineBranch').onchange = e => { timelineBranch = e.target.value; loadTimeline(0); };
@@ -1294,12 +1319,12 @@
                     if (!valid() || !closeCustomerDrawer()) return;
                     state.tab = 'sales'; renderMerchant();
                     const lookup = document.querySelector('#lookup');
-                    lookup.elements.kind.value = 'cardCode'; lookup.elements.value.value = d.member.cardCode;
+                    const option=document.createElement('option');option.value='memberId';option.textContent='Cliente seleccionado';lookup.elements.kind.append(option);lookup.elements.kind.value='memberId';lookup.elements.value.value=memberId;
                     if (recovery) lookup.dataset.recovery = d.member.id;
                     lookup.requestSubmit();
                 };
-                dialog.querySelector('#serveCustomer').onclick = () => serve(false);
-                dialog.querySelector('#recoverCustomerWallet').onclick = () => serve(true);
+                if(isOwner)dialog.querySelector('#serveCustomer').onclick = () => serve(false);
+                if(isOwner)dialog.querySelector('#recoverCustomerWallet').onclick = () => serve(true);
                 form('customerPreferences', async v => {
                     try { await api('/api/staff/customer-insights/' + encodeURIComponent(memberId) + '/preferences', {preferences: {birthday: v.birthday || null, marketingConsent: v.marketingConsent === 'on'}, customerConfirmed: v.confirmed === 'on'}, 'PUT'); }
                     finally { if (valid()) dialog.querySelector('#customerDrawerStatus').textContent = ''; }
@@ -1388,8 +1413,19 @@
         }
         const enroll = document.querySelector('#enroll'); if (enroll && !enroll.dataset.preferencesReady) {
             enroll.dataset.preferencesReady = 'true'; const extra = document.createElement('div');
-            extra.innerHTML = `${field('birthMonthDay', 'Mes y día de cumpleaños (opcional)', 'text', '', 'placeholder="MM-DD" pattern="[0-9]{2}-[0-9]{2}"')}<label class="check"><input name="marketingConsent" type="checkbox">Quiero recibir felicitaciones y anuncios de este negocio en mi tarjeta. Puedo pedir al negocio que los desactive.</label>`;
-            enroll.querySelector('button').before(extra);
+            extra.innerHTML = `<details class="registration-optional"><summary>Cumpleaños y novedades (opcional)</summary><div class="row"><div><label for="birthDay">Día</label><select id="birthDay"><option value="">Día</option>${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}">${i+1}</option>`).join('')}</select></div><div><label for="birthMonth">Mes</label><select id="birthMonth"><option value="">Mes</option>${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((name,i)=>`<option value="${String(i+1).padStart(2,'0')}">${name}</option>`).join('')}</select></div></div><input type="hidden" name="birthMonthDay" value=""><label class="check"><input name="marketingConsent" type="checkbox">Quiero recibir felicitaciones y novedades en mi tarjeta.</label><p class="small">Puedes pedir al negocio que las desactive.</p></details>`;
+            enroll.querySelector('button:not([type]),button[type=submit]').before(extra);
+            const day=extra.querySelector('#birthDay'),month=extra.querySelector('#birthMonth');
+            const birthday=()=>{
+                day.setCustomValidity('');month.setCustomValidity('');
+                if(!day.value&&!month.value){enroll.elements.birthMonthDay.value='';return;}
+                const limit=[31,29,31,30,31,30,31,31,30,31,30,31][Number(month.value)-1];
+                const valid=day.value&&month.value&&Number(day.value)<=limit;
+                enroll.elements.birthMonthDay.value=valid?month.value+'-'+day.value:'';
+                if(!valid)(!month.value?month:day).setCustomValidity('Elige un día y un mes válidos, o deja ambos sin seleccionar.');
+            };
+            day.onchange=birthday;month.onchange=birthday;
+            enroll.addEventListener('invalid',e=>{if(extra.contains(e.target))extra.querySelector('details').open=true;},true);
         }
     }
     new MutationObserver(enhance).observe(app, {childList: true, subtree: true}); enhance();

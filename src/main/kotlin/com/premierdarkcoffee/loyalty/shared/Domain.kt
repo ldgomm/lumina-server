@@ -89,7 +89,7 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
 
 @Serializable data class NewBranch(val name: String, val code: String)
 @Serializable data class NewStaff(val role: String, val branchId: String? = null, val name: String? = null, val contact: String = "", val requestId: String? = null, val permissions: StaffPermissions? = null)
-@Serializable data class Enrollment(val name: String, val document: String, val password: String, val acceptedTerms: Boolean)
+@Serializable data class Enrollment(val name: String, val document: String, val password: String, val acceptedTerms: Boolean, val phone: String? = null)
 @Serializable data class Login(val document: String, val password: String)
 @Serializable data class ProgramChange(val expectedVersion: Int, val program: Program)
 @Serializable data class Reward(val programId: String, val name: String, val cost: Long, val active: Boolean = true, val benefit: Benefit? = null)
@@ -100,4 +100,4 @@ enum class Kind { POINTS, CASHBACK, STAMPS }
     val identityVerified: Boolean = false, val customerConfirmed: Boolean = false, val expectedEarningReview: String? = null)
 @Serializable data class Reserve(val rewardId: String)
 @Serializable data class Confirm(val token: String, val branchId: String)
-@Serializable data class Lookup(val document: String? = null, val cardCode: String? = null)
+@Serializable data class Lookup(val document: String? = null, val cardCode: String? = null, val memberId: String? = null)

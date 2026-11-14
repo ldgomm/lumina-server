@@ -77,11 +77,11 @@ class CustomerActivityPostgresTest {
         val slug="activity-"+id().take(12)
         val t=service.createTenant(NewTenant("Negocio",slug));val token=t.str("ownerToken");val s=service.staff(token)
         val a=service.newBranch(s,NewBranch("Centro","A")).str("id");val b=service.newBranch(s,NewBranch("Norte","B")).str("id")
-        val m=service.member(service.enrollWithoutPassword(slug,WalletEnrollment(name,"DEMO10001",true)).str("token"))
+        val m=service.member(service.enrollWithoutPassword(slug,WalletEnrollment(name,"DEMO10001",true, phone = "0991234567")).str("token"))
         val p=service.createPromotion(s,PromotionTemplate("Sexta pizza","pizza",6,rewardName="Pizza gratis"),id())
         return F(s,token,slug,m,a,b,p.str("programId"),p.str("rewardId"))
     }
-    private fun member(f:F,name:String,doc:String)=service.member(service.enrollWithoutPassword(f.slug,WalletEnrollment(name,doc,true)).str("token"))
+    private fun member(f:F,name:String,doc:String)=service.member(service.enrollWithoutPassword(f.slug,WalletEnrollment(name,doc,true, phone = "0991234567")).str("token"))
     private fun buy(f:F,qty:Int=1,time:Instant=at,m:Member=f.member,branch:String=f.a):JsonObject {
         return atTime(time).purchase(f.owner,Purchase(m.id,branch,id(),qty*100L,"USD",listOf(PurchaseItem("Pizza","pizza",qty,100))),id())
     }

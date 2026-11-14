@@ -150,7 +150,7 @@ class WalletSubscriptionPostgresTest {
         val saved=db.tx{it.one("SELECT config::text FROM wallet_designs WHERE tenant_id=?",f.tenant){r->r.getString(1)}}!!
         assertNotEquals(design,saved);assertEquals("Diseño propio",json.parseToJsonElement(saved).jsonObject.str("displayName"))
         assertEquals("CAFE",db.tx{it.one("SELECT category FROM lumina_business_registrations WHERE tenant_id=?",f.tenant){r->r.getString(1)}})
-        assertEquals(16,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getInt(1)}})
+        assertEquals(17,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getInt(1)}})
     }
 
     @Test fun `annual promotion and historical branches charge one full year once`() {

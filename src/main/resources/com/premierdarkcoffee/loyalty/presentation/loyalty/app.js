@@ -401,11 +401,22 @@ async function customerStart() {
             });
             return;
         }
-        app.innerHTML = `<section class="narrow"><div class="eyebrow">${esc(d.business.name)}</div><h1>Tu tarjeta.<br>Siempre contigo.</h1><p>Regístrate una vez y guarda tu tarjeta en Wallet. En tus próximas compras, solo preséntala en caja.</p><section class="panel"><form id="enroll">${field('name', 'Tu nombre', 'text', '', 'required maxlength="80" autocomplete="name"')}${field('document', 'Cédula', 'text', '', 'required minlength="5" maxlength="40" inputmode="numeric" autocomplete="off"')}<p class="small">Una cédula permite una sola tarjeta en este negocio, válida en todas sus sucursales. No necesitas contraseña.</p><label class="check"><input name="acceptedTerms" type="checkbox" required>Acepto participar en el piloto y guardar mi nombre, identificador protegido y movimientos para administrar mi tarjeta. Usaré datos ficticios durante las pruebas.</label><button>Crear mi tarjeta</button></form><details><summary>Ya tengo tarjeta</summary><p>Abre Apple Wallet o Google Wallet y presenta tu tarjeta en caja. No necesitas registrarte otra vez ni iniciar sesión.</p><p>Si cambiaste de teléfono o borraste la tarjeta, pide al dueño del negocio que verifique tu identidad y te ayude a recuperarla.</p></details></section></section>`;
+        app.innerHTML = `<section class="narrow registration-flow"><p class="eyebrow">${esc(d.business.name)}</p><h1>Tu próxima visita<br>ya cuenta.</h1><p class="registration-intro">Crea tu tarjeta y guárdala en tu teléfono.</p><ol class="registration-progress" aria-label="Tu tarjeta en dos pasos"><li aria-current="step"><span>1</span> Tus datos</li><li><span>2</span> Guardar en Wallet</li></ol><section class="panel registration-panel"><h2>Crea tu tarjeta</h2><p class="small">Sin contraseña. Una tarjeta para todas las sucursales.</p><form id="enroll">${field('name', 'Nombre y apellido', 'text', '', 'required maxlength="80" autocomplete="name"')}${field('document', 'Cédula', 'text', '', 'required minlength="5" maxlength="40" inputmode="numeric" autocomplete="off"')}${field('phone', 'Teléfono', 'tel', '', 'required maxlength="30" autocomplete="tel" placeholder="099 123 4567" aria-describedby="phoneHint"')}<small id="phoneHint">Para otro país, incluye + y el código del país.</small><label class="check registration-consent"><input name="acceptedTerms" type="checkbox" required>Autorizo el uso de mi nombre, cédula, teléfono y movimientos para administrar mi tarjeta y atenderme en este negocio.</label><button>Crear mi tarjeta</button></form><details class="registration-help"><summary>Ya tengo una tarjeta</summary><p>Ábrela en Apple Wallet o Google Wallet. Si la borraste o cambiaste de teléfono, pide al negocio que te ayude a recuperar la misma tarjeta.</p></details></section></section>`;
+        const enroll=document.querySelector('#enroll'),phoneInput=enroll.elements.phone;
+        const validatePhone=()=>{phoneInput.setCustomValidity('');try{contactPhone(phoneInput.value);}catch(error){phoneInput.setCustomValidity(error.message);} };
+        phoneInput.addEventListener('input',()=>{phoneInput.setCustomValidity('');phoneInput.removeAttribute('aria-invalid');});
+        phoneInput.addEventListener('blur',()=>{if(phoneInput.value.trim()){validatePhone();phoneInput.setAttribute('aria-invalid',String(!phoneInput.checkValidity()));}});
+        enroll.addEventListener('submit',event=>{validatePhone();if(!phoneInput.checkValidity()){event.preventDefault();event.stopImmediatePropagation();phoneInput.setAttribute('aria-invalid','true');phoneInput.reportValidity();}});
         form('enroll', async v => {
-            const r = await api(`/api/public/${encodeURIComponent(state.slug)}/join`, {name: v.name, document: v.document, acceptedTerms: v.acceptedTerms === 'on'});
+            const r = await api(`/api/public/${encodeURIComponent(state.slug)}/join`, {name: v.name, document: v.document, phone: contactPhone(v.phone), acceptedTerms: v.acceptedTerms === 'on'});
             state.token = r.token;
-            await customerCard();
+            // A successful registration has already committed. Never offer another join on a later read failure.
+            const showCard=async()=>{
+                app.innerHTML='<section class="panel narrow registration-flow"><h1>Tu registro está listo</h1><p role="status">Abriendo tu tarjeta…</p></section>';
+                try { await customerCard(); }
+                catch(error){app.innerHTML=`<section class="panel narrow registration-flow"><h1>Tu registro está listo</h1><p role="alert">${esc(error.message)}</p><p>Tu tarjeta ya fue creada. Reintenta para abrirla.</p><button id="retryRegisteredCard" type="button">Abrir mi tarjeta</button></section>`;document.querySelector('#retryRegisteredCard').onclick=showCard;}
+            };
+            await showCard();
         });
     } catch (e) {
         app.innerHTML = `<section class="panel narrow"><h2>No pudimos abrir el registro</h2><p>${esc(e.message)}</p></section>`;
@@ -417,7 +428,7 @@ async function customerCard() {
     const d = await api('/api/me');
     exit.hidden = false;
     exit.textContent = 'Terminar';
-    app.innerHTML = `<section class="narrow"><div class="eyebrow">${esc(state.business.name)}</div><h1>Tu tarjeta está lista,<br>${esc(d.member.name)}.</h1><section id="walletMount" class="panel"><p>Preparando las opciones para guardar tu tarjeta…</p></section><section class="card"><h2>Una tarjeta. Todas las sucursales.</h2><p>En cada compra, abre Wallet y muestra el QR. En caja registran tu consumo y tus puntos se actualizan en la misma tarjeta.</p><p>Para un premio, presenta tu tarjeta y pídelo al cajero. El negocio verifica al titular y confirma el canje.</p><div class="balances">${d.balances.map(b => `<div class="balance"><span>${esc(b.name)}</span><strong>${b.kind === 'CASHBACK' ? (b.available / 100).toFixed(2) : b.available}</strong><small>${b.kind === 'CASHBACK' ? esc(state.business.currency) : esc(kinds[b.kind])}</small></div>`).join('')}</div></section><details class="panel"><summary>Ver identificador de esta tarjeta</summary><img id="cardQR" class="qr" alt="QR personal de la tarjeta"><p class="small">Este QR identifica tu tarjeta. La cédula no se incluye en el código. Tu negocio también puede localizarte por cédula.</p></details></section>`;
+    app.innerHTML = `<section class="narrow registration-flow"><div class="eyebrow">${esc(state.business.name)}</div><h1>Tu tarjeta está lista,<br>${esc(d.member.name)}.</h1><ol class="registration-progress" aria-label="Tu tarjeta en dos pasos"><li class="complete"><span>✓</span> Tus datos</li><li aria-current="step"><span>2</span> Guardar en Wallet</li></ol><section id="walletMount" class="panel"><p>Preparando las opciones para guardar tu tarjeta…</p></section><section class="card"><h2>Una tarjeta. Todas las sucursales.</h2><p>En cada compra, abre Wallet y muestra el QR. En caja registran tu consumo y tus puntos se actualizan en la misma tarjeta.</p><p>Para un premio, presenta tu tarjeta y pídelo al cajero. El negocio verifica al titular y confirma el canje.</p><div class="balances">${d.balances.map(b => `<div class="balance"><span>${esc(b.name)}</span><strong>${b.kind === 'CASHBACK' ? (b.available / 100).toFixed(2) : b.available}</strong><small>${b.kind === 'CASHBACK' ? esc(state.business.currency) : esc(kinds[b.kind])}</small></div>`).join('')}</div></section><details class="panel"><summary>Ver identificador de esta tarjeta</summary><img id="cardQR" class="qr" alt="QR personal de la tarjeta"><p class="small">Este QR identifica tu tarjeta. La cédula no se incluye en el código. Tu negocio también puede localizarte por cédula.</p></details></section>`;
     try {
         const url = await imageFromApi('/api/me/qr');
         const img = document.querySelector('#cardQR');
@@ -426,3 +437,14 @@ async function customerCard() {
     } catch (e) { notice(e.message); }
 }
 state.slug?customerStart():welcome();
+
+function phoneCheck(ok,message){if(!ok)throw new Error(message);}
+function contactPhone(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  phoneCheck(raw.length <= 30 && /^\+?[0-9 ()-]+$/.test(raw), 'Escribe tu teléfono, por ejemplo 099 123 4567.');
+  let digits = raw.replace(/[^0-9]/g, '');
+  if (/^(09\d{8}|0[2-7]\d{7})$/.test(digits)) digits = '593' + digits.slice(1);
+  phoneCheck(/^[1-9]\d{7,14}$/.test(digits) && (digits.startsWith('593') ? /^593(9\d{8}|[2-7]\d{7})$/.test(digits) : raw.startsWith('+')),
+    'Revisa el teléfono. Para otro país, incluye + y el código del país.');
+  return '+' + digits;
+}

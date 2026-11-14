@@ -28,3 +28,14 @@ export function whatsappNumber(value) {
   requireThat(/^[1-9]\d{7,14}$/.test(digits) && (digits.startsWith('593') ? /^5939\d{8}$/.test(digits) : raw.startsWith('+')), 'Usa un celular ecuatoriano de 10 dígitos o el código internacional, por ejemplo +593.');
   return '+' + digits;
 }
+
+// A contact number is not a login, ownership proof or marketing authorization.
+export function contactPhone(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  requireThat(raw.length <= 30 && /^\+?[0-9 ()-]+$/.test(raw), 'Escribe tu teléfono, por ejemplo 099 123 4567.');
+  let digits = raw.replace(/[^0-9]/g, '');
+  if (/^(09\d{8}|0[2-7]\d{7})$/.test(digits)) digits = '593' + digits.slice(1);
+  requireThat(/^[1-9]\d{7,14}$/.test(digits) && (digits.startsWith('593') ? /^593(9\d{8}|[2-7]\d{7})$/.test(digits) : raw.startsWith('+')),
+    'Revisa el teléfono. Para otro país, incluye + y el código del país.');
+  return '+' + digits;
+}

@@ -121,12 +121,12 @@ def sql_hashes(root=SQL_ROOT):
 def observe(c):
     n=c['native'];a=c['portal'];folder=Path(a['LUMINA_DATA_DIR'])
     with sqlite3.connect((folder/'agency.sqlite').as_uri()+'?mode=ro',uri=True) as db:
-        need(db.execute('PRAGMA user_version').fetchone()[0]==9,'PORTAL_MIGRATION_REQUIRED')
+        need(db.execute('PRAGMA user_version').fetchone()[0]==10,'PORTAL_MIGRATION_REQUIRED')
         agency=db.execute("SELECT id FROM accounts WHERE kind='AGENCY' ORDER BY id LIMIT 1").fetchone()
         need(agency,'AGENCY_SETUP_REQUIRED')
         need(db.execute('PRAGMA quick_check').fetchone()[0]=='ok','PORTAL_DATABASE_CHECK_FAILED')
     database=json.loads(pg(c,"SELECT json_build_object('name',current_database(),'created',(SELECT floor(extract(epoch FROM applied_at)*1000)::bigint::text FROM comeback_migrations WHERE version=1),'versions',(SELECT array_agg(version ORDER BY version) FROM comeback_migrations))"))
-    need(database.pop('versions')==list(range(1,17)) and database['created'],'WALLET_MIGRATION_REQUIRED')
+    need(database.pop('versions')==list(range(1,18)) and database['created'],'WALLET_MIGRATION_REQUIRED')
     key=pg(c,'SELECT fingerprint FROM wallet_key_identity WHERE singleton=true')
     need(not key or key==digest(base64.b64decode(n['WALLET_DATA_KEY'])),'WALLET_KEY_CHANGED')
     # Validate identifiers against existing passes before pinning the first production configuration.
@@ -257,7 +257,7 @@ def verify_backup(c,folder):
         run(['docker','cp',str(folder/'wallet.dump'),container+':/tmp/wallet.dump'],timeout=300)
         run(['docker','exec',container,'pg_restore','--exit-on-error','--no-owner','--no-acl','-U','postgres','-d','postgres','/tmp/wallet.dump'],timeout=900)
         count=run(['docker','exec',container,'psql','-X','-qAt','-U','postgres','-c','SELECT count(*) FROM comeback_migrations']).decode().strip()
-        need(count=='16','RESTORE_SCHEMA_MISMATCH')
+        need(count=='17','RESTORE_SCHEMA_MISMATCH')
         rows=json.loads(run(['docker','exec',container,'psql','-X','-qAt','-U','postgres','-c',"SELECT COALESCE(json_agg(json_build_array(company_id,tenant_id)),'[]'::json) FROM lumina_business_registrations"]).decode())
         links=dict(rows)
         with sqlite3.connect((folder/'agency.sqlite').as_uri()+'?mode=ro',uri=True) as db:

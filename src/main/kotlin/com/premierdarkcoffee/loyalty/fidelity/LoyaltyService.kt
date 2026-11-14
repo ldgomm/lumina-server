@@ -79,7 +79,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         internal fun tenant(c: Connection, slug: String): JsonObject = c.one("SELECT * FROM tenants WHERE slug=?",slug) {
         obj("id" to it.getString("id"),"name" to it.getString("name"),"slug" to it.getString("slug"),"currency" to it.getString("currency"),"timezone" to it.getString("timezone"))
     } ?: throw Problem(404,"NOT_FOUND","Negocio no encontrado.")
-    fun publicTenant(slug: String) = db.tx { c -> tenant(c,slug).let { t -> obj("business" to t,"programs" to programs(c,t.getValue("id").jsonPrimitive.content,true),"rewards" to rewards(c,t.getValue("id").jsonPrimitive.content,true),"termsVersion" to "pilot-1", "pilot" to true) } }
+    fun publicTenant(slug: String) = db.tx { c -> tenant(c,slug).let { t -> obj("business" to t,"programs" to programs(c,t.getValue("id").jsonPrimitive.content,true),"rewards" to rewards(c,t.getValue("id").jsonPrimitive.content,true),"termsVersion" to "wallet-registration-2", "pilot" to false) } }
         fun createTenant(input: NewTenant): JsonObject {
         val profile = input.profile?.normalized()?.also { it.validate() }
         input.firstBranch?.let { text(it.name); text(it.code, 40) }
@@ -182,14 +182,15 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         return obj("token" to token,"expiresAt" to until,"memberId" to member.id)
     }
     fun enroll(slug: String, input: Enrollment): JsonObject {
-        text(input.name,80); need(input.acceptedTerms,"CONSENT_REQUIRED","Debes aceptar las condiciones del piloto.")
+        text(input.name,80); need(input.acceptedTerms,"CONSENT_REQUIRED","Autoriza el uso de tus datos para administrar tu tarjeta.")
+        val phone = com.premierdarkcoffee.loyalty.access.contactPhone(input.phone)
         val password = Security.password(input.password)
         return db.tx { c -> val tenant = tenant(c,slug).getValue("id").jsonPrimitive.content
         commercial.requireActive(c, tenant);
         
             val identity = Security.identity(pepper,tenant,input.document); val member = id()
             need(c.one("SELECT id FROM members WHERE tenant_id=? AND identity_hash=?",tenant,identity) { it.getString(1) } == null,"ENROLLMENT_UNAVAILABLE","No se puede completar el registro. Si ya tienes tarjeta, inicia sesión.",409)
-            c.exec("INSERT INTO members(tenant_id,id,identity_hash,password_hash,name,card_code,terms_version) VALUES(?,?,?,?,?,?,'pilot-1')",tenant,member,identity,password,input.name.trim(),Security.token())
+            c.exec("INSERT INTO members(tenant_id,id,identity_hash,password_hash,name,card_code,terms_version,contact_phone) VALUES(?,?,?,?,?,?,'wallet-registration-2',?)",tenant,member,identity,password,input.name.trim(),Security.token(),phone)
             changed(c,tenant,member); audit(c,tenant,member,"ENROLL",member); session(c,Member(tenant,member))
         }
     }
@@ -277,10 +278,12 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         "promotionSuggestions" to if(s.role=="OWNER")promotionSuggestions(c,s.tenant) else null,
         "wallet" to obj("apple" to "PENDING_INTEGRATION","google" to "PENDING_INTEGRATION")) }
     fun lookup(s: Staff, input: Lookup): JsonObject {
-        need((input.document == null) != (input.cardCode == null),"INVALID_LOOKUP","Usa documento o código de tarjeta.")
+        need(listOf(input.document,input.cardCode,input.memberId).count { it != null } == 1,"INVALID_LOOKUP","Usa documento, código de tarjeta o el cliente seleccionado.")
+        input.memberId?.let { s.owner(); uuid(it) }
         return db.tx { c ->
             authorizeStaff(c,s)
             val member = if (input.document != null) c.one("SELECT id FROM members WHERE tenant_id=? AND identity_hash=?",s.tenant,Security.identity(pepper,s.tenant,input.document)) { it.getString(1) }
+                else if(input.memberId != null) c.one("SELECT id FROM members WHERE tenant_id=? AND id=?",s.tenant,input.memberId) { it.getString(1) }
                 else c.one("SELECT id FROM members WHERE tenant_id=? AND card_code=?",s.tenant,input.cardCode) { it.getString(1) }
             need(member != null,"NOT_FOUND","Cliente no encontrado.",404)
             lockMember(c,s.tenant,member!!); releaseExpired(c,s.tenant,member)

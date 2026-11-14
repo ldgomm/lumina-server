@@ -89,7 +89,7 @@ class CommercialPostgresTest {
         val branch = service.newBranch(f.staff, NewBranch("Centro", "CENTRO")).str("id")
         val p = service.newProgram(f.staff, Program("Puntos", Kind.POINTS)).str("id")
         val reward = service.saveReward(f.staff, Reward(p, "Premio", 5)).str("id")
-        val member = service.member(service.enroll(f.slug, Enrollment("Cliente", "ID123456", "test-password-123", true)).str("token"))
+        val member = service.member(service.enroll(f.slug, Enrollment("Cliente", "ID123456", "test-password-123", true, phone = "0991234567")).str("token"))
         db.tx { it.exec("UPDATE members SET created_at=? WHERE tenant_id=? AND id=?", Timestamp.from(time.instant()), f.tenant, member.id) }
         service.purchase(f.staff, Purchase(member.id, branch, id(), 1000, "USD"), id())
         return Triple(member, branch, reward)
@@ -101,7 +101,7 @@ class CommercialPostgresTest {
     @Test fun `migration is repeatable and backfills existing tenants`() {
         val f = fixture(); db.migrate()
         assertTrue(billing.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
-                assertEquals(16, db.tx { c -> c.one("SELECT count(*) FROM comeback_migrations") { it.getInt(1) } })
+                assertEquals(17, db.tx { c -> c.one("SELECT count(*) FROM comeback_migrations") { it.getInt(1) } })
         db.tx { c ->
             val oldSchema = "upgrade_" + id().replace("-", "")
             c.exec("CREATE SCHEMA $oldSchema"); c.exec("SET LOCAL search_path TO $oldSchema")
@@ -178,7 +178,7 @@ class CommercialPostgresTest {
             { service.confirm(f.staff, Confirm(hold.str("token"), branch), id()) },
             { service.newBranch(f.staff, NewBranch("Otra", "OTRA")) },
             { service.newProgram(f.staff, Program("Otro", Kind.POINTS)) },
-            { service.enroll(f.slug, Enrollment("Otro", "ID987654", "test-password-123", true)) }
+            { service.enroll(f.slug, Enrollment("Otro", "ID987654", "test-password-123", true, phone = "0991234567")) }
         )) assertEquals("BUSINESS_SUSPENDED", assertFailsWith<Problem> { action() }.code)
         service.login(f.slug, Login("ID123456", "test-password-123")); service.card(member); service.cancel(member, hold.str("id"), id())
         assertEquals("SUSPENDED", account(f).getValue("access").jsonObject.str("state"))

@@ -1,6 +1,6 @@
 import { identityLabel } from '../../access/identity.mjs';
 import { businessCategories } from '../../businesses/categories.mjs';
-import { button, card, check, esc, form, input, label, localLink } from './components.mjs';
+import { button, card, check, esc, form, hidden, input, label, localLink } from './components.mjs';
 
 const password = (name,caption,extra='') => input(name,caption,'password',extra || 'required minlength="12" maxlength="128" autocomplete="new-password"');
 function publicView(path,setupAvailable,values={}) {
@@ -25,7 +25,7 @@ function publicView(path,setupAvailable,values={}) {
   if (path === '/activar') return {
     title:'Activa tu acceso', description:'Usa el código que te entregó el dueño del negocio y elige tu contraseña.',
     body:card('Activación de colaborador',form('/activar',null,`${input('code','Código de activación','password','required minlength="43" maxlength="43" autocomplete="off"')}
-      ${password('password','Nueva contraseña')}${button('Activar y entrar')}`)),
+      ${input('phone','Tu teléfono','tel','required maxlength="30" autocomplete="tel" placeholder="099 123 4567" data-identity="contact"',values.phone||'')}${password('password','Nueva contraseña')}<p class="muted">Al menos 12 caracteres.</p>${button('Activar y entrar')}`)),
   };
   if (path === '/configurar') return {
     title:'Configura la cuenta de Lúmina', description:'Crea una sola vez el acceso de quien administra Lúmina Digital. El código aparece en la terminal donde iniciaste el portal.',
@@ -50,11 +50,16 @@ export function publicPage(path,setupAvailable,{values={},error=''}={}) {
   if(error)result.body=`<div class="feedback-error" role="alert"><strong>Revisa estos datos</strong><p>${esc(error)}</p></div>`+result.body;
   return result;
 }
-export function accountPage(actor,{otherSessions=0,error='',notice=''}={}) {
+export function accountPage(actor,{otherSessions=0,error='',notice='',contactValues={},contactError=''}={}) {
   const workspace=actor.kind==='AGENCY'?'Lúmina Digital':actor.company_name||'Mi negocio';
   return `<div class="account-layout">
     <section class="card account-profile" aria-label="Tu perfil"><span class="account-avatar" aria-hidden="true">${esc(actor.name.trim().charAt(0).toUpperCase())}</span><div><p class="eyebrow">TU PERFIL</p><h2>${esc(actor.name)}</h2><p>${esc(identityLabel(actor))}</p><span class="badge">${esc(label(actor.kind))}</span></div>
     <dl><div><dt>Espacio de trabajo</dt><dd>${esc(workspace)}</dd></div><div><dt>Acceso</dt><dd>Una cuenta para Lúmina y tus módulos</dd></div></dl></section>
+    <section class="card account-contact"><p class="eyebrow">CONTACTO</p><h2>Tu teléfono</h2>
+    ${actor.contact_phone?`<p class="account-phone">${esc(actor.contact_phone)}</p>`:'<p class="muted">Añade un teléfono para que puedan contactarte.</p>'}
+    <details${contactError||!actor.contact_phone?' open':''}><summary>${actor.contact_phone?'Cambiar teléfono':'Añadir teléfono'}</summary>
+    ${contactError?`<p class="feedback-error" role="alert">${esc(contactError)}</p>`:''}
+    ${form('/cuenta/contacto',actor,`${hidden('revision',contactValues.revision??actor.revision)}${input('phone','Teléfono personal','tel','required maxlength="30" autocomplete="tel" placeholder="099 123 4567" data-identity="contact"',contactValues.phone??actor.contact_phone??'')}<p class="muted">Tu acceso sigue siendo con cédula y contraseña.</p>${button('Guardar teléfono')}`)}</details></section>
     ${!actor.document?identityMigrationPage(actor):''}
     ${notice?`<p class="notice account-feedback" role="status">${esc(notice)}</p>`:''}
     <section class="card account-security"><p class="eyebrow">SEGURIDAD</p><h2>Cambiar contraseña</h2>

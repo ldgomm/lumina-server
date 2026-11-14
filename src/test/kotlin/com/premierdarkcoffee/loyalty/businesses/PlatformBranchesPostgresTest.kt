@@ -98,7 +98,7 @@ class PlatformBranchesPostgresTest {
         val t = business(); val owner = service.staff(t.str("ownerToken"))
         service.newProgram(owner, Program("Puntos", Kind.POINTS))
         val slug = t.str("enrollmentPath").substringAfterLast('/')
-        val member = service.member(service.enrollWithoutPassword(slug, WalletEnrollment("Ana", "DEMO00001", true)).str("token"))
+        val member = service.member(service.enrollWithoutPassword(slug, WalletEnrollment("Ana", "DEMO00001", true, phone = "0991234567")).str("token"))
         val second = service.platformNewBranch(owner.tenant, NewBranch("Norte", "NORTH"), id()).str("id")
         service.purchase(owner, Purchase(member.id, t.str("firstBranchId"), id(), 1000, "USD"), id())
         service.purchase(owner, Purchase(member.id, second, id(), 2000, "USD"), id())

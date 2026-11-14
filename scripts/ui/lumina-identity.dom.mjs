@@ -14,7 +14,7 @@ try{
  assert.equal(doc.type,'text');assert.equal(doc.required,true);assert.equal(d.querySelector('[name=email]'),null);
  doc.value='1712345678';doc.dispatchEvent(new b.Event('blur'));assert.equal(doc.checkValidity(),false);assert.equal(doc.getAttribute('aria-invalid'),'true');assert.match(d.getElementById(doc.getAttribute('aria-describedby')).textContent,/verificador/);
  doc.value=documentFor('dom-person');doc.dispatchEvent(new b.Event('input'));assert.equal(doc.getAttribute('aria-invalid'),null);doc.dispatchEvent(new b.Event('blur'));assert.equal(doc.checkValidity(),true);
- ruc.value='1791234567001';ruc.dispatchEvent(new b.Event('blur'));assert.equal(ruc.checkValidity(),true);assert.match(d.getElementById(ruc.getAttribute('aria-describedby')).textContent,/pendientes de verificación/);
+ ruc.value='1791234567001';ruc.dispatchEvent(new b.Event('blur'));assert.equal(ruc.checkValidity(),true);assert.equal(d.getElementById(ruc.getAttribute('aria-describedby')).textContent,'');
  ruc.value='1791234567002';ruc.dispatchEvent(new b.Event('input'));ruc.dispatchEvent(new b.Event('blur'));assert.equal(ruc.checkValidity(),false);
  phone.value='0991234567';phone.dispatchEvent(new b.Event('blur'));assert.equal(phone.checkValidity(),true);assert.equal(phone.value,'0991234567');
  phone.value='09912';phone.dispatchEvent(new b.Event('input'));phone.dispatchEvent(new b.Event('blur'));assert.equal(phone.checkValidity(),false);
@@ -23,5 +23,6 @@ try{
  const form=welcome.querySelector('form[action="/bienvenida"]');assert.equal(form.checkValidity(),true);assert.ok(form.querySelector('[name=_csrf]'));
  await client.post('/bienvenida',{service:'LATER'});const services=dom((await client.get('/servicios')).body,w.origin).document;assert.equal(services.querySelectorAll('form[action="/servicios/activar"]').length,5);assert.equal(services.querySelector('form [name=service][value=WALLET]').closest('form').method,'post');
  assert.equal(w.db.get('SELECT count(*) n FROM company_services').n,0);
+ const reveal=d.querySelector('.password-reveal');assert.equal(reveal.type,'button');reveal.click();assert.equal(d.querySelector('[name=password]').type,'text');reveal.click();assert.equal(d.querySelector('[name=password]').type,'password');
  console.log('LUMINA_IDENTITY_DOM_PASS');
 }finally{for(const f of clean.reverse())await f();}

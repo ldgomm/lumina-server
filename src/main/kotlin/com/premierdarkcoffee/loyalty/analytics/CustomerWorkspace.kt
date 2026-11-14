@@ -50,8 +50,8 @@ fun LoyaltyService.customerWorkspace(s: Staff, memberId: String, query: Customer
     s.owner();uuid(memberId);query.validate();val at=Timestamp.from(clock.instant())
     return db.tx { c ->
         c.exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-        val member=c.one("SELECT id,name,card_code,created_at FROM members WHERE tenant_id=? AND id=?",s.tenant,memberId) {
-            obj("id" to it.getString("id"),"name" to it.getString("name"),"cardCode" to it.getString("card_code"),"joinedAt" to it.instant("created_at"))
+        val member=c.one("SELECT id,name,card_code,created_at,contact_phone,contact_version FROM members WHERE tenant_id=? AND id=?",s.tenant,memberId) {
+            obj("id" to it.getString("id"),"name" to it.getString("name"),"cardCode" to it.getString("card_code"),"joinedAt" to it.instant("created_at"),"contactPhone" to it.getString("contact_phone"),"contactVersion" to it.getInt("contact_version"))
         }?:throw Problem(404,"NOT_FOUND","Cliente no encontrado en este negocio.")
         query.branchId?.let { branch ->
             need(c.one("SELECT id FROM branches WHERE tenant_id=? AND id=?",s.tenant,branch){it.getString(1)}!=null,"NOT_FOUND","Sucursal no encontrada en este negocio.",404)

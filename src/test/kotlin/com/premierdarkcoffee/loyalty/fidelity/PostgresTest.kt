@@ -76,7 +76,7 @@ class PostgresTest {
         val t=service.createTenant(NewTenant("Prueba",slug));val staff=service.staff(t.str("ownerToken"))
         val a=service.newBranch(staff,NewBranch("A","A")).str("id");val b=service.newBranch(staff,NewBranch("B","B")).str("id")
         val program=service.newProgram(staff,Program("Programa",kind,cashbackBps=500)).str("id")
-        val login=service.enroll(slug,Enrollment("Cliente de prueba","TEST12345","test-password-123",true))
+        val login=service.enroll(slug,Enrollment("Cliente de prueba","TEST12345","test-password-123",true, phone = "0991234567"))
         val member=service.member(login.str("token"));val reward=service.saveReward(staff,Reward(program,"Premio",5)).str("id")
         return Fixture(slug,staff,t.str("ownerToken"),a,b,program,member,login.str("token"),reward)
     }
@@ -89,7 +89,7 @@ class PostgresTest {
     @Test fun `one card across branches and repeated enrollment never steals account`() {
         val f=fixture();earn(f,branch=f.a);earn(f,branch=f.b);assertEquals(20L,balance(f))
         assertEquals(f.member.id,service.member(service.login(f.slug,Login("TEST12345","test-password-123")).str("token")).id)
-        assertFailsWith<Problem>{service.enroll(f.slug,Enrollment("Intruso","TEST12345","another-password-123",true))}
+        assertFailsWith<Problem>{service.enroll(f.slug,Enrollment("Intruso","TEST12345","another-password-123",true, phone = "0991234567"))}
     }
     @Test fun `concurrent duplicate purchase credits exactly once`() {
         val f=fixture();val responses=parallel(8){earn(f,receipt="invoice-1",key="same-request-key")}

@@ -22,7 +22,7 @@ class ProductionTests(unittest.TestCase):
         self.data = self.root/'agency'
         self.data.mkdir(mode=0o700)
         with sqlite3.connect(self.data/'agency.sqlite') as db:
-            db.executescript("PRAGMA user_version=9; CREATE TABLE accounts(id TEXT,kind TEXT); INSERT INTO accounts VALUES('a','AGENCY'); CREATE TABLE companies(id TEXT,loyalty_tenant TEXT);")
+            db.executescript("PRAGMA user_version=10; CREATE TABLE accounts(id TEXT,kind TEXT); INSERT INTO accounts VALUES('a','AGENCY'); CREATE TABLE companies(id TEXT,loyalty_tenant TEXT);")
         (self.data/'agency.sqlite').chmod(0o600);p.write_private(self.data/'agency.key',bytes([6])*32)
         self.n={k:'fictional-'+k for k in p.NATIVE_NAMES}
         self.n.update(DATABASE_URL='jdbc:postgresql://127.0.0.1:5432/lumina',DATABASE_USER='lumina',DATABASE_PASSWORD='fictional-db',IDENTITY_PEPPER='P'*48,PLATFORM_ADMIN_TOKEN='T'*48,WALLET_DATA_KEY=base64.b64encode(bytes([7])*32).decode(),PUBLIC_BASE_URL='https://wallet.example.com',APPLE_PASS_TYPE_ID='pass.com.example.lumina',APPLE_TEAM_ID='ABCDEFGHIJ',GOOGLE_WALLET_ISSUER_ID='123456',APPLE_WALLET_ENABLED='true',GOOGLE_WALLET_ENABLED='true',APPLE_P12_PASSWORD='fictional-p12')
@@ -32,7 +32,7 @@ class ProductionTests(unittest.TestCase):
         self.c={'native':self.n,'portal':{'LUMINA_ORIGIN':'https://portal.example.com','LUMINA_DATA_DIR':str(self.data),'LUMINA_LOYALTY_ADMIN_TOKEN':'T'*48},'identity_file':str(self.root/'identity/continuity.json'),'backup_dir':str(self.root/'backups'),'release_root':str(self.root/'releases'),'runtime_dir':str(self.root/'runtime')}
         self.config=self.root/'production.json';p.save_json(self.config,self.c);self.c['_path']=str(self.config)
     def pg(self,c,sql):
-        if 'json_build_object' in sql:return json.dumps({'name':'lumina','created':'123','versions':list(range(1,17))})
+        if 'json_build_object' in sql:return json.dumps({'name':'lumina','created':'123','versions':list(range(1,18))})
         if 'fingerprint' in sql:return p.digest(bytes([7])*32)
         return '0'
     def sealed(self):
@@ -138,7 +138,7 @@ class ProductionTests(unittest.TestCase):
         s=self.sealed();b=self.verified(s);calls=[]
         def run(argv,*args,**kw):
             calls.append(argv)
-            if 'SELECT count(*) FROM comeback_migrations' in argv:return b'16\n'
+            if 'SELECT count(*) FROM comeback_migrations' in argv:return b'17\n'
             if any('lumina_business_registrations' in a for a in argv):return b'[]\n'
             return b'container\n'
         with patch.object(p,'check',return_value=s),patch.object(p,'run',run):result=p.verify_backup(self.c,b)

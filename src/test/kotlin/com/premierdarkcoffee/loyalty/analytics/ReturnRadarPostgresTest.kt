@@ -71,14 +71,14 @@ class ReturnRadarPostgresTest {
     private fun fixture(name:String="Ana"):F {
         val slug="radar-"+id().take(12);val t=service.createTenant(NewTenant("Café de prueba",slug));val token=t.str("ownerToken");val owner=service.staff(token)
         val branch=service.newBranch(owner,NewBranch("Centro","centro")).str("id")
-        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment(name,"DEMO10001",true)).str("token"))
+        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment(name,"DEMO10001",true, phone = "0991234567")).str("token"))
         val program=service.newProgram(owner,Program("Visitas",Kind.STAMPS)).str("id")
         val reward=service.saveReward(owner,Reward(program,"Tu premio",5)).str("id")
         return F(owner,token,slug,member,branch,program,reward)
     }
     private fun buy(f:F,daysAgo:Long,member:Member=f.member,branch:String=f.branch)=serviceAt(now.minusSeconds(daysAgo*86400)).purchase(f.owner,Purchase(member.id,branch,id(),100,"USD"),id())
     private fun radar(f:F,query:ReturnRadarQuery=ReturnRadarQuery("ALL"))=service.ownerReturnRadar(f.owner,query)
-    private fun another(f:F,name:String="Luis",doc:String="DEMO10002")=service.member(service.enrollWithoutPassword(f.slug,WalletEnrollment(name,doc,true)).str("token"))
+    private fun another(f:F,name:String="Luis",doc:String="DEMO10002")=service.member(service.enrollWithoutPassword(f.slug,WalletEnrollment(name,doc,true, phone = "0991234567")).str("token"))
     @Test fun `individual cadence differs by customer and is explained from real distinct days`() {
         val f=fixture();val slow=another(f)
         listOf(35L,28,21,14).forEach{buy(f,it)};listOf(110L,80,50,20).forEach{buy(f,it,slow)}

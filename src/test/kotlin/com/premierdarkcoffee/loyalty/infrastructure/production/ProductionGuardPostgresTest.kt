@@ -50,12 +50,12 @@ class ProductionGuardPostgresTest {
     }
     @Test fun currentDatabaseCanBeCheckedRepeatedlyWithoutMigration() {
         db.migrate();val s=seal();repeat(2) { ProductionGuard.verifyDatabase(db,s,env) }
-        assertEquals(16L,db.tx { c->c.one("SELECT count(*) FROM comeback_migrations") { it.getLong(1) } })
+        assertEquals(17L,db.tx { c->c.one("SELECT count(*) FROM comeback_migrations") { it.getLong(1) } })
     }
     @Test fun oldSchemaIsRejectedWithoutReapplyingMigrations() {
-        db.migrate();val s=seal();db.tx { c->c.exec("DELETE FROM comeback_migrations WHERE version=16") }
+        db.migrate();val s=seal();db.tx { c->c.exec("DELETE FROM comeback_migrations WHERE version=17") }
         assertFails { ProductionGuard.verifyDatabase(db,s,env) }
-        assertEquals(15L,db.tx { c->c.one("SELECT count(*) FROM comeback_migrations") { it.getLong(1) } })
+        assertEquals(16L,db.tx { c->c.one("SELECT count(*) FROM comeback_migrations") { it.getLong(1) } })
     }
     @Test fun changedDatabaseOrEncryptionKeyCannotStart() {
         db.migrate();assertFails { ProductionGuard.verifyDatabase(db,obj("database" to obj("name" to "another","created" to "0")),env) }

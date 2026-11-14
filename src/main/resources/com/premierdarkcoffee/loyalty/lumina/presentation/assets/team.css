@@ -62,3 +62,5 @@
  .team-save{display:grid}.team-save button{width:100%}.team-save-sticky{position:static;gap:12px}.team-secondary{padding:18px}
  .team-code{grid-template-columns:1fr}.team-code .secret{font-size:14px}#permisos,#datos,#historial{scroll-margin-top:90px}
 }
+
+.team-phone{display:inline-block;margin-top:6px;font-size:.875rem;text-decoration:none}.team-phone:hover{text-decoration:underline}.team-contact{overflow-wrap:anywhere}

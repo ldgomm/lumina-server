@@ -66,3 +66,7 @@
 
 /* Central business control and compact Wallet pricing. */
 .billing-choice{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}.billing-choice .btn{flex:1;min-width:200px;text-align:center}.benefit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}.benefit-grid strong{display:block;color:#0b1f3a}.benefit-grid p{margin:8px 0 0}.business-control details{margin-top:24px}.control-effects{padding-left:22px}.control-effects li{margin:12px 0}.subscription-summary dl>div{display:flex;justify-content:space-between;gap:16px}.subscription-summary dd{font-weight:700;text-align:right;margin:0}.table-wrap details{min-width:200px}.table-wrap details form{min-width:240px;max-width:360px}.table-wrap details input,.table-wrap details select{max-width:100%}@media(max-width:900px){.benefit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.benefit-grid{grid-template-columns:1fr}.subscription-summary dl>div{display:block}.subscription-summary dd{text-align:left}.billing-choice .btn{min-width:0;flex-basis:100%}}
+
+.password-control{position:relative;display:block;width:100%}.password-control input{padding-right:92px!important;width:100%;margin:0}
+.password-control .password-reveal{position:absolute;inset-inline-end:6px;top:50%;transform:translateY(-50%);background:transparent;color:#173a62;border:0;box-shadow:none;padding:8px 10px;min-height:40px;width:auto;margin:0;font-size:13px}
+.password-reveal:focus-visible{outline:2px solid #456fa7;outline-offset:1px;border-radius:8px}

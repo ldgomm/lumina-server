@@ -569,3 +569,20 @@ input[data-money]{appearance:textfield;-moz-appearance:textfield}input[data-mone
 @media(max-width:1100px){.setup-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.overview-command-grid{grid-template-columns:1fr}.overview-command-grid .overview-hero{padding:2rem}}
 @media(max-width:600px){.promotion-command{flex-direction:column;align-items:stretch;padding:1.5rem}.promotion-command>button{width:100%}.promotion-filter-row{gap:.4rem}.promotion-filter-row button{font-size:.76rem;padding:.6rem .7rem}.setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.setup-checklist .section-heading{align-items:start}.setup-fraction{font-size:2rem}.earning-forecast{padding:1rem}.earning-forecast .section-heading{align-items:start;flex-direction:column;gap:.5rem}.earning-forecast-row{flex-direction:column;gap:.4rem}.earning-forecast-row b{text-align:left}.operation-draft-dialog{padding:1.3rem}.promotion-conditions dl{grid-template-columns:1fr}.overview-period{align-items:stretch;flex-direction:column;gap:.5rem}}
 @media(prefers-reduced-motion:reduce){.priority-task,.setup-step{transition:none}}
+
+/* Registration: one short form, optional details and one clear next action. */
+.registration-flow{max-width:600px;margin-inline:auto;padding-bottom:24px}
+.registration-flow h1{font-size:clamp(2rem,5.8vw,3rem);line-height:1.12;letter-spacing:-.035em;margin:16px 0}
+.registration-intro{color:#526176;font-size:1.05rem}.registration-panel{padding:clamp(20px,5vw,32px);border-radius:22px}
+.registration-panel h2{margin:0 0 8px;font-size:1.35rem}.registration-panel input:not([type=checkbox]),.registration-panel select{min-height:50px;font-size:16px}
+.registration-panel form>label:not(.check){margin-top:20px}.registration-panel button{min-height:52px;width:100%;margin-top:20px}
+.registration-panel .check{align-items:flex-start;font-size:.9rem;line-height:1.5}.registration-panel .check input{flex:0 0 auto;margin-top:4px;width:20px;height:20px}
+.registration-progress{display:flex;gap:20px;list-style:none;padding:0;margin:26px 0;color:#66758a;font-size:.875rem}
+.registration-progress li{display:flex;gap:9px;align-items:center;flex:1}.registration-progress span{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;border:1px solid #c4cfde;border-radius:50%;font-weight:700}
+.registration-progress [aria-current=step]{font-weight:650;color:#0b1f3a}.registration-progress [aria-current=step] span{color:white;background:#0b1f3a;border-color:#0b1f3a}
+.registration-progress .complete span{color:#17614b;background:#e9f5ef;border-color:#bedbcc}
+.registration-optional{border-top:1px solid #e2e8f0;margin-top:20px;padding-top:16px}.registration-help{border-top:1px solid #e2e8f0;margin-top:24px;padding-top:18px}
+.registration-optional summary,.registration-help summary{font-size:.9rem;cursor:pointer;font-weight:600;min-height:32px}.registration-optional .row{display:grid;grid-template-columns:1fr 1.6fr;gap:12px}
+.registration-flow [aria-invalid=true]{border-color:#ac3434}.registration-flow .form-feedback{padding:14px;border-radius:12px;background:#fff1f1;color:#852e2e;margin-top:16px}
+.customer-contact form{margin-top:16px}.customer-contact a{font-size:1.05rem;font-variant-numeric:tabular-nums}.customer-contact input[type=tel]{font-size:16px}
+@media(max-width:480px){.registration-flow{padding:0 0 16px}.registration-progress{gap:12px;font-size:.8rem}.registration-panel{padding:20px}.registration-flow .card{padding:20px}}

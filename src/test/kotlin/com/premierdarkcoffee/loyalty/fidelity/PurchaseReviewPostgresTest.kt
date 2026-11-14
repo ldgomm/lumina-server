@@ -62,7 +62,7 @@ class PurchaseReviewPostgresTest {
     private fun fixture():F {
         val slug="review-"+id().take(12);val t=service.createTenant(NewTenant("Negocio ficticio",slug));val owner=service.staff(t.str("ownerToken"))
         val branch=service.newBranch(owner,NewBranch("Centro","C")).str("id")
-        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente ficticio","DEMO10001",true)).str("token"))
+        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente ficticio","DEMO10001",true, phone = "0991234567")).str("token"))
         val points=service.newProgram(owner,Program("Puntos",Kind.POINTS)).str("id")
         val stamps=service.newProgram(owner,Program("Sellos",Kind.STAMPS,minimumSpendMinor=2000)).str("id")
         return F(owner,member,branch,points,stamps)

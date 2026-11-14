@@ -85,7 +85,7 @@ class OwnerExperiencePostgresTest {
     private fun fixture():F {
         val slug="owner-"+id().take(12);val t=service.createTenant(NewTenant("Negocio",slug,profile=profile(),firstBranch=NewBranch("Centro","A")))
         val token=t.str("ownerToken");val owner=service.staff(token);val b=service.newBranch(owner,NewBranch("Norte","B")).str("id")
-        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Ana","TEST"+id().take(12),true)).str("token"))
+        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Ana","TEST"+id().take(12),true, phone = "0991234567")).str("token"))
         db.tx{it.exec("UPDATE members SET created_at=? WHERE tenant_id=?",Timestamp.from(at),owner.tenant)}
         return F(owner,token,member,t.str("firstBranchId"),b)
     }

@@ -1,4 +1,4 @@
-import { documentNumber, rucNumber, whatsappNumber } from './identity.mjs';
+import { documentNumber, rucNumber, whatsappNumber, contactPhone } from './identity.mjs';
 import { activeServices } from '../businesses/services.mjs';
 import { businessCategory } from '../businesses/categories.mjs';
 import { channels, areas, walletScopes, socialChannels, event, now, requireThat, text, uuid } from '../shared/domain.mjs';
@@ -122,7 +122,7 @@ export function createSession(db, accountId) {
 }
 export function getSession(db, cookie) {
   if (!codePattern.test(cookie || '')) return null;
-  const actor = db.get(`SELECT a.id,a.company_id,a.name,a.email,a.document,a.welcome_done,a.kind,a.revision,c.ruc,c.phone,
+  const actor = db.get(`SELECT a.id,a.company_id,a.name,a.email,a.document,a.welcome_done,a.kind,a.revision,a.contact_phone,c.ruc,c.phone,
     s.digest AS session_id,s.csrf,c.name AS company_name,c.approved
     FROM sessions s JOIN accounts a ON a.id=s.account_id LEFT JOIN companies c ON c.id=a.company_id
     WHERE s.digest=? AND s.expires_at>? AND a.active=1`, digest(cookie), now());
@@ -179,7 +179,7 @@ export function approveCompany(db, actor, company) {
 }
 export function teamMember(db, actor, id) {
   requireOwner(actor);
-  const target = db.get(`SELECT a.id,a.name,a.email,a.document,a.revision,a.active,a.password IS NOT NULL AS activated,
+  const target = db.get(`SELECT a.id,a.name,a.email,a.document,a.contact_phone,a.revision,a.active,a.password IS NOT NULL AS activated,
     c.status AS cash_status,c.branch_id,c.branch_name,c.purchases,c.rewards,
     (SELECT max(expires_at) FROM codes WHERE account_id=a.id AND kind='ACTIVATE') AS activation_expires,
     (SELECT count(*) FROM sessions WHERE account_id=a.id AND expires_at>?) AS session_count,
@@ -215,10 +215,11 @@ export function createTeamMember(db, actor, input) {
   requireOwner(actor);
   const name = text(input.name,'nombre',2,100);
   const document = documentNumber(input.document);
+  const phone = input.phone?.trim() ? contactPhone(input.phone) : null;
   return db.transaction(() => {
     requireThat(!db.get('SELECT id FROM accounts WHERE document=?',document), 'Esa cédula ya tiene un acceso.', 409);
     const id = uuid();
-    db.run("INSERT INTO accounts(id,company_id,name,email,document,kind,welcome_done) VALUES(?,?,?,?,?,'COLLABORATOR',0)",id,actor.company_id,name,'account:'+id,document);
+    db.run("INSERT INTO accounts(id,company_id,name,email,document,contact_phone,kind,welcome_done) VALUES(?,?,?,?,?,?,'COLLABORATOR',0)",id,actor.company_id,name,'account:'+id,document,phone);
     setGrants(db,id,input);
     const code = issueActivation(db,id);
     auditTeamChange(db,actor,{id},'ACCESO_CREADO',null,{name,documentHint:document.slice(-4),grants:grantsSnapshot(parseGrants(input))});
@@ -243,14 +244,14 @@ export function replaceTeamGrants(db, actor, target, next) {
   return true;
 }
 export function updateMember(db, actor, id, input) {
-  const name=text(input.name,'nombre',2,100),document=documentNumber(input.document);
+  const name=text(input.name,'nombre',2,100),document=documentNumber(input.document),phone=contactPhone(input.phone);
   return db.transaction(()=>{
     const target=teamMember(db,actor,id);requireTeamRevision(target,input);
     requireThat(!db.get('SELECT id FROM accounts WHERE document=? AND id<>?',document,id),'Esa cédula ya tiene un acceso.',409);
-    if(name===target.name&&document===target.document)return;
-    db.run('UPDATE accounts SET name=?,document=?,revision=revision+1 WHERE id=?',name,document,id);
+    if(name===target.name&&document===target.document&&phone===target.contact_phone)return;
+    db.run('UPDATE accounts SET name=?,document=?,contact_phone=?,revision=revision+1 WHERE id=?',name,document,phone,id);
     if(document!==target.document){db.run('DELETE FROM sessions WHERE account_id=?',id);db.run('DELETE FROM codes WHERE account_id=?',id);}
-    auditTeamChange(db,actor,target,'PERSONA_ACTUALIZADA',{name:target.name,documentHint:target.document?.slice(-4)||null},{name,documentHint:document.slice(-4)});
+    auditTeamChange(db,actor,target,'PERSONA_ACTUALIZADA',{name:target.name,documentHint:target.document?.slice(-4)||null},{name,documentHint:document.slice(-4),contactUpdated:phone!==target.contact_phone});
   });
 }
 export function manageAccount(db, actor, id, action, input) {
@@ -275,13 +276,26 @@ export function manageAccount(db, actor, id, action, input) {
 }
 export async function activate(db, data) {
   const initial = checkCode(db,data.code,'ACTIVATE');
+  const phone = contactPhone(data.phone);
   const password = await hashPassword(data.password);
   return db.transaction(() => {
     const code = checkCode(db,data.code,'ACTIVATE');
     requireThat(code.account_id === initial.account_id, 'El acceso cambió. Solicita un código vigente.', 409);
-    requireThat(db.run('UPDATE accounts SET password=?,revision=revision+1 WHERE id=? AND active=1 AND password IS NULL',
-      password,code.account_id).changes === 1, 'El acceso cambió. Solicita un código vigente.', 409);
+    requireThat(db.run('UPDATE accounts SET password=?,contact_phone=?,revision=revision+1 WHERE id=? AND active=1 AND password IS NULL',
+      password,phone,code.account_id).changes === 1, 'El acceso cambió. Solicita un código vigente.', 409);
     db.run('DELETE FROM codes WHERE digest=?',code.digest);
     return code.account_id;
+  });
+}
+
+export function updateContact(db,actor,input) {
+  const phone=contactPhone(input.phone);
+  return db.transaction(()=>{
+    const current=db.get('SELECT id,revision,contact_phone FROM accounts WHERE id=? AND active=1',actor.id);
+    requireThat(current&&current.revision===actor.revision,'Tu cuenta cambió. Recarga antes de guardar.',409);
+    requireTeamRevision(current,input);
+    if(current.contact_phone===phone)return;
+    db.run('UPDATE accounts SET contact_phone=?,revision=revision+1 WHERE id=?',phone,actor.id);
+    event(db,actor,actor.company_id,'ACCOUNT',actor.id,'CONTACTO_ACTUALIZADO','Teléfono de contacto actualizado.');
   });
 }

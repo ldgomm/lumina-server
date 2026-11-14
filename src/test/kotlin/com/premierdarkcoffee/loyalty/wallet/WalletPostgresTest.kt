@@ -91,7 +91,7 @@ class WalletPostgresTest {
     private fun fixture():Fixture {
         val slug="wallet-"+id().take(12);val tenant=service.createTenant(NewTenant("Negocio Wallet",slug,timezone="UTC"));val owner=tenant.str("ownerToken");val staff=service.staff(owner)
         val branch=service.newBranch(staff,NewBranch("Principal","P01")).str("id");val program=service.newProgram(staff,Program("Puntos",Kind.POINTS)).str("id")
-        val login=service.enroll(slug,Enrollment("Cliente","ID123456","test-password-123",true));return Fixture(staff,owner,service.member(login.str("token")),login.str("token"),branch,program)
+        val login=service.enroll(slug,Enrollment("Cliente","ID123456","test-password-123",true, phone = "0991234567"));return Fixture(staff,owner,service.member(login.str("token")),login.str("token"),branch,program)
     }
     private fun earn(f:Fixture)=service.purchase(f.staff,Purchase(f.member.id,f.branch,id(),1000,"USD"),id())
     private fun count(sql:String,vararg args:Any?)=db.tx { c->c.one(sql,*args){it.getLong(1)}!! }

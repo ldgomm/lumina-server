@@ -90,3 +90,7 @@ Equipo con búsqueda, estados, permisos claros, historial y protección ante for
 ## Campañas de noviembre · v051
 
 [Promociones personalizables, vigencia y validación](docs/lumina-viernes-negro-v051.md).
+
+### Lúmina v022 / Loyalty v061
+
+Teléfono para colaboradores y clientes Wallet, alta más clara, contacto editable según permisos y corrección del acceso a Caja desde la ficha. [Guía de actualización](docs/lumina-contacto-simple-v061.md).

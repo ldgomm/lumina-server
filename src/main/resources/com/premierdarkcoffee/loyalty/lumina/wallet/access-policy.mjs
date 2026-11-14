@@ -14,7 +14,7 @@ const id='[0-9a-fA-F-]{36}';
 const paths={
  WALLET_DESIGN:{GET:/^\/api\/staff\/wallet-design$/,PUT:/^\/api\/staff\/wallet-design$/},
  WALLET_PROGRAMS:{GET:new RegExp(`^/api/staff/programs/${id}/deletion-preview$`),POST:/^\/api\/staff\/(programs|promotion-templates|promotion-setups|rewards)$/,PUT:new RegExp(`^/api/staff/(programs|rewards)/${id}$`),DELETE:new RegExp(`^/api/staff/programs/${id}$`)},
- WALLET_CUSTOMERS:{GET:new RegExp(`^/api/staff/(customer-activity|customer-suggestions|customer-events|customer-insights(?:/${id})?|customer-workspace/${id})$`),POST:/^\/api\/staff\/(wallet\/restore|customer-events)$/,PUT:new RegExp(`^/api/staff/customer-insights/${id}/preferences$`),DELETE:new RegExp(`^/api/staff/customer-events/${id}$`)},
+ WALLET_CUSTOMERS:{GET:new RegExp(`^/api/staff/(customer-activity|customer-suggestions|customer-events|customer-insights(?:/${id})?|customer-workspace/${id})$`),POST:/^\/api\/staff\/(wallet\/restore|customer-events)$/,PUT:new RegExp(`^/api/staff/(customer-insights/${id}/preferences|customer-workspace/${id}/contact)$`),DELETE:new RegExp(`^/api/staff/customer-events/${id}$`)},
  WALLET_REPORTS:{GET:/^\/api\/staff\/(metrics|return-radar|wallet-health)$/},
 };
 export function delegatedRouteAllowed(actor,method,path) {

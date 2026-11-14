@@ -48,7 +48,7 @@ object WalletFirstMigration {
     }
 }
 
-@Serializable data class WalletEnrollment(val name: String, val document: String, val acceptedTerms: Boolean, val preferences: CustomerPreferences = CustomerPreferences())
+@Serializable data class WalletEnrollment(val name: String, val document: String, val acceptedTerms: Boolean, val preferences: CustomerPreferences = CustomerPreferences(), val phone: String? = null)
 @Serializable data class CounterRedemption(
     val memberId: String, val branchId: String, val rewardId: String,
     val expectedRevision: Long, val expectedRewardVersion: Int,
@@ -60,15 +60,16 @@ object WalletFirstMigration {
 /** A document is a unique identifier within a business, never an authentication secret. */
 fun LoyaltyService.enrollWithoutPassword(slug: String, input: WalletEnrollment): JsonObject {
     text(input.name, 80)
+    val phone = com.premierdarkcoffee.loyalty.access.contactPhone(input.phone)
     input.preferences.validate()
-    need(input.acceptedTerms, "CONSENT_REQUIRED", "Debes aceptar las condiciones del piloto.")
+    need(input.acceptedTerms, "CONSENT_REQUIRED", "Autoriza el uso de tus datos para administrar tu tarjeta.")
     return db.tx { c ->
         val business = tenant(c, slug).getValue("id").jsonPrimitive.content
         commercial.requireActive(c, business)
         val identity = Security.identity(pepper, business, input.document)
         val memberId = id()
-        val inserted = c.exec("INSERT INTO members(tenant_id,id,identity_hash,password_hash,name,card_code,terms_version) VALUES(?,?,?,NULL,?,?,'pilot-1') ON CONFLICT(tenant_id,identity_hash) DO NOTHING",
-            business, memberId, identity, input.name.trim(), Security.token())
+        val inserted = c.exec("INSERT INTO members(tenant_id,id,identity_hash,password_hash,name,card_code,terms_version,contact_phone) VALUES(?,?,?,NULL,?,?,'wallet-registration-2',?) ON CONFLICT(tenant_id,identity_hash) DO NOTHING",
+            business, memberId, identity, input.name.trim(), Security.token(), phone)
         need(inserted == 1, "ENROLLMENT_UNAVAILABLE", "No se puede crear otra tarjeta con esta cédula. Abre la que tienes en Wallet o pide al dueño del negocio que verifique tu identidad para recuperarla.", 409)
         writePreferences(c,Member(business,memberId),input.preferences)
         changed(c, business, memberId)

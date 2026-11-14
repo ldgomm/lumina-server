@@ -76,7 +76,7 @@ class WalletFirstPostgresTest {
         val slug="first-"+id().take(12);val t=service.createTenant(NewTenant("Negocio",slug));val staff=service.staff(t.str("ownerToken"))
         val a=service.newBranch(staff,NewBranch("Centro","A")).str("id");val b=service.newBranch(staff,NewBranch("Norte","B")).str("id")
         val program=service.newProgram(staff,Program("Programa",kind,cashbackBps=500)).str("id")
-        val r=service.enrollWithoutPassword(slug,WalletEnrollment("Ana","DEMO10001",true));val member=service.member(r.str("token"))
+        val r=service.enrollWithoutPassword(slug,WalletEnrollment("Ana","DEMO10001",true, phone = "0991234567"));val member=service.member(r.str("token"))
         val reward=service.saveReward(staff,Reward(program,"Premio",5)).str("id")
         return Fixture(slug,t.str("ownerToken"),staff,a,b,program,reward,member,r.str("token"))
     }
@@ -94,7 +94,7 @@ class WalletFirstPostgresTest {
         val f=fixture()
         assertNull(db.tx{c->c.one("SELECT password_hash FROM members WHERE tenant_id=? AND id=?",f.staff.tenant,f.member.id){it.getString(1)}})
         assertEquals(401,assertFailsWith<Problem>{service.login(f.slug,Login("DEMO10001","dummy-password-never-used"))}.status)
-        assertEquals(409,assertFailsWith<Problem>{service.enrollWithoutPassword(f.slug,WalletEnrollment("Otro"," demo10001 ",true))}.status)
+        assertEquals(409,assertFailsWith<Problem>{service.enrollWithoutPassword(f.slug,WalletEnrollment("Otro"," demo10001 ",true, phone = "0991234567"))}.status)
         assertEquals(1,count("members",f));assertEquals(1,count("member_sessions",f))
     }
     @Test fun `same document creates independent memberships in different businesses`() {
@@ -104,7 +104,7 @@ class WalletFirstPostgresTest {
     }
     @Test fun `concurrent registration grants exactly one enrollment session`() {
         val t=service.createTenant(NewTenant("Concurrente","parallel-"+id().take(12)));val slug=t.str("enrollmentPath").substringAfterLast('/')
-        val results=parallel(6){service.enrollWithoutPassword(slug,WalletEnrollment("Ana","0001234567",true))}
+        val results=parallel(6){service.enrollWithoutPassword(slug,WalletEnrollment("Ana","0001234567",true, phone = "0991234567"))}
         assertEquals(1,results.count{it is JsonObject});assertEquals(5,results.filterIsInstance<Problem>().count{it.status==409})
     }
     @Test fun `counter redeem works across branches without customer login`() {
@@ -155,7 +155,7 @@ class WalletFirstPostgresTest {
         assertFailsWith<Problem>{service.redeemAtCounter(f.staff,request(f).copy(customerConfirmed=false),id())}
         service.commercial.changeAccess(f.staff.tenant,AccessChange("SUSPENDED","Prueba",1))
         assertFailsWith<Problem>{service.redeemAtCounter(f.staff,request(f),id())}
-        assertFailsWith<Problem>{service.enrollWithoutPassword(f.slug,WalletEnrollment("Otro","DEMO10003",true))}
+        assertFailsWith<Problem>{service.enrollWithoutPassword(f.slug,WalletEnrollment("Otro","DEMO10003",true, phone = "0991234567"))}
         assertFailsWith<Problem>{issue(f)};assertEquals(20L,balance(f))
     }
     @Test fun `cashback and stamps preserve independent units during redemption`() {
@@ -208,15 +208,15 @@ class WalletFirstPostgresTest {
         assertTrue(details.any { it.str("label").startsWith("COMPRA") && it.str("value") == "20.00 USD\nSucursal: Centro" })
     }
     @Test fun `new migration is repeatable and keeps legacy login compatible`() {
-        val f=fixture();db.migrate();assertEquals(16,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
-        val legacy=service.enroll(f.slug,Enrollment("Legacy","LEGACY123","test-password-123",true))
+        val f=fixture();db.migrate();assertEquals(17,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        val legacy=service.enroll(f.slug,Enrollment("Legacy","LEGACY123","test-password-123",true, phone = "0991234567"))
         assertEquals(service.member(legacy.str("token")),service.member(service.login(f.slug,Login("LEGACY123","test-password-123")).str("token")))
         assertEquals(2,count("members",f))
     }
     @Test fun `HTTP onboarding and counter enforce roles origins and no document login`() = testApplication {
         environment { config=MapApplicationConfig() }; application { loyaltyRoutes(service,"p".repeat(40),"http://localhost") }
         val f=fixture();earn(f)
-        val joined=client.post("/api/public/${f.slug}/join"){contentType(ContentType.Application.Json);setBody("""{"name":"Nuevo","document":"DEMO10009","acceptedTerms":true}""")}
+        val joined=client.post("/api/public/${f.slug}/join"){contentType(ContentType.Application.Json);setBody("""{"name":"Nuevo","document":"DEMO10009","acceptedTerms":true,"phone":"0991234567"}""")}
         assertEquals(HttpStatusCode.Created,joined.status)
         val session=json.parseToJsonElement(joined.bodyAsText()).jsonObject.str("token")
         assertEquals(HttpStatusCode.Unauthorized,client.post("/api/staff/counter-redemptions"){bearerAuth(session);contentType(ContentType.Application.Json);setBody(json.encodeToString(request(f)))}.status)

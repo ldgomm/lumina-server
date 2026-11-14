@@ -20,7 +20,7 @@ import { walletSections } from '../wallet/access-policy.mjs';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { activate, approveCompany, authenticate, authenticateLegacy, claimIdentity, can, changePassword, companyFor, createAgency, createSession, createTeamMember,
-  getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamMember, updateGrants, updateMember } from '../access/accounts.mjs';
+  getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamMember, updateGrants, updateMember, updateContact } from '../access/accounts.mjs';
 import { teamDirectory, teamHistory } from '../access/team-directory.mjs';
 import { consultTeams } from '../access/team-consultation.mjs';
 import { teamsConsultationPage } from '../presentation/pages/team-consultation-pages.mjs';
@@ -305,6 +305,10 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         res.setHeader('Set-Cookie',sessionCookie('',trusted.protocol==='https:'));
         return redirect(res,'/');
       }
+      if(path==='/cuenta/contacto' && method==='POST') {
+        try { updateContact(db,actor,data);return redirect(res,'/cuenta?contacto=guardado'); }
+        catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Mi cuenta',body:accountPage(actor,{contactValues:data,contactError:issue.message})},issue.status);}
+      }
       if(path==='/cuenta/identificacion') {
         if(actor.document)return redirect(res,'/cuenta');
         if(method==='POST') {
@@ -494,7 +498,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'),actor)});
       }
       const accountView=options=>({title:'Mi cuenta',body:(actor.kind==='AGENCY'?'<section class="card"><h2>Datos del proveedor</h2><a href="/cuenta/proveedor" class="btn secondary">Identificación legal de Lúmina</a></section>':'')+accountPage(actor,{otherSessions:db.get('SELECT count(*) n FROM sessions WHERE account_id=? AND digest<>? AND expires_at>?',actor.id,actor.session_id,now()).n,...options})});
-      if (path==='/cuenta' && method==='GET') return render(accountView({notice:target.searchParams.get('estado')==='clave'?'Contraseña actualizada.':target.searchParams.get('estado')==='sesiones'?'Se cerraron tus otras sesiones.':''}));
+      if (path==='/cuenta' && method==='GET') return render(accountView({notice:target.searchParams.get('contacto')==='guardado'?'Teléfono guardado.':target.searchParams.get('estado')==='clave'?'Contraseña actualizada.':target.searchParams.get('estado')==='sesiones'?'Se cerraron tus otras sesiones.':''}));
       if (path==='/cuenta/sesiones/cerrar' && method==='POST') {
         db.run('DELETE FROM sessions WHERE account_id=? AND digest<>?',actor.id,actor.session_id);
         return redirect(res,'/cuenta?estado=sesiones');

@@ -72,7 +72,7 @@ class WalletFeaturedRewardPostgresTest {
         val slug="goal-"+id().take(12);val tenant=service.createTenant(NewTenant("Metas",slug));val owner=service.staff(tenant.str("ownerToken"))
         val branch=service.newBranch(owner,NewBranch("Centro","C")).str("id")
         val program=service.newProgram(owner,Program("Promoción",kind,cashbackBps=500,productGroup=benefit?.group ?: "",countUnits=kind==Kind.STAMPS)).str("id")
-        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente de prueba","DEMO10001",true)).str("token"))
+        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente de prueba","DEMO10001",true, phone = "0991234567")).str("token"))
         val input=Reward(program,"Premio",goal,benefit=benefit)
         return F(owner,member,branch,program,service.saveReward(owner,input).str("id"),input)
     }

@@ -17,7 +17,7 @@ async function setup(t) {
 }
 const inviteCode = response => response.body.match(/<code class="secret">([A-Za-z0-9_-]{43})<\/code>/)?.[1];
 const person = (w,input={}) => colleague(w,w.client,{name:'Persona de prueba',document:'1738277993','SOCIAL.VIEW':'yes',...input});
-const write = (w,id,action,data={}) => w.client.post('/equipo/'+id+'/'+action,{revision:teamRevision(w,id),...data});
+const write = (w,id,action,data={}) => w.client.post('/equipo/'+id+'/'+action,{revision:teamRevision(w,id),...(action==='datos'?{phone:'0991234567'}:{}),...data});
 const activeCash = async (w,member,permissions={purchases:'yes'}) => {
   const result=await write(w,member.id,'caja/guardar',{branch:w.branch,...permissions});assert.equal(result.status,303,result.body);
   return w.db.get('SELECT * FROM cash_grants WHERE account_id=?',member.id);
@@ -49,8 +49,8 @@ test('una invitación se usa una vez, no inicia sesión antes de activarse y no 
   const id=w.db.get('SELECT id FROM accounts WHERE document=?','1723435424').id;
   assert.ok(code);assert.equal((await w.session().post('/entrar',{document:'1723435424',password})).status,401);
   assert.match((await w.client.get('/equipo/'+id)).body,/Por activar/);
-  assert.equal((await w.session().post('/activar',{code,password})).status,303);
-  assert.equal((await w.session().post('/activar',{code,password})).status,403);
+  assert.equal((await w.session().post('/activar',{code,password,phone:'0991234567'})).status,303);
+  assert.equal((await w.session().post('/activar',{code,password,phone:'0991234567'})).status,403);
   assert.ok(!JSON.stringify(audit(w,id)).includes(code));
   assert.doesNotMatch((await w.client.get('/equipo/'+id)).body,/<code class="secret">/);
 });
@@ -58,13 +58,13 @@ test('códigos vencidos y renovados: sólo funciona el vigente y los formularios
   const w=await setup(t),r=await w.client.post('/equipo',{name:'Invitación',document:'1722743307'}),code=inviteCode(r);
   const id=w.db.get('SELECT id FROM accounts WHERE document=?','1722743307').id,old=teamRevision(w,id);
   w.db.run("UPDATE codes SET expires_at='2001-01-01T00:00:00.000Z' WHERE account_id=?",id);
-  assert.equal((await w.session().post('/activar',{code,password})).status,403);
+  assert.equal((await w.session().post('/activar',{code,password,phone:'0991234567'})).status,403);
   assert.match((await w.client.get('/equipo?estado=EXPIRED')).body,/Cédula ····3307/);
   assert.equal((await write(w,id,'invitar')).status,400);
   const next=await write(w,id,'invitar',{confirm:'yes'});assert.equal(next.status,200);
   assert.equal((await write(w,id,'invitar',{revision:old,confirm:'yes'})).status,409);
-  assert.equal((await w.session().post('/activar',{code,password})).status,403);
-  assert.equal((await w.session().post('/activar',{code:inviteCode(next),password})).status,303);
+  assert.equal((await w.session().post('/activar',{code,password,phone:'0991234567'})).status,403);
+  assert.equal((await w.session().post('/activar',{code:inviteCode(next),password,phone:'0991234567'})).status,303);
 });
 test('renovar el acceso explica y cierra sesiones, invalida la contraseña anterior y conserva los permisos',async t=>{
   const w=await setup(t),m=await person(w),before=w.db.all('SELECT scope,action FROM grants WHERE account_id=?',m.id);
@@ -73,7 +73,7 @@ test('renovar el acceso explica y cierra sesiones, invalida la contraseña anter
   assert.equal((await m.session.post('/solicitudes',{})).status,401);
   assert.equal((await w.session().post('/entrar',{document:'1738277993',password})).status,401);
   assert.deepEqual(w.db.all('SELECT scope,action FROM grants WHERE account_id=?',m.id),before);
-  const restored=w.session();assert.equal((await restored.post('/activar',{code:inviteCode(reset),password})).status,303);assert.equal((await restored.get('/contenido')).status,200);
+  const restored=w.session();assert.equal((await restored.post('/activar',{code:inviteCode(reset),password,phone:'0991234567'})).status,303);assert.equal((await restored.get('/contenido')).status,200);
 });
 test('permisos: dos pestañas no se sobrescriben y el conflicto conserva el borrador con la versión antigua',async t=>{
   const w=await setup(t),m=await person(w),old=teamRevision(w,m.id);
@@ -93,7 +93,7 @@ test('baja, reactivación y edición usan revisión y confirmación sin reactiva
   assert.equal((await m.session.get('/api/staff/dashboard')).status,401);
   assert.equal((await write(w,m.id,'invitar',{revision:old,confirm:'yes'})).status,409);
   assert.equal((await write(w,m.id,'permisos',{'WEB.VIEW':'yes'})).status,303);assert.equal(w.db.get('SELECT active FROM accounts WHERE id=?',m.id).active,0);
-  const code=inviteCode(await write(w,m.id,'invitar',{confirm:'yes'})),s=w.session();assert.equal((await s.post('/activar',{code,password})).status,303);assert.equal((await s.get('/servicios/web')).status,200);assert.equal((await s.get('/contenido')).status,403);
+  const code=inviteCode(await write(w,m.id,'invitar',{confirm:'yes'})),s=w.session();assert.equal((await s.post('/activar',{code,password,phone:'0991234567'})).status,303);assert.equal((await s.get('/servicios/web')).status,200);assert.equal((await s.get('/contenido')).status,403);
 });
 test('corregir cédula cierra sesiones y códigos; duplicados e identidad ajena no se aceptan',async t=>{
   const w=await setup(t),m=await person(w),old=teamRevision(w,m.id);

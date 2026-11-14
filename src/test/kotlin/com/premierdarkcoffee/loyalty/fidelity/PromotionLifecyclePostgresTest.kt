@@ -82,7 +82,7 @@ class PromotionLifecyclePostgresTest {
     private fun fixture():F {
         val slug="lifecycle-"+id().take(12);val t=service.createTenant(NewTenant("Negocio",slug));val token=t.str("ownerToken");val owner=service.staff(token)
         val branch=service.newBranch(owner,NewBranch("Centro","A")).str("id")
-        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente","DEMO10001",true)).str("token"))
+        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente","DEMO10001",true, phone = "0991234567")).str("token"))
         val program=service.newProgram(owner,Program("Promoción de prueba",Kind.STAMPS)).str("id")
         val reward=service.saveReward(owner,Reward(program,"Premio",1)).str("id")
         return F(owner,token,member,branch,program,reward,slug)
@@ -167,7 +167,7 @@ class PromotionLifecyclePostgresTest {
         assertEquals(1,service.customerDetail(f.owner,f.member.id).getValue("rewards").jsonArray.size);assertEquals(1,count("redemptions",f))
     }
     @Test fun `migration repeats and database prevents deleted program restoration`() {
-        val f=fixture();remove(f);db.migrate();assertEquals(16,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        val f=fixture();remove(f);db.migrate();assertEquals(17,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
         assertFails{db.tx{c->c.exec("UPDATE programs SET deleted_at=NULL WHERE tenant_id=? AND id=?",f.owner.tenant,f.program)}}
         assertFails{db.tx{c->c.exec("DELETE FROM program_deletions WHERE tenant_id=?",f.owner.tenant)}}
     }

@@ -55,13 +55,13 @@ class BusinessProfilePostgresTest {
         if(::schema.isInitialized)DriverManager.getConnection(url,user,password).use{it.createStatement().use{s->s.execute("DROP SCHEMA $schema CASCADE")}}
     }
     private fun business(p:BusinessProfile?=profile(),name:String="Café "+id().take(8))=service.createTenant(NewTenant(name,"profile-"+id().take(12),firstBranch=NewBranch("Principal","MAIN"),profile=p))
-    private fun enroll(t:JsonObject,name:String)=service.enrollWithoutPassword(t.str("enrollmentPath").substringAfterLast('/'),WalletEnrollment(name,"ID"+id().take(12),true))
+    private fun enroll(t:JsonObject,name:String)=service.enrollWithoutPassword(t.str("enrollmentPath").substringAfterLast('/'),WalletEnrollment(name,"ID"+id().take(12),true, phone = "0991234567"))
     @Test fun `creation persists profile branch and owner together and migration repeats`() {
         val p=profile();val t=business(p);val tenant=t.str("tenantId")
         db.migrate();val saved=service.businessProfile(tenant)
         assertEquals(1,saved.getValue("version").jsonPrimitive.int);assertEquals("NOT_VERIFIED",saved.str("rucVerification"));assertEquals(p,json.decodeFromJsonElement<BusinessProfile>(saved.getValue("profile")))
         assertEquals(1,service.platformBranches(tenant).getValue("branches").jsonArray.size);assertEquals(tenant,service.staff(t.str("ownerToken")).tenant)
-        assertEquals(16,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getInt(1)}})
+        assertEquals(17,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getInt(1)}})
     }
     @Test fun `invalid profile or branch creates no tenant or orphan profile`() {
         for(input in listOf(NewTenant("Inválido","invalid-"+id().take(12),profile=profile().copy(ruc="wrong")),NewTenant("Inválido","invalid-"+id().take(12),firstBranch=NewBranch(" ","MAIN"),profile=profile()))) {

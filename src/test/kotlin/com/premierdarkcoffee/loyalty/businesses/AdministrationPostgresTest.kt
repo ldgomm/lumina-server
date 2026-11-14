@@ -71,7 +71,7 @@ class AdministrationPostgresTest {
     private fun fixture():F {
         val slug="admin-"+id().take(10);val t=service.createTenant(NewTenant("Negocio administración",slug))
         val token=t.str("ownerToken");val owner=service.staff(token);val branch=service.newBranch(owner,NewBranch("Centro","C")).str("id")
-        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente ficticio","DEMO12345",true)).str("token"))
+        val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("Cliente ficticio","DEMO12345",true, phone = "0991234567")).str("token"))
         val program=service.newProgram(owner,Program("Puntos",Kind.POINTS)).str("id");val reward=service.saveReward(owner,Reward(program,"Premio",5)).str("id")
         return F(owner,token,member,branch,program,reward)
     }
@@ -165,7 +165,7 @@ class AdministrationPostgresTest {
     }
     @Test fun `migration rerun preserves existing version labels and credentials`() {
         val f=fixture();rename(f);db.migrate();assertEquals(2,row(f).num("version"));assertEquals("Centro renovado",row(f).str("name"));assertEquals(f.owner.id,service.staff(f.token).id)
-        assertEquals(16,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
+        assertEquals(17,db.tx{c->c.one("SELECT count(*) FROM comeback_migrations"){it.getInt(1)}})
     }
     @Test fun `HTTP routes enforce authentication roles method input and no-store`()=testApplication {
         val f=fixture();val cashier=service.newStaff(f.owner,NewStaff("CASHIER",f.branch,"Cajera")).str("token");application{loyaltyRoutes(service,admin,"https://loyalty.test")}

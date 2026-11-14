@@ -63,6 +63,11 @@ fun Route.managementRoutes(service: LoyaltyService, platformToken: String) {
         get("/operations") { val s=io { service.staff(call.bearer()) };val q=call.operationsQuery();call.respond(io { service.operationsReport(s,q) }) }
         get("/activity.csv") { val s=io { service.staff(call.bearer()) };call.activityCsv(service,s) }
         get("/team") { val s=io { service.staff(call.bearer()) };call.respond(io { service.team(s) }) }
+        put("/customer-workspace/{id}/contact") {
+            val staff=io { service.staff(call.bearer()) }
+            val input=call.body<CustomerContactChange>()
+            call.respond(io { service.updateCustomerContact(staff,call.parameters["id"]!!,input) })
+        }
         put("/team/{id}") { val s=io { service.staff(call.bearer()) };val input=call.body<TeamChange>();call.respond(io { service.editTeamUser(s,call.parameters["id"]!!,input) }) }
         post("/team/{id}/actions") { val s=io { service.staff(call.bearer()) };val input=call.body<TeamAction>();call.respond(io { service.teamAction(s,call.parameters["id"]!!,input) }) }
         get("/activity") { val s=io { service.staff(call.bearer()).also { it.owner() } };val q=call.managementQuery();call.respond(io { service.managementActivity(s.tenant,q,s) }) }

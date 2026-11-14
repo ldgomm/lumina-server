@@ -5,3 +5,4 @@ export const documentNumber=value=>check('documentNumber',value);
 export const rucNumber=value=>check('rucNumber',value);
 export const whatsappNumber=value=>check('whatsappNumber',value);
 export const identityLabel=account=>account.document?'Cédula ····'+account.document.slice(-4):'Cédula pendiente';
+export const contactPhone=value=>check('contactPhone',value);

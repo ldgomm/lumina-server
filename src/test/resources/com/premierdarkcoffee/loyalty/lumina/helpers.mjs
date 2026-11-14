@@ -83,7 +83,7 @@ export async function colleague(world,client,data) {
   if (!code) throw new Error('No se creó invitación de prueba.');
   const accountId = world.db.get('SELECT id FROM accounts WHERE document=?',data.document).id;
   const session = world.session();
-  if ((await session.post('/activar',{code,password})).status!==303) throw new Error('No se activó prueba.');
+  if ((await session.post('/activar',{code,password,phone:'0991234567'})).status!==303) throw new Error('No se activó prueba.');
   world.db.run('UPDATE accounts SET welcome_done=1 WHERE id=?',accountId);
   await session.get('/inicio');
   return {id:accountId,session,code};

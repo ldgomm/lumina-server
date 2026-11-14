@@ -61,7 +61,7 @@ class OperationsPostgresTest {
     private fun JsonObject.rows(k:String)=getValue(k).jsonArray.map{it.jsonObject}
     private fun JsonObject.summary()=getValue("summary").jsonObject
     private data class F(val owner:Staff,val token:String,val member:Member,val branch:String,val north:String,val program:String,val reward:String)
-    private fun fixture():F {val slug="ops-"+id().take(10);val t=service.createTenant(NewTenant("Prueba operaciones",slug));val token=t.str("ownerToken");val owner=service.staff(token);val b=service.newBranch(owner,NewBranch("Centro","C")).str("id");val n=service.newBranch(owner,NewBranch("Norte","N")).str("id");val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("=Cliente de prueba","DEMO12345",true)).str("token"));val p=service.newProgram(owner,Program("Club",Kind.POINTS)).str("id");val r=service.saveReward(owner,Reward(p,"Café de cortesía",5)).str("id");return F(owner,token,member,b,n,p,r)}
+    private fun fixture():F {val slug="ops-"+id().take(10);val t=service.createTenant(NewTenant("Prueba operaciones",slug));val token=t.str("ownerToken");val owner=service.staff(token);val b=service.newBranch(owner,NewBranch("Centro","C")).str("id");val n=service.newBranch(owner,NewBranch("Norte","N")).str("id");val member=service.member(service.enrollWithoutPassword(slug,WalletEnrollment("=Cliente de prueba","DEMO12345",true, phone = "0991234567")).str("token"));val p=service.newProgram(owner,Program("Club",Kind.POINTS)).str("id");val r=service.saveReward(owner,Reward(p,"Café de cortesía",5)).str("id");return F(owner,token,member,b,n,p,r)}
     private fun hire(f:F,p:StaffPermissions=StaffPermissions(),name:String="Ana Pérez"):JsonObject=service.newStaff(f.owner,NewStaff("CASHIER",f.branch,name,requestId=id(),permissions=p))
     private fun input(f:F,branch:String=f.branch,amount:Long=1000)=Purchase(f.member.id,branch,id(),amount,"USD",programIds=setOf(f.program))
     private fun buy(f:F,s:Staff=f.owner,time:Instant=at,branch:String=f.branch,amount:Long=1000)=atTime(time).purchase(s,input(f,branch,amount),id())
@@ -167,6 +167,6 @@ class OperationsPostgresTest {
         assertEquals(HttpStatusCode.BadRequest,client.get("/api/staff/operations?fromDate=2026-11-02"){bearerAuth(f.token)}.status)
     }
     @Test fun `migration reruns preserve credentials grants and ledger`() {
-        val f=fixture();val h=hire(f,StaffPermissions(false,true));buy(f);db.migrate();assertEquals(StaffPermissions(false,true),service.staff(h.str("token")).permissions);assertEquals(f.owner,service.staff(f.token));assertEquals(1,count(f,"purchases"));assertEquals(16L,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getLong(1)}})
+        val f=fixture();val h=hire(f,StaffPermissions(false,true));buy(f);db.migrate();assertEquals(StaffPermissions(false,true),service.staff(h.str("token")).permissions);assertEquals(f.owner,service.staff(f.token));assertEquals(1,count(f,"purchases"));assertEquals(17L,db.tx{it.one("SELECT count(*) FROM comeback_migrations"){r->r.getLong(1)}})
     }
 }

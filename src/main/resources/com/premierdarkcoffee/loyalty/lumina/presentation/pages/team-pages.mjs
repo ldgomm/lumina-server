@@ -27,8 +27,8 @@ function editor(member, branches, values = null, branchError = '') {
 }
 export function newMemberPage(actor, values = {}, error = '') {
   return `<div class="team-heading">${localLink('/equipo','← Volver al equipo')}</div>${alert(error)}${card('Añadir persona',teamForm('/equipo',actor,
-    `<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100" autocomplete="name"',values.name)}${input('document','Cédula','text','required inputmode="numeric" maxlength="10" data-identity="document"',values.document)}</div>
-    <p class="team-help">Después elige las tareas que podrá realizar.</p><div class="team-save">${button('Continuar')}</div>`))}`;
+    `<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100" autocomplete="name"',values.name)}${input('document','Cédula','text','required inputmode="numeric" maxlength="10" data-identity="document"',values.document)}${input('phone','Teléfono (si lo conoces)','tel','maxlength="30" autocomplete="tel" data-identity="contact" placeholder="099 123 4567"',values.phone)}</div>
+    <p class="team-help">La persona confirmará su teléfono al activar el acceso. Después elige sus tareas.</p><div class="team-save">${button('Continuar')}</div>`))}`;
 }
 export function teamPage(actor, company, directory) {
   const {rows,counts,q,state,area,page,more,total} = directory;
@@ -36,7 +36,7 @@ export function teamPage(actor, company, directory) {
   const list = table(['Persona','Puede acceder a','Estado',''],rows.map(member=>{
     const scopes=Object.entries(areas).filter(([scope])=>member.grants.some(g=>g.action==='VIEW'&&(g.scope===scope||scope==='SOCIAL'&&socialChannels.includes(g.scope)))).map(([,title])=>title);
     if(member.cash_status==='ACTIVE'){const wallet=scopes.indexOf(areas.WALLET);if(wallet>=0)scopes.splice(wallet,1);scopes.unshift('Wallet · Caja · '+member.branch_name);}
-    return [`<strong>${localLink('/equipo/'+member.id,member.name)}</strong><span class="team-email">${esc(identityLabel(member))}</span>`,
+    return [`<strong>${localLink('/equipo/'+member.id,member.name)}</strong><span class="team-email">${esc(identityLabel(member))}</span>${member.contact_phone?`<a class="team-phone" href="tel:${esc(member.contact_phone)}">${esc(member.contact_phone)}</a>`:'<span class="team-email">Teléfono pendiente</span>'}`,
       scopes.length?scopes.map(s=>`<span class="team-area-tag">${esc(s)}</span>`).join(''):'Sin áreas asignadas',
       `<span class="team-state ${memberState(member).toLowerCase()}">${states[memberState(member)]}</span>${member.cash_status==='REVOKING'?'<span class="team-email">Caja bloqueada · retiro pendiente</span>':''}`,
       localLink('/equipo/'+member.id,'Gestionar →','team-manage')];
@@ -62,12 +62,13 @@ function auditDetails(details) {
     if('rewards' in value)parts.push(value.rewards?'Canjes habilitados':'Sin canjes');
     if('active' in value)parts.push(value.active?'Activo':'Desactivado');
     if(value.status)parts.push(value.status==='REVOKING'?'Caja bloqueada':value.status==='INACTIVE'?'Caja retirada':value.status);
+    if(value.contactUpdated)parts.push('Teléfono actualizado');
     if(value.reason)parts.push(value.reason);
     return parts.join(' · ')||'Sin cambios de permisos';
   };
   return `<dl class="team-audit-diff"><dt>Antes</dt><dd>${esc(summary(parsed.before))}</dd><dt>Después</dt><dd>${esc(summary(parsed.after))}</dd></dl>`;
 }
-const auditLabels={ACCESO_CREADO:'Acceso creado',PERMISOS_ACTUALIZADOS:'Permisos actualizados',PERSONA_ACTUALIZADA:'Datos actualizados',ACCESO_DESACTIVADO:'Acceso desactivado',ACTIVACIÓN_EMITIDA:'Código renovado',CAJA_AUTORIZADA:'Caja asignada',CAJA_BLOQUEADA:'Caja bloqueada',CAJA_REVOCADA:'Caja retirada',ACCESO_WALLET_PREPARADO:'Wallet preparada',ACCESO_WALLET_REPARADO:'Wallet reparada',CONTRASEÑA_ACTUALIZADA:'Contraseña actualizada'};
+const auditLabels={ACCESO_CREADO:'Acceso creado',PERMISOS_ACTUALIZADOS:'Permisos actualizados',PERSONA_ACTUALIZADA:'Datos actualizados',ACCESO_DESACTIVADO:'Acceso desactivado',ACTIVACIÓN_EMITIDA:'Código renovado',CAJA_AUTORIZADA:'Caja asignada',CAJA_BLOQUEADA:'Caja bloqueada',CAJA_REVOCADA:'Caja retirada',ACCESO_WALLET_PREPARADO:'Wallet preparada',ACCESO_WALLET_REPARADO:'Wallet reparada',CONTRASEÑA_ACTUALIZADA:'Contraseña actualizada',CONTACTO_ACTUALIZADO:'Teléfono actualizado'};
 export function memberPage(actor, company, member, branches = null, options = {}) {
   const {values={},error='',section='',history=[],notice='',branchError=''}=options;
   const base='/equipo/'+member.id;
@@ -83,10 +84,10 @@ export function memberPage(actor, company, member, branches = null, options = {}
   const invitationCopy=member.activated?'Cierra sus sesiones y reemplaza su contraseña por una nueva activación.':!member.active?'Reactiva su cuenta con los permisos que ves arriba.':'El código anterior dejará de funcionar.';
   const activity=history.length?`<ol class="team-history">${history.map(row=>`<li><div><strong>${esc(auditLabels[row.action]||row.action)}</strong><time>${timestamp(row.happened_at)}</time></div><span class="team-help">${esc(row.actor_name)}</span>${auditDetails(row.details)}</li>`).join('')}</ol>`:'<p class="team-help">Todavía no hay cambios registrados.</p>';
   return `<div class="team-heading">${localLink('/equipo','← Volver al equipo')}<span class="team-state ${status.toLowerCase()}">${states[status]}</span></div>
-    <p class="team-contact">${esc(identityLabel(member))}</p>${notice?`<p class="team-success" role="status">${esc(notice)}</p>`:''}${alert(error)}${error?localLink(base,'Descartar el borrador y cargar el acceso actual','team-support'):''}
+    <p class="team-contact">${esc(identityLabel(member))}${member.contact_phone?` · <a href="tel:${esc(member.contact_phone)}">${esc(member.contact_phone)}</a>`:' · Teléfono pendiente'}</p>${notice?`<p class="team-success" role="status">${esc(notice)}</p>`:''}${alert(error)}${error?localLink(base,'Descartar el borrador y cargar el acceso actual','team-support'):''}
     ${!member.active?'<p class="team-alert">Acceso desactivado. Guardar permisos no reactiva la cuenta.</p>':''}
     <section id="permisos" class="card team-access-card"><h2>Qué puede hacer</h2><p class="team-help">Elige sus tareas y guarda una sola vez.</p>${teamForm(base+'/acceso',actor,`${hidden('revision',accessRevision)}${editor(member,branches,draft,branchError)}<div class="team-save team-save-sticky"><span data-save-status role="status">Los cambios se aplican al guardar.</span>${button(member.cash_status==='REVOKING'?'Guardar y completar retiro':'Guardar acceso')}</div>`)}</section>
-    <details id="datos" class="card team-secondary"${['datos','invitar','desactivar'].includes(section)?' open':''}><summary>Datos y acceso</summary>${fold('datos','Nombre y cédula',teamForm(base+'/datos',actor,`${revision('datos')}<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100"',section==='datos'?values.name:member.name)}${input('document','Cédula','text','required inputmode="numeric" maxlength="10" data-identity="document"',section==='datos'?values.document:member.document)}</div><p class="team-help">Cambiar la cédula cierra sus sesiones y anula los códigos anteriores.</p>${button('Guardar datos','secondary')}`))}
+    <details id="datos" class="card team-secondary"${['datos','invitar','desactivar'].includes(section)?' open':''}><summary>Datos y acceso</summary>${fold('datos','Datos de la persona',teamForm(base+'/datos',actor,`${revision('datos')}<div class="fields two">${input('name','Nombre','text','required minlength="2" maxlength="100"',section==='datos'?values.name:member.name)}${input('document','Cédula','text','required inputmode="numeric" maxlength="10" data-identity="document"',section==='datos'?values.document:member.document)}${input('phone','Teléfono','tel','required maxlength="30" autocomplete="tel" data-identity="contact" placeholder="099 123 4567"',section==='datos'?values.phone:member.contact_phone)}</div><p class="team-help">Cambiar la cédula cierra sus sesiones y anula los códigos anteriores.</p>${button('Guardar datos','secondary')}`))}
       ${member.activation_expires&&status==='PENDING'?`<p class="team-help">Código válido hasta ${timestamp(member.activation_expires)}.</p>`:''}
       ${fold('invitar',!member.active?'Reactivar persona':member.activated?'Restablecer acceso':'Renovar código',form(base+'/invitar',actor,`${revision('invitar')}<p>${invitationCopy}</p>${check('confirm','Confirmo que la persona deberá activar su acceso de nuevo.',false,true)}${button(!member.active?'Reactivar y generar código':'Generar nuevo código','secondary')}`))}
       ${member.active?fold('desactivar','Desactivar persona',form(base+'/desactivar',actor,`${revision('desactivar')}<p>Se cerrarán sus sesiones y se bloqueará todo su acceso, incluida Caja. El historial se conserva.</p>${check('confirm','Confirmo la baja del acceso completo.',false,true)}${button('Desactivar persona','danger')}`)):''}
