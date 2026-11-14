@@ -55,6 +55,7 @@ function navLinks(actor,company,url,cash) {
     if(actor.kind==='OWNER')items.push(['/equipo','Equipos y roles','clients']);
     if(actor.kind==='AGENCY'&&company)items.push(['/administracion/negocios/'+company.id,'Estado y pagos','plans']);
     if(Object.keys(channels).some(scope=>can(actor,scope)))items.push([url('/solicitudes'),'Solicitudes','content'],[url('/agenda'),'Grabaciones','calendar']);
+    if(actor.kind!=='AGENCY'&&(actor.kind==='OWNER'||Object.keys(areas).some(scope=>can(actor,scope,'APPROVE'))))items.push([url('/pendientes'),'Pendientes','check']);
   }
   if(actor.kind==='OWNER')items.push(['/servicios','Mis servicios','plans','Servicios']);
   if(can(actor,'WALLET')||cash)items.push([url('/wallet'),'Fidelización digital · Wallet','wallet',actor.kind==='OWNER'?undefined:'Servicios']);
@@ -68,6 +69,9 @@ function navLinks(actor,company,url,cash) {
   if(actor.kind==='OWNER')items.push(['/mi-estado-cuenta','Mi cuenta y pagos','plans']);
   items.push(['/ayuda','Ayuda','content'],['/cuenta','Mi cuenta','settings']);
   return items;
+}
+export function navigationSearch() {
+  return '<div class="navigation-find" hidden><label>Buscar sección<input type="search" data-nav-search autocomplete="off" placeholder="Equipo, pagos…"></label><button type="button" data-nav-clear hidden>Limpiar</button><p data-nav-result role="status" aria-live="polite"></p></div>';
 }
 const mark = `<img class="lumina-symbol" src="/assets/lumina-symbol.png" width="44" height="44" alt=""><span>Lúmina <strong>Digital</strong></span>`;
 export function page({actor,company,path='/',title,description='',body,cash=false,notice=''}) {
@@ -84,7 +88,7 @@ export function page({actor,company,path='/',title,description='',body,cash=fals
     <body class="${actor?'signed-in':'signed-out'}"><a class="skip" href="#contenido">Saltar al contenido</a>
     <header class="site-header"><div class="top"><a class="brand" href="${actor?esc(actor.kind==='AGENCY'?'/resumen':'/inicio'):'/'}">${mark}</a>
     ${actor?`<button class="menu-toggle quiet" type="button" aria-label="Abrir navegación" aria-controls="workspace-nav" aria-expanded="false">${icon('menu')}</button>`:`<div class="top-links">${localLink('/','Ingresar')}${localLink('/registro','Registrar negocio cliente')}</div>`}</div>
-    ${actor?`<nav class="lumina-sidebar-nav" id="workspace-nav" aria-label="Área de trabajo"><button class="navigation-close" type="button" aria-label="Cerrar navegación">Cerrar menú ×</button><div class="workspace-context"><small>ESPACIO DE TRABAJO</small><strong>${esc(company?.name||actor.company_name||(actor.kind==='AGENCY'?'Lúmina Digital':'Mi negocio'))}</strong><span>${esc(label(actor.kind))}</span></div>${menu}<div class="nav-foot"><img class="lumina-symbol" src="/assets/lumina-symbol.png" alt="" width="28" height="28"><p>Marketing con propósito.<small>Lúmina Digital</small></p></div></nav>`:''}</header>
+    ${actor?`<nav class="lumina-sidebar-nav" id="workspace-nav" aria-label="Área de trabajo"><button class="navigation-close" type="button" aria-label="Cerrar navegación">Cerrar menú ×</button><div class="workspace-context"><small>ESPACIO DE TRABAJO</small><strong>${esc(company?.name||actor.company_name||(actor.kind==='AGENCY'?'Lúmina Digital':'Mi negocio'))}</strong><span>${esc(label(actor.kind))}</span></div>${navigationSearch()}${menu}<div class="nav-foot"><img class="lumina-symbol" src="/assets/lumina-symbol.png" alt="" width="28" height="28"><p>Marketing con propósito.<small>Lúmina Digital</small></p></div></nav>`:''}</header>
     ${actor?`<div class="workspace-topbar"><span>${esc(company?.name||actor.company_name||'Lúmina Digital')}<small>${actor.kind==='AGENCY'&&company?(path.startsWith('/administracion/negocios/')?'Administración del negocio':'Consulta de cliente'):'Tu centro de trabajo'}</small></span><div class="identity"><span class="avatar" aria-hidden="true">${esc(actor.name.trim().charAt(0).toUpperCase())}</span><span>${esc(actor.name)}<small>${esc(label(actor.kind))}</small></span>${localLink('/cuenta','Mi cuenta','account-link')}</div></div>`:''}
     <button class="navigation-backdrop" type="button" aria-label="Cerrar navegación" hidden></button><main id="contenido"><header class="page-title"><p class="eyebrow">${esc(company?.name||actor?.company_name||(actor?'LÚMINA / ESPACIO PRIVADO':'LÚMINA DIGITAL'))}</p><h1>${esc(title)}</h1>${description?`<p>${esc(description)}</p>`:''}</header>
     ${actor?.kind==='AGENCY'&&company&&!path.startsWith('/administracion/negocios/')?`<aside class="consultation-notice" role="note"><strong>${actor.agencyWork?'Trabajo de Lúmina':'Consulta del negocio · Solo lectura'}</strong><p>${actor.agencyWork?'Las acciones se registran a nombre de la agencia. Las solicitudes y aprobaciones corresponden al negocio.':'Estás consultando '+esc(company.name)+' como administrador de Lúmina. Conservas tu identidad de agencia.'}</p></aside>`:''}

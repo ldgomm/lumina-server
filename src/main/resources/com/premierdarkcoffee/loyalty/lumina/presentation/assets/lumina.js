@@ -133,3 +133,23 @@ for(const form of document.querySelectorAll('form:has([name="individual_service"
 
 const validationMessage=document.querySelector('[role=alert]');
 if(validationMessage){validationMessage.tabIndex=-1;validationMessage.focus();}
+
+// This finder filters authorized navigation only. It has no network or storage access.
+for(const box of document.querySelectorAll('.navigation-find')) {
+  const nav=box.parentElement,input=box.querySelector('[data-nav-search]'),clear=box.querySelector('[data-nav-clear]'),result=box.querySelector('[data-nav-result]');
+  const links=[...nav.children].filter(e=>e.matches('a[href]'));
+  const headings=[...nav.children].filter(e=>e.matches('.nav-label'));
+  const fold=value=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es').trim();
+  const filter=()=>{
+    const words=fold(input.value).split(/\s+/).filter(Boolean);
+    for(const link of links)link.hidden=!words.every(word=>fold(link.textContent).includes(word));
+    for(const heading of headings){let next=heading.nextElementSibling,visible=false;while(next&&!next.matches('.nav-label')){if(links.includes(next)&&!next.hidden)visible=true;next=next.nextElementSibling;}heading.hidden=!!words.length&&!visible;}
+    const count=links.filter(e=>!e.hidden).length;
+    result.textContent=words.length?(count?count+' sección'+(count===1?'':'es'):'No encontramos esa sección.'):'';
+    clear.hidden=!words.length;
+  };
+  box.hidden=false;input.addEventListener('input',filter);
+  clear.addEventListener('click',()=>{input.value='';filter();input.focus();});
+  input.addEventListener('keydown',event=>{if(event.key==='Escape'&&input.value){event.preventDefault();event.stopPropagation();input.value='';filter();}});
+  window.addEventListener('pageshow',filter);
+}

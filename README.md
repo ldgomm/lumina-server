@@ -94,3 +94,7 @@ Equipo con búsqueda, estados, permisos claros, historial y protección ante for
 ### Lúmina v022 / Loyalty v061
 
 Teléfono para colaboradores y clientes Wallet, alta más clara, contacto editable según permisos y corrección del acceso a Caja desde la ficha. [Guía de actualización](docs/lumina-contacto-simple-v061.md).
+
+### Lúmina v023 / Loyalty v062
+
+Pendientes completos, agenda por próximas visitas e historial, solicitudes con filtros y totales, y buscador de secciones. Conserva roles y conexiones Wallet. [Guía de actualización](docs/lumina-jornada-simple-v062.md).

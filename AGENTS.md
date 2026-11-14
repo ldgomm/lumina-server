@@ -1,5 +1,15 @@
 # Loyalty
 
+## Lúmina v023 / Loyalty v062 — jornada y navegación claras
+
+- Baseline: v022 instalada y validada, commit 6bb8c0d534df0d775dc6a335889cf7451cd1653b. Esta sección prevalece para versiones y gates.
+- Pendientes reúne entregas con permiso de aprobación y propuestas/cotizaciones del dueño. Nunca permite actuar como negocio a la agencia. Consulta sin escrituras; filtros, búsqueda y paginación conservan alcance.
+- Agenda compartida entre Lúmina y Contenido: próximas, por actualizar e historial. No marcar una visita realizada por haber vencido. Las solicitudes canceladas salen de próximos y sus recuentos, conservando historial. Buscar antes de paginar; preservar empresa y modo de agencia.
+- Solicitudes: todas, en curso y cerradas; totales exactos y paginación con filtros. Búsqueda de navegación únicamente sobre enlaces autorizados, sin red ni almacenamiento. Equipos y roles mantiene su posición inmediatamente después de Mi negocio para el dueño.
+- Sin cambios de esquema, motor Wallet, identidades, certificados, dominios, suscripciones, cargos o contratos. SQLite10/PostgreSQLV017 y representación Wallet34 se conservan.
+- Gates: 27 suites / 298 pruebas portal; 170 Python; 312 unidades/HTTP y 347 PostgreSQL. Docker y gateway antes de commit local; no push. 21 suites DOM, distintas de comprobación visual y recepción física.
+- Terminal solo RESULTADO y URL después de salud confirmada. Instalador de desarrollo bloquea producción; la entrega no despliega. Ver docs/lumina-jornada-simple-v062.md.
+
 ## Lúmina v022 / Loyalty v061 — contacto y registro claros
 
 - Esta sección prevalece sobre números de versión y gates históricos. Baseline: resultado v021 validado, commit ae2c75bd459d21eccf88d26ab293791f6293a29f.

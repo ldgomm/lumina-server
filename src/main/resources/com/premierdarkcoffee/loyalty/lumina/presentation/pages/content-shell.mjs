@@ -1,7 +1,7 @@
 import { brandSocial } from './brand-social.mjs';
 import { contentViews } from '../../content/workspace.mjs';
 import { can } from '../../access/accounts.mjs';
-import { esc, label, localLink, pathFor } from './components.mjs';
+import { esc, label, localLink, pathFor, navigationSearch } from './components.mjs';
 import { icon } from './icons.mjs';
 
 const marks={resumen:'home',solicitudes:'content',produccion:'social',revisiones:'check',entregas:'plans',publicaciones:'web',metricas:'metrics',agenda:'calendar'};
@@ -16,7 +16,7 @@ export function contentShell({actor,company,title,description='',body,contentVie
     <header class="content-header"><a class="content-brand" href="${esc(url('/contenido'))}"><img class="lumina-symbol" src="/assets/lumina-symbol.png" width="40" height="40" alt=""><strong>Contenido</strong><small class="module-chip">Lúmina Digital</small></a>
       <div class="content-header-actions">${localLink(back,'Volver a Lúmina','btn secondary')}<button class="menu-toggle secondary" type="button" aria-label="Abrir menú de Contenido" aria-controls="workspace-nav" aria-expanded="false">${icon('menu')}</button></div></header>
     <aside class="content-sidebar" id="workspace-nav" aria-label="Área de Contenido"><button class="navigation-close" type="button" aria-label="Cerrar navegación">Cerrar menú ×</button><div class="content-context"><span class="eyebrow">${actor.kind==='AGENCY'?'AGENCIA':'ESPACIO DE CONTENIDO'}</span><div class="content-business"><span class="business-avatar" aria-hidden="true">${esc(context.charAt(0).toUpperCase())}</span><strong>${esc(context)}</strong></div><span>${esc(mode)}</span></div>
-      <nav class="lumina-sidebar-nav" aria-label="Módulo de contenido">${Object.entries(contentViews).map(([key,title])=>`${({resumen:'Día a día',produccion:'Tu contenido',publicaciones:'Resultados'}[key])?`<p class="nav-label">${({resumen:'Día a día',produccion:'Tu contenido',publicaciones:'Resultados'}[key])}</p>`:''}<a href="${esc(url('/contenido',{vista:key}))}"${key===contentView?' aria-current="page"':''}>${icon(marks[key])}<span>${esc(title)}</span></a>`).join('')}</nav>
+      <nav class="lumina-sidebar-nav" aria-label="Módulo de contenido">${navigationSearch()}${Object.entries(contentViews).map(([key,title])=>`${({resumen:'Día a día',produccion:'Tu contenido',publicaciones:'Resultados'}[key])?`<p class="nav-label">${({resumen:'Día a día',produccion:'Tu contenido',publicaciones:'Resultados'}[key])}</p>`:''}<a href="${esc(url('/contenido',{vista:key}))}"${key===contentView?' aria-current="page"':''}>${icon(marks[key])}<span>${esc(title)}</span></a>`).join('')}</nav>
       <div class="content-person">${localLink(back,'← Volver a Lúmina','content-back')}<strong>${esc(actor.name)}</strong><span>${esc(label(actor.kind))}</span>${localLink('/cuenta','Mi cuenta','content-back')}</div></aside>
     <button class="navigation-backdrop" type="button" aria-label="Cerrar navegación" hidden></button><main id="contenido"><div class="content-breadcrumb">${esc(context)}<span>/</span>Contenido<span>/</span>${esc(title)}</div>
       <header class="content-title"><div><p class="eyebrow">${esc(mode)}</p><h1>${esc(title)}</h1>${description?`<p>${esc(description)}</p>`:''}</div>

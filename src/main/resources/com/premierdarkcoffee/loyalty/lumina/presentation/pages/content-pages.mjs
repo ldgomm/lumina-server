@@ -1,3 +1,4 @@
+import { workdayAgenda } from './workday-pages.mjs';
 import { priceGuide } from './request-composer.mjs';
 import { contentName } from '../../content/service-options.mjs';
 import { can } from '../../access/accounts.mjs';
@@ -9,8 +10,16 @@ export function contentNav(url,view='resumen') {
   return `<nav class="module-tabs" aria-label="Módulo de contenido">${Object.entries(contentViews).map(([key,title])=>
     `<a href="${esc(url('/contenido',{vista:key}))}"${key===view?' aria-current="page"':''}>${title}</a>`).join('')}</nav>`;
 }
-export function contentPage({actor,company,url,data,metricsHtml='',plans=[],contracts=[]}) {
+export function contentPage({actor,company,url,data,metricsHtml='',agenda=null,plans=[],contracts=[]}) {
   const {view,counts,rows}=data;
+  if(view==='agenda'&&agenda) {
+    const agendaUrl=(path,params={})=>{
+      if(path!=='/agenda'&&path!=='/agenda-general')return url(path,params);
+      const {vista,...rest}=params;
+      return url('/contenido',{...rest,vista:'agenda',...(vista?{periodo:vista}:{})});
+    };
+    return workdayAgenda({actor,data:agenda,url:agendaUrl,global:actor.kind==='AGENCY'&&!company,viewKey:'periodo'});
+  }
   const requestLink=row=>actor.kind==='AGENCY'?(actor.agencyWork||!company?'/agencia':'')+'/solicitudes/'+(row.request_id||row.id)+'?empresa='+row.company_id:'/solicitudes/'+(row.request_id||row.id);
   const context=company?hidden('empresa',company.id):'';
   const filter=`<form action="${esc(url('/contenido').split('?')[0])}" class="workspace-filter content-filter">${context}${hidden('vista',view)}

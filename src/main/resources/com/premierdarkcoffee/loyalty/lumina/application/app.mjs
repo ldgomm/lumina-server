@@ -14,7 +14,9 @@ import { subscriptionPage, legalProfilePage, walletPriceCard } from '../presenta
 import { canReadFidelityReport, centralPaths, managementSections, managementTitles } from '../wallet/management-policy.mjs';
 import { managementPage, managementFramePage, managementDocument } from '../presentation/pages/management-pages.mjs';
 import { offerEditor } from '../presentation/pages/offer-editor.mjs';
-import { businessOverview } from '../production/overview.mjs';
+import { agendaData } from '../production/agenda.mjs';
+import { attentionPage, workdayAgenda } from '../presentation/pages/workday-pages.mjs';
+import { businessOverview, attentionData } from '../production/overview.mjs';
 import { requestAccessSql } from '../access/content-policy.mjs';
 import { walletSections } from '../wallet/access-policy.mjs';
 import { createServer } from 'node:http';
@@ -37,10 +39,10 @@ import { accountPage, publicPage, identityMigrationPage } from '../presentation/
 import { invitePage, memberPage, newMemberPage, teamPage } from '../presentation/pages/team-pages.mjs';
 import { card, esc, localLink, page, pathFor } from '../presentation/pages/components.mjs';
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
-import { agendaPage, homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
+import { homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
 import { mapsPage, metricsPage } from '../presentation/pages/service-pages.mjs';
 import { cajaHtml, loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
-import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
+import { agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
 
 import { contentData } from '../content/workspace.mjs';
 import { contentShell } from '../presentation/pages/content-shell.mjs';
@@ -99,12 +101,6 @@ const pieceOperations = {
 function teamInvitation(db,actor,id,code) {
   const member = teamMember(db,actor,id);
   return {title:'Acceso creado',description:'Comparte el código con la persona por tu canal habitual.',body:invitePage(member,code)};
-}
-function agendaRows(db,actor,companyId) {
-  const policy=requestAccessSql(actor);
-  return db.all(`SELECT v.*,r.title FROM visits v JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
-    WHERE v.company_id=? AND ${policy.sql} ORDER BY CASE WHEN v.status='SCHEDULED' THEN 0 ELSE 1 END,
-    CASE WHEN v.status='SCHEDULED' THEN v.starts_at END,v.starts_at DESC,v.id LIMIT 100`,companyId,...policy.params);
 }
 function getRequestPage(db,actor,company,url,request) {
   const pieces = db.all('SELECT * FROM pieces WHERE company_id=? AND request_id=? ORDER BY created_at,id',company.id,request.id)
@@ -456,12 +452,12 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           WHERE (?='' OR instr(lower(r.title||' '||c.name),lower(?))>0) AND (?='' OR r.status=?) AND (?='' OR r.channel=?)
           ORDER BY r.created_at DESC,r.id LIMIT 100`,q,q,state,state,channel,channel);
         const visits=db.all(`SELECT v.*,r.title,c.name AS company_name FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id
-          JOIN companies c ON c.id=v.company_id WHERE v.status='SCHEDULED' AND v.starts_at>=? ORDER BY v.starts_at,v.id LIMIT 100`,now());
+          JOIN companies c ON c.id=v.company_id WHERE v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=? ORDER BY v.starts_at,v.id LIMIT 100`,now());
         if(path==='/produccion')return render({title:'Producción',description:'Todos los clientes y servicios, con cada trabajo en su etapa.',body:agencyProduction(rows(),{q,state,channel})});
-        if(path==='/agenda-general')return render({title:'Agenda',description:'Organiza tus visitas y jornadas de grabación.',body:agencyAgenda(visits)});
+        if(path==='/agenda-general')return render({title:'Agenda',body:workdayAgenda({actor,data:agendaData(db,actor,null,target.searchParams),url:pathFor(actor,null),global:true})});
         const counts=db.get(`SELECT (SELECT count(*) FROM companies) AS companies,(SELECT count(*) FROM companies WHERE approved=0) AS pending,
           (SELECT count(*) FROM requests WHERE status NOT IN ('CANCELLED','DELIVERED')) AS open,(SELECT count(*) FROM pieces WHERE status='DELIVERED') AS delivered,
-          (SELECT count(*) FROM visits WHERE status='SCHEDULED' AND starts_at>=?) AS visits`,now());
+          (SELECT count(*) FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id WHERE v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?) AS visits`,now());
         const pipeline=db.all('SELECT status,count(*) AS count FROM requests GROUP BY status');
         return render({title:'Vista general',description:'Todo lo que tu agencia tiene en marcha.',body:agencyOverview({counts,pipeline,visits:visits.slice(0,5),recent:rows().slice(0,6)})});
       }
@@ -481,9 +477,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const url=pathFor(actor,company);
         if(target.searchParams.has('plataforma'))return redirect(res,url('/contenido'));
         const data=contentData(db,actor,company,target.searchParams);
+        const agendaParams=new URLSearchParams(target.searchParams);agendaParams.set('vista',target.searchParams.get('periodo')||'proximas');
+        const agenda=data.view==='agenda'?agendaData(db,actor,company?.id||null,agendaParams,true):null;
         const metricsHtml=data.view==='metricas'&&company?metricsPage(actor,url,analytics(db,actor,company.id,
           {from:target.searchParams.get('desde'),to:target.searchParams.get('hasta')}),'/contenido'):'';
-        return render({layout:'content',contentView:data.view,title:data.view==='resumen'?'Tu espacio de contenido':data.title,description:'De la idea a la entrega, en un solo lugar.',body:contentPage({actor,company,url,data,metricsHtml,plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'&&company?contractsFor(db,company.id):[]})});
+        return render({layout:'content',contentView:data.view,title:data.view==='resumen'?'Tu espacio de contenido':data.title,description:'De la idea a la entrega, en un solo lugar.',body:contentPage({actor,company,url,data,metricsHtml,agenda,plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'&&company?contractsFor(db,company.id):[]})});
       }
       if(method==='GET'&&path.startsWith('/servicios/')) {
         const channel=path==='/contenido'?'SOCIAL':path.slice('/servicios/'.length).toUpperCase();
@@ -535,6 +533,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (actor.kind!=='AGENCY' || companyId) company = companyFor(db,actor,companyId);
       const url = pathFor(actor,company);
+      if(path==='/pendientes') {
+        requireThat(method==='GET','Los pendientes se consultan desde esta vista.',405);
+        requireThat(actor.kind!=='AGENCY','Esta bandeja corresponde al negocio.',403);
+        return render({title:'Pendientes',description:'Entregas, cotizaciones y propuestas listas para tu revisión.',body:attentionPage({data:attentionData(db,actor,company.id,target.searchParams),url})});
+      }
       if (path==='/inicio' && method==='GET') {
         if(!actor.welcome_done)return redirect(res,'/bienvenida');
         const groups = requestCounts(db,actor,company.id);
@@ -542,7 +545,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const videos=db.all(`SELECT r.quantity,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
           FROM requests r WHERE r.company_id=? AND ${policy.sql} AND r.service IN ('VIDEO','REEL','SHORT') AND r.type<>'VISIT' AND r.status<>'CANCELLED'`,company.id,...policy.params);
         const upcoming=db.get(`SELECT count(*) AS count FROM visits v JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
-          WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
+          WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
         const courtesy = actor.kind==='OWNER' ? db.get("SELECT id,status FROM requests WHERE company_id=? AND type='COURTESY'",company.id) : null;
         return render({title:actor.kind==='AGENCY'?'Información del negocio':'Panel de trabajo',description:'Servicios y actividades del negocio.',
           body:(actor.kind==='OWNER'?campaignBanner(listPlans(db),url):'')+homePage({actor,company,url,groups,upcoming,courtesy,cash,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
@@ -664,9 +667,10 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const channel = target.searchParams.get('canal') || '';
         const currentPage = integer(target.searchParams.get('pagina') || '0','página',{max:10000});
         const q=text(target.searchParams.get('q')||'','búsqueda',0,100),state=target.searchParams.get('estado')||'';
-        const items = visibleRequests(db,actor,company.id,channel,currentPage,{q,state});
+        const view=target.searchParams.get('vista')||'todas';
+        const items = visibleRequests(db,actor,company.id,channel,currentPage,{q,state,view});
         return render({title:'Solicitudes',description:'Cotizaciones, contenido y visitas de tu negocio.',
-          body:requestsPage({actor,url,...items,channel,page:currentPage,q,state})});
+          body:requestsPage({actor,url,...items,channel,q,state,view})});
       }
       const requestMatch = path.match(/^\/solicitudes\/([^/]+)(.*)$/);
       if (requestMatch && isId(requestMatch[1])) {
@@ -685,8 +689,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (path==='/agenda' && method==='GET') {
         requireThat(Object.keys(channels).some(key=>can(actor,key)),'Tu acceso no incluye agenda.',403);
-        return render({title:'Agenda',description:'Consulta las últimas 100 visitas, con prioridad para las programadas.',
-          body:agendaPage(agendaRows(db,actor,company.id),url)});
+        return render({title:'Agenda',body:workdayAgenda({actor,data:agendaData(db,actor,company.id,target.searchParams),url})});
       }
       if (path.startsWith('/planes')) {
         requireThat(actor.kind!=='COLLABORATOR','Tu acceso no incluye contratos ni precios.',403);
