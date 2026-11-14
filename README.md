@@ -1,8 +1,8 @@
-# Lúmina v026 / Loyalty v065
+# Lúmina v027 / Loyalty v066
 
-Public agency homepage, English navigation, and a focused five-service offering. [Installation and validation](docs/lumina-homepage-v065.md).
+A consistent visitor-to-workspace experience: clearer account entry, grouped registration and service activation, with a simple explanation of project, monthly and combined work. [Installation and validation](docs/lumina-experience-v066.md).
 
-Open `/` for the agency website and `/login` to access the workspace. The public site does not activate services, create accounts, or change Wallet connections.
+Open `/` for the agency website, `/login` for account entry and `/services` as an owner to manage available services. Reading these pages never activates a service or changes a Wallet connection.
 
 # loyalty
 

@@ -3,19 +3,17 @@ import { can } from '../../access/accounts.mjs';
 import { button, card, esc, form, hidden, localLink } from './components.mjs';
 import { icon } from './icons.mjs';
 
-function tiles(actor,states={},welcome=false,cash=false) {
- const owner=actor.kind==='OWNER';
- const list=Object.entries(serviceCatalog).filter(([code])=>owner||can(actor,code)||code==='WALLET'&&cash);
- return `<div class="service-choice-grid activation-services">${list.map(([code,service])=>{
-  const status=states[code]||'INACTIVE',active=status==='ACTIVE',pending=status==='SETUP';
-  return `<article class="service-choice ${active?'is-active':''}"><div class="service-choice-heading"><span class="service-symbol">${icon(service.icon)}</span><span class="service-state">${active?'Activo':pending?'Falta confirmar':'Disponible'}</span></div><h2>${esc(service.name)}</h2><p>${esc(service.description)}</p>
-   ${code==='WALLET'?'<small>$4,99 al mes o $50 al año por sucursal. Revisa la promoción y las condiciones antes de activar.</small>':'<small>Los trabajos se cotizan o se descuentan de tu paquete contratado.</small>'}
-   ${active?localLink(service.path,'Abrir '+service.name,'btn secondary'):owner?(pending?localLink('/plans/wallet','Continuar activación','btn'):form('/services/activate',actor,hidden('service',code)+button('Activar '+service.name))):''}</article>`;
- }).join('')}</div>`;
+function serviceRows(list,actor) {
+ return `<ul class="service-roster">${list.map(([code,service,status])=>{
+  const active=status==='ACTIVE',pending=status==='SETUP';
+  return `<li class="service-roster-item" data-service="${code}" data-service-state="${status}"><span class="service-symbol">${icon(service.icon)}</span><div class="service-roster-copy"><div><h3>${esc(service.name)}</h3><span class="service-state${active?' is-active':pending?' is-pending':''}">${active?'Activo':pending?'Por confirmar':'Disponible'}</span></div><p>${esc(service.description)}</p>${code==='WALLET'&&!active?'<small>Revisa la tarifa y acepta las condiciones antes de activar.</small>':''}</div><div class="service-roster-action">${active?localLink(service.path,'Abrir '+service.name,'btn secondary'):pending?localLink('/plans/wallet','Continuar con Wallet','btn'):form('/services/activate',actor,hidden('service',code)+button(code==='WALLET'?'Configurar Wallet':'Activar '+service.name,'secondary'))}</div></li>`;
+ }).join('')}</ul>`;
 }
 export function servicesPage(db,actor) {
- const states=Object.fromEntries(Object.keys(serviceCatalog).map(code=>[code,serviceState(db,actor.company_id,code)]));
- return `<section class="services-intro"><p>Activa solo lo que necesitas. Puedes añadir más servicios cuando quieras.</p></section>${tiles(actor,states)}`;
+ const all=Object.entries(serviceCatalog).map(([code,service])=>[code,service,serviceState(db,actor.company_id,code)]);
+ const active=all.filter(item=>item[2]==='ACTIVE'),pending=all.filter(item=>item[2]==='SETUP'),available=all.filter(item=>item[2]==='INACTIVE');
+ const section=(id,title,items)=>items.length?`<section class="service-group" id="${id}" aria-labelledby="${id}-title"><div class="service-group-heading"><h2 id="${id}-title">${title}</h2><span>${items.length}</span></div>${serviceRows(items,actor)}</section>`:'';
+ return `<div class="service-center"><div class="service-center-main"><div class="service-center-intro"><p>${active.length?`Tienes ${active.length} ${active.length===1?'servicio activo':'servicios activos'}. Entra directamente o añade otro cuando lo necesites.`:'Empieza por un servicio. Puedes añadir los demás después.'}</p></div>${section('active-services','Listos para trabajar',active)}${section('pending-services','Termina la configuración',pending)}${section('available-services',active.length||pending.length?'Añade otro servicio':'Elige por dónde empezar',available)}</div><aside class="service-center-aside"><span class="eyebrow">TODO, DESDE LÚMINA</span><h2>Tu espacio.<br>Tus decisiones.</h2><p>Activar Contenido, Web, Maps o Marca abre tu espacio de trabajo. Los pedidos y paquetes se contratan por separado.</p><div class="service-price-note"><strong>¿Buscas precios o paquetes?</strong><p>Consulta lo publicado o solicita una propuesta a tu medida.</p>${localLink('/plans','Ver paquetes y servicios →')}</div><p class="service-wallet-note">Wallet requiere aceptar sus condiciones y su tarifa antes de activarse.</p></aside></div>`;
 }
 export function welcomePage(actor,{cash=false}={}) {
  const owner=actor.kind==='OWNER';

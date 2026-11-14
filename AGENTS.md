@@ -1,5 +1,17 @@
 # Loyalty
 
+## Lúmina v027 / Loyalty v066 — visitor and service experience
+
+- Baseline: installed v026/v065, commit a9c7c5c21973e7f4d0ecc0a02e736cf8c6ea3200. This section supersedes prior version and gate counts.
+- Public entry pages use accessShell and a dedicated stylesheet; preserve English paths, real form actions, Spanish labels, autocomplete, identity validators and existing authorization. The homepage remains public, private routes require authentication, and closed setup stays closed.
+- Registration groups business and personal fields without adding data requirements. On recoverable failures retain safe values, never passwords or invitation/setup codes. An invalid invitation keeps the activation form with its existing 403 status. Origin and rate-limit checks stay outside that recovery handler.
+- A password field owns exactly one visibility control when both lumina.js and identity.js run. Reset visibility on submit, page return and hidden tabs. Never persist account input in browser storage.
+- Mis servicios groups ACTIVE, SETUP and INACTIVE states. Owner-only activation remains explicit POST+CSRF and idempotent. Pending Wallet links to the existing terms flow; reading or choosing a service never substitutes for accepting Wallet terms.
+- Public commercial guidance explains one-off, monthly and combined services without fabricated prices or subscriptions. Existing contracts, catalog offers, amounts, consent, billing and roles are unchanged.
+- No Kotlin, native Wallet assets, SQL, SQLite10/PostgreSQLV017, representation34, provider configuration, identities, balances, sessions or credential changes.
+- Gates: 31 suites / 352 portal tests, 170 Python, 312 native unit/HTTP, 347 PostgreSQL. Docker staging and gateway before a local commit; no push. 25 DOM suites remain distinct from browser inspection and physical device receipt.
+- Installer terminal output remains RESULTADO and the URL only after confirmed startup. Production profiles and conflicting local edits are blocked. See docs/lumina-experience-v066.md.
+
 ## Lúmina v026 / Loyalty v065 — public agency homepage
 
 - Baseline: installed v025/v064, commit ed9442283aa339a347076ebdba958c8aac0498f3. This section supersedes prior version and gate counts.

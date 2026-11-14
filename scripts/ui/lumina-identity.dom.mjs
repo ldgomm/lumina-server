@@ -9,6 +9,7 @@ function dom(html,origin){const b=new JSDOM(html.replace(/<script\b[^>]*src[^>]*
 try{
  const w=await portal(t),client=w.session(),publicForm=await client.get('/register');
  const b=dom(publicForm.body,w.origin),d=b.document;
+ b.eval(source('lumina.js'));
  b.eval(source('identity-rules.mjs').replace(/export /g,'')+'\n'+source('identity.js').replace(/^import[^\n]+\n/,''));
  const doc=d.querySelector('[name=document]'),ruc=d.querySelector('[name=ruc]'),phone=d.querySelector('[name=phone]');
  assert.equal(doc.type,'text');assert.equal(doc.required,true);assert.equal(d.querySelector('[name=email]'),null);
@@ -23,6 +24,6 @@ try{
  const form=welcome.querySelector('form[action="/welcome"]');assert.equal(form.checkValidity(),true);assert.ok(form.querySelector('[name=_csrf]'));
  await client.post('/welcome',{service:'LATER'});const services=dom((await client.get('/services')).body,w.origin).document;assert.equal(services.querySelectorAll('form[action="/services/activate"]').length,5);assert.equal(services.querySelector('form [name=service][value=WALLET]').closest('form').method,'post');
  assert.equal(w.db.get('SELECT count(*) n FROM company_services').n,0);
- const reveal=d.querySelector('.password-reveal');assert.equal(reveal.type,'button');reveal.click();assert.equal(d.querySelector('[name=password]').type,'text');reveal.click();assert.equal(d.querySelector('[name=password]').type,'password');
+ const reveal=d.querySelector('[data-password-toggle]');assert.equal(reveal.type,'button');assert.equal(d.querySelectorAll('.password-reveal,[data-password-toggle]').length,1);assert.equal(d.querySelectorAll('.password-control .password-control').length,0);reveal.click();assert.equal(d.querySelector('[name=password]').type,'text');reveal.click();assert.equal(d.querySelector('[name=password]').type,'password');
  console.log('LUMINA_IDENTITY_DOM_PASS');
 }finally{for(const f of clean.reverse())await f();}

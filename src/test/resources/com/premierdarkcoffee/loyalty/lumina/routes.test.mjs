@@ -33,7 +33,7 @@ test('public QR slugs, provider routes and opaque tokens never undergo translati
 });
 test('login is a GET page and an old bookmark opens its English equivalent',async t=>{
  const w=await portal(t),s=w.session();
- const page=await s.get('/login');assert.equal(page.status,200);assert.match(page.body,/action="\/login"/);assert.match(page.body,/Ingresa a Lúmina/);assert.doesNotMatch(page.body,/action="\/entrar"/);
+ const page=await s.get('/login');assert.equal(page.status,200);assert.match(page.body,/action="\/login"/);assert.match(page.body,/name="document"/);assert.match(page.body,/autocomplete="current-password"/);assert.doesNotMatch(page.body,/action="\/entrar"/);
  const old=await s.get('/entrar');assert.equal(old.status,303);assert.equal(old.location,'/login');assert.equal(w.db.get('SELECT count(*) n FROM accounts').n,0);
  const login=await s.post('/login',{document:'1748225842',password:'wrong'});assert.equal(login.status,401);assert.doesNotMatch(login.body,/value="wrong"/);
 });

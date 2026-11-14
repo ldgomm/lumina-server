@@ -17,7 +17,13 @@ for(const input of document.querySelectorAll('[data-identity]')) {
 }
 
 for(const input of document.querySelectorAll('input[type="password"][name="password"],input[type="password"][name="current"],input[type="password"][name="confirmation"]')) {
+ // Account forms already own an accessible reveal button and its lifecycle.
+ if(input.closest('.password-control'))continue;
  const wrap=document.createElement('span');wrap.className='password-control';input.before(wrap);wrap.append(input);
  const button=document.createElement('button');button.type='button';button.className='password-reveal';button.textContent='Mostrar';button.setAttribute('aria-label','Mostrar contraseña');button.setAttribute('aria-pressed','false');wrap.append(button);
- button.addEventListener('click',()=>{const show=input.type==='password';input.type=show?'text':'password';button.textContent=show?'Ocultar':'Mostrar';button.setAttribute('aria-label',show?'Ocultar contraseña':'Mostrar contraseña');button.setAttribute('aria-pressed',String(show));});
+ const reveal=show=>{input.type=show?'text':'password';button.textContent=show?'Ocultar':'Mostrar';button.setAttribute('aria-label',show?'Ocultar contraseña':'Mostrar contraseña');button.setAttribute('aria-pressed',String(show));};
+ button.addEventListener('click',()=>reveal(input.type==='password'));
+ input.form?.addEventListener('submit',()=>reveal(false));
+ window.addEventListener('pageshow',()=>reveal(false));
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)reveal(false);});
 }

@@ -30,6 +30,7 @@ export const check = (name,caption,checked = false,required = false) =>
   `<label class="check"><input type="checkbox" name="${esc(name)}" value="yes" ${checked ? 'checked' : ''} ${required ? 'required' : ''}><span>${esc(caption)}</span></label>`;
 export const form = (action,actor,body,css='') =>
   `<form method="post" action="${esc(action)}" class="${css}">${actor ? hidden('_csrf',actor.csrf) : ''}${body}</form>`;
+export const passwordField = (name,caption,extra='') => `<div class="password-field"><label for="password-${esc(name)}">${esc(caption)}</label><div class="password-control"><input id="password-${esc(name)}" name="${esc(name)}" type="password" ${extra || 'required minlength="12" maxlength="128" autocomplete="new-password"'}><button type="button" class="secondary" data-password-toggle aria-controls="password-${esc(name)}" aria-label="Mostrar ${esc(caption.toLowerCase().replace(/^crea (?:una |tu )/,''))}" aria-pressed="false" hidden>Mostrar</button></div></div>`;
 export const button = (caption,css='') => `<button type="submit" class="${css}">${esc(caption)}</button>`;
 export const localLink = (url,caption,css='') => `<a class="${css}" href="${esc(url)}">${esc(caption)}</a>`;
 export const external = (url,caption) => `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(caption)} ↗</a>`;

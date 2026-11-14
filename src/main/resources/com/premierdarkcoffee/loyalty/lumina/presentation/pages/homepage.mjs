@@ -1,6 +1,7 @@
+import { engagementGuide } from './engagement-guide.mjs';
 import { brandSocial } from './brand-social.mjs';
 
-const arrow = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+import { publicArrow as arrow, publicBrand } from './public-shell.mjs';
 const services = [
   ['01','content','Contenido para redes','De lo que haces, a lo que todos quieren ver.','Fotografía, video, edición, diseño y textos que cuentan lo que hace especial a tu negocio. Una misma pieza puede vivir en Instagram, TikTok, Facebook y YouTube.','Coordinamos la producción y las grabaciones, compartimos las entregas para tu revisión y registramos las publicaciones y sus métricas por plataforma.','Fotografía · Video · Diseño · Publicaciones'],
   ['02','web','Páginas web','Un lugar propio para tu negocio.','Páginas empresariales, tiendas en línea, catálogos, menús digitales, reservas y páginas para campañas.','Definimos contigo la información y las funciones, diseñamos la experiencia y desarrollamos tu web. También puedes contratar mantenimiento.','Diseño · Desarrollo · Mantenimiento'],
@@ -24,7 +25,7 @@ export function homepage({signedIn=false}={}) {
     <link rel="icon" href="/assets/lumina-symbol.png"><link rel="stylesheet" href="/assets/homepage.css"><script defer src="/assets/homepage.js"></script>
   </head><body class="agency-home"><a class="skip-link" href="#main">Saltar al contenido</a>
     <header class="public-header"><div class="home-container header-row">
-      <a class="home-brand" href="/" aria-label="Lúmina Digital, inicio"><img src="/assets/lumina-symbol.png" alt="" width="42" height="42"><span>Lúmina<span class="brand-subtitle">DIGITAL</span></span></a>
+      ${publicBrand()}
       <nav class="desktop-nav" aria-label="Navegación principal">${navigation}</nav>
       <div class="header-actions"><a class="entry-link" href="${entry}">${entryLabel}${arrow}</a><details class="mobile-menu"><summary aria-label="Menú de navegación"><span>Menú</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8h16M4 16h16" stroke="currentColor" stroke-width="1.6"/></svg></summary><nav aria-label="Navegación móvil">${navigation}<a href="${startHref}">${startLabel}</a></nav></details></div>
     </div></header>
@@ -33,7 +34,7 @@ export function homepage({signedIn=false}={}) {
         <div class="hero-copy"><p class="eyebrow"><span class="accent-line"></span>AGENCIA CREATIVA & DIGITAL</p>
           <h1 id="hero-title">Que tu negocio<br>se vea.<br><em>Y se recuerde.</em></h1>
           <p class="hero-description">Tú tienes una historia que merece ser contada. Nosotros la convertimos en contenido, diseño y experiencias digitales para tu negocio.</p>
-          <div class="hero-actions"><a class="home-button primary" href="#services">Descubre lo que hacemos${arrow}</a><a class="text-link" href="${startHref}">${startLabel}${arrow}</a></div>
+          <div class="hero-actions"><a class="home-button primary" href="#services">Descubre lo que hacemos${arrow}</a><a class="text-link" href="https://www.instagram.com/luminadigital360/" target="_blank" rel="noopener noreferrer">Hablemos de tu negocio${arrow}<span class="sr-only"> (abre otra pestaña)</span></a></div>
           <p class="hero-note">Contenido. Presencia. Clientes que vuelven.</p>
         </div>
         <figure class="creative-scene"><div class="scene-board" aria-hidden="true">
@@ -49,6 +50,7 @@ export function homepage({signedIn=false}={}) {
         <div class="section-intro"><p class="eyebrow">01 / LO QUE HACEMOS</p><h2 id="services-title">Tu negocio.<br><em>En todas sus formas.</em></h2><p>Somos Lúmina Digital. Unimos producción de contenido, diseño y tecnología para darle presencia a tu negocio y acompañar su relación con los clientes.</p><p>Elige un servicio, combínalos o trabajemos en un proyecto puntual. Empezamos por lo que necesitas.</p><a class="text-link" href="#process">Así trabajamos${arrow}</a></div>
         <div class="service-index">${services.map(([n,id,name,headline,description,process,tags],i)=>`<details class="service-detail" id="service-${id}"${i===0?' open':''}><summary><span class="service-number">${n}</span><span>${name}</span><span class="disclosure-mark" aria-hidden="true"></span></summary><div class="service-body"><h3>${headline}</h3><p>${description}</p><p>${process}</p><span class="service-tags">${tags}</span><a class="text-link" href="${startHref}">${signedIn?'Ir a mi espacio':'Empezar con mi negocio'}${arrow}</a></div></details>`).join('')}</div>
       </section>
+      ${engagementGuide()}
       <section class="loyalty-feature" id="loyalty" aria-labelledby="loyalty-title"><div class="home-container loyalty-grid">
         <div class="loyalty-copy"><p class="eyebrow">02 / LÚMINA WALLET</p><h2 id="loyalty-title">Una visita es el inicio.<br><em>Volver es la idea.</em></h2><p>Dale a tus clientes una tarjeta de tu negocio que puedan llevar en Apple Wallet o Google Wallet. Tú defines los puntos, los sellos y las recompensas.</p><ul class="loyalty-benefits"><li>Tu marca y tu programa de fidelización.</li><li>Registro mediante un código QR.</li><li>Compras y canjes desde la caja de tu negocio.</li><li>Accesos para tu equipo, con los permisos que tú decides.</li></ul><a class="home-button light" href="${startHref}">${signedIn?'Ir a mi espacio':'Empezar en Lúmina'}${arrow}</a><p class="loyalty-note">Tú eliges si activas Wallet. Crear tu cuenta no la activa.</p></div>
         <figure class="loyalty-illustration"><div class="loyalty-halo" aria-hidden="true"></div><div class="wallet-illustration-card" aria-hidden="true"><div class="wallet-card-top"><span>TU NEGOCIO</span><span>✦</span></div><span class="wallet-card-label">CADA VISITA CUENTA</span><strong>Qué bueno<br>tenerte de vuelta.</strong><div class="wallet-progress"><span>✦</span><span>✦</span><span>✦</span><span>✦</span><span></span></div><div class="wallet-card-bottom"><span>Tu próxima recompensa,<br>un poco más cerca.</span><span>→</span></div></div><figcaption>Diseño ilustrativo. Personaliza tu tarjeta y sus beneficios.</figcaption><div class="wallet-platforms"><span>Apple Wallet</span><span>Google Wallet</span></div></figure>
@@ -66,6 +68,6 @@ export function homepage({signedIn=false}={}) {
       </div></section>
       <section class="home-container contact-section" id="contact"><div><p class="eyebrow">LA SIGUIENTE IDEA PUEDE SER LA TUYA</p><h2>Hagamos visible<br><em>lo que te hace especial.</em></h2></div><div class="contact-actions"><a class="home-button primary" href="${startHref}">${startLabel}${arrow}</a><a class="text-link" href="https://www.instagram.com/luminadigital360/" target="_blank" rel="noopener noreferrer">Conversemos en Instagram <span aria-hidden="true">→</span><span class="sr-only"> (abre otra pestaña)</span></a><p>¿Recibiste una invitación de tu negocio?<br><a href="/activate">Activa tu acceso de equipo</a></p></div></section>
     </main>
-    <footer class="public-footer"><div class="home-container"><div class="footer-top"><a class="home-brand" href="/" aria-label="Lúmina Digital, inicio"><img src="/assets/lumina-symbol.png" alt="" width="42" height="42"><span>Lúmina<span class="brand-subtitle">DIGITAL</span></span></a><p>Creatividad con dirección.<br>Presencia con identidad.</p>${brandSocial()}</div><div class="footer-wordmark" aria-hidden="true">Lúmina.</div><div class="footer-bottom"><span>Lúmina Digital · Marketing y fidelización</span><a href="${entry}">${entryLabel} ${arrow}</a><a href="#main">Volver arriba ↑</a></div></div></footer>
+    <footer class="public-footer"><div class="home-container"><div class="footer-top">${publicBrand()}<p>Creatividad con dirección.<br>Presencia con identidad.</p>${brandSocial()}</div><div class="footer-wordmark" aria-hidden="true">Lúmina.</div><div class="footer-bottom"><span>Lúmina Digital · Marketing y fidelización</span><a href="${entry}">${entryLabel} ${arrow}</a><a href="#main">Volver arriba ↑</a></div></div></footer>
   </body></html>`;
 }

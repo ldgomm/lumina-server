@@ -1,3 +1,4 @@
+import { accessShell } from '../presentation/pages/public-shell.mjs';
 import { homepage } from '../presentation/pages/homepage.mjs';
 import { canonicalTarget, legacyRedirectAllowed } from '../shared/routes.mjs';
 import { serviceState, requireService, serviceCatalog, beginService, completeWalletActivation, finishWelcome, routeService } from '../businesses/services.mjs';
@@ -55,6 +56,7 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/access.css':['access.css','text/css; charset=utf-8'],
   '/assets/homepage.js':['homepage.js','text/javascript; charset=utf-8'],
   '/assets/homepage.css':['homepage.css','text/css; charset=utf-8'],
   '/assets/deliveries.css':['deliveries.css','text/css; charset=utf-8'],
@@ -140,7 +142,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
     let agencyWork=false;
     const render = (view,status=200) => {
       const viewer=actor?{...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(company)&&!agencyWork}:null;
-      return send(res,status,(view.layout==='content'?contentShell:page)({actor:viewer,company,path,cash,...view}));
+      return send(res,status,(view.layout==='content'?contentShell:view.layout==='access'?accessShell:page)({actor:viewer,company,path,cash,...view}));
     };
     try {
       const origin = publicOrigin || `http://127.0.0.1:${req.socket.localPort}`;
@@ -196,7 +198,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           if (path==='/activate') return startSession(await activate(db,data),'/welcome');
           return startSession(await createAgency(db,data));
         } catch(issue) {
-          if (!(issue instanceof Problem) || ![400,401,409].includes(issue.status)) throw issue;
+          if (!(issue instanceof Problem) || !([400,401,409].includes(issue.status) || path==='/activate'&&issue.status===403)) throw issue;
           const setupAvailable=!db.get("SELECT id FROM accounts WHERE kind='AGENCY'");
           return render(publicPage(path,setupAvailable,{values:data,error:issue.message}),issue.status);
         }
