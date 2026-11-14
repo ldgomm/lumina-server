@@ -14,7 +14,7 @@ function dom(html,scripts=['lumina.js','requests.js','packages.js']){
 }
 try{
  const world=await portal(t),admin=await agency(world),{client}=await owner(world,'Negocio ficticio','1');
- const home=dom((await client.get('/inicio')).body),gift=home.document.querySelector('.welcome-gift details');assert.equal(gift.open,false);assert.equal(gift.querySelector('[name=phone]').value,'0991234567');gift.querySelector('[name=title]').dispatchEvent(new home.Event('invalid',{bubbles:false}));assert.equal(gift.open,true);checks.push('Courtesy stays compact; invalid optional fields reveal their form');
+ const home=dom((await client.get('/inicio')).body),gift=home.document.querySelector('.welcome-gift details');assert.equal(gift.open,false);assert.equal(gift.querySelector('[name=phone]').value,'+593991234567');gift.querySelector('[name=title]').dispatchEvent(new home.Event('invalid',{bubbles:false}));assert.equal(gift.open,true);checks.push('Courtesy stays compact; invalid optional fields reveal their form');
  for(const path of ['/inicio','/contenido']){
   const w=dom((await client.get(path)).body),d=w.document,menu=d.querySelector('.menu-toggle'),nav=d.querySelector('#workspace-nav'),close=nav.querySelector('.navigation-close'),backdrop=d.querySelector('.navigation-backdrop');
   const field=d.querySelector('input:not([type=hidden])');field.focus();d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(d.activeElement,field);
@@ -27,7 +27,7 @@ try{
  }
  checks.push('Both navigation drawers: focus loop, Escape, backdrop, close, inert content, no focus theft when closed');
  const formWin=dom((await client.get('/solicitudes/nueva?area=SOCIAL')).body),doc=formWin.document,options=doc.querySelector('.request-options'),type=doc.querySelector('[name=type]'),quantity=doc.querySelector('[name=quantity]');
- assert.equal(options.open,false);assert.equal(type.value,'CONTENT');assert.equal(quantity.value,'1');assert.equal(doc.querySelector('[name=phone]').value,'0991234567');
+ assert.equal(options.open,false);assert.equal(type.value,'CONTENT');assert.equal(quantity.value,'1');assert.equal(doc.querySelector('[name=phone]').value,'+593991234567');
  type.value='VISIT';type.dispatchEvent(new formWin.Event('change',{bubbles:true}));assert.equal(doc.querySelector('[data-visit]').hidden,false);assert.equal(quantity.disabled,true);assert.equal(new formWin.FormData(doc.querySelector('.request-composer')).has('quantity'),false);
  type.value='CONTENT';type.dispatchEvent(new formWin.Event('change',{bubbles:true}));assert.equal(quantity.disabled,false);quantity.value='101';quantity.checkValidity();assert.equal(options.open,true);assert.equal(quantity.value,'101');
  const web=dom((await client.get('/solicitudes/nueva?area=MAPS')).body);assert.equal(web.document.querySelectorAll('[name=service]').length,1);assert.equal(web.document.querySelector('[name=service]').value,'MAPS_PROFILE');checks.push('Simple forms retain values, visit behavior, contact and browser validation in collapsed controls');

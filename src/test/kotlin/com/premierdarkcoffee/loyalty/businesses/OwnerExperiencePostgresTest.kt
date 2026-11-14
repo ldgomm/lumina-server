@@ -98,7 +98,7 @@ class OwnerExperiencePostgresTest {
 
     @Test fun `owner cannot modify any protected identity field even with a reason`() {
         val f=fixture();val p=profile();val before=service.businessProfile(f.owner.tenant)
-        for(changed in listOf(p.copy(legalName="Otra razón"),p.copy(ruc="1234567890123"),p.copy(activity="Otra actividad"),p.copy(province="Azuay"),p.copy(city="Cuenca"),p.copy(address="Otra dirección")))
+        for(changed in listOf(p.copy(legalName="Otra razón"),p.copy(ruc="1234567890001"),p.copy(activity="Otra actividad"),p.copy(province="Azuay"),p.copy(city="Cuenca"),p.copy(address="Otra dirección")))
             assertEquals("PROFILE_ADMIN_REQUIRED",assertFailsWith<Problem>{service.saveBusinessProfile(f.owner.tenant,BusinessProfileChange(1,changed,"Dueño dice que verificó"),f.owner.id)}.code)
         assertEquals(before,service.businessProfile(f.owner.tenant));assertEquals(0,count("business_profile_corrections",f))
     }

@@ -7,9 +7,9 @@ const idea={type:'CONTENT',channel:'SOCIAL',service:'VIDEO',quantity:'1',title:'
 const provider=(path,id)=>'/agencia'+path+'?empresa='+id;
 test('el registro inválido conserva contacto e identidad pero nunca vuelve a imprimir secretos',async t=>{
   const w=await portal(t),session=w.session();
-  const response=await session.post('/registro',{company:'Mi nuevo negocio',name:'Dueña de prueba',document:'1234567891',phone:'0991234567',email:'nueva@example.test',password:'short',consent:'yes'});
+  const response=await session.post('/registro',{company:'Mi nuevo negocio',name:'Dueña de prueba',document:'1234567891',phone:'0991234567',document:'1747556965',password:'short',consent:'yes'});
   assert.equal(response.status,400);assert.match(response.body,/role="alert"/);
-  for(const value of ['Mi nuevo negocio','Dueña de prueba','0991234567','nueva@example.test'])assert.ok(response.body.includes('value="'+value+'"'));
+  for(const value of ['Mi nuevo negocio','Dueña de prueba','0991234567','1747556965'])assert.ok(response.body.includes('value="'+value+'"'));
   assert.doesNotMatch(response.body,/value="short"/);assert.equal(w.db.get('SELECT count(*) n FROM companies').n,0);
 });
 async function setup(t) {
@@ -73,7 +73,7 @@ test('Web, Maps y Marca abren el pedido correcto como dueño y conservan la cons
 });
 
 test('el colaborador abre solo el servicio autorizado y nunca una ruta de administración',async t=>{
-  const w=await setup(t),m=await colleague(w,w.client,{name:'Colaboradora Web',email:'web@example.test','WEB.VIEW':'yes'});
+  const w=await setup(t),m=await colleague(w,w.client,{name:'Colaboradora Web',document:'1710683820','WEB.VIEW':'yes'});
   const r=await w.client.post('/solicitudes',{...idea,channel:'WEB',service:'WEBSITE'});
   const page=await m.session.get('/servicios/web');
   assert.equal(page.status,200);assert.ok(page.body.includes('href="'+r.location+'"'));

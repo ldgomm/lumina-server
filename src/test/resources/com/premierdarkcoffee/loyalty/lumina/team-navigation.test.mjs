@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {documentFor} from './helpers.mjs';
 import { test } from 'node:test';
 import { agency, owner, colleague, portal, password, teamRevision } from './helpers.mjs';
 import { fakeLoyalty } from './loyalty-fixture.mjs';
@@ -13,7 +14,7 @@ async function setup(t) {
 }
 const nav=body=>body.match(/<nav[^>]+id="workspace-nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1]||'';
 const actor=(w,client)=>getSession(w.db,client.cookie.split('=')[1]);
-const person=w=>colleague(w,w.client,{name:'Persona de prueba',email:'persona@example.test','SOCIAL.VIEW':'yes'});
+const person=w=>colleague(w,w.client,{name:'Persona de prueba',document:'1738277993','SOCIAL.VIEW':'yes'});
 const snapshot=w=>Object.fromEntries(['companies','accounts','grants','cash_grants','wallet_access','codes','audit'].map(name=>[name,w.db.all('SELECT * FROM '+name)]));
 
 test('dueño registrado: Equipos y roles es el segundo enlace y tiene un acceso visible en el inicio',async t=>{
@@ -28,13 +29,13 @@ test('dueño registrado: Equipos y roles es el segundo enlace y tiene un acceso 
 test('volver a entrar como dueño en el mismo navegador conserva el rol y reemplaza el menú de la cuenta anterior',async t=>{
   const w=await setup(t),ownerId=actor(w,w.client).id;
   assert.equal((await w.admin.post('/salir')).status,303);
-  assert.equal((await w.admin.post('/entrar',{email:'negocio1@example.test',password})).status,303);
+  assert.equal((await w.admin.post('/entrar',{document:'1748639844',password})).status,303);
   const session=actor(w,w.admin),home=await w.admin.get('/inicio');
   assert.equal(session.id,ownerId);assert.equal(session.kind,'OWNER');assert.equal(session.company_id,w.id);
   assert.match(nav(home.body),/href="\/equipo"/);assert.doesNotMatch(nav(home.body),/href="\/clientes"/);
   assert.equal((await w.admin.get('/equipo/nuevo')).status,200);
   assert.equal((await w.admin.post('/salir')).status,303);
-  assert.equal((await w.admin.post('/entrar',{email:'agencia@example.test',password})).status,303);
+  assert.equal((await w.admin.post('/entrar',{document:'1748225842',password})).status,303);
   assert.equal(actor(w,w.admin).kind,'AGENCY');assert.equal((await w.admin.get('/equipo/nuevo')).status,403);
   assert.equal(w.db.get('SELECT kind FROM accounts WHERE id=?',ownerId).kind,'OWNER');
 });
@@ -48,12 +49,12 @@ test('el dueño encuentra el mismo enlace en cuenta, planes y administración au
   assert.match(nav((await w.client.get('/equipo')).body),/href="\/equipo" aria-current="page"/);
 });
 test('entrada común de equipos dirige al dueño a su editor e ignora un negocio ajeno seleccionado',async t=>{
-  const w=await setup(t),other=await owner(w,'Otro negocio','2'),m=await colleague(w,other.client,{name:'Persona ajena',email:'ajena@example.test'});
+  const w=await setup(t),other=await owner(w,'Otro negocio','2'),m=await colleague(w,other.client,{name:'Persona ajena',document:'1703448355'});
   const response=await w.client.get('/equipos?empresa='+other.id);assert.equal(response.status,303);assert.equal(response.location,'/equipo');
   const own=await w.client.get(response.location+'?empresa='+other.id);assert.equal(own.status,200);assert.doesNotMatch(own.body,/Persona ajena|ajena@example.test/);
   assert.equal((await w.client.get('/equipo/'+m.id+'?empresa='+other.id)).status,404);
-  const added=await w.client.post('/equipo',{name:'Nueva persona propia',email:'propia@example.test'});assert.equal(added.status,201);
-  const addedId=w.db.get('SELECT id,company_id FROM accounts WHERE email=?','propia@example.test');assert.equal(addedId.company_id,w.id);
+  const added=await w.client.post('/equipo',{name:'Nueva persona propia',document:'1705288023'});assert.equal(added.status,201);
+  const addedId=w.db.get('SELECT id,company_id FROM accounts WHERE document=?','1705288023');assert.equal(addedId.company_id,w.id);
   assert.equal((await w.client.post('/equipo/'+addedId.id+'/acceso',{revision:teamRevision(w,addedId.id),cash_mode:'OFF','WEB.VIEW':'yes'})).status,303);
 });
 test('agencia encuentra equipos junto a Clientes y consulta un negocio manteniendo su identidad',async t=>{
@@ -84,15 +85,15 @@ test('directorio de negocios filtra antes de paginar y mantiene una página acot
 });
 test('consulta paginada de personas respeta el negocio, búsqueda y estados de acceso',async t=>{
   const w=await setup(t),other=await owner(w,'Negocio ajeno','2');
-  await colleague(w,other.client,{name:'Persona privada ajena',email:'privada@example.test'});
-  for(let i=0;i<21;i++)assert.equal((await w.client.post('/equipo',{name:'Persona '+i,email:'p'+i+'@example.test'})).status,201);
-  w.db.run("UPDATE codes SET expires_at='2000-01-01T00:00:00.000Z' WHERE account_id=(SELECT id FROM accounts WHERE email='p0@example.test')");
-  w.db.run("UPDATE accounts SET active=0 WHERE email='p1@example.test'");
+  await colleague(w,other.client,{name:'Persona privada ajena',document:'1744493808'});
+  for(let i=0;i<21;i++)assert.equal((await w.client.post('/equipo',{name:'Persona '+i,document:documentFor('p'+i+'@example.test')})).status,201);
+  w.db.run("UPDATE codes SET expires_at='2000-01-01T00:00:00.000Z' WHERE account_id=(SELECT id FROM accounts WHERE document='1708600802')");
+  w.db.run("UPDATE accounts SET active=0 WHERE document='1754063319'");
   const query=new URLSearchParams({empresa:w.id}),admin=actor(w,w.admin),first=consultTeams(w.db,admin,query);
   assert.equal(first.total,22);assert.equal(first.rows.length,20);assert.equal(first.rows[0].kind,'OWNER');assert.equal(first.more,true);
   query.set('pagina','1');assert.equal(consultTeams(w.db,admin,query).rows.length,2);
-  query.set('pagina','0');query.set('q','p0@example.test');const expired=await w.admin.get('/equipos?'+query);assert.match(expired.body,/Activación vencida/);
-  query.set('q','p1@example.test');assert.match((await w.admin.get('/equipos?'+query)).body,/Desactivado/);
+  query.set('pagina','0');query.set('q','1708600802');const expired=await w.admin.get('/equipos?'+query);assert.match(expired.body,/Activación vencida/);
+  query.set('q','1754063319');assert.match((await w.admin.get('/equipos?'+query)).body,/Desactivado/);
   const listing=await w.admin.get('/equipos?empresa='+w.id);assert.match(listing.body,/Por activar/);assert.doesNotMatch(listing.body,/Persona privada ajena|privada@example.test/);
 });
 test('la consulta muestra compras, canjes y permisos exactos sin preparar accesos ni modificar registros',async t=>{
@@ -107,7 +108,7 @@ test('la consulta muestra compras, canjes y permisos exactos sin preparar acceso
 });
 test('proyección de consulta excluye contraseñas, tokens, códigos, sesiones y datos cifrados',async t=>{
   const w=await setup(t),m=await person(w),data=consultTeams(w.db,actor(w,w.admin),new URLSearchParams({empresa:w.id}));
-  const allowed=['id','name','email','kind','active','activated','cash_status','branch_name','purchases','rewards','activation_expires','grants'];
+  const allowed=['id','name','document','kind','active','activated','cash_status','branch_name','purchases','rewards','activation_expires','grants'];
   for(const row of data.rows)assert.deepEqual(Object.keys(row).sort(),allowed.sort());
   const view=await w.admin.get('/equipos?empresa='+w.id);
   const secrets=[m.code,w.native.platformToken,...w.db.all('SELECT password FROM accounts WHERE password IS NOT NULL').map(r=>r.password),...w.db.all('SELECT digest FROM codes').map(r=>r.digest)];

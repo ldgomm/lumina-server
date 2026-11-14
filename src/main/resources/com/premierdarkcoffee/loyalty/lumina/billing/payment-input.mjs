@@ -15,3 +15,5 @@ export function chargeInput(data) {
  const amount=paymentInput({...data,invoiceId:data.requestKey,method:'OTHER',paidOn:data.dueOn,reference:'CARGO'}).amountMinor;
  return {description:text(data.description,'concepto y acuerdo',5,200),amountMinor:amount,dueOn:data.dueOn};
 }
+
+export function emptyAccount(company,today) { return {business:{id:company.id,name:company.name},today,membership:null,summary:{balanceMinor:0,overdueMinor:0,nextDueOn:null,invoiceCount:0},invoices:[],payments:[],paymentCount:0,offset:0}; }

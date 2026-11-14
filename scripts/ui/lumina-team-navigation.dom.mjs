@@ -1,3 +1,4 @@
+import {documentFor} from '../../src/test/resources/com/premierdarkcoffee/loyalty/lumina/helpers.mjs';
 // Navigation and read-only DOM checks with fictional accounts, not visual/device validation.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -17,7 +18,7 @@ function dom(html){
 }
 try{
   const w=await portal(t),admin=await agency(w),business=await owner(w,'Negocio de prueba','1');
-  const member=await colleague(w,business.client,{name:'Persona de prueba',email:'persona@example.test','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
+  const member=await colleague(w,business.client,{name:'Persona de prueba',document:documentFor('persona@example.test'),'SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
   for(const [client,path,index] of [[business.client,'/inicio',1],[admin,'/resumen',2]]){
     const view=dom((await client.get(path)).body),d=view.document,menu=d.querySelector('#workspace-nav');
     const links=[...menu.querySelectorAll(':scope > a')],team=links[index];

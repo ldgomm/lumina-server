@@ -17,7 +17,7 @@ async function linked(t) {
 }
 test('una cuenta combina TikTok, Instagram y Caja, con compras y canjes independientes',async t=>{
   const {loyalty,world,client} = await linked(t);
-  const member = await colleague(world,client,{name:'Equipo mixto',email:'mixto@example.test','TIKTOK.VIEW':'yes',
+  const member = await colleague(world,client,{name:'Equipo mixto',document:'1726863523','TIKTOK.VIEW':'yes',
     'INSTAGRAM.VIEW':'yes','INSTAGRAM.REQUEST':'yes'});
   const path = '/equipo/'+member.id+'/caja';
   const input = {credential:loyalty.ownerToken,branch:loyalty.branch.id,purchases:'yes'};
@@ -66,7 +66,7 @@ test('una cuenta combina TikTok, Instagram y Caja, con compras y canjes independ
 });
 test('Caja sola funciona y recupera un alta de respuesta perdida sin duplicar el acceso',async t=>{
   const {loyalty,world,client} = await linked(t);
-  const member = await colleague(world,client,{name:'Solo Caja',email:'caja@example.test'});
+  const member = await colleague(world,client,{name:'Solo Caja',document:'1743252924'});
   const path = '/equipo/'+member.id+'/caja/guardar';
   const data = {revision:teamRevision(world,member.id),credential:loyalty.ownerToken,branch:loyalty.branch.id,purchases:'yes',rewards:'yes'};
   loyalty.loseCreateResponse();

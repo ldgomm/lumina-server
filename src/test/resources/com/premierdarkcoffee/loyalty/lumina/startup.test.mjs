@@ -72,7 +72,7 @@ test('arranque real con .env generado por staging conserva clave, sesión y cred
     contents=contents.replace(/^LOYALTY_HTTP_PORT=\d+$/m,'LOYALTY_HTTP_PORT='+port);writeFileSync(config,contents,{mode:0o600});
     mkdirSync(f.data,{mode:0o700});loadKey(f.data,false);const originalKey=readFileSync(join(f.data,'agency.key'));
     let db=openDatabase(join(f.data,'agency.sqlite'));
-    const account=await createAgency(db,{code:setupCode(db),name:'Agencia persistente',email:'persistente@example.test',password});
+    const account=await createAgency(db,{code:setupCode(db),name:'Agencia persistente',document:'1724323843',password});
     const session=createSession(db,account),csrf=getSession(db,session).csrf;db.close();
     const started=await launchOnFreePort(f,port);process=started.process;const luminaPort=started.port;
     const origin='http://127.0.0.1:'+luminaPort;

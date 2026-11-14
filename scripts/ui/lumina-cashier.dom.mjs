@@ -1,3 +1,4 @@
+import {documentFor} from '../../src/test/resources/com/premierdarkcoffee/loyalty/lumina/helpers.mjs';
 // Real portal/session/bridge and browser scripts; native engine responses use fictional fixtures.
 // This verifies DOM interaction, not physical Wallet installation or browser layout.
 import assert from 'node:assert/strict';
@@ -19,7 +20,7 @@ const reward={id:'reward-fixture',programId:'program-fixture',name:'Premio de pr
 const fixture={programs:[{id:'program-fixture',version:1,config:{name:'Visitas',kind:'STAMPS',active:true,minimumSpendMinor:100,stampsPerPurchase:1,branchIds:[]}}],rewards:[reward],member:{member:{id:'member-fixture',name:'Persona ficticia',cardCode:'FICTIONAL-CARD',revision:1},balances:[{programId:'program-fixture',name:'Visitas',kind:'STAMPS',available:3}],rewards:[reward]}};
 try{
  const native=await fakeLoyalty(t,null,fixture),world=await portal(t,native.origin,{platformToken:native.platformToken});await agency(world);
- const business=await owner(world,'Negocio ficticio','9'),person=await colleague(world,business.client,{name:'Caja de prueba',email:'caja-dom@example.test'});
+ const business=await owner(world,'Negocio ficticio','9'),person=await colleague(world,business.client,{name:'Caja de prueba',document:documentFor('caja-dom@example.test')});
  const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',business.id).loyalty_tenant,branch=native.branches.get(tenant)[0].id;
  const assign=async values=>{const r=await business.client.post('/equipo/'+person.id+'/caja/guardar',{revision:teamRevision(world,person.id),branch,...values});assert.equal(r.status,303,r.body);};
  const team=dom((await business.client.get('/equipo/'+person.id)).body,world.origin+'/equipo/'+person.id);load(team,'team.js');

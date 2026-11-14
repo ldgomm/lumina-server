@@ -49,4 +49,11 @@ class WalletSubscriptionTest {
         for(cycle in listOf("YEAR","FREE","MONTHLY ",""))assertFailsWith<Problem>{walletUnitPrice(cycle)}
     }
 
+    @Test fun `historical agreements without cedula still decode without changing their evidence`() {
+        val old="""{"version":"v1","terms":"Términos originales","hash":"original-hash","acceptedAt":"2026-11-19T15:00:00Z","ownerId":"old-owner","ownerName":"Responsable","ownerEmail":"old@example.test","companyId":"old-company","activationOn":"2026-11-19","paidFrom":"2027-01-01","firstBranchIds":["branch"],"provider":{"legalName":"Agencia","ruc":"1234567890001","address":"Quito","email":"legal@example.test","phone":"0991234567","privacyUrl":"https://example.test/privacy"}}"""
+        val agreement=com.premierdarkcoffee.loyalty.shared.json.decodeFromString<WalletAgreement>(old)
+        assertEquals("",agreement.ownerDocument);assertEquals("old@example.test",agreement.ownerEmail)
+        assertEquals("original-hash",agreement.hash);assertEquals("Términos originales",agreement.terms)
+    }
+
 }

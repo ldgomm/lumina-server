@@ -6,8 +6,9 @@ export function platformTargets(db,request) {
 export function canRequest(actor,request,action='VIEW') {
   if (actor.kind==='AGENCY') return action==='VIEW';
   if (actor.company_id!==request.company_id) return false;
-  if (actor.kind==='OWNER') return true;
+  if (actor.kind==='OWNER') return action==='VIEW'||can(actor,request.channel,action);
   if (['PLAN','QUOTE','COURTESY'].includes(request.type)) return false;
+  if(!can(actor,request.channel,action))return false;
   if (request.channel!=='SOCIAL') return can(actor,request.channel,action);
   if (actor.grants.some(g=>g.scope==='SOCIAL' && g.action===action)) return true;
   const targets=request.platforms || [];
@@ -21,7 +22,7 @@ export function requestAccessSql(actor,alias='r') {
   if(actor.kind==='OWNER')return {sql:`${alias}.company_id=?`,params:[actor.company_id]};
   const areasAllowed=Object.keys(areas).filter(scope=>scope!=='SOCIAL'&&can(actor,scope));
   const platforms=socialChannels.filter(scope=>can(actor,scope));
-  const whole=actor.grants.some(g=>g.scope==='SOCIAL'&&g.action==='VIEW');
+  const whole=can(actor,'SOCIAL')&&actor.grants.some(g=>g.scope==='SOCIAL'&&g.action==='VIEW');
   const social=whole ? `${alias}.channel='SOCIAL'` : platforms.length ?
     `(${alias}.channel='SOCIAL' AND (NOT EXISTS(SELECT 1 FROM request_platforms old WHERE old.company_id=${alias}.company_id AND old.request_id=${alias}.id) OR EXISTS(SELECT 1 FROM request_platforms rp WHERE rp.company_id=${alias}.company_id AND rp.request_id=${alias}.id AND rp.platform IN (${platforms.map(()=>'?').join(',')}))))` : '0=1';
   const ordinary=areasAllowed.length?`${alias}.channel IN (${areasAllowed.map(()=>'?').join(',')})`:'0=1';

@@ -14,7 +14,7 @@ function fixture(t) {
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'lumina-production-test-')));
  t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const key=Buffer.alloc(32,5);writeFileSync(join(dir,'agency.key'),key,{mode:0o600});const db=openDatabase(join(dir,'agency.sqlite'));chmodSync(join(dir,'agency.sqlite'),0o600);
- db.run("INSERT INTO accounts(id,name,email,kind,password) VALUES('agency','Agencia','a@example.test','AGENCY','fictional')");
+ db.run("INSERT INTO accounts(id,name,email,kind,password) VALUES('agency','Agencia','1748995345','AGENCY','fictional')");
  const env={LUMINA_PROFILE:'production',LUMINA_ORIGIN:'https://portal.example.com',LUMINA_DATA_DIR:dir,LUMINA_LOYALTY_ADMIN_TOKEN:'A'.repeat(48),PRODUCTION_IDENTITY_PATH:join(dir,'identity.json'),SOURCE_SHA:'a'.repeat(64)};
  const sql={'lumina/infrastructure/schema.sql':hash(readFileSync(new URL('schema.sql',infra)))};
  for(const f of readdirSync(new URL('migrations/',infra)))if(f.endsWith('.sql'))sql['lumina/infrastructure/migrations/'+f]=hash(readFileSync(new URL('migrations/'+f,infra)));

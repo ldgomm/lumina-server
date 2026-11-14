@@ -5,7 +5,7 @@ import { cajaHtml, loyaltyWorkspaceHtml } from '../../../../../../main/resources
 
 for(const role of ['AGENCY','OWNER','COLLABORATOR'])test('Mi cuenta concentra perfil y salida para '+role,async t=>{
  const w=await portal(t);const admin=await agency(w);const business=await owner(w,'Cuenta prueba',1);
- const staff=await colleague(w,business.client,{name:'Colaborador',email:'cuenta-colab@example.test','SOCIAL.VIEW':'yes'});
+ const staff=await colleague(w,business.client,{name:'Colaborador',document:'1712423381','SOCIAL.VIEW':'yes'});
  const session=role==='AGENCY'?admin:role==='OWNER'?business.client:staff.session;
  const account=await session.get('/cuenta');assert.equal(account.status,200);
  assert.match(account.body,/TU PERFIL/);assert.match(account.body,/name="confirmation"/);assert.equal((account.body.match(/action="\/salir"/g)||[]).length,1);
@@ -16,7 +16,7 @@ for(const role of ['AGENCY','OWNER','COLLABORATOR'])test('Mi cuenta concentra pe
 
 test('cerrar otras sesiones conserva la actual y las cuentas ajenas',async t=>{
  const w=await portal(t);const a=await owner(w,'Primero',1),b=await owner(w,'Segundo',2);
- const extra=w.session();assert.equal((await extra.post('/entrar',{email:'negocio1@example.test',password})).status,303);await extra.get('/cuenta');
+ const extra=w.session();assert.equal((await extra.post('/entrar',{document:'1748639844',password})).status,303);await extra.get('/cuenta');
  assert.match((await a.client.get('/cuenta')).body,/otra sesión abierta/);
  assert.equal((await a.client.post('/cuenta/sesiones/cerrar',{account_id:w.db.get('SELECT id FROM accounts WHERE company_id=?',b.id).id})).status,303);
  assert.equal((await a.client.get('/cuenta')).status,200);assert.equal((await extra.get('/cuenta')).location,'/');assert.equal((await b.client.get('/cuenta')).status,200);
@@ -38,7 +38,7 @@ test('cambiar contraseña mantiene identidad, negocio y permisos y renueva la se
  const before=w.db.get('SELECT id,company_id,kind FROM accounts WHERE company_id=?',a.id),company=w.db.get('SELECT * FROM companies WHERE id=?',a.id);
  const result=await a.client.post('/cuenta/clave',{current:password,password:next,confirmation:next});assert.equal(result.location,'/cuenta?estado=clave');assert.notEqual(a.client.cookie,oldCookie);
  assert.deepEqual(w.db.get('SELECT id,company_id,kind FROM accounts WHERE company_id=?',a.id),before);assert.deepEqual(w.db.get('SELECT * FROM companies WHERE id=?',a.id),company);
- const other=w.session();assert.equal((await other.post('/entrar',{email:'negocio1@example.test',password})).status,401);assert.equal((await other.post('/entrar',{email:'negocio1@example.test',password:next})).status,303);
+ const other=w.session();assert.equal((await other.post('/entrar',{document:'1748639844',password})).status,401);assert.equal((await other.post('/entrar',{document:'1748639844',password:next})).status,303);
 });
 test('cerrar sesión bloquea también el proxy de Wallet sin cambiar asociaciones',async t=>{
  const w=await portal(t);const a=await owner(w,'Cuenta',1);const company=w.db.get('SELECT * FROM companies WHERE id=?',a.id);

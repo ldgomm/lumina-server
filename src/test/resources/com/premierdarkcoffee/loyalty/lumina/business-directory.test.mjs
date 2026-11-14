@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {documentFor} from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { openDatabase } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/database.mjs';
@@ -10,7 +11,7 @@ function fixture(t,count=61){
  for(let i=0;i<count;i++){
   const id=randomUUID();ids.push(id);
   db.run('INSERT INTO companies(id,name,registration_key,document_hint,phone,approved,created_at) VALUES(?,?,?,?,?,?,?)',id,i===0?'Café Órbita':i===1?'<Taller & Sol>':'Negocio '+String(i).padStart(3,'0'),randomUUID(),'1234','099000'+String(i).padStart(4,'0'),i%2,'2026-11-13T18:00:00.000Z');
-  db.run("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'OWNER')",randomUUID(),id,i===0?'José Ruiz':'Responsable '+i,'owner'+i+'@example.test');
+  db.run("INSERT INTO accounts(id,company_id,name,email,document,kind) VALUES(?,?,?,?,?,'OWNER')",randomUUID(),id,i===0?'José Ruiz':'Responsable '+i,'owner'+i+'@example.test',documentFor('owner'+i+'@example.test'));
   if(i%4)db.run('INSERT INTO business_controls VALUES(?,?,?,?,?,?)',id,['ACTIVE','PAUSED','SUSPENDED','CLOSED'][i%4],'Motivo de prueba',1,null,'2026-11-13T18:00:00.000Z');
  }
  return {db,ids};
@@ -21,7 +22,7 @@ test('business directory paginates the full collection with stable nonoverlappin
  assert.equal(businessDirectory(db,actor,query({pagina:'99'})).page,2);
 });
 test('search is literal and ignores accents across business and owner contact',t=>{
- const {db,ids}=fixture(t);for(const q of ['CAFE orbita','Jose Ruiz','owner0@example.test','0990000000'])assert.deepEqual(businessDirectory(db,actor,query({q})).rows.map(r=>r.id),[ids[0]],q);
+ const {db,ids}=fixture(t);for(const q of ['CAFE orbita','Jose Ruiz','1729279784','0990000000'])assert.deepEqual(businessDirectory(db,actor,query({q})).rows.map(r=>r.id),[ids[0]],q);
  assert.equal(businessDirectory(db,actor,query({q:'%_'})).total,0);
 });
 test('lifecycle and verification filters apply before pagination and counts describe all businesses',t=>{

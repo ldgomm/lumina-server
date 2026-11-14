@@ -1,9 +1,11 @@
+import { serviceState, requireService, serviceCatalog, beginService, completeWalletActivation, finishWelcome, routeService } from '../businesses/services.mjs';
+import { welcomePage, servicesPage, inactiveServicePage } from '../presentation/pages/welcome-pages.mjs';
 import { businessDirectory } from '../businesses/directory.mjs';
 import { businessDirectoryPage } from '../presentation/pages/business-directory-pages.mjs';
 import { receiptPage, receiptText } from '../presentation/pages/billing-account-pages.mjs';
 import { businessControl, requireOperating, requestBusinessChange, createBusinessControlSync, businessStates } from '../businesses/control.mjs';
 import { controlPage, accountPage as billingAccountPage } from '../presentation/pages/business-control-pages.mjs';
-import { paymentInput, chargeInput } from '../billing/payment-input.mjs';
+import { paymentInput, chargeInput, emptyAccount } from '../billing/payment-input.mjs';
 import { walletComparison } from '../presentation/pages/wallet-benefits.mjs';
 import { campaignPage, campaignBanner } from '../presentation/pages/campaign-pages.mjs';
 import { campaignBases, createCampaignOffer } from '../campaigns/offers.mjs';
@@ -17,7 +19,7 @@ import { requestAccessSql } from '../access/content-policy.mjs';
 import { walletSections } from '../wallet/access-policy.mjs';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
-import { activate, approveCompany, authenticate, can, changePassword, companyFor, createAgency, createSession, createTeamMember,
+import { activate, approveCompany, authenticate, authenticateLegacy, claimIdentity, can, changePassword, companyFor, createAgency, createSession, createTeamMember,
   getSession, limit, logout, manageAccount, register, requireAccess, requireAgency, requireOwner, teamMember, updateGrants, updateMember } from '../access/accounts.mjs';
 import { teamDirectory, teamHistory } from '../access/team-directory.mjs';
 import { consultTeams } from '../access/team-consultation.mjs';
@@ -25,13 +27,13 @@ import { teamsConsultationPage } from '../presentation/pages/team-consultation-p
 import { saveTeamAccess } from '../access/team-access.mjs';
 import { equal } from '../access/security.mjs';
 import { acceptQuote, cancelContract, contractsFor, createPlan, currentQuote, getPlan, hidePlan, listPlans, offerQuote } from '../memberships/billing.mjs';
-import { event, channels, areas, integer, isId, now, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
+import { event, channels, areas, integer, isId, now, localDay, Problem, requireThat, socialChannels, text } from '../shared/domain.mjs';
 import { cashierAssets, createLoyaltyBridge } from '../wallet/bridge.mjs';
 import { createWalletWorkspace } from '../wallet/wallet.mjs';
 import { addEvidence, addPiece, addPublication, addVisit, createRequest, editPiece, finishVisit, getPiece, getRequest,
   requestCounts, reviewPiece, updateRequest, visibleRequests } from '../production/production.mjs';
 import { addLocation, addMapsMetric, addReview, addSocialMetric, analytics, mapsData, publicationsFor } from '../analytics/reporting.mjs';
-import { accountPage, publicPage } from '../presentation/pages/account-pages.mjs';
+import { accountPage, publicPage, identityMigrationPage } from '../presentation/pages/account-pages.mjs';
 import { invitePage, memberPage, newMemberPage, teamPage } from '../presentation/pages/team-pages.mjs';
 import { card, esc, localLink, page, pathFor } from '../presentation/pages/components.mjs';
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
@@ -49,6 +51,9 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/welcome.css':['welcome.css','text/css; charset=utf-8'],
+  '/assets/identity.js':['identity.js','text/javascript; charset=utf-8'],
+  '/assets/identity-rules.mjs':['identity-rules.mjs','text/javascript; charset=utf-8'],
   '/assets/billing-workspace.css':['billing-workspace.css','text/css; charset=utf-8'],
   '/assets/billing-workspace.js':['billing-workspace.js','text/javascript; charset=utf-8'],
   '/assets/wallet-campaigns.js':['wallet-campaigns.js','text/javascript; charset=utf-8'],
@@ -164,26 +169,25 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         res.setHeader('Set-Cookie',sessionCookie(createSession(db,id),trusted.protocol==='https:'));
         return redirect(res,destination);
       };
-      const publicPaths = ['/','/registro','/activar','/configurar'];
+      const publicPaths = ['/','/registro','/activar','/configurar','/acceso-anterior'];
       if (method==='GET' && publicPaths.includes(path)) {
         if (actor) return redirect(res,'/inicio');
         const setupAvailable = !db.get("SELECT id FROM accounts WHERE kind='AGENCY'");
         if (path==='/configurar') requireThat(setupAvailable,'La cuenta de agencia ya está configurada.',404);
         return render(publicPage(path,setupAvailable));
       }
-      if (method==='POST' && ['/entrar','/registro','/activar','/configurar'].includes(path)) {
+      if (method==='POST' && ['/entrar','/registro','/activar','/configurar','/acceso-anterior'].includes(path)) {
         requireThat(!actor,'Cierra la sesión actual para usar otra cuenta.',409);
         limit(db,path+':'+req.socket.remoteAddress,path==='/entrar' ? 50 : 16);
         const data = await readForm(req);
         try {
-          if (path==='/entrar') return startSession(await authenticate(db,data));
+          if (path==='/entrar') {const id=await authenticate(db,data);return startSession(id,db.get('SELECT welcome_done FROM accounts WHERE id=?',id).welcome_done?'/inicio':'/bienvenida');}
+          if(path==='/acceso-anterior')return startSession(await authenticateLegacy(db,data),'/cuenta/identificacion');
           if (path==='/registro') {
             const account=await register(db,key,data);
-            const created=db.get('SELECT company_id FROM accounts WHERE id=?',account);
-            try{await wallets.ensureCompany(created.company_id);}catch{} // Account survives an outage; opening Wallet retries the durable registration.
-            return startSession(account,legalProfile(db)?'/planes/wallet':'/inicio');
+            return startSession(account,'/bienvenida');
           }
-          if (path==='/activar') return startSession(await activate(db,data));
+          if (path==='/activar') return startSession(await activate(db,data),'/bienvenida');
           return startSession(await createAgency(db,data));
         } catch(issue) {
           if (!(issue instanceof Problem) || ![400,401,409].includes(issue.status)) throw issue;
@@ -212,6 +216,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         agencyWork=true;path=path.slice('/agencia'.length);
       }
       actor={...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('empresa'))&&!agencyWork};
+      if(actor.kind!=='AGENCY') {
+        const scope=routeService(path);
+        if(scope&&path!=='/wallet/ventajas'&&serviceState(db,actor.company_id,scope)!=='ACTIVE') {
+          if(method==='GET'&&!api){company=companyFor(db,actor);return render({title:serviceCatalog[scope].name,body:inactiveServicePage(actor,scope)},409);}
+          requireService(db,actor.company_id,scope);
+        }
+      }
+
       if (actor.kind === 'COLLABORATOR') cash = db.get(
         "SELECT branch_name,purchases,rewards FROM cash_grants WHERE account_id=? AND company_id=? AND status='ACTIVE'",actor.id,actor.company_id);
       if (path.startsWith('/wallet-api/')||path.startsWith('/gestion-api/')) {
@@ -293,6 +305,30 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         res.setHeader('Set-Cookie',sessionCookie('',trusted.protocol==='https:'));
         return redirect(res,'/');
       }
+      if(path==='/cuenta/identificacion') {
+        if(actor.document)return redirect(res,'/cuenta');
+        if(method==='POST') {
+          try { limit(db,'claim-identity:'+actor.id,6);return startSession(await claimIdentity(db,actor,data),'/cuenta'); }
+          catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Actualiza tu acceso',body:identityMigrationPage(actor,data,issue.message)},issue.status);}
+        }
+        return render({title:'Actualiza tu acceso',body:identityMigrationPage(actor)});
+      }
+      if(path==='/servicios'||path==='/servicios/activar'||path==='/bienvenida') {
+        requireThat(actor.kind!=='AGENCY','Esta bienvenida pertenece al negocio y su equipo.',403);
+        company=companyFor(db,actor);
+        if(path==='/bienvenida') {
+          if(method==='GET')return render({title:'Bienvenido a Lúmina',body:welcomePage(actor,{cash})});
+          if(actor.kind==='COLLABORATOR'){requireThat(!data.service,'Solo el dueño activa servicios.',403);finishWelcome(db,actor);return redirect(res,'/inicio');}
+          if(data.service==='LATER'){finishWelcome(db,actor);return redirect(res,'/inicio');}
+          beginService(db,actor,data.service);finishWelcome(db,actor);
+          return redirect(res,data.service==='WALLET'?'/planes/wallet':serviceCatalog[data.service].path);
+        }
+        requireOwner(actor);
+        if(path==='/servicios'&&method==='GET')return render({title:'Mis servicios',body:servicesPage(db,actor)});
+        requireThat(path==='/servicios/activar'&&method==='POST','Acción no encontrada.',404);
+        beginService(db,actor,data.service);
+        return redirect(res,data.service==='WALLET'?'/planes/wallet':serviceCatalog[data.service].path);
+      }
       if(path==='/wallet/ventajas'&&method==='GET')return render({title:'Lúmina Wallet',body:walletComparison()});
       if(path==='/ayuda'&&method==='GET') {
         const provider=legalProfile(db);
@@ -319,7 +355,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if(path==='/mi-estado-cuenta'&&method==='GET') {
         requireOwner(actor);company=companyFor(db,actor);
         const {offset,view}=billingView();
-        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,await wallets.account(actor,offset),'/mi-estado-cuenta','',{},{view})});
+        const account=company.loyalty_tenant?await wallets.account(actor,offset):emptyAccount(company,localDay());
+        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,account,'/mi-estado-cuenta','',{},{view})});
       }
       const administration=path.match(/^\/administracion\/negocios\/([0-9a-f-]{36})(?:\/(estado|reintentar|pago|revertir|cargo|anular))?$/i);
       if(administration) {
@@ -327,7 +364,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const base='/administracion/negocios/'+company.id;let issueText='';
         const panel=billingView();
         const view=async(status=200)=>{
-          let account=null;try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
+          company=companyFor(db,actor,company.id);
+          let account=company.loyalty_tenant?null:emptyAccount(company,localDay());if(company.loyalty_tenant)try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
           return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{view:panel.view,action:method==='POST'?administration[2]:'',notice:{cargo:'Cargo registrado.',revertir:'Registro de pago revertido.',anular:'Cargo anulado.',estado:'Estado actualizado.',reintentar:'Sincronización confirmada.'}[target.searchParams.get('guardado')]||''})},status);
         };
         if(method==='POST')try {
@@ -344,7 +382,6 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return redirect(res,savedPayment?base+'/pagos/'+savedPayment.id:base+'?'+new URLSearchParams({vista:administration[2]==='revertir'?'pagos':['cargo','anular'].includes(administration[2])?'cargos':'resumen',guardado:administration[2]}));
         }catch(issue){if(!(issue instanceof Problem))throw issue;issueText=issue.message;panel.view=['pago','cargo','anular'].includes(administration[2])?'cargos':administration[2]==='revertir'?'pagos':panel.view;return view(issue.status);}
         requireThat(!administration[2],'Página no encontrada.',404);
-        try{await wallets.ensureCompany(company.id);}catch(issue){issueText=issue.message;}
         company=companyFor(db,actor,company.id);
         return view();
       }
@@ -356,15 +393,18 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if(path.startsWith('/planes/wallet')) {
         requireOwner(actor);
+        if(serviceState(db,actor.company_id,'WALLET')==='INACTIVE')return redirect(res,'/servicios');
         if(method==='POST') {
           const action=path==='/planes/wallet/aceptar'?'accept':path==='/planes/wallet/cancelar'?'cancel':null;
           requireThat(action,'Acción no encontrada.',404);
           requireThat(/^[0-9a-f-]{36}$/i.test(data.requestKey||''),'Recarga el formulario antes de continuar.');
           const payload=action==='accept'?{offer:subscriptionOfferInput(db,actor,data.cycle||"MONTHLY"),expectedHash:data.hash||'',accepted:data.accept==='yes'}:{expectedVersion:Number(data.version),confirmed:data.confirm==='yes'};
-          try { await commercialTurn(actor.company_id,async()=>{if(action==='accept')payload.offer=subscriptionOfferInput(db,actor,data.cycle||'MONTHLY');return wallets.subscription(actor,action,payload,data.requestKey);});return redirect(res,action==='accept'?'/wallet':'/planes/wallet'); }
+          try { await commercialTurn(actor.company_id,async()=>{if(action==='accept')payload.offer=subscriptionOfferInput(db,actor,data.cycle||'MONTHLY');const result=await wallets.subscription(actor,action,payload,data.requestKey);if(action==='accept')completeWalletActivation(db,actor);return result;});return redirect(res,action==='accept'?'/wallet':'/planes/wallet'); }
           catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Revisa tu suscripción',body:`<section class="card"><h2>No pudimos confirmar el cambio</h2><p role="alert">${esc(issue.message)}</p><a class="btn" href="/planes/wallet">Revisar condiciones actuales</a></section>`},issue.status);}
         }
+        if(serviceState(db,actor.company_id,'WALLET')==='SETUP'&&db.get(`SELECT c.id FROM contracts c JOIN plan_items i ON i.plan_id=c.plan_id AND i.service='WALLET' WHERE c.company_id=? AND c.cancelled_at IS NULL AND c.starts_on<=? AND c.ends_before>? LIMIT 1`,actor.company_id,localDay(),localDay())){completeWalletActivation(db,actor);return redirect(res,'/wallet');}
         const status=await wallets.subscription(actor);
+        if(status.accepted&&status.recurring&&serviceState(db,actor.company_id,'WALLET')==='SETUP')completeWalletActivation(db,actor);
         if(path==='/planes/wallet/estado')return json(res,200,{accepted:status.accepted,recurring:status.recurring,trialUntil:status.trialUntil,endsOn:status.endsOn,nextChargeOn:status.nextChargeOn,monthlyMinor:status.monthlyMinor,periodMinor:status.periodMinor,cycle:status.cycle,unitMinor:status.unitMinor});
         let offer=null,error='';
         if(!status.legacy&&(!status.recurring||target.searchParams.has('ciclo')&&target.searchParams.get('ciclo')!==(status.cycle||'MONTHLY')))try{offer=await wallets.subscription(actor,'offer',subscriptionOfferInput(db,actor,target.searchParams.get('ciclo')||'MONTHLY'));}catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
@@ -394,7 +434,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           if(company)company=companyFor(db,actor,company.id);
         }catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
         const companies=actor.kind==='AGENCY'&&!company?db.all('SELECT id,name FROM companies ORDER BY name,id'):[];
-        const contact=company?db.get("SELECT a.name,a.email,c.phone FROM accounts a JOIN companies c ON c.id=a.company_id WHERE c.id=? AND a.kind='OWNER'",company.id):null;
+        const contact=company?db.get("SELECT a.name,c.phone FROM accounts a JOIN companies c ON c.id=a.company_id WHERE c.id=? AND a.kind='OWNER'",company.id):null;
         return render({title:'Fidelización digital',description:'Wallet de tu negocio, integrado en Lúmina.',
           body:walletPage({actor,company,contact,companies,data:information,error,blocked:actor.kind==='OWNER'&&company?db.all("SELECT w.account_id,a.name,a.revision FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[]})});
       }
@@ -492,7 +532,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (actor.kind!=='AGENCY' || companyId) company = companyFor(db,actor,companyId);
       const url = pathFor(actor,company);
       if (path==='/inicio' && method==='GET') {
-        if(actor.kind==='OWNER'&&!company.loyalty_tenant){try{company=await wallets.ensureCompany(company.id);}catch{}}
+        if(!actor.welcome_done)return redirect(res,'/bienvenida');
         const groups = requestCounts(db,actor,company.id);
         const policy=requestAccessSql(actor);
         const videos=db.all(`SELECT r.quantity,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
@@ -684,7 +724,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
                 actor=getSession(db,cookie);requireThat(actor&&equal(actor.csrf,data._csrf),'Tu sesión cambió. Recarga para continuar.',403);
                 requireOperating(db,company.id);
                 const latest=getOrder(db,actor,company,id);
-                if(['aceptar','activar'].includes(action)&&latest.lines.some(line=>line.wallet!=='NONE'||line.items?.some(item=>item.service==='WALLET'))) {
+                if(company.loyalty_tenant&&['aceptar','activar'].includes(action)&&latest.lines.some(line=>line.wallet!=='NONE'||line.items?.some(item=>item.service==='WALLET'))) {
                   const account=actor.kind==='AGENCY'?await wallets.administration(actor,company.id,'account'):await wallets.account(actor);
                   const plan=account.membership?.plan;
                   requireThat(!plan?.recurring&&(!plan?.walletEndsOn||latest.lines.every(line=>line.starts_on>=plan.walletEndsOn)),'Wallet ya tiene una suscripción. Desactiva su renovación y programa el paquete después del período vigente para evitar cargos duplicados.',409);

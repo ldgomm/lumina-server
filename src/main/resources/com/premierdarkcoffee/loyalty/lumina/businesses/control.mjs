@@ -33,7 +33,10 @@ export function createBusinessControlSync({db,remote,ensureCompany}) {
  async function perform(companyId) {
   const control=businessControl(db,companyId);if(!control.pending_id)return control;
   let command=db.get('SELECT * FROM business_commands WHERE id=?',control.pending_id);
-  const company=await ensureCompany(companyId);
+  let company=db.get('SELECT * FROM companies WHERE id=?',companyId);
+  const requested=db.get("SELECT 1 FROM company_services WHERE company_id=? AND service='WALLET'",companyId);
+  if(!company.loyalty_tenant&&requested)company=await ensureCompany(companyId);
+  if(company.loyalty_tenant) {
   requireThat(company.loyalty_tenant,'No se pudo localizar Wallet. El bloqueo local sigue activo.',503);
   if(command.native_version===null){
    const access=await remote(company.loyalty_tenant,'access');
@@ -43,6 +46,7 @@ export function createBusinessControlSync({db,remote,ensureCompany}) {
   }
   const result=await remote(company.loyalty_tenant,'access',{method:'PUT',body:{state:command.state==='PAUSED'?'SUSPENDED':command.state,reason:command.reason,expectedVersion:command.native_version,commandId:command.id}});
   requireThat(result.state===(command.state==='PAUSED'?'SUSPENDED':command.state)&&result.version===command.native_version+1,'No se pudo confirmar el cambio en Wallet.',502);
+  }
   return db.transaction(()=>{
    const current=businessControl(db,companyId);
    requireThat(current.pending_id===command.id,'Hay un cambio posterior pendiente.',409);

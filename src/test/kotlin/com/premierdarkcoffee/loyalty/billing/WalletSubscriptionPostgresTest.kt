@@ -210,4 +210,22 @@ class WalletSubscriptionPostgresTest {
         assertTrue(service.commercial.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
         accept(f);assertEquals(5000L,balance(f));assertEquals("2028-03-19",status(f).str("nextChargeOn"))
     }
+    @Test fun `cedula replaces owner email and remains bound to the accepted offer`() {
+        val f=fixture().let { it.copy(offer=it.offer.copy(ownerEmail="",ownerDocument="1748639844")) }
+        val quote=service.walletSubscriptionOffer(f.staff,f.offer)
+        val changed=f.offer.copy(ownerDocument="1748225842")
+        assertEquals("OFFER_CHANGED",assertFailsWith<Problem>{service.acceptWalletSubscription(f.staff,WalletAcceptInput(changed,quote.str("hash"),true),id())}.code)
+        accept(f,quote=quote)
+        val agreement=status(f).getValue("agreement").jsonObject
+        assertEquals("1748639844",agreement.str("ownerDocument"));assertEquals("",agreement.str("ownerEmail"))
+        assertEquals(0L,balance(f))
+    }
+    @Test fun `a supplied malformed document cannot fall back to a legacy email`() {
+        val f=fixture()
+        for(document in listOf("1712345678","0000000000","letters","17486398440")) {
+            assertEquals("INVALID_OWNER_IDENTITY",assertFailsWith<Problem>{service.walletSubscriptionOffer(f.staff,f.offer.copy(ownerDocument=document))}.code)
+        }
+        assertFalse(status(f).getValue("accepted").jsonPrimitive.boolean)
+    }
+
 }

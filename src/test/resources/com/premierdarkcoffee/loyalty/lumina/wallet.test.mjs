@@ -30,7 +30,7 @@ test('dueño accede sin credenciales y mantiene el mismo acceso después de cerr
  const restore=await client.post('/wallet-api/api/staff/wallet/restore',{confirmed:true},{json:true,headers:{'X-Lumina-CSRF':client.csrf}});assert.equal(restore.status,200);
  const join=await client.get(JSON.parse(restore.body).path);assert.equal(join.location,loyalty.origin+'/join/'+loyalty.business.slug+'?restore=ficticio');
  await client.post('/salir');assert.equal((await client.get('/wallet-api/api/staff/dashboard')).status,401);
- await client.post('/entrar',{email:'negocio5@example.test',password});await client.get('/wallet');
+ await client.post('/entrar',{document:'1731480081',password});await client.get('/wallet');
  assert.equal(world.db.get('SELECT staff_id FROM wallet_access').staff_id,row.staff_id);assert.equal(loyalty.staff.get(row.staff_id).token,token);
 });
 test('las escrituras de Wallet exigen origen y CSRF, incluido PUT',async t=>{
@@ -53,7 +53,7 @@ test('alta automática usa un negocio propio y retira la asociación manual al d
 });
 test('colaborador solo ve áreas asignadas y no hereda edición, Caja ni administración',async t=>{
  const {client,world}=await context(t);
- const member=await colleague(world,client,{name:'Diseño',email:'design@example.test','WALLET.VIEW':'yes','WALLET_DESIGN.VIEW':'yes'});
+ const member=await colleague(world,client,{name:'Diseño',document:'1746242013','WALLET.VIEW':'yes','WALLET_DESIGN.VIEW':'yes'});
  const page=await member.session.get('/wallet');assert.match(page.body,/name="lumina-wallet-section" content="design"/);assert.match(page.body,/content="\[&quot;design&quot;,&quot;qr&quot;\]"/);assert.doesNotMatch(page.body,/href="\/wallet\/gestion\?seccion=(customers|programs|reports)"/);
  assert.equal((await member.session.get('/wallet/gestion?seccion=design')).status,200);
  assert.equal((await member.session.get('/wallet/gestion?seccion=customers')).status,403);
@@ -71,7 +71,7 @@ test('colaborador solo ve áreas asignadas y no hereda edición, Caja ni adminis
 });
 test('permisos de servicios no crean acceso operativo y baja de persona cierra Wallet',async t=>{
  const {client,world}=await context(t);
- const member=await colleague(world,client,{name:'Servicios',email:'services@example.test','WALLET.VIEW':'yes','WALLET.REQUEST':'yes'});
+ const member=await colleague(world,client,{name:'Servicios',document:'1758207334','WALLET.VIEW':'yes','WALLET.REQUEST':'yes'});
  assert.equal((await member.session.get('/wallet')).status,200);
  assert.equal((await member.session.get('/wallet-api/api/staff/dashboard')).status,403);
  assert.equal(world.db.get('SELECT count(*) AS n FROM wallet_access').n,0);
@@ -130,7 +130,7 @@ test('reparar un acceso bloqueado exige dueño y confirmación; la agencia no pu
 });
 test('informes delegados se abren sin consultar ni mostrar la cuenta comercial',async t=>{
  const {client,world,loyalty}=await context(t);
- const member=await colleague(world,client,{name:'Analista',email:'reports@example.test','WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
+ const member=await colleague(world,client,{name:'Analista',document:'1754366613','WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
  const start=loyalty.calls.length;
  assert.equal((await member.session.get('/wallet/gestion?seccion=reports')).location,'/gestion/informes');
  const view=await member.session.get('/gestion/informes');assert.equal(view.status,200);assert.match(view.body,/Resultados por sucursal/);assert.match(view.body,/105/);

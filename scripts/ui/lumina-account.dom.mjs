@@ -1,3 +1,4 @@
+import {documentFor} from '../../src/test/resources/com/premierdarkcoffee/loyalty/lumina/helpers.mjs';
 // Interaction and accessible structure, not browser screenshots or physical Wallet validation.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -6,7 +7,7 @@ import {portal,agency,owner,colleague} from '../../src/test/resources/com/premie
 const {JSDOM,VirtualConsole}=createRequire(import.meta.url)(process.env.LOYALTY_TEST_JSDOM||'jsdom');
 const cleanup=[],errors=[],t={after:f=>cleanup.push(f)};
 try{
- const w=await portal(t),admin=await agency(w),business=await owner(w,'Cuenta DOM',1),member=await colleague(w,business.client,{name:'Equipo',email:'cuenta-dom@example.test','SOCIAL.VIEW':'yes'});
+ const w=await portal(t),admin=await agency(w),business=await owner(w,'Cuenta DOM',1),member=await colleague(w,business.client,{name:'Equipo',document:documentFor('cuenta-dom@example.test'),'SOCIAL.VIEW':'yes'});
  for(const client of [admin,business.client,member.session]){
   const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
   const browser=new JSDOM((await client.get('/cuenta')).body.replace(/<script\b[^>]*src[^>]*><\/script>/g,''),{url:w.origin+'/cuenta',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc});cleanup.push(()=>browser.window.close());const d=browser.window.document;

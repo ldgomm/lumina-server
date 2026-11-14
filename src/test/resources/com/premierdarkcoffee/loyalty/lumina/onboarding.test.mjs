@@ -12,15 +12,15 @@ const schema=relative=>readFileSync(new URL('../../../../../../main/resources/co
 async function setup(t){const loyalty=await fakeLoyalty(t),world=await portal(t,loyalty.origin,{platformToken:loyalty.platformToken}),admin=await agency(world);return {loyalty,world,admin};}
 const scope=id=>({headers:{'X-Lumina-Company':id}});
 
-test('registrar negocio prepara Wallet propio y contacto sin verificación manual ni promociones ficticias',async t=>{
+test('activar Wallet prepara un registro propio y contacto sin verificación manual ni promociones ficticias',async t=>{
  const {loyalty,world}=await setup(t);const {client,id}=await owner(world,'Panadería Sol','1');
  const company=world.db.get('SELECT * FROM companies WHERE id=?',id);assert.equal(company.approved,0);assert.ok(company.loyalty_tenant);assert.notEqual(company.loyalty_tenant,loyalty.business.id);
  assert.equal(loyalty.registrations.size,1);assert.equal(loyalty.branches.get(company.loyalty_tenant).length,1);
  const view=await client.get('/wallet');assert.equal(view.status,200);assert.match(view.body,/<body class="lumina-loyalty">/);assert.match(view.body,/Panadería Sol/);assert.match(view.body,/name="lumina-wallet-back" content="\/inicio"/);
- assert.equal(world.db.get("SELECT email FROM accounts WHERE company_id=? AND kind='OWNER'",id).email,'negocio1@example.test');assert.equal(world.db.get('SELECT phone FROM companies WHERE id=?',id).phone,'0991234567');
+ assert.equal(world.db.get("SELECT document FROM accounts WHERE company_id=? AND kind='OWNER'",id).document,'1748639844');assert.equal(world.db.get('SELECT phone FROM companies WHERE id=?',id).phone,'+593991234567');
  assert.doesNotMatch(view.body,/Asociar negocio|Café Loyalty|Registro de Loyalty|name="credential"/);
  const dashboard=JSON.parse((await client.get('/wallet-api/api/staff/dashboard')).body);assert.equal(dashboard.business.name,'Panadería Sol');assert.deepEqual(dashboard.programs,[]);assert.deepEqual(dashboard.rewards,[]);
- const member=await colleague(world,client,{name:'Caja principal',email:'caja-auto@example.test'});
+ const member=await colleague(world,client,{name:'Caja principal',document:'1733224974'});
  const branch=dashboard.branches[0].id;
  assert.equal((await client.post('/equipo/'+member.id+'/caja/guardar',{revision:teamRevision(world,member.id),branch,purchases:'yes',rewards:'yes'})).status,303);
  assert.equal((await member.session.get('/caja')).status,200);
@@ -30,6 +30,8 @@ test('una interrupción tras crear Wallet recupera el mismo negocio y no entrega
  const {client,id}=await owner(world,'Respuesta interrumpida','2');
  assert.equal(loyalty.registrations.size,1);
  const expected=loyalty.registrations.get(id).id;
+ assert.equal(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant,null);
+ assert.equal((await client.get('/wallet')).status,200);
  assert.equal(world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',id).loyalty_tenant,expected);
  for(let n=0;n<3;n++)assert.equal((await client.get('/wallet')).status,200);
  assert.equal(loyalty.registrations.size,1);
@@ -80,10 +82,10 @@ test('migración v2 preserva todos los accesos cifrados y realiza un respaldo pr
   let raw=new DatabaseSync(path);raw.exec(schema('schema.sql'));raw.exec(schema('migrations/002_unified.sql'));raw.exec('PRAGMA user_version=2');
   const company=uuid(),account=uuid(),tenant=uuid();
   raw.prepare('INSERT INTO companies(id,name,registration_key,document_hint,phone,created_at,loyalty_tenant) VALUES(?,?,?,?,?,?,?)').run(company,'Existente','private-id','1234','0991234567','2026-10-01',tenant);
-  raw.prepare("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'OWNER')").run(account,company,'Persona','existente@example.test');
+  raw.prepare("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'OWNER')").run(account,company,'Persona','1759900820');
   raw.prepare("INSERT INTO wallet_access VALUES(?,?,?,?,?,?,?,'ACTIVE',?)").run(account,company,tenant,uuid(),'Lúmina · Persona',uuid(),'unchanged-ciphertext','2026-10-01');
   const before=raw.prepare('SELECT * FROM wallet_access').all();raw.close();
-  let db=openDatabase(path);assert.deepEqual(db.all('SELECT * FROM wallet_access'),before);assert.equal(db.get('PRAGMA user_version').user_version,8);db.close();
+  let db=openDatabase(path);assert.deepEqual(db.all('SELECT * FROM wallet_access'),before);assert.equal(db.get('PRAGMA user_version').user_version,9);db.close();
   assert.equal(readdirSync(join(folder,'migrations')).length,1);db=openDatabase(path);assert.deepEqual(db.all('SELECT * FROM wallet_access'),before);db.close();assert.equal(readdirSync(join(folder,'migrations')).length,1);
  }finally{rmSync(folder,{recursive:true,force:true});}
 });

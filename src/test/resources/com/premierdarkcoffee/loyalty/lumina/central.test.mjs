@@ -64,7 +64,7 @@ test('API de Wallet rechaza gestión común y contratación; API central conserv
 });
 
 test('permisos de informes se aplican desde Lúmina sin exponer cargos, equipo ni datos de otros negocios',async t=>{
- const w=await setup(t),a=await colleague(w,w.client,{name:'Análisis',email:'analisis@example.test','WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
+ const w=await setup(t),a=await colleague(w,w.client,{name:'Análisis',document:'1749844500','WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
  assert.equal((await a.session.get('/gestion/informes')).status,200);assert.equal((await a.session.get('/gestion')).status,403);assert.equal((await a.session.get('/gestion/vista?seccion=reports')).status,403);
  const before=w.l.calls.length;for(const path of ['account','operations','team','business-profile','branch-directory'])assert.equal((await api(w,a.session,'/gestion-api/api/staff/'+path)).status,403);assert.equal(w.l.calls.length,before);
  w.db.run('DELETE FROM grants WHERE account_id=? AND scope=?',a.id,'WALLET_REPORTS');assert.equal((await a.session.get('/gestion/informes')).status,403);assert.equal((await api(w,a.session,'/gestion-api/api/staff/metrics')).status,403);

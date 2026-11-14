@@ -70,6 +70,7 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     return value;
   }
   const ensureCompany=createWalletOnboarding({db,remote,configured});
+  const ensureBillingAccount=createWalletOnboarding({db,remote,configured,requireWallet:false});
   async function provision(actor) {
     let fresh=current(actor);
     requireThat(fresh.kind!=='AGENCY',message,403);
@@ -225,7 +226,10 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
   }
   async function administration(actor,companyId,action,options={}) {
     const fresh=current(actor);requireThat(fresh.kind==='AGENCY','Acceso exclusivo de administración.',403);
-    const company=db.get('SELECT * FROM companies WHERE id=?',companyId);requireThat(company?.loyalty_tenant,'Abre la ficha de Wallet antes de continuar.',409);
+    let company=db.get('SELECT * FROM companies WHERE id=?',companyId);
+    requireThat(company,'Negocio no encontrado.',404);
+    if(!company.loyalty_tenant&&action==='charges'&&options.method==='POST'){requireOperating(db,company.id);company=await ensureBillingAccount(companyId);requireOperating(db,company.id);}
+    requireThat(company.loyalty_tenant,'Este negocio todavía no tiene cargos registrados.',409);
     const result=await controlRemote(company.loyalty_tenant,action,options);
     requireThat(current(actor).revision===fresh.revision,message,403);
     return result;

@@ -1,5 +1,14 @@
 # Loyalty
 
+## Lúmina v021 / Loyalty v060 — identificación e inicio simple
+
+- La identidad de agencia/dueño/colaborador usa cédula y contraseña; empresas usan RUC y WhatsApp. Validar en servidor y navegador, preservar ceros iniciales y rechazar duplicados dentro de la transacción. RUC estructural no equivale a certificación SRI; no imponer módulo 11 a sociedades. Cédula consistente no prueba titularidad.
+- SQLite009 es aditiva. Conservar todos los SQL anteriores, IDs, contraseñas, asociaciones, dominios y secretos. Cuentas anteriores completan la identidad con contraseña actual; no inventar documentos, no recrear cuentas, no cambiar seriales u objetos Wallet. El acceso anterior por correo se cierra al completar la transición.
+- Crear un negocio no activa servicios ni prepara Wallet. La bienvenida es una sola vista y Explorar primero es la opción inicial. Solo el dueño activa módulos; Wallet requiere condiciones aceptadas o contrato vigente que ya la incluya. El colaborador solo recibe tareas asignadas en servicios activos. Aplicar el control en rutas y operaciones de dominio.
+- Mis servicios permite activar los demás módulos. Ninguna visita a cuenta, catálogo o administración activa Wallet. Cargos de servicios pueden crear explícitamente una cuenta interna de facturación sin habilitar Wallet ni suscripción. Mantener USD 4,99/mes o USD 50/año/sucursal, promoción fija hasta 31-12-2026 y acuerdos previos.
+- Gates: 25 suites / 272 pruebas del portal, 170 Python, 309 unidades/HTTP nativos y 341 PostgreSQL (650), Docker local y gateway antes del commit. 18 suites DOM no equivalen a comprobación visual o recepción en teléfonos. Imprimir RESULTADO y URL solo después del arranque confirmado.
+- Producción exige SQLite9 y sello compatible; no migrar ni sobrescribir sellos automáticamente. Seguir docs/production/transicion-v060.md. Mantener representación Wallet34 y V001–V016. Guía de entrega: docs/lumina-inicio-simple-v060.md.
+
 El proyecto está en `/Users/ldgomm/Developer/pdc/sales/loyalty`. El namespace base es `com.premierdarkcoffee.loyalty`, organizado en subpaquetes por responsabilidad (v041). Conserva el formato y el orden de declaraciones de IntelliJ; modifica únicamente las regiones necesarias. No confundas reformateo con cambios de lógica.
 
 El usuario autoriza commits locales automáticos después de aprobar la validación completa. No hacer push. El script se ejecuta desde Downloads y genera allí un ZIP con el mismo .sh, código antes/después, pruebas, errores, registros redactados y commit. Excluir archivos privados, certificados, tokens, pases, cachés y `.git`.

@@ -12,7 +12,7 @@ export function teamDirectory(db, actor, query = new URLSearchParams()) {
   const at = now();
   const stateSql = `CASE WHEN a.active=0 THEN 'INACTIVE' WHEN a.password IS NOT NULL THEN 'ACTIVE'
     WHEN EXISTS(SELECT 1 FROM codes k WHERE k.account_id=a.id AND k.kind='ACTIVATE' AND k.expires_at>?) THEN 'PENDING' ELSE 'EXPIRED' END`;
-  const where = `a.company_id=? AND a.kind='COLLABORATOR' AND (?='' OR instr(lower(a.name||' '||a.email),lower(?))>0)
+  const where = `a.company_id=? AND a.kind='COLLABORATOR' AND (?='' OR instr(lower(a.name||' '||coalesce(a.document,'')),lower(?))>0)
     AND (?='' OR ${stateSql}=?) AND (?='' OR (?='CASH' AND EXISTS(SELECT 1 FROM cash_grants c WHERE c.account_id=a.id AND c.company_id=a.company_id AND c.status='ACTIVE'))
     OR EXISTS(SELECT 1 FROM grants g WHERE g.account_id=a.id AND g.action='VIEW' AND (g.scope=? OR (?='SOCIAL' AND g.scope IN ('INSTAGRAM','TIKTOK','FACEBOOK','YOUTUBE')))))`;
   const args = [actor.company_id, q, q, state, at, state, area, area, area, area];

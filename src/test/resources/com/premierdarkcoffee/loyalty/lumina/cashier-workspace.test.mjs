@@ -5,7 +5,7 @@ import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { uuid } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 async function setup(t,grants={}){
  const native=await fakeLoyalty(t),world=await portal(t,native.origin,{platformToken:native.platformToken}),admin=await agency(world),business=await owner(world,'Caja propia','8');
- const person=await colleague(world,business.client,{name:'Operador',email:'operador@example.test',...grants});
+ const person=await colleague(world,business.client,{name:'Operador',document:'1759607508',...grants});
  const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',business.id).loyalty_tenant,branch=native.branches.get(tenant)[0].id;
  const assign=data=>business.client.post('/equipo/'+person.id+'/caja/guardar',{revision:teamRevision(world,person.id),branch,...data});
  return {...world,native,admin,business,person,branch,assign};

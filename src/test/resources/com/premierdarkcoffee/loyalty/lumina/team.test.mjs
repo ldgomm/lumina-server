@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {documentFor} from './helpers.mjs';
 import { test } from 'node:test';
 import { agency, owner, colleague, portal, password, teamRevision } from './helpers.mjs';
 import { fakeLoyalty } from './loyalty-fixture.mjs';
@@ -15,7 +16,7 @@ async function setup(t) {
   return {...world,world,loyalty,admin,client,id,branch};
 }
 const inviteCode = response => response.body.match(/<code class="secret">([A-Za-z0-9_-]{43})<\/code>/)?.[1];
-const person = (w,input={}) => colleague(w,w.client,{name:'Persona de prueba',email:'persona@example.test','SOCIAL.VIEW':'yes',...input});
+const person = (w,input={}) => colleague(w,w.client,{name:'Persona de prueba',document:'1738277993','SOCIAL.VIEW':'yes',...input});
 const write = (w,id,action,data={}) => w.client.post('/equipo/'+id+'/'+action,{revision:teamRevision(w,id),...data});
 const activeCash = async (w,member,permissions={purchases:'yes'}) => {
   const result=await write(w,member.id,'caja/guardar',{branch:w.branch,...permissions});assert.equal(result.status,303,result.body);
@@ -25,8 +26,8 @@ const audit = (w,id) => w.db.all("SELECT * FROM audit WHERE subject='ACCOUNT' AN
 
 test('directorio: búsqueda, filtros, estados y paginación no mezclan personas de otros negocios',async t=>{
   const w=await setup(t),m=await person(w),other=await owner(w,'Negocio privado','2');
-  await colleague(w,other.client,{name:'Persona secreta',email:'secreta@example.test'});
-  for(let i=0;i<21;i++)assert.equal((await w.client.post('/equipo',{name:'Invitada '+String(i).padStart(2,'0'),email:'invitada'+i+'@example.test','WEB.VIEW':'yes'})).status,201);
+  await colleague(w,other.client,{name:'Persona secreta',document:'1705666814'});
+  for(let i=0;i<21;i++)assert.equal((await w.client.post('/equipo',{name:'Invitada '+String(i).padStart(2,'0'),document:documentFor('invitada'+i+'@example.test'),'WEB.VIEW':'yes'})).status,201);
   const first=await w.client.get('/equipo');assert.equal(first.status,200);assert.match(first.body,/22 personas/);assert.match(first.body,/Siguiente/);assert.doesNotMatch(first.body,/Persona secreta|secreta@example/);
   assert.match((await w.client.get('/equipo?pagina=1')).body,/Anterior/);
   assert.match((await w.client.get('/equipo?q=persona&estado=ACTIVE&area=SOCIAL')).body,/1 persona/);
@@ -39,14 +40,14 @@ test('directorio: búsqueda, filtros, estados y paginación no mezclan personas 
 test('crear una persona rechaza permisos desconocidos, dependencias incompletas y privilegios de dueño',async t=>{
   const w=await setup(t);
   for(const grants of [{'SOCIAL.APPROVE':'yes'},{'WALLET_DESIGN.VIEW':'yes'},{'WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes','WALLET_REPORTS.EDIT':'yes'},{'ADMIN.VIEW':'yes'},{'SOCIAL.VIEW':'no'},{'SOCIAL.VIEW.extra':'yes'}]){
-    const r=await w.client.post('/equipo',{name:'Borrador intacto',email:'borrador@example.test',...grants});assert.equal(r.status,400);assert.match(r.body,/value="Borrador intacto"/);assert.equal(w.db.get('SELECT id FROM accounts WHERE email=?','borrador@example.test'),undefined);
+    const r=await w.client.post('/equipo',{name:'Borrador intacto',document:'1736305879',...grants});assert.equal(r.status,400);assert.match(r.body,/value="Borrador intacto"/);assert.equal(w.db.get('SELECT id FROM accounts WHERE document=?','1736305879'),undefined);
   }
   const m=await person(w,{kind:'OWNER',company_id:uuid()});assert.equal(w.db.get('SELECT kind FROM accounts WHERE id=?',m.id).kind,'COLLABORATOR');
 });
 test('una invitación se usa una vez, no inicia sesión antes de activarse y no guarda su código en el historial',async t=>{
-  const w=await setup(t),r=await w.client.post('/equipo',{name:'Invitación única',email:'unica@example.test','WEB.VIEW':'yes'}),code=inviteCode(r);
-  const id=w.db.get('SELECT id FROM accounts WHERE email=?','unica@example.test').id;
-  assert.ok(code);assert.equal((await w.session().post('/entrar',{email:'unica@example.test',password})).status,401);
+  const w=await setup(t),r=await w.client.post('/equipo',{name:'Invitación única',document:'1723435424','WEB.VIEW':'yes'}),code=inviteCode(r);
+  const id=w.db.get('SELECT id FROM accounts WHERE document=?','1723435424').id;
+  assert.ok(code);assert.equal((await w.session().post('/entrar',{document:'1723435424',password})).status,401);
   assert.match((await w.client.get('/equipo/'+id)).body,/Por activar/);
   assert.equal((await w.session().post('/activar',{code,password})).status,303);
   assert.equal((await w.session().post('/activar',{code,password})).status,403);
@@ -54,11 +55,11 @@ test('una invitación se usa una vez, no inicia sesión antes de activarse y no 
   assert.doesNotMatch((await w.client.get('/equipo/'+id)).body,/<code class="secret">/);
 });
 test('códigos vencidos y renovados: sólo funciona el vigente y los formularios antiguos no reinician accesos',async t=>{
-  const w=await setup(t),r=await w.client.post('/equipo',{name:'Invitación',email:'vence@example.test'}),code=inviteCode(r);
-  const id=w.db.get('SELECT id FROM accounts WHERE email=?','vence@example.test').id,old=teamRevision(w,id);
+  const w=await setup(t),r=await w.client.post('/equipo',{name:'Invitación',document:'1722743307'}),code=inviteCode(r);
+  const id=w.db.get('SELECT id FROM accounts WHERE document=?','1722743307').id,old=teamRevision(w,id);
   w.db.run("UPDATE codes SET expires_at='2001-01-01T00:00:00.000Z' WHERE account_id=?",id);
   assert.equal((await w.session().post('/activar',{code,password})).status,403);
-  assert.match((await w.client.get('/equipo?estado=EXPIRED')).body,/vence@example.test/);
+  assert.match((await w.client.get('/equipo?estado=EXPIRED')).body,/Cédula ····3307/);
   assert.equal((await write(w,id,'invitar')).status,400);
   const next=await write(w,id,'invitar',{confirm:'yes'});assert.equal(next.status,200);
   assert.equal((await write(w,id,'invitar',{revision:old,confirm:'yes'})).status,409);
@@ -70,7 +71,7 @@ test('renovar el acceso explica y cierra sesiones, invalida la contraseña anter
   const view=await w.client.get('/equipo/'+m.id);assert.match(view.body,/Cierra sus sesiones y reemplaza su contraseña/);
   const reset=await write(w,m.id,'invitar',{confirm:'yes'});assert.equal(reset.status,200);
   assert.equal((await m.session.post('/solicitudes',{})).status,401);
-  assert.equal((await w.session().post('/entrar',{email:'persona@example.test',password})).status,401);
+  assert.equal((await w.session().post('/entrar',{document:'1738277993',password})).status,401);
   assert.deepEqual(w.db.all('SELECT scope,action FROM grants WHERE account_id=?',m.id),before);
   const restored=w.session();assert.equal((await restored.post('/activar',{code:inviteCode(reset),password})).status,303);assert.equal((await restored.get('/contenido')).status,200);
 });
@@ -94,21 +95,21 @@ test('baja, reactivación y edición usan revisión y confirmación sin reactiva
   assert.equal((await write(w,m.id,'permisos',{'WEB.VIEW':'yes'})).status,303);assert.equal(w.db.get('SELECT active FROM accounts WHERE id=?',m.id).active,0);
   const code=inviteCode(await write(w,m.id,'invitar',{confirm:'yes'})),s=w.session();assert.equal((await s.post('/activar',{code,password})).status,303);assert.equal((await s.get('/servicios/web')).status,200);assert.equal((await s.get('/contenido')).status,403);
 });
-test('corregir correo cierra sesiones y códigos; duplicados y correo ajeno no se aceptan',async t=>{
+test('corregir cédula cierra sesiones y códigos; duplicados e identidad ajena no se aceptan',async t=>{
   const w=await setup(t),m=await person(w),old=teamRevision(w,m.id);
-  const r=await write(w,m.id,'datos',{name:'Nombre corregido',email:'nuevo@example.test'});assert.equal(r.status,303);
+  const r=await write(w,m.id,'datos',{name:'Nombre corregido',document:'1730212279'});assert.equal(r.status,303);
   assert.equal((await m.session.get('/api/staff/dashboard')).status,401);
-  assert.equal((await w.session().post('/entrar',{email:'persona@example.test',password})).status,401);
-  assert.equal((await w.session().post('/entrar',{email:'nuevo@example.test',password})).status,303);
-  assert.equal((await write(w,m.id,'datos',{revision:old,name:'Anterior',email:'otro@example.test'})).status,409);
-  const r2=await write(w,m.id,'datos',{name:'No perder texto',email:'agencia@example.test'});assert.equal(r2.status,409);assert.match(r2.body,/value="No perder texto"/);
-  assert.equal(w.db.get('SELECT email FROM accounts WHERE id=?',m.id).email,'nuevo@example.test');
+  assert.equal((await w.session().post('/entrar',{document:'1738277993',password})).status,401);
+  assert.equal((await w.session().post('/entrar',{document:'1730212279',password})).status,303);
+  assert.equal((await write(w,m.id,'datos',{revision:old,name:'Anterior',document:'1706707138'})).status,409);
+  const r2=await write(w,m.id,'datos',{name:'No perder texto',document:'1748225842'});assert.equal(r2.status,409);assert.match(r2.body,/value="No perder texto"/);
+  assert.equal(w.db.get('SELECT document FROM accounts WHERE id=?',m.id).document,'1730212279');
 });
 test('ningún colaborador, agencia u otro dueño puede leer o modificar el equipo de un negocio',async t=>{
   const w=await setup(t),m=await person(w),other=await owner(w,'Otro equipo','3');
   for(const actor of [m.session,w.admin,other.client]){
     assert.equal((await actor.get('/equipo/'+m.id)).status,actor===other.client?404:403);
-    for(const action of ['permisos','datos','invitar','desactivar','caja/guardar','caja/revocar'])assert.equal((await actor.post('/equipo/'+m.id+'/'+action,{revision:teamRevision(w,m.id),confirm:'yes',name:'Intento',email:'intento@example.test','SOCIAL.VIEW':'yes'})).status,actor===other.client?404:403,action);
+    for(const action of ['permisos','datos','invitar','desactivar','caja/guardar','caja/revocar'])assert.equal((await actor.post('/equipo/'+m.id+'/'+action,{revision:teamRevision(w,m.id),confirm:'yes',name:'Intento',document:'1723017594','SOCIAL.VIEW':'yes'})).status,actor===other.client?404:403,action);
   }
   const ownerId=w.db.get("SELECT id FROM accounts WHERE company_id=? AND kind='OWNER'",w.id).id;
   assert.equal((await write(w,ownerId,'desactivar',{confirm:'yes'})).status,404);assert.equal(w.db.get('SELECT active FROM accounts WHERE id=?',ownerId).active,1);
@@ -116,7 +117,7 @@ test('ningún colaborador, agencia u otro dueño puede leer o modificar el equip
 test('Caja valida revisión, sucursal y operaciones antes de crear credenciales; jamás confía en secretos del formulario',async t=>{
   const w=await setup(t),m=await person(w),base=teamRevision(w,m.id),size=w.loyalty.staff.size;
   for(const data of [{branch:w.branch},{branch:uuid(),purchases:'yes'},{revision:'999',branch:w.branch,purchases:'yes'}])assert.ok([400,409].includes((await write(w,m.id,'caja/guardar',data)).status));
-  assert.equal(w.loyalty.staff.size,size+1); // The owner's internal access may be prepared; no cashier is created.
+  assert.equal(w.loyalty.staff.size,size); // Existing owner access is reused; no cashier is created.
   assert.equal([...w.loyalty.staff.values()].filter(p=>p.role==='CASHIER').length,0);
   const grant=await activeCash(w,m);assert.notEqual(teamRevision(w,m.id),base);
   assert.equal((await write(w,m.id,'caja/guardar',{revision:base,branch:w.branch,rewards:'yes'})).status,409);

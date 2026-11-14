@@ -39,7 +39,7 @@ test('formulario nativo: configurar agencia, cierre definitivo de configuración
   const client = nativeForms(world.origin);
   const code = setupCode(world.db);
   const form = await client.get('/configurar');
-  const data = {code,name:'Agencia de prueba',email:'agencia-form@example.test',password};
+  const data = {code,name:'Agencia de prueba',document:'1729512507',password};
   const created = await client.submit(form,'/configurar',data);
   assert.equal(created.status,303,created.body);
   assert.equal(created.headers.get('location'),'/inicio');
@@ -53,7 +53,7 @@ test('formulario nativo: configurar agencia, cierre definitivo de configuración
   assert.equal(world.db.get("SELECT count(*) AS n FROM accounts WHERE kind='AGENCY'").n,1);
   const login = await client.get('/');
   assert.doesNotMatch(login.body,/href="\/configurar"/);
-  const entered = await client.submit(login,'/entrar',{email:data.email,password});
+  const entered = await client.submit(login,'/entrar',{document:data.document,password});
   assert.equal(entered.status,303,entered.body);
   assert.equal((await client.get('/clientes')).status,200);
 });
@@ -62,8 +62,8 @@ test('formulario nativo: registro, sesión y rechazo de orígenes extraños o CS
   const world = await portal(t);
   const client = nativeForms(world.origin);
   const form = await client.get('/registro');
-  const data = {company:'Cliente de prueba',name:'Responsable de prueba',document:'1234567890',
-    phone:'0991234567',email:'cliente-form@example.test',password,consent:'yes'};
+  const data = {company:'Cliente de prueba',name:'Responsable de prueba',document:'1747556593',ruc:'1747556593001',
+    phone:'0991234567',password,consent:'yes'};
   for (const origin of ['null',null,'https://example.test',world.origin+'.example.test']) {
     assert.equal((await client.submit(form,'/registro',data,{origin})).status,403);
   }
@@ -79,5 +79,5 @@ test('formulario nativo: registro, sesión y rechazo de orígenes extraños o CS
   assert.equal((await client.submit(afterChange,'/salir')).status,303);
   assert.equal((await client.get('/inicio')).status,303);
   const login = await client.get('/');
-  assert.equal((await client.submit(login,'/entrar',{email:data.email,password:changed.password})).status,303);
+  assert.equal((await client.submit(login,'/entrar',{document:data.document,password:changed.password})).status,303);
 });

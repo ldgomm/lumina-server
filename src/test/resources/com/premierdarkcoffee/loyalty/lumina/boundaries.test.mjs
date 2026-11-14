@@ -162,7 +162,7 @@ test('formatos simples usan cupos históricos compatibles sin modificar contrato
 });
 
 test('equipo de contenido conserva asignaciones y reparación de Wallet queda aislada al propio dueño',async t=>{
-  const w=await setup(t),member=await colleague(w,w.client,{name:'Solo contenido',email:'contenido@example.test','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
+  const w=await setup(t),member=await colleague(w,w.client,{name:'Solo contenido',document:'1737432896','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
   assert.equal((await member.session.get('/contenido')).status,200);assert.equal((await member.session.post('/solicitudes',idea)).status,303);
   assert.equal((await member.session.get('/wallet/gestion')).status,403);
   const other=await owner(w,'Otro dueño','2');await other.client.get('/wallet');

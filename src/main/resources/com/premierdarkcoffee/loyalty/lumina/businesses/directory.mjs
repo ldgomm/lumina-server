@@ -19,7 +19,7 @@ export function businessDirectory(db, actor, query = new URLSearchParams()) {
   requireThat(Object.hasOwn(orders, sort), 'Orden inválido.');
   const requestedPage = integer(query.get('pagina') || '0', 'página', { max: 100000 });
   const from = 'FROM companies c LEFT JOIN business_controls b ON b.company_id=c.id';
-  const where = `instr(search_text(c.name||' '||c.phone||' '||COALESCE((SELECT group_concat(a.name||' '||a.email,' ') FROM accounts a WHERE a.company_id=c.id AND a.kind='OWNER'),'')),search_text(?))>0
+  const where = `instr(search_text(c.name||' '||coalesce(c.ruc,'')||' '||c.phone||' '||COALESCE((SELECT group_concat(a.name||' '||coalesce(a.document,''),' ') FROM accounts a WHERE a.company_id=c.id AND a.kind='OWNER'),'')),search_text(?))>0
     AND (?='' OR (?='PENDING' AND b.pending_id IS NOT NULL) OR (COALESCE(b.state,'ACTIVE')=? AND (?<>'ACTIVE' OR b.pending_id IS NULL)))
     AND (?='' OR c.approved=?)`;
   const args = [q, state, state, state, state, verification, verification === 'VERIFIED' ? 1 : 0];

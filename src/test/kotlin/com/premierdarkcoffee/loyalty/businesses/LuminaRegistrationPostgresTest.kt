@@ -90,4 +90,14 @@ class LuminaRegistrationPostgresTest {
         assertEquals(HttpStatusCode.Created,response.status);val text=response.bodyAsText();assertFalse(text.contains("ownerToken"));assertFalse(text.contains("staffId"))
         assertEquals(value.companyId,json.parseToJsonElement(text).jsonObject.getValue("companyId").jsonPrimitive.content)
     }
+    @Test fun `email free registration remains replay safe and creates no customers or agreement`() {
+        val value=input().copy(email="",phone="+593991234567")
+        val first=service.registerLuminaBusiness(value);val tenant=tenant(first)
+        assertEquals(tenant,tenant(service.registerLuminaBusiness(value)))
+        val registration=service.businessProfile(tenant).getValue("registration").jsonObject
+        assertEquals("",registration.getValue("email").jsonPrimitive.content)
+        assertEquals(value.phone,registration.getValue("phone").jsonPrimitive.content)
+        assertEquals(0L,count("members",tenant));assertEquals(0L,count("billing_invoices",tenant))
+    }
+
 }

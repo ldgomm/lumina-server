@@ -1,3 +1,4 @@
+import {documentFor} from '../../src/test/resources/com/premierdarkcoffee/loyalty/lumina/helpers.mjs';
 // Real presentation scripts with fictional HTTP data. This is DOM verification, not visual/device QA.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -18,7 +19,7 @@ function load(w,name,native=false){const s=w.document.createElement('script');s.
 const settle=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}throw Error('UI not ready; '+errors.join('; '));};
 try{
   const l=await fakeLoyalty(t),world=await portal(t,l.origin,{platformToken:l.platformToken});await agency(world);const {client}=await owner(world,'Prueba de equipo','1');
-  const initial=await colleague(world,client,{name:'Persona inicial',email:'persona-inicial@example.test','WALLET.VIEW':'yes','WALLET.APPROVE':'yes','WALLET_CUSTOMERS.VIEW':'yes','WALLET_CUSTOMERS.EDIT':'yes','INSTAGRAM.VIEW':'yes','INSTAGRAM.APPROVE':'yes'});
+  const initial=await colleague(world,client,{name:'Persona inicial',document:documentFor('persona-inicial@example.test'),'WALLET.VIEW':'yes','WALLET.APPROVE':'yes','WALLET_CUSTOMERS.VIEW':'yes','WALLET_CUSTOMERS.EDIT':'yes','INSTAGRAM.VIEW':'yes','INSTAGRAM.APPROVE':'yes'});
   const response=await client.get('/equipo/'+initial.id),w=dom(response.body);for(const script of ['lumina.js','team.js'])load(w,script);
   const d=w.document,editor=d.querySelector('[data-team-editor]'),form=editor.closest('form'),field=name=>form.elements.namedItem(name),preview=()=>d.querySelector('[data-access-preview]').textContent;
   assert.equal(editor.querySelectorAll('[data-module=WALLET]').length,1);assert.equal(form.querySelectorAll('button[type=submit]').length,1);assert.equal(d.querySelector('form[action$="/caja/guardar"]'),null);assert.equal(d.querySelector('form[action$="/permisos"]'),null);
@@ -39,13 +40,13 @@ try{
   const submitted=Object.fromEntries(new w.FormData(form)),saved=await client.post(form.getAttribute('action'),submitted);assert.equal(saved.status,303,saved.body);assert.equal((await initial.session.get('/wallet')).location,'/caja');
   form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));const afterSubmit=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(afterSubmit);assert.equal(afterSubmit.defaultPrevented,false);assert.equal(form.querySelector('button[type=submit]').disabled,true);
   checks.push('Unified UI payload activates real session access through HTTP; draft navigation and double submit are guarded');
-  const invite=await client.post('/equipo',{name:'Por activar',email:'activar@example.test'}),code=invite.body.match(/<code class="secret">([^<]+)</)[1];
+  const invite=await client.post('/equipo',{name:'Por activar',document:documentFor('activar@example.test')}),code=invite.body.match(/<code class="secret">([^<]+)</)[1];
   const copied=dom(invite.body);let value=null;Object.defineProperty(copied.navigator,'clipboard',{value:{writeText:async text=>{value=text;}}});load(copied,'team.js');assert.equal(value,null);copied.document.querySelector('[data-copy-activation]').click();await settle(()=>copied.document.querySelector('[data-copy-status]').textContent.includes('copiado'));assert.equal(value,code);assert.match(copied.document.querySelector('[data-copy-status]').textContent,/copiado/);
   checks.push('Activation code copies only after an explicit click; no automatic sharing or storage');
-  const member=await colleague(world,client,{name:'Revisora',email:'revisora@example.test','WALLET.VIEW':'yes','WALLET_PROGRAMS.VIEW':'yes'});
-  const bad=await client.post('/equipo/'+member.id+'/datos',{revision:teamRevision(world,member.id),name:'Borrador',email:'agencia@example.test'});assert.equal(bad.status,409);
+  const member=await colleague(world,client,{name:'Revisora',document:documentFor('revisora@example.test'),'WALLET.VIEW':'yes','WALLET_PROGRAMS.VIEW':'yes'});
+  const bad=await client.post('/equipo/'+member.id+'/datos',{revision:teamRevision(world,member.id),name:'Borrador',document:documentFor('agencia@example.test')});assert.equal(bad.status,409);
   const invalid=dom(bad.body);assert.equal(invalid.document.querySelector('form[action$="/datos"]').closest('details').open,true);assert.equal(invalid.document.querySelector('form[action$="/datos"] [name=name]').value,'Borrador');
-  const noJS=dom((await client.get('/equipo/nuevo')).body);assert.equal(noJS.document.querySelector('[name=email]').required,true);assert.equal(noJS.document.querySelector('form[action="/equipo"]').method,'post');
+  const noJS=dom((await client.get('/equipo/nuevo')).body);assert.equal(noJS.document.querySelector('[name=document]').required,true);assert.equal(noJS.document.querySelector('form[action="/equipo"]').method,'post');
   const fallback=dom(response.body),fallbackForm=fallback.document.querySelector('form[action$="/acceso"]');assert.equal(fallbackForm.method,'post');assert.equal(fallbackForm.querySelector('[name="WALLET.APPROVE"]').checked,true);assert.equal(fallbackForm.querySelector('[data-custom=WALLET]').open,true);assert.equal(fallbackForm.querySelector('[data-access-level=WALLET]').parentElement.hidden,true);checks.push('Server errors keep the draft visible; complete access form remains usable without JavaScript');
   async function wallet(){
     const page=await member.session.get('/wallet'),native=dom(page.body);

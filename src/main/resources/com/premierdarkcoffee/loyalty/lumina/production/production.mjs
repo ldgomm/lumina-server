@@ -1,3 +1,4 @@
+import { requireService } from '../businesses/services.mjs';
 import { requestPhone } from '../shared/contact.mjs';
 import { compatibleContentQuota } from '../content/service-options.mjs';
 import { canRequest, platformTargets, requestAccessSql } from '../access/content-policy.mjs';
@@ -37,6 +38,7 @@ export function createRequest(db, actor, company, data) {
   if (type === 'QUOTE') requireThat(actor.kind !== 'COLLABORATOR','Solo el dueño puede solicitar cotizaciones.',403);
   const original=type==='PLAN'?'GENERAL':choice(data.channel,Object.keys(channels),'área');
   const channel=socialChannels.includes(original)?'SOCIAL':original;
+  if(Object.hasOwn(areas,channel))requireService(db,company.id,channel);
   // Accept old area URLs/forms without turning a request into a publication plan.
   // Keep the original scope check so legacy clients cannot bypass permissions.
   if(socialChannels.includes(original)) requireAccess(actor,original,'REQUEST');

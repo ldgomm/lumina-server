@@ -56,14 +56,15 @@ function navLinks(actor,company,url,cash) {
     if(actor.kind==='AGENCY'&&company)items.push(['/administracion/negocios/'+company.id,'Estado y pagos','plans']);
     if(Object.keys(channels).some(scope=>can(actor,scope)))items.push([url('/solicitudes'),'Solicitudes','content'],[url('/agenda'),'Grabaciones','calendar']);
   }
-  if(can(actor,'WALLET')||cash)items.push([url('/wallet'),'Fidelización digital · Wallet','wallet','Servicios']);
+  if(actor.kind==='OWNER')items.push(['/servicios','Mis servicios','plans','Servicios']);
+  if(can(actor,'WALLET')||cash)items.push([url('/wallet'),'Fidelización digital · Wallet','wallet',actor.kind==='OWNER'?undefined:'Servicios']);
   for(const [scope,route,mark] of [['SOCIAL','/contenido','social'],['MAPS','/servicios/maps','maps'],['WEB','/servicios/web','web'],['BRAND','/servicios/brand','content']])if(can(actor,scope))items.push([url(route),areas[scope],mark]);
   if(actor.kind!=='COLLABORATOR')items.push([url('/proximamente'),'WhatsApp Business e IA · Próximamente','social']);
   if(actor.kind!=='COLLABORATOR')items.push([url('/planes'),'Paquetes y servicios','plans','Gestión']);
   if((actor.kind!=='AGENCY'||company)&&socialChannels.some(scope=>can(actor,scope)))items.push([url('/reportes'),'Estadísticas','metrics']);
   if((actor.kind!=='AGENCY'||company)&&can(actor,'MAPS'))items.push([url('/mapas'),'Reseñas y ubicaciones','maps']);
   if(actor.kind==='OWNER')items.push(['/gestion','Administración','settings']);
-  if(actor.kind==='OWNER'||actor.kind==='COLLABORATOR'&&can(actor,'WALLET')&&can(actor,'WALLET_REPORTS'))items.push(['/gestion/informes','Informes de fidelización','metrics']);
+  if(actor.kind==='OWNER'&&can(actor,'WALLET')||actor.kind==='COLLABORATOR'&&can(actor,'WALLET')&&can(actor,'WALLET_REPORTS'))items.push(['/gestion/informes','Informes de fidelización','metrics']);
   if(actor.kind==='OWNER')items.push(['/mi-estado-cuenta','Mi cuenta y pagos','plans']);
   items.push(['/ayuda','Ayuda','content'],['/cuenta','Mi cuenta','settings']);
   return items;
@@ -79,7 +80,7 @@ export function page({actor,company,path='/',title,description='',body,cash=fals
     return `${group?`<p class="nav-label">${esc(group)}</p>`:''}<a href="${esc(href)}"${active?' aria-current="page"':''}>${icon(mark)}<span>${esc(name)}</span>${mark==='wallet'?'<span class="nav-dot" aria-hidden="true"></span>':''}</a>`;
   }).join(''):'';
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1f3a">${actor?`<meta name="lumina-csrf" content="${esc(actor.csrf)}">`:""}
-    <title>${esc(title)} · Lúmina Digital</title><link rel="stylesheet" href="/assets/lumina.css"><link rel="stylesheet" href="/assets/workspace.css"><link rel="stylesheet" href="/assets/modules.css"><link rel="stylesheet" href="/assets/experience.css"><script defer src="/assets/lumina.js"></script><script defer src="/assets/requests.js"></script><script defer src="/assets/packages.js"></script><script defer src="/assets/offers.js"></script><script defer src="/assets/management-frame.js"></script><link rel="stylesheet" href="/assets/central.css"><link rel="stylesheet" href="/assets/practical.css"><link rel="stylesheet" href="/assets/black-friday.css"><link rel="stylesheet" href="/assets/team.css"><link rel="stylesheet" href="/assets/account.css"><link rel="stylesheet" href="/assets/billing-workspace.css"><script defer src="/assets/billing-workspace.js"></script><script defer src="/assets/team.js"></script><script defer src="/assets/black-friday.js"></script><link rel="icon" href="/assets/lumina-symbol.png"></head>
+    <title>${esc(title)} · Lúmina Digital</title><link rel="stylesheet" href="/assets/lumina.css"><link rel="stylesheet" href="/assets/workspace.css"><link rel="stylesheet" href="/assets/modules.css"><link rel="stylesheet" href="/assets/experience.css"><script defer src="/assets/lumina.js"></script><script defer src="/assets/requests.js"></script><script defer src="/assets/packages.js"></script><script defer src="/assets/offers.js"></script><script defer src="/assets/management-frame.js"></script><link rel="stylesheet" href="/assets/central.css"><link rel="stylesheet" href="/assets/practical.css"><link rel="stylesheet" href="/assets/black-friday.css"><link rel="stylesheet" href="/assets/team.css"><link rel="stylesheet" href="/assets/account.css"><link rel="stylesheet" href="/assets/billing-workspace.css"><script defer src="/assets/billing-workspace.js"></script><script defer src="/assets/team.js"></script><script defer src="/assets/black-friday.js"></script><link rel="stylesheet" href="/assets/welcome.css"><script type="module" src="/assets/identity.js"></script><link rel="icon" href="/assets/lumina-symbol.png"></head>
     <body class="${actor?'signed-in':'signed-out'}"><a class="skip" href="#contenido">Saltar al contenido</a>
     <header class="site-header"><div class="top"><a class="brand" href="${actor?esc(actor.kind==='AGENCY'?'/resumen':'/inicio'):'/'}">${mark}</a>
     ${actor?`<button class="menu-toggle quiet" type="button" aria-label="Abrir navegación" aria-controls="workspace-nav" aria-expanded="false">${icon('menu')}</button>`:`<div class="top-links">${localLink('/','Ingresar')}${localLink('/registro','Registrar negocio cliente')}</div>`}</div>

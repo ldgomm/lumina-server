@@ -24,10 +24,10 @@ test('Wallet entra al módulo sin presentación y el botón vuelve al inicio sin
 });
 
 test('Wallet dirige al personal a su permiso operativo o Caja y conserva la revocación inmediata',async t=>{
- const w=await setup(t);const designer=await colleague(w,w.client,{name:'Diseño',email:'design@example.test','WALLET.VIEW':'yes','WALLET_DESIGN.VIEW':'yes'});
+ const w=await setup(t);const designer=await colleague(w,w.client,{name:'Diseño',document:'1746242013','WALLET.VIEW':'yes','WALLET_DESIGN.VIEW':'yes'});
  assert.match((await designer.session.get('/wallet')).body,/lumina-wallet-section" content="design"/);
  assert.equal((await designer.session.get('/wallet/gestion?seccion=programs')).status,403);
- const cashier=await colleague(w,w.client,{name:'Caja',email:'cash@example.test'}),tenant=w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant;
+ const cashier=await colleague(w,w.client,{name:'Caja',document:'1731144158'}),tenant=w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant;
  assert.equal((await w.client.post('/equipo/'+cashier.id+'/caja/guardar',{revision:teamRevision(w,cashier.id),branch:w.loyalty.branches.get(tenant)[0].id,purchases:'yes',rewards:'yes'})).status,303);
  assert.equal((await cashier.session.get('/wallet')).location,'/caja');assert.equal((await cashier.session.get('/caja')).status,200);
  w.db.run('UPDATE accounts SET active=0 WHERE id=?',designer.id);assert.equal((await designer.session.get('/wallet')).location,'/');
@@ -69,7 +69,7 @@ test('solicitud guiada ofrece solo áreas autorizadas y tres formatos comunes, s
  const w=await setup(t);const page=await w.client.get('/solicitudes/nueva');assert.equal(page.status,200);for(const area of ['SOCIAL','WALLET','MAPS','WEB','BRAND'])assert.ok(page.body.includes('area='+area));
  const r=await w.client.get('/solicitudes/nueva?area=SOCIAL');assert.match(r.body,/<body class="content-app">/);assert.match(r.body,/name="channel" value="SOCIAL"/);
  assert.deepEqual([...r.body.matchAll(/type="radio" name="service" value="([^"]+)"/g)].map(m=>m[1]),['VIDEO','PHOTO','GRAPHIC']);assert.doesNotMatch(r.body,/name="platform|value="REEL"|value="STORY"/);
- const member=await colleague(w,w.client,{name:'Solo contenido',email:'onlycontent@example.test','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
+ const member=await colleague(w,w.client,{name:'Solo contenido',document:'1747189064','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
  const selection=await member.session.get('/solicitudes/nueva');assert.ok(selection.body.includes('area=SOCIAL'));assert.ok(!selection.body.includes('area=WEB'));
  assert.equal((await member.session.get('/solicitudes/nueva?area=WEB')).status,403);assert.equal((await w.admin.get('/agencia/solicitudes/nueva?empresa='+w.id)).status,403);
 });
@@ -85,7 +85,7 @@ test('precios y cupos del dueño se muestran en la solicitud sin revelar contrat
  const w=await setup(t);await offer(w);await w.admin.post('/agencia/clientes/verificar?empresa='+w.id);
  const pack=await offer(w,{name:'Videos mes',offer_kind:'BUNDLE',VIDEO:'4',term:'MONTHLY',price:'100'});await acceptedContract(w,w.admin,w.client,w.id,pack.id);
  const view=await w.client.get('/contenido?vista=solicitudes');assert.match(view.body,/35[,.]25/);assert.match(view.body,/4 cupo\(s\) disponibles/);assert.match(view.body,/no reserva cupos/);
- const member=await colleague(w,w.client,{name:'Contenido',email:'collabprice@example.test','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
+ const member=await colleague(w,w.client,{name:'Contenido',document:'1704501871','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
  assert.doesNotMatch((await member.session.get('/contenido?vista=solicitudes')).body,/PRECIOS Y CUPOS|35[,.]25|Videos mes|100[,.]00/);
 });
 
@@ -101,7 +101,7 @@ test('búsqueda de solicitudes aplica estado y permisos antes de paginar y trata
  for(let i=0;i<34;i++)createRequest(w.db,actor,company,{...idea,title:'Una idea literal % '+i});
  await other.client.post('/solicitudes',{...idea,title:'Secreto ajeno %'});
  const old=createRequest(w.db,actor,company,{...idea,title:'Video reservado'});w.db.run('INSERT INTO request_platforms VALUES(?,?,?)',w.id,old,'TIKTOK');
- const member=await colleague(w,w.client,{name:'Instagram',email:'search@example.test','INSTAGRAM.VIEW':'yes'});
+ const member=await colleague(w,w.client,{name:'Instagram',document:'1753142718','INSTAGRAM.VIEW':'yes'});
  const r=await member.session.get('/solicitudes?q=%25&estado=NEW');assert.equal(r.status,200);assert.equal((r.body.match(/class="request-record"/g)||[]).length,30);assert.match(r.body,/pagina=1/);assert.doesNotMatch(r.body,/Secreto ajeno|Video reservado/);
  const next=await member.session.get('/solicitudes?q=%25&estado=NEW&pagina=1');assert.equal((next.body.match(/class="request-record"/g)||[]).length,4);
  assert.doesNotMatch((await member.session.get('/solicitudes?estado=DELIVERED')).body,/Una idea literal/);assert.equal((await w.client.get('/solicitudes?estado=BAD')).status,400);

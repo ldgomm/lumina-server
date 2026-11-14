@@ -42,7 +42,7 @@ async function world(t){
   command:(state='SUSPENDED',revision=0)=>({state,reason:'Revisión solicitada por administración',confirm:'yes',requestKey:newId(),revision:String(revision)})};
 }
 test('agency has an administration entry while owner and collaborator cannot administer businesses',async t=>{
- const w=await world(t);const member=await colleague(w,w.client,{name:'Persona',email:'persona@example.test',view:['WALLET']});
+ const w=await world(t);const member=await colleague(w,w.client,{name:'Persona',document:'1738277993',view:['WALLET']});
  assert.match((await w.admin.get('/clientes')).body,new RegExp(w.base));
  assert.equal((await w.admin.get(w.base)).status,200);
  for(const actor of [w.client,w.other.client,member.session]){assert.equal((await actor.get(w.base)).status,403);assert.equal((await actor.post(w.base+'/estado',w.command())).status,403);}
@@ -160,7 +160,7 @@ test('payment redirects to its receipt and owner can view and download the ident
 });
 test('receipt cannot be read by another business or a collaborator and posted tenant is ignored',async t=>{
  const w=await world(t),{payment}=await recorded(w),path='/mi-estado-cuenta/pagos/'+payment.id;
- const member=await colleague(w,w.client,{name:'Persona recibo',email:'recibo@example.test',view:['WALLET']});
+ const member=await colleague(w,w.client,{name:'Persona recibo',document:'1723843650',view:['WALLET']});
  assert.equal((await w.other.client.get(path)).status,404);assert.equal((await member.session.get(path)).status,403);assert.equal((await member.session.get(path+'.txt')).status,403);
  assert.equal((await w.client.get(path+'?empresa='+w.other.id)).status,200);assert.equal((await w.admin.get('/administracion/negocios/'+w.other.id+'/pagos/'+payment.id)).status,404);
  assert.equal((await w.client.post(path,{})).status,405);

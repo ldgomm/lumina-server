@@ -22,11 +22,11 @@ async function review(w,title,platforms=[]){const r=await request(w,{title});ass
 test('solicitudes simples precargan teléfono, conservan tres formatos sociales y reducen las demás áreas',async t=>{
  const w=await setup(t);
  for(const [area,codes] of Object.entries({SOCIAL:['VIDEO','PHOTO','GRAPHIC'],WEB:['WEBSITE','MAINTENANCE'],WALLET:['WALLET'],MAPS:['MAPS_PROFILE'],BRAND:['IDENTITY']})){
-  const page=await w.client.get('/solicitudes/nueva?area='+area);assert.equal(page.status,200);assert.match(page.body,/name="phone"[^>]*required[^>]*value="0991234567"/);assert.match(page.body,/name="contact_version" value="1"/);
+  const page=await w.client.get('/solicitudes/nueva?area='+area);assert.equal(page.status,200);assert.match(page.body,/name="phone"[^>]*required[^>]*value="\+593991234567"/);assert.match(page.body,/name="contact_version" value="1"/);
   assert.deepEqual([...page.body.matchAll(/name="service" value="([^"]+)"/g)].map(m=>m[1]),codes);
   assert.match(page.body,/<details class="request-options">/);assert.doesNotMatch(page.body,/name="platform/);
  }
- for(const path of ['/inicio','/contenido?vista=solicitudes','/contenido/grabacion'])assert.match((await w.client.get(path)).body,/name="phone"[^>]*value="0991234567"/);
+ for(const path of ['/inicio','/contenido?vista=solicitudes','/contenido/grabacion'])assert.match((await w.client.get(path)).body,/name="phone"[^>]*value="\+593991234567"/);
 });
 
 test('teléfono de cada solicitud se conserva al cambiar el contacto del negocio y permite llamar',async t=>{
@@ -65,8 +65,8 @@ test('contratación conserva selección, notas y clave cuando el teléfono falla
 });
 
 test('formularios anteriores conservan compatibilidad usando el contacto registrado sin modificar el perfil',async t=>{
- const w=await setup(t),{phone,contact_version,...legacy}=idea;const r=await w.client.post('/solicitudes',legacy);assert.equal(r.status,303);assert.equal(w.db.get('SELECT contact_phone FROM requests').contact_phone,'0991234567');
- const p=await offer(w);assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+p]:'1'})).status,303);assert.equal(w.db.get('SELECT contact_phone FROM package_orders').contact_phone,'0991234567');assert.equal(w.db.get('SELECT phone FROM companies WHERE id=?',w.id).phone,'0991234567');
+ const w=await setup(t),{phone,contact_version,...legacy}=idea;const r=await w.client.post('/solicitudes',legacy);assert.equal(r.status,303);assert.equal(w.db.get('SELECT contact_phone FROM requests').contact_phone,'+593991234567');
+ const p=await offer(w);assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+p]:'1'})).status,303);assert.equal(w.db.get('SELECT contact_phone FROM package_orders').contact_phone,'+593991234567');assert.equal(w.db.get('SELECT phone FROM companies WHERE id=?',w.id).phone,'+593991234567');
 });
 
 test('inicio reúne pendientes reales, propuesta y próxima visita con enlaces directos',async t=>{
@@ -82,9 +82,9 @@ test('inicio reúne pendientes reales, propuesta y próxima visita con enlaces d
 
 test('pendientes del colaborador respetan aprobación común y destinos históricos, sin propuestas comerciales',async t=>{
  const w=await setup(t);await review(w,'Pieza común');await review(w,'Pieza compartida',['INSTAGRAM','TIKTOK']);await review(w,'Pieza Instagram',['INSTAGRAM']);
- const limited=await colleague(w,w.client,{name:'Revisor',email:'review@example.test','INSTAGRAM.VIEW':'yes','INSTAGRAM.APPROVE':'yes'});
+ const limited=await colleague(w,w.client,{name:'Revisor',document:'1717818015','INSTAGRAM.VIEW':'yes','INSTAGRAM.APPROVE':'yes'});
  let result=businessOverview(w.db,actor(w,limited.session),w.id);assert.deepEqual(result.reviews.map(r=>r.title),['Pieza Instagram']);assert.deepEqual(result.quotes,[]);assert.deepEqual(result.proposals,[]);
- const whole=await colleague(w,w.client,{name:'Revisor general',email:'allreview@example.test','SOCIAL.VIEW':'yes','SOCIAL.APPROVE':'yes'});assert.equal(businessOverview(w.db,actor(w,whole.session),w.id).reviews.length,3);
+ const whole=await colleague(w,w.client,{name:'Revisor general',document:'1710500545','SOCIAL.VIEW':'yes','SOCIAL.APPROVE':'yes'});assert.equal(businessOverview(w.db,actor(w,whole.session),w.id).reviews.length,3);
  assert.equal((await w.client.post('/equipo/'+whole.id+'/permisos',{revision:String(w.db.get('SELECT revision FROM accounts WHERE id=?',whole.id).revision),'SOCIAL.VIEW':'yes'})).status,303);assert.equal(businessOverview(w.db,actor(w,whole.session),w.id).reviews.length,0);
 });
 
@@ -97,17 +97,17 @@ test('inicio no filtra información entre negocios ni muestra acciones de client
 });
 
 test('inicio sin permisos no ofrece funciones de otro rol ni mensajes de aprobación',async t=>{
- const w=await setup(t),member=await colleague(w,w.client,{name:'Sin permisos',email:'none@example.test'});const page=await member.session.get('/inicio');assert.equal(page.status,200);assert.match(page.body,/Acceso pendiente/);assert.doesNotMatch(page.body,/Necesita tu atención|home-module|Solicitar un servicio/);
+ const w=await setup(t),member=await colleague(w,w.client,{name:'Sin permisos',document:'1700012568'});const page=await member.session.get('/inicio');assert.equal(page.status,200);assert.match(page.body,/Acceso pendiente/);assert.doesNotMatch(page.body,/Necesita tu atención|home-module|Solicitar un servicio/);
 });
 
 test('migración v4 a v5 guarda respaldo privado, mantiene vínculos y datos, y no inventa contactos históricos',()=>{
  const dir=mkdtempSync(join(tmpdir(),'lumina-contact-')),path=join(dir,'agency.sqlite');
  try{
   let raw=new DatabaseSync(path);for(const file of ['schema.sql','migrations/002_unified.sql','migrations/003_onboarding.sql','migrations/004_packages.sql'])raw.exec(readFileSync(new URL('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/'+file,import.meta.url),'utf8'));raw.exec('PRAGMA user_version=4');
-  const company=uuid(),account=uuid(),requestId=uuid();raw.prepare('INSERT INTO companies(id,name,registration_key,document_hint,phone,created_at,loyalty_tenant) VALUES(?,?,?,?,?,?,?)').run(company,'Anterior','private','1234','0990000000','2026-10-01',uuid());raw.prepare("INSERT INTO accounts(id,company_id,kind,name,email,password) VALUES(?,?,'OWNER',?,?,?)").run(account,company,'Dueño','old@example.test','hash');
+  const company=uuid(),account=uuid(),requestId=uuid();raw.prepare('INSERT INTO companies(id,name,registration_key,document_hint,phone,created_at,loyalty_tenant) VALUES(?,?,?,?,?,?,?)').run(company,'Anterior','private','1234','0990000000','2026-10-01',uuid());raw.prepare("INSERT INTO accounts(id,company_id,kind,name,email,password) VALUES(?,?,'OWNER',?,?,?)").run(account,company,'Dueño','1745704641','hash');
   raw.prepare("INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,created_at) VALUES(?,?,?,'CONTENT','SOCIAL','REEL',2,'Original','Sin cambios','DELIVERED','2026-10-01')").run(requestId,company,account);
   const before=raw.prepare('SELECT * FROM requests').get(),business=raw.prepare('SELECT * FROM companies').get();raw.close();
-  let db=openDatabase(path);assert.equal(db.get('PRAGMA user_version').user_version,8);const after=db.get('SELECT * FROM requests');assert.equal(after.contact_phone,null);for(const key of Object.keys(before))assert.deepEqual(after[key],before[key]);assert.deepEqual(db.get('SELECT * FROM companies'),Object.assign(Object.create(null),business,{category:''}));db.close();
+  let db=openDatabase(path);assert.equal(db.get('PRAGMA user_version').user_version,9);const after=db.get('SELECT * FROM requests');assert.equal(after.contact_phone,null);for(const key of Object.keys(before))assert.deepEqual(after[key],before[key]);assert.deepEqual(db.get('SELECT * FROM companies'),Object.assign(Object.create(null),business,{category:'',ruc:null}));db.close();
   const backups=readdirSync(join(dir,'migrations'));assert.equal(backups.length,1);const backup=join(dir,'migrations',backups[0]);assert.equal(statSync(backup).mode&0o777,0o600);raw=new DatabaseSync(backup,{readOnly:true});assert.equal(raw.prepare('PRAGMA user_version').get().user_version,4);assert.deepEqual(raw.prepare('SELECT * FROM requests').get(),before);raw.close();
   db=openDatabase(path);assert.deepEqual(db.get('SELECT * FROM requests'),after);db.close();assert.equal(readdirSync(join(dir,'migrations')).length,1);
  }finally{rmSync(dir,{recursive:true,force:true});}

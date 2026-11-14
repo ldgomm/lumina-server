@@ -26,13 +26,13 @@ object LuminaRegistrationMigration {
     }
 }
 
-@Serializable data class LuminaRegistration(val companyId: String, val name: String, val contactName: String, val email: String, val phone: String, val category: String = "") {
+@Serializable data class LuminaRegistration(val companyId: String, val name: String, val contactName: String, val email: String = "", val phone: String, val category: String = "") {
     fun normalized() = copy(companyId=uuid(companyId), name=name.trim(), contactName=contactName.trim(), email=email.trim().lowercase(), phone=phone.trim())
     fun validate() {
         uuid(companyId)
         need(category.isEmpty() || BusinessCategories.known(category), "INVALID_BUSINESS_CATEGORY", "Elige un tipo de negocio válido.")
         for (value in listOf(name,contactName)) need(value.length in 2..100 && value.none { it.isISOControl() }, "INVALID_REGISTRATION", "Revisa el nombre del negocio y su responsable.")
-        need(email.length in 5..180 && email.matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")), "INVALID_EMAIL", "Revisa el correo del registro.")
+        need(email.isEmpty() || email.length in 5..180 && email.matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")), "INVALID_EMAIL", "Revisa el correo del registro.")
         need(phone.length in 7..25 && phone.matches(Regex("[+0-9() -]+")) && phone.count { it in '0'..'9' } >= 7, "INVALID_PHONE", "Revisa el teléfono del registro.")
     }
 }

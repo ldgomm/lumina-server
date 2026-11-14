@@ -23,7 +23,7 @@ async function world(t){
 test('registration asks and persists business category with compatibility for older callers',async t=>{
  const w=await world(t);assert.equal(w.db.get('SELECT category FROM companies WHERE id=?',w.id).category,'CAFE');
  const signup=await w.session().get('/registro');assert.match(signup.body,/name="category"[^>]*required/);assert.match(signup.body,/Cafetería/);
- const invalid=await w.session().post('/registro',{company:'Otra',name:'Dueño',document:'1234567895',phone:'0991234567',email:'otra@example.test',password:'Pruebas Lúmina 123!',consent:'yes',category:'INVENTADA'});assert.equal(invalid.status,400);
+ const invalid=await w.session().post('/registro',{company:'Otra',name:'Dueño',document:'1234567895',phone:'0991234567',document:'1723016091',password:'Pruebas Lúmina 123!',consent:'yes',category:'INVENTADA'});assert.equal(invalid.status,400);
  assert.equal(w.db.get('SELECT count(*) AS n FROM companies').n,1);
 });
 test('operator identification is agency only and requires confirmed valid information',async t=>{
@@ -55,7 +55,7 @@ test('acceptance uses actual logged in business and no posted price or identity'
  const terms=await w.client.get('/planes/wallet/condiciones');assert.equal(terms.body,'Condiciones aceptadas de prueba');
 });
 test('agency and collaborator cannot accept cancel or query a business subscription',async t=>{
- const w=await world(t);const member=await colleague(w,w.client,{name:'Colaborador',email:'staff@example.test',view:['WALLET']});
+ const w=await world(t);const member=await colleague(w,w.client,{name:'Colaborador',document:'1754634234',view:['WALLET']});
  const before=w.calls.length;
  for(const actor of [w.admin,member.session]){
   assert.equal((await actor.get('/planes/wallet')).status,403);

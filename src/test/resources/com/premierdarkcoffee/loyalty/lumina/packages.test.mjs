@@ -90,7 +90,7 @@ test('contrataciones aisladas por negocio, dueño y CSRF; un permiso de contenid
   assert.equal((await other.client.post(o.path+'/aceptar',{revision:'1',confirm:'yes'})).status,404);
   assert.equal((await w.client.post(o.path+'/cotizar',quotation(w,o.id))).status,403);
   assert.equal((await w.client.post('/planes/solicitar',{key:uuid(),['qty_'+a]:'1',_csrf:'bad'})).status,403);
-  const collaborator=await colleague(w,w.client,{name:'Editor',email:'editor@example.test','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
+  const collaborator=await colleague(w,w.client,{name:'Editor',document:'1743990283','SOCIAL.VIEW':'yes','SOCIAL.REQUEST':'yes'});
   assert.equal((await collaborator.session.get('/planes')).status,403);
   assert.equal((await collaborator.session.get(o.path)).status,403);
   assert.equal((await collaborator.session.post('/planes/solicitar',{key:uuid(),['qty_'+a]:'1'})).status,403);
@@ -157,14 +157,14 @@ test('SQLite v3 a v4: respaldo privado, contratos y vínculos existentes intacto
     const raw=new DatabaseSync(path);for(const file of ['schema.sql','migrations/002_unified.sql','migrations/003_onboarding.sql'])raw.exec(sql(file));raw.exec('PRAGMA user_version=3');
     const company=uuid(),account=uuid(),tenant=uuid(),planId=uuid(),contract=uuid();
     raw.prepare('INSERT INTO companies(id,name,registration_key,document_hint,phone,created_at,loyalty_tenant) VALUES(?,?,?,?,?,?,?)').run(company,'Persistencia','private','1234','0990000000','2026-10-01',tenant);
-    raw.prepare("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'OWNER')").run(account,company,'Dueño','owner@example.test');
+    raw.prepare("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'OWNER')").run(account,company,'Dueño','1738679677');
     raw.prepare("INSERT INTO wallet_access VALUES(?,?,?,?,?,?,?,'ACTIVE',?)").run(account,company,tenant,uuid(),'Acceso',uuid(),'ciphertext-sin-cambios','2026-10-01');
     raw.prepare("INSERT INTO plans(id,name,term,price_minor,wallet,description,created_at) VALUES(?,?,'MONTHLY',1000,'NONE','','2026-10-01')").run(planId,'Histórico');
     raw.prepare('INSERT INTO plan_items VALUES(?,?,?)').run(planId,'VIDEO',3);
     raw.prepare('INSERT INTO contracts(id,company_id,plan_id,agreed_minor,starts_on,ends_before,created_at) VALUES(?,?,?,1000,?,?,?)').run(contract,company,planId,'2026-10-01','2026-11-01','2026-10-01');
     const prior=raw.prepare('SELECT * FROM contracts').get(),wallet=raw.prepare('SELECT * FROM wallet_access').all();raw.close();
     let db=openDatabase(path);const migrated=db.get('SELECT * FROM contracts');
-    for(const key of Object.keys(prior))assert.equal(migrated[key],prior[key]);assert.equal(migrated.units,1);assert.deepEqual(db.all('SELECT * FROM wallet_access'),wallet);assert.equal(db.get('PRAGMA user_version').user_version,8);db.close();
+    for(const key of Object.keys(prior))assert.equal(migrated[key],prior[key]);assert.equal(migrated.units,1);assert.deepEqual(db.all('SELECT * FROM wallet_access'),wallet);assert.equal(db.get('PRAGMA user_version').user_version,9);db.close();
     const files=readdirSync(join(dir,'migrations'));assert.equal(files.length,1);assert.equal(statSync(join(dir,'migrations',files[0])).mode&0o777,0o600);
     const backup=new DatabaseSync(join(dir,'migrations',files[0]),{readOnly:true});assert.equal(backup.prepare('PRAGMA user_version').get().user_version,3);assert.deepEqual(backup.prepare('SELECT * FROM contracts').get(),prior);backup.close();
     db=openDatabase(path);assert.deepEqual(db.all('PRAGMA foreign_key_check'),[]);db.close();assert.equal(readdirSync(join(dir,'migrations')).length,1);

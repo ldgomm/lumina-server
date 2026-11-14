@@ -1,5 +1,7 @@
 package com.premierdarkcoffee.loyalty.businesses
 
+import com.premierdarkcoffee.loyalty.access.consistentRuc
+
 import com.premierdarkcoffee.loyalty.access.Staff
 import com.premierdarkcoffee.loyalty.application.web
 import com.premierdarkcoffee.loyalty.infrastructure.persistence.SqlFingerprint
@@ -60,8 +62,8 @@ object BusinessProfileMigration {
         required(legalName,200,"la razón social"); required(activity,100,"la actividad del negocio")
         required(contactName,120,"el nombre de contacto"); required(province,80,"la provincia")
         required(city,80,"la ciudad"); required(address,250,"la dirección")
-        need(ruc.matches(Regex("[0-9]{13}")) && ruc.any { it != '0' }, "INVALID_RUC", "El RUC debe tener 13 dígitos, sin letras ni separadores. Cópialo de tu registro del SRI.")
-        need(email.length <= 254 && email.matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) && email.none { it.isISOControl() }, "INVALID_EMAIL", "Escribe un correo válido, por ejemplo contacto@negocio.com.")
+        need(consistentRuc(ruc), "INVALID_RUC", "El RUC debe tener 13 dígitos y terminar en 001. Cópialo de tu registro del SRI.")
+        need(email.isEmpty() || email.length <= 254 && email.matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) && email.none { it.isISOControl() }, "INVALID_EMAIL", "Escribe un correo válido, por ejemplo contacto@negocio.com.")
         need(phone.length <= 30 && phone.matches(Regex("[+0-9() .-]+")) && phone.count { it in '0'..'9' } in 7..15, "INVALID_PHONE", "Escribe un teléfono de contacto con 7 a 15 dígitos; puedes incluir +593.")
         if (website.isNotEmpty()) {
             val uri = runCatching { URI(website) }.getOrNull()

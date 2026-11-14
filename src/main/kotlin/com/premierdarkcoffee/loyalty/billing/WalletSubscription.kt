@@ -1,5 +1,7 @@
 package com.premierdarkcoffee.loyalty.billing
 
+import com.premierdarkcoffee.loyalty.access.consistentCedula
+
 import com.premierdarkcoffee.loyalty.access.Staff
 import com.premierdarkcoffee.loyalty.access.Security
 import com.premierdarkcoffee.loyalty.access.authorizeStaff
@@ -33,11 +35,11 @@ fun walletPaidFrom(activation:LocalDate):LocalDate = maxOf(activation,WALLET_PRO
         need(url?.scheme=="https" && !url.host.isNullOrBlank() && url.userInfo==null && privacyUrl.length<=500,"PRIVACY_REQUIRED","Lúmina debe publicar su política de privacidad.")
     }
 }
-@Serializable data class WalletOfferInput(val companyId:String,val ownerId:String,val ownerName:String,val ownerEmail:String,val provider:WalletProviderLegal,val cycle:String="MONTHLY")
+@Serializable data class WalletOfferInput(val companyId:String,val ownerId:String,val ownerName:String,val ownerEmail:String,val provider:WalletProviderLegal,val cycle:String="MONTHLY",val ownerDocument:String="")
 @Serializable data class WalletAcceptInput(val offer:WalletOfferInput,val expectedHash:String,val accepted:Boolean)
 @Serializable data class WalletCancelInput(val expectedVersion:Int,val confirmed:Boolean)
 @Serializable data class WalletAgreement(val version:String,val terms:String,val hash:String,val acceptedAt:String,val ownerId:String,val ownerName:String,val ownerEmail:String,
-    val companyId:String,val activationOn:String,val paidFrom:String,val firstBranchIds:List<String>,val provider:WalletProviderLegal)
+    val companyId:String,val activationOn:String,val paidFrom:String,val firstBranchIds:List<String>,val provider:WalletProviderLegal,val ownerDocument:String="")
 
 fun walletTerms(provider:WalletProviderLegal,business:String,activation:LocalDate,paidFrom:LocalDate,branchCount:Int,cycle:String="MONTHLY"):String {
     val unit=walletUnitPrice(cycle);val annual=cycle=="ANNUAL"
@@ -70,7 +72,7 @@ Negocio contratante: $business. Inicio: $activation. Sucursales registradas: $br
 private fun walletBranches(c:Connection,tenant:String) = c.rows("SELECT id,name FROM branches WHERE tenant_id=? ORDER BY id",tenant) { obj("id" to it.getString(1),"name" to it.getString(2)) }
 private fun LoyaltyService.offer(c:Connection,s:Staff,input:WalletOfferInput):JsonObject {
     input.provider.validate();uuid(input.companyId);uuid(input.ownerId);text(input.ownerName,100)
-    need(input.ownerEmail.matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")),"INVALID_EMAIL","Revisa el correo del responsable.")
+    need(if(input.ownerDocument.isNotEmpty()) consistentCedula(input.ownerDocument) else input.ownerEmail.matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")),"INVALID_OWNER_IDENTITY","Revisa la identificación del responsable.")
     need(c.one("SELECT tenant_id FROM lumina_business_registrations WHERE company_id=?",input.companyId){it.getString(1)}==s.tenant,"BUSINESS_MISMATCH","La suscripción corresponde a otro negocio.",403)
     val current=commercial.plan(c,s.tenant)
     need(current==null || current.first.walletAgreement!=null,"EXISTING_AGREEMENT","Este negocio tiene una programación anterior. Lúmina debe revisarla antes de aceptar otra tarifa para evitar cargos duplicados.",409)
@@ -101,7 +103,7 @@ fun LoyaltyService.acceptWalletSubscription(s:Staff,input:WalletAcceptInput,key:
             val paid=maxOf(walletPaidFrom(date),if(previous?.first?.recurring==true)previous.third else previous?.first?.walletEndsOn?.let(::billingDate)?:date)
             need(paid.toString()==quote.getValue("paidFrom").jsonPrimitive.content,"PERIOD_STILL_ACTIVE","El período actual sigue disponible. Puedes volver a activar la renovación al finalizarlo.",409)
             val agreement=WalletAgreement(WALLET_TERMS_VERSION,quote.getValue("terms").jsonPrimitive.content,input.expectedHash,commercial.clock.instant().toString(),input.offer.ownerId,input.offer.ownerName,input.offer.ownerEmail,
-                input.offer.companyId,date.toString(),paid.toString(),quote.getValue("branches").jsonArray.map{it.jsonObject.getValue("id").jsonPrimitive.content},input.offer.provider)
+                input.offer.companyId,date.toString(),paid.toString(),quote.getValue("branches").jsonArray.map{it.jsonObject.getValue("id").jsonPrimitive.content},input.offer.provider,input.offer.ownerDocument)
             val annual=input.offer.cycle=="ANNUAL"
             val plan=MembershipPlan(if(annual)"Wallet · USD 50,00 al año por sucursal" else "Wallet · USD 4,99 al mes por sucursal",walletUnitPrice(input.offer.cycle),date.toString(),paid.toString(),intervalMonths=if(annual)12 else 1,anchorDay=if(previous?.third==paid)previous.first.anchorDay else paid.dayOfMonth,walletAgreement=agreement)
             val access=commercial.lock(c,s.tenant)

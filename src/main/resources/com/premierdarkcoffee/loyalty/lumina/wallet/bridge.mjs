@@ -1,3 +1,4 @@
+import { requireService } from '../businesses/services.mjs';
 import { requireOperating } from '../businesses/control.mjs';
 import { requireOwner, teamMember, requireTeamRevision, auditTeamChange } from '../access/accounts.mjs';
 import { seal, unseal } from '../access/security.mjs';
@@ -143,6 +144,8 @@ export function createLoyaltyBridge({ db, key, origin }) {
     try { return await work(); } finally { busy.delete(id); }
   }
   async function configure(actor, id, data, commit = () => false) {
+    requireOwner(actor);
+    requireService(db,actor.company_id,'WALLET');
     return runExclusive(id,async () => {
       const target = teamMember(db,actor,id);
       requireTeamRevision(target,data);
@@ -274,6 +277,7 @@ export function createLoyaltyBridge({ db, key, origin }) {
   function activeGrant(actor) {
     requireThat(actor.kind === 'COLLABORATOR','Este acceso de Caja requiere una asignación del dueño.',403);
     currentSession(db,actor);
+    requireService(db,actor.company_id,'WALLET');
     const grant = db.get(`SELECT g.*,c.loyalty_tenant FROM cash_grants g JOIN companies c ON c.id=g.company_id
       WHERE g.company_id=? AND g.account_id=? AND g.status='ACTIVE'`,actor.company_id,actor.id);
     requireThat(grant && !busy.has(actor.id),'Tu acceso de Caja está inactivo o está cambiando.',403);

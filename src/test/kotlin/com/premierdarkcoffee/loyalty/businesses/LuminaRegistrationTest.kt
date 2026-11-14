@@ -18,8 +18,9 @@ class LuminaRegistrationTest {
         for(name in listOf("", "A", "x".repeat(101), "Nombre\nFalso")) assertFailsWith<Problem>{value().copy(name=name).validate()}
     }
     @Test fun `contact validation matches the minimal portal registration`() {
-        for(mail in listOf("", "a@b", "x\ny@example.test"))assertFailsWith<Problem>{value().copy(email=mail).validate()}
+        for(mail in listOf("a@b", "x\ny@example.test"))assertFailsWith<Problem>{value().copy(email=mail).validate()}
         for(phone in listOf("123", "CALL ME", "0991234567\n"))assertFailsWith<Problem>{value().copy(phone=phone).validate()}
         value().copy(phone="+593 (99) 123-4567").validate()
+        value().copy(email="").validate()
     }
 }

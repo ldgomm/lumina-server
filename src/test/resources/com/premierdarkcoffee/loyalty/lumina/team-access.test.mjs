@@ -5,7 +5,7 @@ import {fakeLoyalty} from './loyalty-fixture.mjs';
 import {uuid} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 async function setup(t,permissions={}){
  const native=await fakeLoyalty(t),world=await portal(t,native.origin,{platformToken:native.platformToken}),admin=await agency(world),business=await owner(world,'Equipo unificado','7');
- const person=await colleague(world,business.client,{name:'Operadora',email:'operadora@example.test',...permissions});
+ const person=await colleague(world,business.client,{name:'Operadora',document:'1736469675',...permissions});
  const tenant=world.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',business.id).loyalty_tenant,branch=native.branches.get(tenant)[0].id;
  const save=(data={})=>business.client.post('/equipo/'+person.id+'/acceso',{revision:teamRevision(world,person.id),cash_mode:'OFF',branch,...data});
  const grants=()=>world.db.all('SELECT scope,action FROM grants WHERE account_id=? ORDER BY scope,action',person.id).map(g=>g.scope+'.'+g.action);

@@ -17,9 +17,9 @@ test('registro, cortesía idempotente, privacidad de cédula y credencial',async
   const intro = await client.get('/inicio');
   assert.match(intro.body,/Tu video de cortesía/);
   const company = world.db.get('SELECT * FROM companies WHERE id=?',id);
-  assert.equal(company.document_hint,'7891');
+  assert.equal(company.document_hint,'9844');
   assert.equal(company.registration_key.length,64);
-  assert.ok(!JSON.stringify(company).includes('1234567891'));
+  assert.doesNotMatch(intro.body,/1748639844/);
   assert.ok(!world.db.get("SELECT password FROM accounts WHERE company_id=?",id).password.includes(password));
   const data = {...reviewData,type:'COURTESY',quantity:'10'};
   const results = await Promise.all([client.post('/solicitudes',data),client.post('/solicitudes',data)]);
@@ -27,13 +27,13 @@ test('registro, cortesía idempotente, privacidad de cédula y credencial',async
   assert.equal(results[0].location,results[1].location);
   assert.equal(world.db.get("SELECT quantity FROM requests WHERE company_id=? AND type='COURTESY'",id).quantity,1);
   const session = world.session();
-  const duplicate = await session.post('/registro',{company:'Negocio de Bienvenida',name:'Otro',document:'1234567891',
-    phone:'0991234567',email:'otro@example.test',password,consent:'yes'});
+  const duplicate = await session.post('/registro',{company:'Negocio de Bienvenida',name:'Otro',document:'1706707138',ruc:company.ruc,
+    phone:'0991234567',password,consent:'yes'});
   assert.equal(duplicate.status,409);
   assert.equal((await client.post('/solicitudes',data,{headers:{Origin:'https://example.test'}})).status,403);
   assert.equal((await client.post('/solicitudes',{...data,_csrf:'incorrecto'})).status,403);
   const another = world.session();
-  assert.equal((await another.post('/entrar',{email:'negocio1@example.test',password})).status,303);
+  assert.equal((await another.post('/entrar',{document:'1748639844',password})).status,303);
   const changed = await client.post('/cuenta/clave',{current:password,password:'Otra contraseña larga 1!',confirmation:'Otra contraseña larga 1!'});
   assert.equal(changed.status,303);
   assert.equal((await another.get('/inicio')).status,303);
@@ -118,7 +118,7 @@ test('la matriz impide ver, solicitar o aprobar áreas sin permiso y aplica camb
   const admin = await agency(world);
   const {client,id} = await owner(world,'Negocio de accesos','5');
   await admin.post(selected('/clientes/verificar',id));
-  const member = await colleague(world,client,{name:'Equipo redes',email:'equipo@example.test','TIKTOK.VIEW':'yes','INSTAGRAM.VIEW':'yes','INSTAGRAM.REQUEST':'yes'});
+  const member = await colleague(world,client,{name:'Equipo redes',document:'1721663555','TIKTOK.VIEW':'yes','INSTAGRAM.VIEW':'yes','INSTAGRAM.REQUEST':'yes'});
   assert.equal((await member.session.get('/planes')).status,403);
   assert.equal((await member.session.get('/mapas')).status,403);
   assert.equal((await member.session.get('/equipo')).status,403);

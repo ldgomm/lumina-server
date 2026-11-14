@@ -9,7 +9,7 @@ export function walletPage({actor,company,contact,companies=[],data,error,blocke
   if(admin) return card(company?'Wallet de '+company.name:'Wallet de los negocios',
     company?`<p>${company.loyalty_tenant?badge('Wallet activa','success'):badge('Preparación pendiente')}</p>
       <p>Consulta de fidelización. El dueño y su equipo administran tarjetas, promociones y Caja desde sus propias cuentas.</p>
-      ${contact?`<p>${esc(contact.name)} · ${esc(contact.email)} · ${esc(contact.phone)}</p>`:''}
+      ${contact?`<p>${esc(contact.name)} · ${esc(contact.phone)}</p>`:''}
       ${error?`<p class="notice" role="status">${esc(error)}</p>`:''}
       ${data?.health?.summary?table(['Seguimiento','Registros'],[['Registros por proveedor',number(data.health.summary.total??0)],['Actualizaciones pendientes',number(data.health.summary.pending??0)],['Requieren atención',number(data.health.summary.attention??0)]]):''}`:
       table(['Negocio','Consulta'],companies.map(item=>[esc(item.name),localLink('/wallet?empresa='+item.id,'Consultar Wallet','btn secondary')]),'Los negocios aparecerán aquí al crear su cuenta.'),

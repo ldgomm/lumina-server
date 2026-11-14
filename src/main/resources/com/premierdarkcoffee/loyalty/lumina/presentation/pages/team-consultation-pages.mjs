@@ -1,3 +1,4 @@
+import { identityLabel } from '../../access/identity.mjs';
 import { describeGrants, memberState } from '../../access/team-policy.mjs';
 import { badge, button, card, disclosure, esc, hidden, input, localLink, number, table } from './components.mjs';
 import { icon } from './icons.mjs';
@@ -25,7 +26,7 @@ export function teamsConsultationPage(data) {
   return `<div class="team-heading">${localLink('/equipos','← Todos los equipos')}${localLink('/inicio?empresa='+company.id,'Ver negocio →')}</div>
     <p class="team-help">Los permisos los administra el dueño del negocio.</p>${filter}${card('Personas y tareas',`
     <p class="team-help">${number(total)} ${total===1?'persona':'personas'} · Página ${page+1}</p>${table(['Persona','Rol','Estado','Tareas asignadas'],rows.map(member=>[
-      `<strong>${esc(member.name)}</strong><span class="team-email">${esc(member.email)}</span>`,
+      `<strong>${esc(member.name)}</strong><span class="team-email">${esc(identityLabel(member))}</span>`,
       badge(member.kind),`<span class="team-state ${memberState(member).toLowerCase()}">${states[memberState(member)]}</span>`,
       accessSummary(member)]),'No hay personas con esta búsqueda.')}${pagination}`)}`;
 }

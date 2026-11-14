@@ -43,7 +43,7 @@ test('permisos de plataforma, solicitudes históricas y aislamiento se conservan
   const w=await setup(t),p=await produce(w);
   await w.client.post(p.route+'/revisar',{status:'APPROVED',revision:'2'});
   for(const channel of ['INSTAGRAM','TIKTOK'])await w.admin.post(selected(p.route+'/publicacion',w.id),{channel,url:'https://example.test/private-'+channel,published:yesterday()});
-  const member=await colleague(w,w.client,{name:'Solo TikTok',email:'tiktok@example.test','TIKTOK.VIEW':'yes'});
+  const member=await colleague(w,w.client,{name:'Solo TikTok',document:'1733968380','TIKTOK.VIEW':'yes'});
   const pubs=await member.session.get('/contenido?vista=publicaciones');assert.equal(pubs.status,200);assert.match(pubs.body,/private-TIKTOK/);assert.doesNotMatch(pubs.body,/private-INSTAGRAM/);
   assert.equal((await member.session.get('/contenido?vista=publicaciones&red=INSTAGRAM')).status,403);
   const other=await owner(w,'Separado','2');

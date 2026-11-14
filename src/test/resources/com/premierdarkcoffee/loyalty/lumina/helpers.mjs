@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { localDay, uuid } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 import { once } from 'node:events';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { createPortal } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/application/app.mjs';
 import { setupCode } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/access/accounts.mjs';
 import { openDatabase } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/database.mjs';
@@ -52,26 +52,39 @@ export function browser(origin) {
 }
 export async function agency(world) {
   const admin = world.session();
-  const response = await admin.post('/configurar',{code:setupCode(world.db),name:'Equipo Lúmina',email:'agencia@example.test',password});
+  const response = await admin.post('/configurar',{code:setupCode(world.db),name:'Equipo Lúmina',document:'1748225842',password});
   if (response.status!==303) throw new Error('No se creó agencia de prueba.');
   await admin.get('/clientes');
   return admin;
 }
+export function documentFor(alias) {
+ const hash=createHash('sha256').update(String(alias)).digest('hex');
+ const body='17'+(parseInt(hash.slice(0,12),16)%6)+String(parseInt(hash.slice(12,24),16)%1000000).padStart(6,'0');
+ const total=[...body].reduce((n,v,i)=>{const p=Number(v)*(i%2===0?2:1);return n+(p>9?p-9:p);},0);
+ return body+(10-total%10)%10;
+}
+// Existing workflow fixtures explicitly opt into all services. New onboarding is tested separately.
 export async function owner(world, name, identifier, override = {}) {
-  const client = world.session();
-  const response = await client.post('/registro',{company:name,name:'Dueño de '+name,document:'123456789'+identifier,
-    phone:'0991234567',email:'negocio'+identifier+'@example.test',password,consent:'yes',...override});
-  if (response.status!==303) throw new Error('No se creó negocio de prueba.');
+  const client=world.session(),document=documentFor('negocio'+identifier+'@example.test');
+  const response=await client.post('/registro',{company:name,name:'Dueño de '+name,document,ruc:document+'001',
+    phone:'0991234567',password,consent:'yes',...override});
+  if(response.status!==303)throw new Error('No se creó negocio de prueba: '+response.body);
+  const id=world.db.get('SELECT id FROM companies WHERE name=?',name).id;
+  world.db.run('UPDATE accounts SET welcome_done=1 WHERE company_id=?',id);
+  for(const service of ['SOCIAL','WALLET','MAPS','WEB','BRAND'])world.db.run("INSERT INTO company_services VALUES(?,?,'ACTIVE',NULL,?)",id,service,new Date().toISOString());
+  // Simulate an already opted-in account for historical production/authorization tests.
+  await client.get('/wallet');
   await client.get('/inicio');
-  return {client,id:world.db.get('SELECT id FROM companies WHERE name=?',name).id};
+  return {client,id};
 }
 export async function colleague(world,client,data) {
   const result = await client.post('/equipo',data);
   const code = result.body.match(/<code class="secret">([A-Za-z0-9_-]{43})<\/code>/)?.[1];
   if (!code) throw new Error('No se creó invitación de prueba.');
-  const accountId = world.db.get('SELECT id FROM accounts WHERE email=?',data.email).id;
+  const accountId = world.db.get('SELECT id FROM accounts WHERE document=?',data.document).id;
   const session = world.session();
   if ((await session.post('/activar',{code,password})).status!==303) throw new Error('No se activó prueba.');
+  world.db.run('UPDATE accounts SET welcome_done=1 WHERE id=?',accountId);
   await session.get('/inicio');
   return {id:accountId,session,code};
 }

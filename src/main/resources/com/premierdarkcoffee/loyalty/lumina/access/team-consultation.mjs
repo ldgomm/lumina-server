@@ -18,9 +18,9 @@ export function consultTeams(db, actor, query = new URLSearchParams()) {
   requireThat(isId(selected),'No se encontró ese negocio.',404);
   const company = db.get('SELECT id,name FROM companies WHERE id=?',selected);
   requireThat(company,'No se encontró ese negocio.',404);
-  const where = "a.company_id=? AND a.kind IN ('OWNER','COLLABORATOR') AND instr(lower(a.name||' '||a.email),lower(?))>0";
+  const where = "a.company_id=? AND a.kind IN ('OWNER','COLLABORATOR') AND instr(lower(a.name||' '||coalesce(a.document,'')),lower(?))>0";
   const total = db.get(`SELECT count(*) AS n FROM accounts a WHERE ${where}`,company.id,q).n;
-  const rows = db.all(`SELECT a.id,a.name,a.email,a.kind,a.active,a.password IS NOT NULL AS activated,
+  const rows = db.all(`SELECT a.id,a.name,a.document,a.kind,a.active,a.password IS NOT NULL AS activated,
     c.status AS cash_status,c.branch_name,c.purchases,c.rewards,
     (SELECT max(expires_at) FROM codes WHERE account_id=a.id AND kind='ACTIVATE') AS activation_expires
     FROM accounts a LEFT JOIN cash_grants c ON c.account_id=a.id AND c.company_id=a.company_id

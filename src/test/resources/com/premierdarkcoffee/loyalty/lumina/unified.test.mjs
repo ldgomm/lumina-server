@@ -44,7 +44,7 @@ test('una pieza, cuatro publicaciones y cuatro métricas consumen un solo cupo m
 });
 test('permisos por plataforma filtran métricas y no permiten aprobar globalmente una pieza compartida',async t=>{
  const c=await context(t),{world,client,admin,id}=c;
- const member=await colleague(world,client,{name:'Solo Instagram',email:'ig@example.test','INSTAGRAM.VIEW':'yes','INSTAGRAM.REQUEST':'yes','INSTAGRAM.APPROVE':'yes'});
+ const member=await colleague(world,client,{name:'Solo Instagram',document:'1744083856','INSTAGRAM.VIEW':'yes','INSTAGRAM.REQUEST':'yes','INSTAGRAM.APPROVE':'yes'});
  const {path,piecePath,piece}=await produce(c);
  const revision=world.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision;
  assert.equal((await member.session.get(path)).status,200);
@@ -128,8 +128,8 @@ test('cortesía sin destinos permite publicar después, conserva gratuidad y no 
 });
 test('aprobar contenido común requiere autorización explícita y mantiene aislamiento por negocio',async t=>{
  const c=await context(t),{world,client,admin,id}=c;
- const reader=await colleague(world,client,{name:'Lectura redes',email:'lectura@example.test','TIKTOK.VIEW':'yes'});
- const reviewer=await colleague(world,client,{name:'Revisión contenido',email:'revision@example.test','SOCIAL.VIEW':'yes','SOCIAL.APPROVE':'yes'});
+ const reader=await colleague(world,client,{name:'Lectura redes',document:'1756845671','TIKTOK.VIEW':'yes'});
+ const reviewer=await colleague(world,client,{name:'Revisión contenido',document:'1756287650','SOCIAL.VIEW':'yes','SOCIAL.APPROVE':'yes'});
  const {path,piecePath,piece}=await produce(c);
  assert.equal((await reader.session.get(path)).status,200);
  assert.equal((await reader.session.post('/solicitudes',social)).status,403);
@@ -160,7 +160,7 @@ test('migración v1 conserva IDs, vínculos Wallet, cupos, publicaciones, eviden
   const original=new DatabaseSync(path);original.exec(readFileSync(new URL('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/schema.sql',import.meta.url),'utf8'));original.exec('PRAGMA user_version=1');
   const company=uuid(),account=uuid(),request=uuid(),piece=uuid(),pub=uuid(),tenant=uuid();
   original.prepare('INSERT INTO companies(id,name,registration_key,document_hint,phone,approved,loyalty_tenant,loyalty_name,created_at) VALUES(?,?,?,?,?,1,?,?,?)').run(company,'Persistente','opaque','1234','0990000000',tenant,'Existente','2026-10-01');
-  original.prepare("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'COLLABORATOR')").run(account,company,'Persona','sample@example.test');
+  original.prepare("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'COLLABORATOR')").run(account,company,'Persona','1703682060');
   original.prepare('INSERT INTO grants VALUES(?,?,?)').run(account,'INSTAGRAM','VIEW');
   original.prepare("INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,created_at) VALUES(?,?,?,'CONTENT','INSTAGRAM','VIDEO',1,'Video','Común','PRODUCTION','2026-10-01')").run(request,company,account);
   original.prepare("INSERT INTO pieces(id,company_id,request_id,title,service,status,observations,created_at) VALUES(?,?,?,'Video','VIDEO','APPROVED','Historico','2026-10-01')").run(piece,company,request);
@@ -185,7 +185,7 @@ test('acceso único persiste cifrado al reiniciar servidor y no crea otro emplea
   await admin.post('/agencia/clientes/verificar?empresa='+id);await client.get('/wallet');
   const original={...db.get('SELECT * FROM wallet_access')};await close(server);db.close();
   db=openDatabase(path);server=createPortal({db,key,loyaltyUrl:loyalty.origin,integration});origin=await listen(server);
-  const session=browser(origin);await session.post('/entrar',{email:'negocio2@example.test',password});await session.get('/inicio');
+  const session=browser(origin);await session.post('/entrar',{document:'1755536693',password});await session.get('/inicio');
   assert.equal((await session.get('/wallet-api/api/staff/wallet-design')).status,200);
   assert.deepEqual({...db.get('SELECT * FROM wallet_access')},original);
   assert.equal([...loyalty.staff.values()].filter(p=>p.requestId===original.request_id).length,1);

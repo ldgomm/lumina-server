@@ -102,7 +102,7 @@ class BusinessProfilePostgresTest {
         for(q in listOf(""," ","a","%_"))assertTrue(service.memberSuggestions(owner,q).getValue("items").jsonArray.isEmpty())
     }
     @Test fun `platform searches names legal names and RUC including legacy businesses`() {
-        val p=profile().copy(ruc="1234567890123");val t=business(p);val legacy=business(null,"Árbol "+id().take(8))
+        val p=profile().copy(ruc="1234567890001");val t=business(p);val legacy=business(null,"Árbol "+id().take(8))
         for(q in listOf(p.ruc,p.legalName,service.businessProfile(t.str("tenantId")).getValue("business").jsonObject.str("name"))) {
             assertTrue(service.businessSuggestions(q).getValue("items").jsonArray.any{it.jsonObject.str("id")==t.str("tenantId")})
             assertTrue(service.commercial.businesses(q).getValue("items").jsonArray.any{it.jsonObject.str("id")==t.str("tenantId")})

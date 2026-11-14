@@ -1,3 +1,5 @@
+import { documentNumber, rucNumber, whatsappNumber } from './identity.mjs';
+import { activeServices } from '../businesses/services.mjs';
 import { businessCategory } from '../businesses/categories.mjs';
 import { channels, areas, walletScopes, socialChannels, event, now, requireThat, text, uuid } from '../shared/domain.mjs';
 import { parseGrants, grantsSnapshot, permissions } from './team-policy.mjs';
@@ -11,9 +13,6 @@ export function emailAddress(value) {
   const email = text(value, 'correo', 5, 180).toLowerCase();
   requireThat(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), 'Ingresa un correo válido.');
   return email;
-}
-function accountByEmail(db, email) {
-  return db.get('SELECT * FROM accounts WHERE email=?', email);
 }
 export function limit(db, subject, max, minutes = 10) {
   const window = Math.floor(Date.now() / (minutes * 60000));
@@ -39,55 +38,81 @@ function checkCode(db, raw, kind) {
 }
 export async function createAgency(db, data) {
   checkCode(db, data.code, 'SETUP');
-  const name = text(data.name, 'nombre', 2, 100);
-  const email = emailAddress(data.email);
+  const name = text(data.name, 'nombre', 2, 100), document=documentNumber(data.document);
   const password = await hashPassword(data.password);
   return db.transaction(() => {
     const code = checkCode(db, data.code, 'SETUP');
-    requireThat(!db.get("SELECT id FROM accounts WHERE kind='AGENCY'") && !accountByEmail(db,email),
-      'Ya existe una cuenta con ese correo.', 409);
+    requireThat(!db.get("SELECT id FROM accounts WHERE kind='AGENCY'") && !db.get('SELECT id FROM accounts WHERE document=?',document),
+      'Ya existe una cuenta con esos datos.', 409);
     const id = uuid();
-    db.run("INSERT INTO accounts(id,name,email,kind,password) VALUES(?,?,?,'AGENCY',?)", id, name, email, password);
+    db.run("INSERT INTO accounts(id,name,email,document,kind,password) VALUES(?,?,?,?,'AGENCY',?)", id,name,'account:'+id,document,password);
     db.run('DELETE FROM codes WHERE digest=?', code.digest);
     return id;
   });
 }
 export async function register(db, key, data) {
-  const company = text(data.company, 'negocio', 2, 100);
-  const category = businessCategory(data.category);
-  const name = text(data.name, 'responsable', 2, 100);
-  const email = emailAddress(data.email);
-  const document = text(data.document, 'cédula', 10, 10);
-  const phone = text(data.phone, 'teléfono', 7, 25);
-  requireThat(/^\d{10}$/.test(document), 'Escribe los 10 dígitos de la cédula.');
-  requireThat(/^\+?[0-9() -]+$/.test(phone) && phone.replace(/\D/g,'').length >= 7, 'Ingresa un teléfono válido.');
+  const company = text(data.company, 'negocio', 2, 100), category=businessCategory(data.category);
+  const name = text(data.name, 'responsable', 2, 100), document=documentNumber(data.document);
+  const ruc=rucNumber(data.ruc),phone=whatsappNumber(data.phone);
   requireThat(data.consent === 'yes', 'Confirma que autorizas el registro de estos datos.');
-  const normalized = company.normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-  requireThat(normalized, 'Escribe un nombre de negocio válido.');
-  const identity = fingerprint(key, 'registration', normalized + '\0' + document);
-  const password = await hashPassword(data.password);
-  return db.transaction(() => {
-    requireThat(!accountByEmail(db,email) && !db.get('SELECT id FROM companies WHERE registration_key=?',identity),
-      'Ya existe un registro con esos datos. Usa tu cuenta existente o contacta a Lúmina.', 409);
-    const companyId = uuid();
-    const accountId = uuid();
-    db.run(`INSERT INTO companies(id,name,registration_key,document_hint,phone,created_at,category)
-      VALUES(?,?,?,?,?,?,?)`, companyId, company, identity, document.slice(-4), phone, now(),category);
-    db.run(`INSERT INTO accounts(id,company_id,name,email,kind,password) VALUES(?,?,?,?,'OWNER',?)`,
-      accountId, companyId, name, email, password);
-    event(db, { id: accountId, name }, companyId, 'COMPANY', companyId, 'REGISTRO', 'Video de cortesía disponible.');
+  const identity=fingerprint(key,'ruc-registration',ruc);
+  const normalized=company.normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');
+  const legacyIdentity=fingerprint(key,'registration',normalized+'\0'+document);
+  const password=await hashPassword(data.password);
+  return db.transaction(()=>{
+    requireThat(!db.get('SELECT id FROM accounts WHERE document=?',document)&&!db.get('SELECT id FROM companies WHERE ruc=? OR registration_key=?',ruc,legacyIdentity),
+      'Ya existe una cuenta con esos datos. Ingresa o contacta a Lúmina.',409);
+    const companyId=uuid(),accountId=uuid();
+    db.run(`INSERT INTO companies(id,name,registration_key,document_hint,phone,created_at,category,ruc) VALUES(?,?,?,?,?,?,?,?)`,
+      companyId,company,identity,document.slice(-4),phone,now(),category,ruc);
+    // The historical NOT NULL UNIQUE column is an opaque internal value, never a fabricated email.
+    db.run(`INSERT INTO accounts(id,company_id,name,email,document,kind,password,welcome_done) VALUES(?,?,?,?,?,'OWNER',?,0)`,
+      accountId,companyId,name,'account:'+accountId,document,password);
+    event(db,{id:accountId,name},companyId,'COMPANY',companyId,'REGISTRO','Video de cortesía disponible.');
     return accountId;
   });
 }
 export async function authenticate(db, data) {
-  const email = emailAddress(data.email);
-  limit(db, 'login-email:' + email, 12);
-  const account = accountByEmail(db,email);
-  const valid = await verifyPassword(data.password, account?.password);
-  requireThat(valid && account?.active, 'Correo o contraseña incorrectos.', 401);
-  const current = accountByEmail(db,email);
-  requireThat(current?.active && current.password === account.password, 'Vuelve a iniciar sesión.', 401);
+  const identifier=typeof data.document==='string'?data.document.trim():'';
+  requireThat(/^\d{10}(?:\d{3})?$/.test(identifier),'Escribe tu cédula de 10 dígitos o el RUC de 13 dígitos.');
+  limit(db,'login-document:'+identifier,12);
+  const account=identifier.length===10?db.get('SELECT * FROM accounts WHERE document=?',identifier):
+    db.get("SELECT a.* FROM accounts a JOIN companies c ON c.id=a.company_id WHERE c.ruc=? AND a.kind='OWNER'",identifier);
+  const valid=await verifyPassword(data.password,account?.password);
+  requireThat(valid&&account?.active,'Identificación o contraseña incorrectas.',401);
+  const current=db.get('SELECT * FROM accounts WHERE id=?',account.id);
+  requireThat(current?.active&&current.password===account.password&&current.revision===account.revision,'Vuelve a iniciar sesión.',401);
   return current.id;
+}
+export async function authenticateLegacy(db,data) {
+  const email=emailAddress(data.email);limit(db,'login-legacy:'+email,12);
+  const account=db.get('SELECT * FROM accounts WHERE email=? AND document IS NULL',email);
+  const valid=await verifyPassword(data.password,account?.password);
+  requireThat(valid&&account?.active,'Acceso anterior o contraseña incorrectos.',401);
+  const current=db.get('SELECT * FROM accounts WHERE id=? AND document IS NULL',account.id);
+  requireThat(current?.active&&current.password===account.password&&current.revision===account.revision,'Vuelve a iniciar sesión.',401);
+  return current.id;
+}
+export async function claimIdentity(db,actor,data) {
+  const document=documentNumber(data.document);
+  const ruc=actor.kind==='OWNER'?rucNumber(data.ruc):null;
+  const phone=actor.kind==='OWNER'?whatsappNumber(data.phone):null;
+  const initial=db.get('SELECT password,revision,document FROM accounts WHERE id=? AND active=1',actor.id);
+  requireThat(initial&&await verifyPassword(data.current,initial.password),'Contraseña actual incorrecta.',403);
+  return db.transaction(()=>{
+    const current=db.get('SELECT * FROM accounts WHERE id=? AND active=1',actor.id);
+    requireThat(current&&current.revision===initial.revision&&current.password===initial.password&&!current.document,'La identificación ya se actualizó. Recarga tu cuenta.',409);
+    requireThat(!db.get('SELECT id FROM accounts WHERE document=?',document),'Esa cédula ya tiene un acceso. Contacta a Lúmina.',409);
+    if(ruc){
+      requireThat(!db.get('SELECT id FROM companies WHERE ruc=? AND id<>?',ruc,actor.company_id),'Ese RUC ya tiene un negocio.',409);
+      db.run('UPDATE companies SET ruc=?,phone=? WHERE id=?',ruc,phone,actor.company_id);
+    }
+    db.run('UPDATE accounts SET document=?,revision=revision+1 WHERE id=?',document,actor.id);
+    db.run('DELETE FROM sessions WHERE account_id=?',actor.id);
+    db.run('DELETE FROM codes WHERE account_id=?',actor.id);
+    event(db,actor,actor.company_id,'ACCOUNT',actor.id,'IDENTIFICACIÓN_ACTUALIZADA','Acceso con cédula.');
+    return actor.id;
+  });
 }
 export function createSession(db, accountId) {
   const session = randomCode();
@@ -97,11 +122,11 @@ export function createSession(db, accountId) {
 }
 export function getSession(db, cookie) {
   if (!codePattern.test(cookie || '')) return null;
-  const actor = db.get(`SELECT a.id,a.company_id,a.name,a.email,a.kind,a.revision,
+  const actor = db.get(`SELECT a.id,a.company_id,a.name,a.email,a.document,a.welcome_done,a.kind,a.revision,c.ruc,c.phone,
     s.digest AS session_id,s.csrf,c.name AS company_name,c.approved
     FROM sessions s JOIN accounts a ON a.id=s.account_id LEFT JOIN companies c ON c.id=a.company_id
     WHERE s.digest=? AND s.expires_at>? AND a.active=1`, digest(cookie), now());
-  if (actor) actor.grants = db.all('SELECT scope,action FROM grants WHERE account_id=?', actor.id);
+  if (actor) { actor.grants = db.all('SELECT scope,action FROM grants WHERE account_id=?', actor.id); if(actor.company_id)actor.services=activeServices(db,actor.company_id); }
   return actor || null;
 }
 export function logout(db, actor) {
@@ -120,6 +145,8 @@ export async function changePassword(db, actor, input) {
 }
 export function can(actor, scope, action = 'VIEW') {
   if (actor.kind === 'AGENCY') return action === 'VIEW';
+  const service=socialChannels.includes(scope)?'SOCIAL':scope.startsWith('WALLET')?'WALLET':scope;
+  if(actor.services&&Object.hasOwn(areas,service)&&!actor.services.includes(service))return false;
   return actor.kind === 'OWNER' ||
     actor.grants.some(grant => grant.action === action && (grant.scope === scope || (socialChannels.includes(scope) && grant.scope === 'SOCIAL'))) ||
     (scope === 'SOCIAL' && actor.grants.some(grant => socialChannels.includes(grant.scope) && grant.action === action));
@@ -152,7 +179,7 @@ export function approveCompany(db, actor, company) {
 }
 export function teamMember(db, actor, id) {
   requireOwner(actor);
-  const target = db.get(`SELECT a.id,a.name,a.email,a.revision,a.active,a.password IS NOT NULL AS activated,
+  const target = db.get(`SELECT a.id,a.name,a.email,a.document,a.revision,a.active,a.password IS NOT NULL AS activated,
     c.status AS cash_status,c.branch_id,c.branch_name,c.purchases,c.rewards,
     (SELECT max(expires_at) FROM codes WHERE account_id=a.id AND kind='ACTIVATE') AS activation_expires,
     (SELECT count(*) FROM sessions WHERE account_id=a.id AND expires_at>?) AS session_count,
@@ -187,14 +214,14 @@ function issueActivation(db, accountId) {
 export function createTeamMember(db, actor, input) {
   requireOwner(actor);
   const name = text(input.name,'nombre',2,100);
-  const email = emailAddress(input.email);
+  const document = documentNumber(input.document);
   return db.transaction(() => {
-    requireThat(!accountByEmail(db,email), 'Ese correo ya tiene un acceso.', 409);
+    requireThat(!db.get('SELECT id FROM accounts WHERE document=?',document), 'Esa cédula ya tiene un acceso.', 409);
     const id = uuid();
-    db.run("INSERT INTO accounts(id,company_id,name,email,kind) VALUES(?,?,?,?,'COLLABORATOR')",id,actor.company_id,name,email);
+    db.run("INSERT INTO accounts(id,company_id,name,email,document,kind,welcome_done) VALUES(?,?,?,?,?,'COLLABORATOR',0)",id,actor.company_id,name,'account:'+id,document);
     setGrants(db,id,input);
     const code = issueActivation(db,id);
-    auditTeamChange(db,actor,{id},'ACCESO_CREADO',null,{name,email,grants:grantsSnapshot(parseGrants(input))});
+    auditTeamChange(db,actor,{id},'ACCESO_CREADO',null,{name,documentHint:document.slice(-4),grants:grantsSnapshot(parseGrants(input))});
     return { id, code };
   });
 }
@@ -216,17 +243,14 @@ export function replaceTeamGrants(db, actor, target, next) {
   return true;
 }
 export function updateMember(db, actor, id, input) {
-  const name=text(input.name,'nombre',2,100),email=emailAddress(input.email);
-  return db.transaction(() => {
+  const name=text(input.name,'nombre',2,100),document=documentNumber(input.document);
+  return db.transaction(()=>{
     const target=teamMember(db,actor,id);requireTeamRevision(target,input);
-    requireThat(!db.get('SELECT id FROM accounts WHERE email=? AND id<>?',email,id),'Ese correo ya tiene un acceso.',409);
-    if(name===target.name&&email===target.email)return;
-    db.run('UPDATE accounts SET name=?,email=?,revision=revision+1 WHERE id=?',name,email,id);
-    if(email!==target.email){
-      db.run('DELETE FROM sessions WHERE account_id=?',id);
-      db.run('DELETE FROM codes WHERE account_id=?',id);
-    }
-    auditTeamChange(db,actor,target,'PERSONA_ACTUALIZADA',{name:target.name,email:target.email},{name,email});
+    requireThat(!db.get('SELECT id FROM accounts WHERE document=? AND id<>?',document,id),'Esa cédula ya tiene un acceso.',409);
+    if(name===target.name&&document===target.document)return;
+    db.run('UPDATE accounts SET name=?,document=?,revision=revision+1 WHERE id=?',name,document,id);
+    if(document!==target.document){db.run('DELETE FROM sessions WHERE account_id=?',id);db.run('DELETE FROM codes WHERE account_id=?',id);}
+    auditTeamChange(db,actor,target,'PERSONA_ACTUALIZADA',{name:target.name,documentHint:target.document?.slice(-4)||null},{name,documentHint:document.slice(-4)});
   });
 }
 export function manageAccount(db, actor, id, action, input) {

@@ -1,3 +1,4 @@
+import {documentFor} from '../../src/test/resources/com/premierdarkcoffee/loyalty/lumina/helpers.mjs';
 // Exercises shipped scripts against real rendered pages with fictional data.
 // DOM checks do not replace browser layout or Wallet device validation.
 import assert from 'node:assert/strict';
@@ -48,7 +49,7 @@ try {
   assert.equal(catalog.querySelector('button[type=submit]').disabled,true);
   checks.push('Basket changes are protected across filters; removing all selections clears the draft');
 
-  const member=await colleague(world,a.client,{name:'Equipo de pruebas',email:'equipo-pruebas@example.test','WEB.VIEW':'yes'});
+  const member=await colleague(world,a.client,{name:'Equipo de pruebas',document:documentFor('equipo-pruebas@example.test'),'WEB.VIEW':'yes'});
   const team=render((await a.client.get('/equipo/'+member.id)).body,'/equipo/'+member.id,['lumina.js','team.js']);
   const teamForm=team.document.querySelector('[data-team-form]'),save=teamForm.querySelector('button[type=submit]'),original=save.textContent;
   submit(team,teamForm);assert.equal(save.disabled,true);team.dispatchEvent(new team.Event('pageshow'));assert.equal(save.disabled,false);assert.equal(save.textContent,original);

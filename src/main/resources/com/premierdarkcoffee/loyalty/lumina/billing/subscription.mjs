@@ -29,5 +29,5 @@ export function subscriptionOfferInput(db,actor,cycle="MONTHLY") {
  const provider=legalProfile(db);
  requireThat(provider,'Lúmina está completando la identificación del proveedor. Aún no se activan cargos automáticos.',409);
  const {revision,...identity}=provider;
- return {companyId:actor.company_id,ownerId:actor.id,ownerName:actor.name,ownerEmail:actor.email,provider:identity,cycle};
+ return {companyId:actor.company_id,ownerId:actor.id,ownerName:actor.name,ownerEmail:actor.document?'':actor.email,ownerDocument:actor.document||'',provider:identity,cycle};
 }

@@ -12,8 +12,8 @@ class BusinessProfileTest {
     private fun profile() = BusinessProfile("Negocio de prueba", "1790012345001", "Cafetería", "Ana Ejemplo", "ana@example.test", "+593 99 123 4567", "Pichincha", "Quito", "Dirección ficticia 123")
     @Test fun `RUC is a format check not a tax or checksum certification`() {
         profile().validate()
-        profile().copy(ruc="1234567890123").validate()
-        for (ruc in listOf("", "0000000000000", "179001234500", "17900123450011", "1790012345A01", "179-012345001"))
+        profile().copy(ruc="1234567890001").validate()
+        for (ruc in listOf("", "0000000000000", "0000000000001", "1234567890123", "1790012345002", "179001234500", "17900123450011", "1790012345A01", "179-012345001"))
             assertEquals("INVALID_RUC", assertFailsWith<Problem> { profile().copy(ruc=ruc).validate() }.code)
     }
     @Test fun `normalization trims without changing legal spelling or phone`() {
@@ -24,8 +24,9 @@ class BusinessProfileTest {
         for(p in listOf(profile().copy(legalName=" "),profile().copy(activity=""),profile().copy(contactName=""),profile().copy(province=""),profile().copy(city=""),profile().copy(address=""),profile().copy(legalName="x".repeat(201)),profile().copy(address="x".repeat(251)),profile().copy(contactName="Ana\nTest")))
             assertEquals("INVALID_BUSINESS_PROFILE",assertFailsWith<Problem>{p.validate()}.code)
     }
-    @Test fun `contact email rejects missing parts and controls`() {
-        for(email in listOf("", "ana@", "ana@example", "ana @example.test", "ana\n@example.test"))
+    @Test fun `optional legacy email rejects malformed values and controls`() {
+        profile().copy(email="").validate()
+        for(email in listOf("ana@", "ana@example", "ana @example.test", "ana\n@example.test"))
             assertEquals("INVALID_EMAIL",assertFailsWith<Problem>{profile().copy(email=email).validate()}.code)
     }
     @Test fun `phone permits international formatting but rejects unusable contacts`() {

@@ -38,7 +38,7 @@ export function productionGuard(env=process.env) {
   privateFile(dbPath,false);
   const db=new DatabaseSync(dbPath,{readOnly:true});
   try {
-    if(db.prepare('PRAGMA user_version').get().user_version!==8)throw new Error('PRODUCTION_SCHEMA_CHANGE_REQUIRES_PLANNED_MIGRATION');
+    if(db.prepare('PRAGMA user_version').get().user_version!==9)throw new Error('PRODUCTION_SCHEMA_CHANGE_REQUIRES_PLANNED_MIGRATION');
     const agency=db.prepare("SELECT id FROM accounts WHERE kind='AGENCY' ORDER BY id LIMIT 1").get();
     if(!agency||hash(agency.id)!==seal.portal.agency_id)throw new Error('PRODUCTION_DATABASE_CHANGED');
   }finally{db.close();}
