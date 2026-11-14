@@ -1,6 +1,6 @@
-# Lúmina v028 / Loyalty v067
+# Lúmina v029 / Loyalty v068
 
-A shared daily workspace: request progress, direct delivery review, scoped search and accurate queues for owners, collaborators and agency staff. [Installation and validation](docs/lumina-workspace-v067.md).
+Business accounts, private content files with versioned review, useful notices, clear saved permissions and comparable metrics. [Installation and validation](docs/lumina-operations-v068.md). [Installed Wallet continuity](docs/wallet-continuity-v068.md). [Social API readiness](docs/social-sync-readiness-v068.md).
 
 Open `/` for the agency website, `/login` for account entry and `/services` as an owner to manage available services. Reading these pages never activates a service or changes a Wallet connection.
 

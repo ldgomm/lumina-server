@@ -1,3 +1,4 @@
+import { createFileStore } from '../content/file-store.mjs';
 import { existsSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { setupCode } from '../access/accounts.mjs';
@@ -29,7 +30,7 @@ const key = loadKey(directory,exists);
 const db = openDatabase(databasePath);
 const readiness=production?()=>productionReadiness(db,loyaltyUrl,process.env.SOURCE_SHA):null;
 if(readiness)try{await readiness();}catch(error){db.close();throw error;}
-const server = createPortal({db,key,loyaltyUrl,publicOrigin,integration,readiness});
+const server = createPortal({db,key,loyaltyUrl,publicOrigin,integration,readiness,fileStore:createFileStore(join(directory,'uploads'))});
 server.on('error',error=>{
   db.close();
   process.stderr.write(error.code==='EADDRINUSE' ? 'El puerto de Lúmina ya está ocupado.\n' : 'No se pudo iniciar Lúmina.\n');

@@ -33,3 +33,5 @@ if(requestDetail){
   const error=requestDetail.querySelector('[data-detail-error]');
   if(error)reveal(error);else fromHash();
 }
+
+for(const form of document.querySelectorAll('[data-file-upload]'))form.addEventListener('submit',event=>{const file=form.querySelector('[type=file]').files[0],status=form.querySelector('[data-upload-status]');if(file&&file.size>100*1024*1024){event.preventDefault();status.hidden=false;status.textContent='El archivo supera los 100 MB. Selecciona uno más pequeño.';return;}status.hidden=false;status.textContent='Subiendo archivo… Mantén esta página abierta.';form.querySelector('button[type=submit],button:not([type])')?.setAttribute('disabled','');});

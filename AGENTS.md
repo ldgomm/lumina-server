@@ -1,5 +1,19 @@
 # Loyalty
 
+## Lúmina v029 / Loyalty v068 — business operations and continuity evidence
+
+- Baseline: installed v028/v067, commit 719cb09910352fdef9e36220a218476fded60902. This section supersedes previous release and gate counts.
+- SQLite011 is additive: private file metadata, version comments and per-account notification state. Preserve every existing SQL migration and all native Kotlin/Wallet resources. PostgreSQLV017 and Wallet representation34 are unchanged.
+- Uploaded files live outside releases under the private persistent data directory. Enforce tenant/request/actor access on every read, including ranges. Revalidate upload authorization after streaming, use CSRF/revision/idempotency, and never trust a filename or submitted MIME type. New delivery evidence invalidates approval. Count assets, not versions, as deliverables.
+- Backups must include and verify every file referenced by the SQLite snapshot. Do not treat metadata-only backup as complete once direct uploads exist. Retain original keys, domains, pass IDs, serials, tenant links and transaction history.
+- Production requires schema11 and a compatible identity seal. Never overwrite or bypass a pre-existing seal. Do not roll back to unmodified schema10-only binaries or restore old data over later transactions. This development installer does not perform a production transition.
+- Business account totals distinguish agreements from ledger debt; no banking debit is implied. Failed balance retrieval must not display zero. Preserve existing terms and consent.
+- Notification seen state is per account and meaningful item revision. GET stays read-only. Financial notices remain owner-only; no mail/push integration is implied.
+- Metric comparisons use matched publications and actual prior cuts. Unknown is not zero. Manual source, staleness and comparison coverage stay visible. No unapproved external-account integration.
+- Show effective saved cashier/branch/grant abilities in one summary. Agency business consultation remains read-only; operations use agency routes and the real actor. Revocation remains immediate.
+- Gates: 35 suites / 397 portal tests, 185 Python, 312 native unit/HTTP, 347 PostgreSQL; Docker staging and gateway before local commit, no push. 26 DOM suites and browser fixture QA are separate from native/device tests.
+- Continuity capture/compare is read-only and must always leave physical device status PENDING. See docs/wallet-continuity-v068.md. Terminal stays RESULTADO plus the URL after confirmed startup.
+
 ## Lúmina v028 / Loyalty v067 — daily workspace and delivery inbox
 
 - Baseline: installed v027/v066, commit 5c98f4a6aa878141226c4b4a220d3ea1f6cb7f33. This section supersedes earlier release and gate counts.

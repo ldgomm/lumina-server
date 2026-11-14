@@ -27,3 +27,5 @@
 @media(prefers-reduced-motion:reduce){.service-choice{transition:none}}
 
 @media(max-width:480px){.content-brand strong{font-size:20px}.content-brand{gap:8px}.content-brand>span{width:28px;height:34px}.content-header{gap:10px}}
+
+.notification-list{display:grid;gap:14px}.notification-card{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:22px;border:1px solid #dce5f0;border-left:4px solid #4778b7;border-radius:14px;background:#f5f8fc}.notification-card h3{margin:6px 0}.notification-card p{margin:8px 0 0;color:#52657d}.notification-card.is-seen{border-left-color:#dce5f0;background:white}.notification-card form{margin:0}.notification-card small{color:#365877}

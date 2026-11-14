@@ -15,7 +15,7 @@ export function securityHeaders(res, cashier = false, management = false) {
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('X-Frame-Options',management?'SAMEORIGIN':'DENY');
   res.setHeader('Permissions-Policy',`camera=${cashier ? '(self)' : '()'}, microphone=(), geolocation=()`);
-  res.setHeader('Content-Security-Policy',`default-src 'none'; script-src 'self'; style-src 'self'${cashier ? " 'unsafe-inline'" : ""}; img-src 'self' data: blob:; connect-src 'self'; media-src blob:; frame-src ${management?"'self'":"'none'"}; frame-ancestors ${management?"'self'":"'none'"}; base-uri 'none'; form-action 'self'`);
+  res.setHeader('Content-Security-Policy',`default-src 'none'; script-src 'self'; style-src 'self'${cashier ? " 'unsafe-inline'" : ""}; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; frame-src ${management?"'self'":"'none'"}; frame-ancestors ${management?"'self'":"'none'"}; base-uri 'none'; form-action 'self'`);
 }
 export function send(res,status,body,type = 'text/html; charset=utf-8') {
   res.writeHead(status,{'Content-Type':type});

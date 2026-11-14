@@ -38,19 +38,19 @@ export function analytics(db, actor, companyId, filters) {
   const start = localInstant(from + 'T00:00','inicio');
   const end = new Date(Date.parse(localInstant(to + 'T00:00','fin')) + 86400000).toISOString();
   const channels = socialChannels.filter(channel => can(actor,channel));
-  const summary = new Map(channels.map(channel => [channel,{channel,publications:0,measured:0,values:{},changes:{},coverage:{}}]));
+  const summary = new Map(channels.map(channel => [channel,{channel,publications:0,measured:0,values:{},changes:{},coverage:{},baseline:{},fresh:0,stale:0,unmeasured:0}]));
   for (const item of summary.values()) {
     for (const key of metricsKeys) {
-      item.values[key] = 0n;
+      item.values[key] = 0n; item.baseline[key] = 0n;
       item.changes[key] = 0n;
       item.coverage[key] = {observed:0,comparable:0};
     }
   }
   const policy=requestAccessSql(actor);
-  const pairs = db.all(`SELECT b.channel,r.channel AS request_channel,r.type AS request_type,
+  const pairs = db.all(`SELECT b.id publication_id,b.piece_id,b.url,b.published_at,r.id request_id,x.title,b.channel,r.channel AS request_channel,r.type AS request_type,
     m.id AS current_id,m.views,m.likes,m.comments,m.shares,m.reach,m.observed_at,
     p.views AS prev_views,p.likes AS prev_likes,p.comments AS prev_comments,
-    p.shares AS prev_shares,p.reach AS prev_reach
+    p.shares AS prev_shares,p.reach AS prev_reach,p.observed_at AS previous_at
     FROM publications b JOIN pieces x ON x.company_id=b.company_id AND x.id=b.piece_id
     JOIN requests r ON r.company_id=x.company_id AND r.id=x.request_id
     LEFT JOIN social_metrics m ON m.id=(SELECT id FROM social_metrics WHERE company_id=b.company_id
@@ -58,11 +58,15 @@ export function analytics(db, actor, companyId, filters) {
     LEFT JOIN social_metrics p ON p.id=(SELECT id FROM social_metrics WHERE company_id=b.company_id
       AND publication_id=b.id AND source='MANUAL' AND observed_at<? ORDER BY observed_at DESC LIMIT 1)
     WHERE b.company_id=? AND b.published_at<? AND x.status<>'CANCELLED' AND ${policy.sql}`,start,end,start,companyId,end,...policy.params);
+  const freshness=[],reference=Math.min(Date.now(),Date.parse(end)-1);
   for (const row of pairs) {
     const result = summary.get(row.channel);
     if (!result || !can(actor,row.request_channel) ||
       (actor.kind === 'COLLABORATOR' && ['PLAN','QUOTE','COURTESY'].includes(row.request_type))) continue;
     result.publications++;
+    const latest=row.observed_at||row.previous_at,age=latest?Math.max(0,Math.floor((reference-Date.parse(latest))/86400000)):null;
+    const state=age===null?'unmeasured':age>=7?'stale':'fresh';result[state]++;
+    freshness.push({id:row.publication_id,piece_id:row.piece_id,request_id:row.request_id,title:row.title,channel:row.channel,url:row.url,latest,age,state});
     if (!row.current_id) continue;
     result.measured++;
     for (const key of metricsKeys) {
@@ -71,10 +75,10 @@ export function analytics(db, actor, companyId, filters) {
       result.coverage[key].observed++;
       if (row['prev_' + key] === null) continue;
       result.changes[key] += BigInt(row[key]) - BigInt(row['prev_' + key]);
-      result.coverage[key].comparable++;
+      result.coverage[key].comparable++; result.baseline[key]+=BigInt(row['prev_'+key]);
     }
   }
-  return { from, to, rows: [...summary.values()] };
+  return { from, to, rows: [...summary.values()],freshness:freshness.sort((a,b)=>({unmeasured:0,stale:1,fresh:2})[a.state]-({unmeasured:0,stale:1,fresh:2})[b.state]||(a.latest||'').localeCompare(b.latest||'')||a.id.localeCompare(b.id)) }; 
 }
 function mapsLocation(db, companyId, id) {
   const location = db.get('SELECT * FROM maps_locations WHERE company_id=? AND id=?',companyId,id || '');

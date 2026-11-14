@@ -10,7 +10,7 @@ export function dataDirectory() {
   const stat = lstatSync(folder);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Selecciona una carpeta de datos privada de Lúmina.');
   const files = readdirSync(folder);
-  const known = ['agency.key','agency.sqlite','agency.sqlite-wal','agency.sqlite-shm','migrations'];
+  const known = ['agency.key','agency.sqlite','agency.sqlite-wal','agency.sqlite-shm','migrations','uploads'];
   if (files.some(file => !known.includes(file))) throw new Error('Usa una carpeta exclusiva para los datos de Lúmina.');
   chmodSync(folder, 0o700);
   return folder;
@@ -20,7 +20,7 @@ export function openDatabase(path) {
   db.function('search_text', { deterministic: true }, value => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase());
   db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (version > 10) { db.close(); throw new Error('Esta versión de Lúmina no reconoce el esquema de datos.'); }
+  if (version > 11) { db.close(); throw new Error('Esta versión de Lúmina no reconoce el esquema de datos.'); }
   const transaction = work => {
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -38,7 +38,7 @@ export function openDatabase(path) {
       db.exec('PRAGMA user_version=1');
     });
   }
-  for (const [target,file] of [[2,'002_unified.sql'],[3,'003_onboarding.sql'],[4,'004_packages.sql'],[5,'005_request_contact.sql'],[6,'006_black_friday.sql'],[7,'007_wallet_onboarding.sql'],[8,'008_business_control.sql'],[9,'009_identity_services.sql'],[10,'010_person_contact.sql']]) {
+  for (const [target,file] of [[2,'002_unified.sql'],[3,'003_onboarding.sql'],[4,'004_packages.sql'],[5,'005_request_contact.sql'],[6,'006_black_friday.sql'],[7,'007_wallet_onboarding.sql'],[8,'008_business_control.sql'],[9,'009_identity_services.sql'],[10,'010_person_contact.sql'],[11,'011_delivery_workspace.sql']]) {
     if (db.prepare('PRAGMA user_version').get().user_version >= target) continue;
     // One coherent private snapshot of the original database precedes all pending migrations.
     if (version > 0 && path !== ':memory:' && target===version+1) {

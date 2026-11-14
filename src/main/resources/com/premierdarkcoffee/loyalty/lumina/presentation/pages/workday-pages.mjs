@@ -1,7 +1,7 @@
 import { can } from '../../access/accounts.mjs';
 import { agendaViews } from '../../production/agenda.mjs';
-import { attentionKinds } from '../../production/overview.mjs';
-import { badge, button, card, esc, hidden, input, localLink, timestamp } from './components.mjs';
+import { notificationKinds as attentionKinds } from '../../production/notifications.mjs';
+import { badge, button, card, displayAmount, esc, form, hidden, input, localLink, timestamp } from './components.mjs';
 import { icon } from './icons.mjs';
 
 export function paging({url,path,params,page,total,size=20}) {
@@ -15,12 +15,15 @@ function search(url,path,q,view,caption,viewKey='view') {
   const action=new URL(url(path),'http://localhost');
   return `<form class="workday-search" method="get" action="${esc(action.pathname)}">${[...action.searchParams].map(([k,v])=>hidden(k,v)).join('')}${hidden(viewKey,view)}${input('q',caption,'search','maxlength="100"',q)}${button('Buscar','secondary')}${q?localLink(url(path,{view:view}),'Limpiar búsqueda','btn secondary'):''}</form>`;
 }
-export function attentionPage({data,url}) {
-  const {view,q,rows,counts,total,page}=data;
-  return tabs(url,'/attention',{all:'Todo',...attentionKinds},view,counts,{q})+
-    card('Necesita tu atención',search(url,'/attention',q,view,'Buscar pendiente')+
-    (rows.length?`<div class="attention-list workday-attention">${rows.map(row=>`<a href="${esc(url(row.path))}"><span><small>${esc(attentionKinds[row.kind])}</small><strong>${esc(row.title)}</strong><small>${esc(timestamp(row.created_at))}</small></span><span class="workday-cta">Revisar ${icon('arrow')}</span></a>`).join('')}</div>`:
-      `<div class="workday-empty">${icon('check')}<h3>${q?'Sin coincidencias':'Todo al día'}</h3><p>${q?'Prueba con otro nombre o limpia la búsqueda.':'No hay pendientes en esta vista.'}</p></div>`)+paging({url,path:'/attention',params:{view:view,q},page,total}));
+export function attentionPage({actor,data,url}) {
+  const {view,q,rows,counts,total,page,state='all',newCount=0,billingUnavailable=false}=data;
+  const searchForm=search(url,'/attention',q,view,'Buscar pendiente').replace('<form ',`<form `).replace(hidden('view',view),hidden('view',view)+hidden('state',state));
+  return `<div class="workday-heading"><p><strong>${newCount}</strong> ${newCount===1?'aviso nuevo':'avisos nuevos'}</p><nav class="actions" aria-label="Estado del aviso">${[['all','Todos'],['new','Nuevos'],['seen','Vistos']].map(([key,name])=>localLink(url('/attention',{view,q,state:key}),name,key===state?'btn':'btn secondary')).join('')}</nav></div>`+
+    tabs(url,'/attention',{all:'Todo',...attentionKinds},view,counts,{q,state})+
+    (billingUnavailable?'<p class="notice">Los avisos de pago no están disponibles ahora. <a href="/billing">Consultar cuenta</a></p>':'')+
+    card('Necesita tu atención',searchForm+
+    (rows.length?`<div class="notification-list">${rows.map(row=>`<article class="notification-card${row.seen?' is-seen':''}"><div><small>${esc(attentionKinds[row.kind])} · ${row.seen?'Visto':'Nuevo'}</small><h3>${esc(row.title)}</h3>${row.amount?`<strong>${esc(displayAmount(row.amount))}</strong>`:''}<p>${esc(timestamp(row.created_at))}${row.detail?' · '+esc(row.detail):''}</p></div><div class="actions">${localLink(url(row.path),row.kind==='visits'?'Ver grabación':row.kind==='payments'?'Ver cuenta':'Revisar','btn secondary')}${!row.seen&&actor?form(url('/attention/seen'),actor,hidden('key',row.key)+hidden('fingerprint',row.fingerprint)+button('Marcar como visto','secondary')):''}</div></article>`).join('')}</div>`:
+      `<div class="workday-empty">${icon('check')}<h3>${q?'Sin coincidencias':state==='new'?'Sin avisos nuevos':'Todo al día'}</h3><p>${q?'Prueba con otro nombre o limpia la búsqueda.':'No hay pendientes en esta vista.'}</p></div>`)+paging({url,path:'/attention',params:{view,q,state},page,total}));
 }
 export function workdayAgenda({actor,data,url,global=false,viewKey='view'}) {
   const {view,q,rows,counts,page,total}=data,path=global?'/agency-calendar':'/calendar';

@@ -164,7 +164,7 @@ test('SQLite v3 a v4: respaldo privado, contratos y vínculos existentes intacto
     raw.prepare('INSERT INTO contracts(id,company_id,plan_id,agreed_minor,starts_on,ends_before,created_at) VALUES(?,?,?,1000,?,?,?)').run(contract,company,planId,'2026-10-01','2026-11-01','2026-10-01');
     const prior=raw.prepare('SELECT * FROM contracts').get(),wallet=raw.prepare('SELECT * FROM wallet_access').all();raw.close();
     let db=openDatabase(path);const migrated=db.get('SELECT * FROM contracts');
-    for(const key of Object.keys(prior))assert.equal(migrated[key],prior[key]);assert.equal(migrated.units,1);assert.deepEqual(db.all('SELECT * FROM wallet_access'),wallet);assert.equal(db.get('PRAGMA user_version').user_version,10);db.close();
+    for(const key of Object.keys(prior))assert.equal(migrated[key],prior[key]);assert.equal(migrated.units,1);assert.deepEqual(db.all('SELECT * FROM wallet_access'),wallet);assert.equal(db.get('PRAGMA user_version').user_version,11);db.close();
     const files=readdirSync(join(dir,'migrations'));assert.equal(files.length,1);assert.equal(statSync(join(dir,'migrations',files[0])).mode&0o777,0o600);
     const backup=new DatabaseSync(join(dir,'migrations',files[0]),{readOnly:true});assert.equal(backup.prepare('PRAGMA user_version').get().user_version,3);assert.deepEqual(backup.prepare('SELECT * FROM contracts').get(),prior);backup.close();
     db=openDatabase(path);assert.deepEqual(db.all('PRAGMA foreign_key_check'),[]);db.close();assert.equal(readdirSync(join(dir,'migrations')).length,1);

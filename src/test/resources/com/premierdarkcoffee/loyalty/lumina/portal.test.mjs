@@ -71,8 +71,8 @@ test('una solicitud conserva fecha, visita, evidencia, aprobación y estadístic
   assert.equal((await admin.post(selected(piecePath+'/measure',id),{publication:pub.id,observed:date(2),views:'35'})).status,409);
   const report = await client.get('/reports?from='+oldDate(5)+'&to='+oldDate(0));
   assert.equal(report.status,200);
-  assert.match(report.body,/\+10 · 1 comparadas/);
-  assert.match(report.body,/\+5 · 1 comparadas/);
+  assert.match(report.body,/\+10[\s\S]*1 comparadas/);
+  assert.match(report.body,/\+5<br><small>1 comparadas · sin base para porcentaje/);
   assert.match(report.body,/Fuente manual/);
   const {client:other} = await owner(world,'Otro negocio','3');
   assert.equal((await other.get(path+'?company='+id)).status,404);

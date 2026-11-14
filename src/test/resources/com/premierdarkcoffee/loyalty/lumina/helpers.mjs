@@ -15,9 +15,9 @@ export async function listen(server) {
 export function close(server) {
   return new Promise((resolve,reject)=>server.close(error=>error ? reject(error) : resolve()));
 }
-export async function portal(t, loyaltyUrl = 'http://127.0.0.1:65533', integration = {}) {
+export async function portal(t, loyaltyUrl = 'http://127.0.0.1:65533', integration = {},options = {}) {
   const db = openDatabase(':memory:');
-  const server = createPortal({db,key:randomBytes(32),loyaltyUrl,integration});
+  const server = createPortal({db,key:randomBytes(32),loyaltyUrl,integration,...options});
   const origin = await listen(server);
   t.after(async()=>{ await close(server); db.close(); });
   return {db,origin,session:()=>browser(origin)};

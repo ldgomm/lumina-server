@@ -4,6 +4,7 @@
 All credentials live in an explicit private JSON file outside the checkout/releases.
 Run --help. The CLI prints one result; operational details are retained privately.
 """
+from content_backup import backup_files, verify_files, file_digest
 import argparse
 import base64
 import contextlib
@@ -121,7 +122,7 @@ def sql_hashes(root=SQL_ROOT):
 def observe(c):
     n=c['native'];a=c['portal'];folder=Path(a['LUMINA_DATA_DIR'])
     with sqlite3.connect((folder/'agency.sqlite').as_uri()+'?mode=ro',uri=True) as db:
-        need(db.execute('PRAGMA user_version').fetchone()[0]==10,'PORTAL_MIGRATION_REQUIRED')
+        need(db.execute('PRAGMA user_version').fetchone()[0]==11,'PORTAL_MIGRATION_REQUIRED')
         agency=db.execute("SELECT id FROM accounts WHERE kind='AGENCY' ORDER BY id LIMIT 1").fetchone()
         need(agency,'AGENCY_SETUP_REQUIRED')
         need(db.execute('PRAGMA quick_check').fetchone()[0]=='ok','PORTAL_DATABASE_CHECK_FAILED')
@@ -226,13 +227,14 @@ def backup(c):
     with sqlite3.connect((a/'agency.sqlite').as_uri()+'?mode=ro',uri=True) as source,sqlite3.connect(folder/'agency.sqlite') as target:
         source.backup(target);need(target.execute('PRAGMA integrity_check').fetchone()[0]=='ok','SQLITE_BACKUP_FAILED')
     os.chmod(folder/'agency.sqlite',0o600)
+    backup_files(folder/'agency.sqlite',a/'uploads',folder/'uploads.tar',need)
     env=pg_env(c);env.pop('PGOPTIONS',None)
     run(['pg_dump','--format=custom','--no-owner','--no-acl','--file',str(folder/'wallet.dump')],env,timeout=1800)
     os.chmod(folder/'wallet.dump',0o600)
     originals={'agency.key':a/'agency.key','production.json':Path(c['_path']),'continuity.json':Path(c['identity_file'])}
     originals.update({k:Path(c['native'][k]) for k in MATERIAL})
     for name,path in originals.items():write_private(folder/name,private(path).read_bytes(),True)
-    manifest['files']={p.name:digest(p.read_bytes()) for p in folder.iterdir() if p.is_file()}
+    manifest['files']={p.name:file_digest(p) for p in folder.iterdir() if p.is_file()}
     save_json(folder/'backup.json',manifest,True)
     return {'backup':str(folder),'restore_test':'PENDING'}
 
@@ -240,9 +242,10 @@ def verify_backup(c,folder):
     folder=private(folder,True);m=json.loads(private(folder/'backup.json').read_text());sealed=check(c)
     need(m['seal_sha']==digest(json.dumps(sealed,sort_keys=True)),'BACKUP_IDENTITY_MISMATCH')
     for name,sha in m['files'].items():
-        need(Path(name).name==name and digest(private(folder/name).read_bytes())==sha,'BACKUP_CORRUPT')
+        need(Path(name).name==name and file_digest(private(folder/name))==sha,'BACKUP_CORRUPT')
     with sqlite3.connect((folder/'agency.sqlite').as_uri()+'?mode=ro',uri=True) as db:
         need(db.execute('PRAGMA integrity_check').fetchone()[0]=='ok','SQLITE_BACKUP_CORRUPT')
+    verify_files(folder/'agency.sqlite',folder/'uploads.tar',need)
     # Restore only into a fresh, network-isolated container with no host ports or live volume.
     container='lumina-restore-'+uuid.uuid4().hex
     image=c.get('postgres_image','postgres:16')
@@ -277,7 +280,7 @@ def gateway(c,slot,sha):
     conf=conf.replace('pid /tmp/nginx.pid;','pid '+str(runtime/'gateway.pid')+';').replace('listen 8080;','listen 127.0.0.1:8101;')
     for name in ('client-body','proxy','fastcgi','uwsgi','scgi'):
         conf=conf.replace('/tmp/'+name+';',str(runtime/('nginx-'+name))+';')
-    conf=conf.replace('http {','http {\n  server {\n    listen 127.0.0.1:8100;\n    location / {\n      proxy_pass http://127.0.0.1:'+str(portal_port)+';\n      proxy_set_header Host $http_host;\n      proxy_set_header Connection "";\n      proxy_http_version 1.1;\n      proxy_connect_timeout 5s;\n      proxy_read_timeout 45s;\n    }\n  }',1)
+    conf=conf.replace('http {','http {\n  server {\n    listen 127.0.0.1:8100;\n    location / {\n      proxy_pass http://127.0.0.1:'+str(portal_port)+';\n      proxy_set_header Host $http_host;\n      proxy_set_header Connection "";\n      proxy_http_version 1.1;\n      client_max_body_size 101m;\n      client_body_timeout 300s;\n      proxy_request_buffering off;\n      proxy_connect_timeout 5s;\n      proxy_read_timeout 300s;\n    }\n  }',1)
     return conf
 
 def prepare_gateway(c,release,slot):
@@ -299,7 +302,7 @@ def switch(c,release,slot,backup_folder):
     need(verified['backup_manifest']==digest(private(Path(backup_folder)/'backup.json').read_bytes()),'BACKUP_MANIFEST_CHANGED')
     backup_manifest=json.loads(private(Path(backup_folder)/'backup.json').read_text())
     for name,sha in backup_manifest['files'].items():
-        need(Path(name).name==name and digest(private(Path(backup_folder)/name).read_bytes())==sha,'BACKUP_CORRUPT')
+        need(Path(name).name==name and file_digest(private(Path(backup_folder)/name))==sha,'BACKUP_CORRUPT')
     lock=runtime/'release.lock'
     with lock.open('a') as f:
         import fcntl

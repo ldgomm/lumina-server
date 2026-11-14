@@ -24,7 +24,7 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v067'
+VERSION = 'v068'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.production', '.lumina-digital', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
@@ -552,7 +552,7 @@ def main(arguments=None, updates=None, origin=None):
         for attempt in (1, 2):
             before = snapshot(project)
             prefix = 'attempt_'+str(attempt)+'_'
-            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=170, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
+            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=185, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
             if workflow:
                 report['status'] = 'WORKFLOW_TESTS_FAILED_NO_COMMIT'
                 break

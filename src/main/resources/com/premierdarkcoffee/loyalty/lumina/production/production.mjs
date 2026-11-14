@@ -230,7 +230,7 @@ export function addEvidence(db, actor, company, request, piece, data) {
       'Este enlace ya está adjunto al entregable.',409);
     db.run('INSERT INTO evidence VALUES(?,?,?,?,?,?)',uuid(),company.id,piece.id,label,url,now());
     // A review opened before a new attachment cannot approve the changed version.
-    db.run('UPDATE pieces SET revision=revision+1 WHERE id=?',piece.id);
+    db.run("UPDATE pieces SET revision=revision+1,status=CASE WHEN status='APPROVED' THEN 'REVIEW' ELSE status END WHERE id=?",piece.id);
     event(db,actor,company.id,'REQUEST',request.id,'EVIDENCIA_ADJUNTADA',label,request.channel);
   });
 }

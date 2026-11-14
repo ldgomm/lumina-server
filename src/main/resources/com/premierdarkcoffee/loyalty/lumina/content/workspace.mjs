@@ -37,7 +37,8 @@ export function contentData(db,actor,company,query) {
   if(['production','reviews','deliveries'].includes(view)) {
     const state=view==='reviews'?review:view==='deliveries'?"p.status='DELIVERED'":production;
     sql=`SELECT p.*,r.title AS request_title,r.type AS request_type,r.status AS request_status,c.name AS company_name,
-      (SELECT count(*) FROM evidence e WHERE e.company_id=p.company_id AND e.piece_id=p.id) AS evidence_count,
+      ((SELECT count(*) FROM evidence e WHERE e.company_id=p.company_id AND e.piece_id=p.id)
+        +(SELECT count(DISTINCT f.asset_id) FROM content_files f WHERE f.company_id=p.company_id AND f.piece_id=p.id)) AS evidence_count,
       (SELECT group_concat(platform) FROM request_platforms rp WHERE rp.company_id=r.company_id AND rp.request_id=r.id) AS targets
       FROM ${pieceFrom} WHERE ${pieceWhere} AND ${state} ORDER BY p.created_at DESC,p.id DESC`;
   } else if(view==='publications') {

@@ -1,3 +1,4 @@
+import { deliveryFiles } from './delivery-files.mjs';
 import { can } from '../../access/accounts.mjs';
 import { canRequest } from '../../access/content-policy.mjs';
 import { compatibleContentQuota, contentName } from '../../content/service-options.mjs';
@@ -65,7 +66,7 @@ function pieceView({actor,base,request,piece,feedback}) {
   const review=actor.kind!=='AGENCY'&&request.status==='PRODUCTION'&&piece.status==='REVIEW'&&canRequest(actor,request,'APPROVE');
   const editOptions=piece.status==='APPROVED'?['APPROVED','DELIVERED','CANCELLED']:['PRODUCTION','REVIEW','CANCELLED'];
   const files=piece.evidence.length?`<ul class="delivery-files">${piece.evidence.map(item=>`<li><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${icon('content')}<span><strong>${esc(item.label)}</strong><small>Abrir archivo o enlace ↗</small></span></a></li>`).join('')}</ul>`:
-    `<p class="muted">${review?'Lúmina aún no ha adjuntado archivos a esta entrega.':'Los archivos aparecerán aquí.'}</p>`;
+    piece.files?.length?'':`<p class="muted">Los archivos aparecerán aquí.</p>`;
   const publicationBody=piece.publications.filter(pub=>can(actor,pub.channel)).map(pub=>publicationView({actor,route,pub,piece,feedback,currentUrl})).join('');
   const canPublish=request.channel==='SOCIAL'&&agency(actor)&&request.status!=='CANCELLED'&&['APPROVED','DELIVERED'].includes(piece.status);
   const publications=publicationBody||canPublish?`<details class="disclosure detail-publications"${publish.failed||feedback?.action===prefix+'/measure'?' open':''}><summary>Publicaciones y métricas${piece.publications.length?' · '+piece.publications.length:''}</summary><div>
@@ -74,7 +75,7 @@ function pieceView({actor,base,request,piece,feedback}) {
     ${publicationBody}</div></details>`:'';
   return `<article class="delivery-card${review?' delivery-review':''}" id="piece-${piece.id}" aria-labelledby="title-${piece.id}">
     <div class="split"><h3 id="title-${piece.id}">${esc(piece.title)}</h3>${badge(piece.status)}</div>
-    ${piece.recorded_at?`<p class="muted">Grabado: ${esc(timestamp(piece.recorded_at))}</p>`:''}${piece.observations?`<p class="prewrap">${esc(piece.observations)}</p>`:''}${files}
+    ${piece.recorded_at?`<p class="muted">Grabado: ${esc(timestamp(piece.recorded_at))}</p>`:''}${piece.observations?`<p class="prewrap">${esc(piece.observations)}</p>`:''}${files}${deliveryFiles({actor,request,piece,route,base,editable,feedback})}
     ${review?`<section class="delivery-decision" aria-label="Revisar entregable"><h4>¿Está listo para entregar?</h4>
       ${operationForm(actor,route('/review'),hidden('status','APPROVED')+revisionField(approve,piece.revision)+button('Aprobar entrega'),approve,currentUrl,'approve-delivery')}
       ${operationPanel('Pedir cambios',operationForm(actor,route('/review'),hidden('status','PRODUCTION')+revisionField(changes,piece.revision)+
@@ -82,7 +83,7 @@ function pieceView({actor,base,request,piece,feedback}) {
     ${editable?operationPanel('Actualizar entregable',operationForm(actor,route('/edit'),revisionField(edit,piece.revision)+
       `<div class="fields two">${select('status','Estado',by(editOptions),edit.value('status',piece.status))}${request.channel==='SOCIAL'?dateField('recorded','Fecha de grabación',edit,localValue(piece.recorded_at),false):hidden('recorded',edit.value('recorded',localValue(piece.recorded_at)))}</div>`+
       field(edit,'notes','Notas de producción','maxlength="2000" rows="3"',piece.observations)+button('Guardar entregable'),edit,currentUrl),edit,'edit-'+piece.id):''}
-    ${agency(actor)&&piece.status!=='CANCELLED'&&request.status!=='CANCELLED'?operationPanel('Adjuntar un archivo o enlace',operationForm(actor,route('/evidence'),revisionField(attach,piece.revision)+
+    ${agency(actor)&&piece.status!=='CANCELLED'&&request.status!=='CANCELLED'?operationPanel('Añadir enlace externo',operationForm(actor,route('/evidence'),revisionField(attach,piece.revision)+
       input('label','Nombre del archivo','text','required minlength="2" maxlength="100"',attach.value('label'))+
       input('url','Enlace al archivo','url','required maxlength="1500" placeholder="https://…"',attach.value('url'))+button('Guardar enlace'),attach,currentUrl),attach,'attach-'+piece.id):''}${publications}</article>`;
 }

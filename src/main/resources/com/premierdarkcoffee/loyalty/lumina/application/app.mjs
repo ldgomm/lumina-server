@@ -1,3 +1,6 @@
+import { fileDetails, saveFile, commentPiece } from '../content/deliverables.mjs';
+import { contractSummary } from '../presentation/pages/contract-summary.mjs';
+import { notifications, seeNotification } from '../production/notifications.mjs';
 import { accessShell } from '../presentation/pages/public-shell.mjs';
 import { homepage } from '../presentation/pages/homepage.mjs';
 import { canonicalTarget, legacyRedirectAllowed } from '../shared/routes.mjs';
@@ -104,7 +107,7 @@ const operations = {
   '/visits':addVisit, '/visits/close':finishVisit, '/pieces':addPiece,
 };
 const pieceOperations = {
-  edit:editPiece, review:reviewPiece, evidence:addEvidence, publication:addPublication, measure:addSocialMetric,
+  edit:editPiece, review:reviewPiece, evidence:addEvidence, publication:addPublication, measure:addSocialMetric, comment:commentPiece,
 };
 function teamInvitation(db,actor,id,code) {
   const member = teamMember(db,actor,id);
@@ -112,7 +115,7 @@ function teamInvitation(db,actor,id,code) {
 }
 function getRequestPage(db,actor,company,url,request,feedback=null) {
   const pieces = db.all('SELECT * FROM pieces WHERE company_id=? AND request_id=? ORDER BY created_at,id',company.id,request.id)
-    .map(piece=>({
+    .map(piece=>({...fileDetails(db,company.id,piece.id),
       ...piece,
       evidence:db.all('SELECT * FROM evidence WHERE company_id=? AND piece_id=? ORDER BY created_at,id',company.id,piece.id),
       publications:publicationsFor(db,actor,company.id,piece.id),
@@ -127,13 +130,14 @@ function getRequestPage(db,actor,company,url,request,feedback=null) {
     body:requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan,feedback})};
 }
 
-export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {}, readiness = null }) {
+export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {}, readiness = null, fileStore = null }) {
+  let uploadsInProgress=0;
   const bridge = createLoyaltyBridge({db,key,origin:loyaltyUrl});
   const wallets = createWalletWorkspace({db,key,origin:loyaltyUrl,integration});
   const commercialWork=new Map();
   const commercialTurn=async(companyId,work)=>{const previous=commercialWork.get(companyId)||Promise.resolve();const next=previous.catch(()=>{}).then(work);commercialWork.set(companyId,next);try{return await next;}finally{if(commercialWork.get(companyId)===next)commercialWork.delete(companyId);}};
   const controls=createBusinessControlSync({db,remote:wallets.controlRemote,ensureCompany:wallets.ensureCompany});
-  const server=createServer({requestTimeout:20_000,headersTimeout:10_000},async (req,res) => {
+  const server=createServer({requestTimeout:300_000,headersTimeout:10_000},async (req,res) => {
     let actor = null;
     let company = null;
     let path = '/';
@@ -295,6 +299,41 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const name = path.slice('/cashier-assets/'.length);
         return send(res,200,await bridge.asset(actor,name),cashierAssets[name]);
       }
+      const uploadMatch=path.match(/^\/requests\/([^/]+)\/pieces\/([^/]+)\/upload$/);
+      if(method==='POST'&&uploadMatch) {
+        requireThat(actor.kind==='AGENCY'&&agencyWork&&!actor.readOnlyCompany,'Solo Lúmina adjunta entregables desde Producción.',403);
+        requireThat(fileStore,'Las cargas de archivos aún no están configuradas.',503);
+        company=companyFor(db,actor,target.searchParams.get('company'));
+        requireOperating(db,company.id);
+        requireThat(isId(uploadMatch[1])&&isId(uploadMatch[2]),'Entregable no encontrado.',404);
+        getPiece(db,company.id,getRequest(db,actor,company.id,uploadMatch[1]).id,uploadMatch[2]);
+        limit(db,'upload:'+actor.id,30);
+        requireThat(uploadsInProgress<2,'Hay otras cargas en curso. Reintenta en un momento.',503);
+        uploadsInProgress++;
+        try {
+        const upload=await fileStore.receive(req);
+        let keep=false;
+        try {
+          requireThat(equal(actor.csrf,upload.fields._csrf),'El formulario venció. Abre la entrega y reintenta.',403);
+          await upload.commit();
+          actor=getSession(db,cookie);
+          requireThat(actor,'Tu sesión terminó. Ingresa nuevamente.',401);
+          actor={...actor,agencyWork,readOnlyCompany:false};
+          requireThat(equal(actor.csrf,upload.fields._csrf),'Tu sesión cambió. Reintenta desde la entrega.',403);
+          company=companyFor(db,actor,target.searchParams.get('company'));
+          const saved=saveFile(db,actor,company,uploadMatch[1],uploadMatch[2],upload);
+          keep=!saved.duplicate;
+          return redirect(res,pathFor(actor,company)('/requests/'+uploadMatch[1])+'#piece-'+uploadMatch[2]);
+        }finally{if(!keep)await upload.remove();}
+        }catch(issue){
+          if(!(issue instanceof Problem)||![400,409,413,415].includes(issue.status))throw issue;
+          actor=getSession(db,cookie);requireThat(actor&&actor.kind==='AGENCY','Tu sesión terminó. Ingresa nuevamente.',401);
+          actor={...actor,agencyWork,readOnlyCompany:false};company=companyFor(db,actor,target.searchParams.get('company'));
+          requireOperating(db,company.id);
+          const latest=getRequest(db,actor,company.id,uploadMatch[1]);
+          return render(getRequestPage(db,actor,company,pathFor(actor,company),latest,{action:'/pieces/'+uploadMatch[2]+'/upload',values:{},error:issue.message+' Selecciona el archivo de nuevo para reintentar.'}),issue.status);
+        }finally{uploadsInProgress--;}
+      }
       let data;
       if (method==='POST') {
         data = await readForm(req);
@@ -367,8 +406,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if(path==='/billing'&&method==='GET') {
         requireOwner(actor);company=companyFor(db,actor);
         const {offset,view}=billingView();
-        const account=company.loyalty_tenant?await wallets.account(actor,offset):emptyAccount(company,localDay());
-        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,account,'/billing','',{},{view})});
+        const contracts=contractsFor(db,company.id);
+        let account;
+        try{account=company.loyalty_tenant?await wallets.account(actor,offset):emptyAccount(company,localDay());}
+        catch(error){if(!(error instanceof Problem))throw error;return render({title:'Mi cuenta y pagos',body:card('Saldo no disponible','<p>No pudimos consultar los cargos y pagos. Tus registros se conservan.</p>'+localLink('/billing','Reintentar','btn secondary'))+contractSummary(contracts,localDay())},503);}
+        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,account,'/billing','',{},{view,contracts})});
       }
       const administration=path.match(/^\/admin\/businesses\/([0-9a-f-]{36})(?:\/(state|retry|payment|reverse|charge|void))?$/i);
       if(administration) {
@@ -378,7 +420,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const view=async(status=200)=>{
           company=companyFor(db,actor,company.id);
           let account=company.loyalty_tenant?null:emptyAccount(company,localDay());if(company.loyalty_tenant)try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
-          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
+          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{contracts:contractsFor(db,company.id),view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
         };
         if(method==='POST')try {
           let savedPayment=null;
@@ -541,10 +583,17 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (actor.kind!=='AGENCY' || companyId) company = companyFor(db,actor,companyId);
       const url = pathFor(actor,company);
-      if(path==='/attention') {
-        requireThat(method==='GET','Los pendientes se consultan desde esta vista.',405);
+      if(path==='/attention'||path==='/attention/seen') {
         requireThat(actor.kind!=='AGENCY','Esta bandeja corresponde al negocio.',403);
-        return render({title:'Pendientes',description:'Entregas, cotizaciones y propuestas listas para tu revisión.',body:attentionPage({data:attentionData(db,actor,company.id,target.searchParams),url})});
+        let account=null,billingUnavailable=false;
+        if(actor.kind==='OWNER'&&company.loyalty_tenant)try{account=await wallets.account(actor);}catch{billingUnavailable=true;}
+        if(path==='/attention/seen'){
+          requireThat(method==='POST','Acción no disponible.',405);
+          actor=getSession(db,cookie);requireThat(actor&&equal(actor.csrf,data._csrf),'Tu sesión cambió. Ingresa nuevamente.',403);
+          seeNotification(db,actor,company.id,data,account);return redirect(res,'/attention');
+        }
+        requireThat(method==='GET','Acción no disponible.',405);
+        return render({title:'Pendientes',description:'Lo que necesita tu atención.',body:attentionPage({actor,data:{...notifications(db,actor,company.id,target.searchParams,account),billingUnavailable},url})});
       }
       if (path==='/home' && method==='GET') {
         if(!actor.welcome_done)return redirect(res,'/welcome');
@@ -685,8 +734,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const [,requestId,rest] = requestMatch;
         const request = getRequest(db,actor,company.id,requestId);
         if (method==='GET' && !rest) return render(getRequestPage(db,actor,company,url,request));
+        const fileMatch=rest.match(/^\/files\/([^/]+)$/);
+        if(method==='GET'&&fileMatch&&isId(fileMatch[1])) {
+          const file=db.get('SELECT f.* FROM content_files f JOIN pieces p ON p.id=f.piece_id AND p.company_id=f.company_id WHERE f.id=? AND f.company_id=? AND p.request_id=?',fileMatch[1],company.id,request.id);
+          requireThat(file,'Archivo no encontrado.',404);requireThat(fileStore,'Las entregas no están disponibles.',503);
+          return await fileStore.serve(req,res,file);
+        }
         if (method==='POST') {
-          const pieceMatch = rest.match(/^\/pieces\/([^/]+)\/(edit|review|evidence|publication|measure)$/);
+          const pieceMatch = rest.match(/^\/pieces\/([^/]+)\/(edit|review|evidence|publication|measure|comment)$/);
           try {
             if (Object.hasOwn(operations,rest)) operations[rest](db,actor,company,request,data);
             else if (pieceMatch && isId(pieceMatch[1])) {

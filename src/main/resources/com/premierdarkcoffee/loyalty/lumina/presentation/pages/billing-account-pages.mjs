@@ -1,3 +1,4 @@
+import { contractSummary } from './contract-summary.mjs';
 import { randomUUID } from 'node:crypto';
 import { localDay } from '../../shared/domain.mjs';
 import { badge, button, card, check, displayAmount, esc, form, hidden, input, localLink, number, select, table, textarea } from './components.mjs';
@@ -52,10 +53,12 @@ function subscriptionSummary(actor, account) {
   const membership = account.membership, plan = membership?.plan, agreement = plan?.walletAgreement;
   if (!plan) return card('Wallet', `<p>No hay una tarifa recurrente aceptada.</p>${actor.kind === 'OWNER' ? localLink('/plans/wallet', 'Ver opciones de Wallet', 'btn secondary') : ''}`);
   const total = membership.branchMonthlyMinor ?? plan.feeMinor;
+  const branches=agreement&&plan.feeMinor>0&&Number.isSafeInteger(total/plan.feeMinor)?total/plan.feeMinor:null;
   const interval = plan.intervalMonths === 12 ? 'año' : plan.intervalMonths === 1 ? 'mes' : `${plan.intervalMonths} meses`;
   const free = agreement && account.today < '2027-01-01' && membership.nextChargeOn >= '2027-01-01';
   return card(plan.name, `${free ? '<p class="subscription-free">Gratis hasta el <strong>31 de diciembre de 2026</strong></p>' : ''}
     <p class="muted">${!plan.recurring ? 'Última tarifa acordada' : free ? 'Después de la promoción' : 'Tarifa para el próximo corte'}</p><p class="billing-plan-price"><strong>${money(total)}</strong> / ${interval}${agreement ? ' en total' : ''}</p>
+    ${branches!==null?`<p class="billing-branch-calculation"><strong>${branches} ${branches===1?'sucursal':'sucursales'}</strong> × ${money(plan.feeMinor)} = <strong>${money(total)} / ${interval}</strong></p>`:''}
     <p>${agreement ? money(plan.feeMinor) + ' por sucursal · ' : ''}${plan.recurring ? 'Próximo cargo: <strong>' + esc(billingDate(membership.nextChargeOn)) + '</strong>' : '<strong>Renovación desactivada</strong>'}</p>
     ${!plan.recurring && plan.walletEndsOn ? `<p>La suscripción finaliza el ${esc(billingDate(plan.walletEndsOn))}.</p>` : ''}
     ${agreement ? `<p class="muted">Aceptado por ${esc(agreement.ownerName)}. Las nuevas sucursales se suman desde el siguiente corte.</p>` : ''}
@@ -71,8 +74,9 @@ export function accountPage(actor, account, base = '/billing', error = '', value
       ${admin && row.paidMinor === 0 && row.status !== 'VOID' ? `<details class="billing-action secondary-action"><summary>Anular cargo</summary>${correctionForm(actor, base, 'void', row.id)}</details>` : ''}</article>`).join('') || '<div class="empty">Todavía no hay cargos en esta página.</div>'}</div>${pagination(base, view, account, summary.invoiceCount)}</section>${admin && action !== 'charge' ? chargeForm(actor, account, base) : ''}`;
   else if (view === 'payments') content = card('Pagos registrados', table(['Fecha', 'Referencia / concepto', 'Medio', 'Importe', 'Estado', 'Comprobante'], account.payments.map(row => [esc(billingDate(row.paidOn)), `<strong>${esc(row.reference)}</strong>${row.invoiceDescription ? '<br><small>' + esc(row.invoiceDescription) + '</small>' : ''}`, esc(paymentMethods[row.method] || row.method), money(row.amountMinor), badge(row.reversed ? 'Revertido' : 'Confirmado', row.reversed ? 'warning' : 'success'), localLink(receiptPath(base, row.id), 'Ver comprobante')]), 'Los pagos confirmados por Lúmina aparecerán aquí.') + pagination(base, view, account, account.paymentCount));
   else content = `<div class="billing-overview-grid">${subscriptionSummary(actor, account)}${card(summary.balanceMinor > 0 ? (admin ? 'Cuenta con saldo pendiente' : 'Tu cuenta tiene un saldo pendiente') : (admin ? 'Cuenta al día' : 'Tu cuenta está al día'), `<p>${summary.balanceMinor > 0 ? 'Pendiente: <strong>' + money(summary.balanceMinor) + '</strong>.' : (admin ? 'El negocio no tiene cargos pendientes de pago.' : 'No tienes cargos pendientes de pago.')}</p>${summary.overdueMinor > 0 ? '<p class="billing-warning">Hay pagos vencidos. Revisa los cargos o contacta a Lúmina.</p>' : ''}<div class="actions">${localLink(base + '?view=charges', admin ? 'Revisar y registrar pagos' : 'Ver mis cargos', 'btn')}${admin ? '' : localLink('/help', 'Contactar a Lúmina', 'btn secondary')}</div>`)}</div>
+    ${contractSummary(options.contracts||[],account.today,actor.kind==='OWNER')}
     ${card('Últimos pagos', account.payments.length ? `<div class="billing-recent">${account.payments.slice(0, 3).map(row => `<a href="${esc(receiptPath(base, row.id))}"><span><strong>${esc(row.reference)}</strong><small>${esc(billingDate(row.paidOn))} · ${row.reversed ? 'Revertido' : 'Confirmado'}</small></span><strong>${money(row.amountMinor)}</strong><span aria-hidden="true">→</span></a>`).join('')}</div>${localLink(base + '?view=payments', 'Ver todos los pagos')}` : '<p>Los pagos confirmados por Lúmina aparecerán aquí.</p>')}`;
-  return `<div class="billing-workspace">${error ? `<p role="alert" class="notice">${esc(error)}</p>` : ''}${navigation(base, view)}${stats}${options.action ? billingDraft(actor, account, base, action, values) : ''}${content}<p class="billing-footnote">Cuenta en USD. Registrar un pago no realiza un débito bancario ni sustituye la factura tributaria.</p></div>`;
+  return `<div class="billing-workspace">${error ? `<p role="alert" class="notice">${esc(error)}</p>` : ''}${navigation(base, view)}${stats}${options.action ? billingDraft(actor, account, base, action, values) : ''}${content}<p class="billing-footnote">Cuenta en USD. Los cargos se registran en tu cuenta; no se debitan de una tarjeta bancaria. Los pagos confirmados no sustituyen la factura tributaria.</p></div>`;
 }
 export function receiptPage(actor, receipt, base, provider = null) {
   const p = receipt.payment, invoice = receipt.invoice;
