@@ -1,5 +1,17 @@
 # Loyalty
 
+## Lúmina v028 / Loyalty v067 — daily workspace and delivery inbox
+
+- Baseline: installed v027/v066, commit 5c98f4a6aa878141226c4b4a220d3ea1f6cb7f33. This section supersedes earlier release and gate counts.
+- Shared read-only request summaries power Home, Requests and Content. Correlate pieces and historical platform targets by company AND request; never join publications into allowance or delivery counts.
+- Review calls to action require the same canRequest APPROVE policy as the detail operation. Preserve legacy platform restrictions. Agency production and read-only business consultation retain different URLs and actions. No actor impersonation.
+- Production and review queues are separate; closed requests never appear as actionable work. Delivered history remains available. Counts and pagination use the same filtered scope; clamp stale pages without weakening invalid-input checks.
+- Search finds requests by their own text or a piece title; piece searches never include unrelated siblings merely because another piece matches. Every query keeps tenant and permission scope.
+- Content cards deep-link to existing piece/review sections. All core links, filters and native forms work without scripts. Keep established sidebar dimensions, focus management and English routes; Spanish interface copy.
+- No Kotlin, native Wallet assets, SQL, SQLite10/PostgreSQLV017, representation34, provider keys, identifiers, domains, balances, grants, billing or consent changes. This release adds no activation or payment side effects.
+- Gates: 32 suites / 366 portal tests, 170 Python, 312 native unit/HTTP and 347 PostgreSQL. Docker staging and gateway before local commit; no push. 26 DOM suites are separate from browser inspection and physical Wallet device checks.
+- Installer output remains RESULTADO plus the URL only after confirmed startup. Block production and source conflicts. See docs/lumina-workspace-v067.md.
+
 ## Lúmina v027 / Loyalty v066 — visitor and service experience
 
 - Baseline: installed v026/v065, commit a9c7c5c21973e7f4d0ecc0a02e736cf8c6ea3200. This section supersedes prior version and gate counts.

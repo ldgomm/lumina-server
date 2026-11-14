@@ -1,6 +1,6 @@
-# Lúmina v027 / Loyalty v066
+# Lúmina v028 / Loyalty v067
 
-A consistent visitor-to-workspace experience: clearer account entry, grouped registration and service activation, with a simple explanation of project, monthly and combined work. [Installation and validation](docs/lumina-experience-v066.md).
+A shared daily workspace: request progress, direct delivery review, scoped search and accurate queues for owners, collaborators and agency staff. [Installation and validation](docs/lumina-workspace-v067.md).
 
 Open `/` for the agency website, `/login` for account entry and `/services` as an owner to manage available services. Reading these pages never activates a service or changes a Wallet connection.
 

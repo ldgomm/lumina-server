@@ -1,4 +1,5 @@
 import { checkRevision } from '../shared/revision.mjs';
+import { requestProgressSql } from './request-progress.mjs';
 import { requireService } from '../businesses/services.mjs';
 import { requestPhone } from '../shared/contact.mjs';
 import { compatibleContentQuota } from '../content/service-options.mjs';
@@ -23,7 +24,7 @@ export function visibleRequests(db, actor, companyId, channel, page = 0, {q='',s
   const counts=Object.fromEntries(Object.entries(stage).map(([key,sql])=>[key,db.get(`SELECT count(*) n ${base} AND ${sql} AND (?='' OR r.channel=?) AND (?='' OR instr(lower(r.title||' '||r.brief),lower(?))>0)`,companyId,...policy.params,area||'',area||'',q,q).n]));
   const total=db.get(`SELECT count(*) n ${base} AND ${filter} AND ${stage[view]}`,companyId,...policy.params,...values).n;
   const currentPage=Math.min(page,Math.max(0,Math.ceil(total/30)-1));
-  const rows=db.all(`SELECT r.*,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
+  const rows=db.all(`SELECT r.*,${requestProgressSql}
     FROM requests r WHERE r.company_id=? AND ${policy.sql} AND ${filter} AND ${stage[view]}
     ORDER BY r.created_at DESC,r.id LIMIT 31 OFFSET ?`,companyId,...policy.params,...values,currentPage*30);
   return {rows:rows.slice(0,30).map(row=>({...row,platforms:platformTargets(db,row)})),more:rows.length>30,total,counts,page:currentPage};

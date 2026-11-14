@@ -56,13 +56,13 @@ export function requestsPage({actor,url,rows,channel,page,total,counts,q='',stat
   const states=[['','Todos los estados'],...['NEW','REVIEW','QUOTED','APPROVED','SCHEDULED','PRODUCTION','DELIVERED','CANCELLED'].map(key=>[key,label(key)])];
   const query={channel:channel,q,state:state,view:view};
   const create=actor.kind!=='AGENCY'&&Object.keys(areas).some(key=>can(actor,key,'REQUEST'));
-  return `<section class="request-hub"><div><p class="eyebrow">TUS IDEAS EN MARCHA</p><h2>¿Qué hacemos hoy por tu negocio?</h2><p>Solicita un servicio y sigue cada avance, desde la idea hasta la entrega.</p></div>${create?localLink(url('/requests/new'),'Nueva solicitud','btn'):''}</section>
-    ${create?`<details class="disclosure request-quick"><summary>Explorar servicios</summary><div>${serviceChoices(actor,url)}</div></details>`:''}
-    <section class="card"><div class="split"><h2>Tus solicitudes</h2><span class="muted">${total} ${total===1?'solicitud':'requests'}</span></div>
+  return `<div class="request-tools"><p>${counts.open} en curso · ${counts.closed} ${counts.closed===1?'cerrada':'cerradas'}</p>${create?localLink(url('/requests/new'),'Nueva solicitud','btn'):''}</div>
+    <section class="card"><div class="split"><h2>Seguimiento de solicitudes</h2><span class="muted">${total} ${total===1?'solicitud':'solicitudes'}</span></div>
     <nav class="workday-tabs" aria-label="Estado de solicitudes">${[['all','Todas'],['open','En curso'],['closed','Cerradas']].map(([key,name])=>`<a href="${esc(url('/requests',{channel:channel,q,view:key}))}"${key===view?' aria-current="page"':''}>${name} <span>${counts[key]}</span></a>`).join('')}</nav>
     <form action="${esc(url('/requests').split('?')[0])}" class="request-filter">${hidden('view',view)}${actor.kind==='AGENCY'?hidden('company',new URL(url('/requests'),'http://localhost').searchParams.get('company')):''}
-    ${input('q','Buscar solicitud','search','maxlength="100" placeholder="Nombre o idea…"',q)}${select('channel','Servicio',filters,channel)}${select('state','Estado',states,state)}${button('Buscar','secondary')}</form>
-    ${q||state||channel||view!=='all'?`<p class="filter-result">Filtros aplicados · ${localLink(url('/requests'),'Ver todas las solicitudes')}</p>`:''}${!rows.length&&(q||state||channel||view!=='all')?message('No encontramos solicitudes con estos filtros.'):requestCards(rows,url)}${paging({url,path:'/requests',params:query,page,total,size:30})}</section>`;
+    ${input('q','Buscar solicitud','search','maxlength="100" placeholder="Nombre o idea…"',q)}${button('Buscar','secondary')}
+    <details class="request-filters"${channel||state?' open':''}><summary>Filtrar por servicio o estado${channel||state?' · Activo':''}</summary><div class="fields two">${select('channel','Servicio',filters,channel)}${select('state','Estado',states,state)}</div></details></form>
+    ${q||state||channel||view!=='all'?`<p class="filter-result">Filtros aplicados · ${localLink(url('/requests'),'Ver todas las solicitudes')}</p>`:''}${!rows.length&&(q||state||channel||view!=='all')?message('No encontramos solicitudes con estos filtros.'):requestCards(rows,url,{actor})}${paging({url,path:'/requests',params:query,page,total,size:30})}</section>`;
 }
 export function agendaPage(rows,url) {
   return card('Agenda de grabaciones',table(['Fecha y hora','Solicitud','Lugar','Estado','Grabación real'],rows.map(visit=>[

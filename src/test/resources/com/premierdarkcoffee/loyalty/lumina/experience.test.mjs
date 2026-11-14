@@ -102,8 +102,8 @@ test('búsqueda de solicitudes aplica estado y permisos antes de paginar y trata
  await other.client.post('/requests',{...idea,title:'Secreto ajeno %'});
  const old=createRequest(w.db,actor,company,{...idea,title:'Video reservado'});w.db.run('INSERT INTO request_platforms VALUES(?,?,?)',w.id,old,'TIKTOK');
  const member=await colleague(w,w.client,{name:'Instagram',document:'1753142718','INSTAGRAM.VIEW':'yes'});
- const r=await member.session.get('/requests?q=%25&state=NEW');assert.equal(r.status,200);assert.equal((r.body.match(/class="request-record"/g)||[]).length,30);assert.match(r.body,/page=1/);assert.doesNotMatch(r.body,/Secreto ajeno|Video reservado/);
- const next=await member.session.get('/requests?q=%25&state=NEW&page=1');assert.equal((next.body.match(/class="request-record"/g)||[]).length,4);
+ const r=await member.session.get('/requests?q=%25&state=NEW');assert.equal(r.status,200);assert.equal((r.body.match(/class="request-record(?:\s[^"]*)?"/g)||[]).length,30);assert.match(r.body,/page=1/);assert.doesNotMatch(r.body,/Secreto ajeno|Video reservado/);
+ const next=await member.session.get('/requests?q=%25&state=NEW&page=1');assert.equal((next.body.match(/class="request-record(?:\s[^"]*)?"/g)||[]).length,4);
  assert.doesNotMatch((await member.session.get('/requests?state=DELIVERED')).body,/Una idea literal/);assert.equal((await w.client.get('/requests?state=BAD')).status,400);
 });
 

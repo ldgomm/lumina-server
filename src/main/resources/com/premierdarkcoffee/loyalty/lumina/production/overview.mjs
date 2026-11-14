@@ -1,12 +1,13 @@
 import { canRequest, requestAccessSql } from '../access/content-policy.mjs';
 import { requireBusinessActor } from '../access/accounts.mjs';
 import { now, integer, requireThat, text } from '../shared/domain.mjs';
+import { requestProgressSql } from './request-progress.mjs';
 
 // A read-only projection of this account's workspace. Every query is tenant-bound.
 export function businessOverview(db,actor,companyId) {
   requireBusinessActor(actor,{id:companyId});
   const policy=requestAccessSql(actor);
-  const recent=db.all(`SELECT r.id,r.title,r.channel,r.service,r.quantity,r.status FROM requests r
+  const recent=db.all(`SELECT r.*,${requestProgressSql} FROM requests r
     WHERE r.company_id=? AND ${policy.sql} ORDER BY r.created_at DESC,r.id DESC LIMIT 4`,companyId,...policy.params);
   const reviews=db.all(`SELECT r.*, (SELECT group_concat(platform) FROM request_platforms rp
     WHERE rp.company_id=r.company_id AND rp.request_id=r.id) AS targets FROM requests r
