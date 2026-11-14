@@ -230,6 +230,27 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         return obj("today" to date,"access" to effective(c,tenant,access,date),"summary" to summary,"notices" to notices,
             "membership" to p?.let { obj("name" to it.first.name,"recurring" to it.first.recurring,"nextChargeOn" to it.third,"feeMinor" to it.first.feeMinor,"intervalMonths" to it.first.intervalMonths) })
     }
+    /** Reading a payment never synchronizes invoices, changes access or calls Wallet providers. */
+    fun paymentReceipt(tenant: String, payment: String, staff: Staff? = null): JsonObject = db.tx { c ->
+        c.exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        uuid(tenant); uuid(payment)
+        if (staff != null) {
+            staff.owner()
+            need(staff.tenant == tenant && c.one("SELECT version FROM staff_tokens WHERE tenant_id=? AND id=? AND role='OWNER' AND revoked_at IS NULL AND archived_at IS NULL", tenant, staff.id) {
+                staff.version == null || it.getInt(1) == staff.version
+            } == true, "STAFF_ACCESS_CHANGED", "Tu acceso cambió. Ingresa nuevamente.", 401)
+        }
+        val business = c.one("SELECT name,currency FROM tenants WHERE id=?", tenant) { obj("id" to tenant, "name" to it.getString(1), "currency" to it.getString(2)) }
+            ?: throw Problem(404, "NOT_FOUND", "Negocio no encontrado.")
+        val date = today(c, tenant)
+        val record = c.one("SELECT p.*,r.reason AS reversal_reason,r.created_at AS reversed_at FROM billing_payments p LEFT JOIN billing_reversals r ON r.tenant_id=p.tenant_id AND r.payment_id=p.id WHERE p.tenant_id=? AND p.id=?", tenant, payment) {
+            obj("id" to it.getString("id"), "invoiceId" to it.getString("invoice_id"), "amountMinor" to it.getLong("amount_minor"), "reference" to it.getString("reference"),
+                "method" to it.getString("method"), "paidOn" to it.getDate("paid_on").toString(), "createdAt" to it.instant("created_at"),
+                "reversed" to (it.getTimestamp("reversed_at") != null), "reversalReason" to it.getString("reversal_reason"), "reversedAt" to it.getTimestamp("reversed_at")?.toInstant())
+        } ?: throw Problem(404, "NOT_FOUND", "Pago no encontrado.")
+        val bill = c.one("SELECT * FROM billing_invoices WHERE tenant_id=? AND id=?", tenant, record.getValue("invoiceId").jsonPrimitive.content) { invoice(it, date) }!!
+        obj("business" to business, "payment" to record, "invoice" to bill, "today" to date.toString())
+    }
     fun ownerAccount(s: Staff, offset: Int = 0): JsonObject { s.owner(); return account(s.tenant, s.id, offset) }
     fun account(tenant: String, staffId: String? = null, offset: Int = 0): JsonObject = db.tx { c ->
         need(offset in 0..1_000_000, "INVALID_PAGE", "Página inválida.")
@@ -245,8 +266,8 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         obj("business" to business, "today" to date.toString(), "access" to effective(c, tenant, access, date), "summary" to summary,
             "membership" to p?.let { obj("version" to it.second, "plan" to json.encodeToJsonElement(it.first), "nextChargeOn" to it.third.toString(), "nextDueOn" to it.third.plusDays(it.first.dueDays.toLong()).toString(), "branchMonthlyMinor" to if(it.first.walletAgreement!=null)Math.multiplyExact(it.first.feeMinor,c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){r->r.getLong(1)}!!)else null) },
             "invoices" to c.rows("SELECT * FROM billing_invoices WHERE tenant_id=? ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET ?", tenant, offset) { invoice(it, date) },
-            "payments" to c.rows("SELECT p.*,r.reason AS reversal_reason,r.created_at AS reversed_at FROM billing_payments p LEFT JOIN billing_reversals r ON r.tenant_id=p.tenant_id AND r.payment_id=p.id WHERE p.tenant_id=? ORDER BY p.created_at DESC,p.id DESC LIMIT 100 OFFSET ?", tenant, offset) {
-                obj("id" to it.getString("id"), "invoiceId" to it.getString("invoice_id"), "amountMinor" to it.getLong("amount_minor"), "reference" to it.getString("reference"), "method" to it.getString("method"), "paidOn" to it.getDate("paid_on").toString(), "reversed" to (it.getTimestamp("reversed_at") != null), "reversalReason" to it.getString("reversal_reason")) },
+            "payments" to c.rows("SELECT p.*,i.description AS invoice_description,r.reason AS reversal_reason,r.created_at AS reversed_at FROM billing_payments p JOIN billing_invoices i ON i.tenant_id=p.tenant_id AND i.id=p.invoice_id LEFT JOIN billing_reversals r ON r.tenant_id=p.tenant_id AND r.payment_id=p.id WHERE p.tenant_id=? ORDER BY p.created_at DESC,p.id DESC LIMIT 100 OFFSET ?", tenant, offset) {
+                obj("id" to it.getString("id"), "invoiceId" to it.getString("invoice_id"), "invoiceDescription" to it.getString("invoice_description"), "amountMinor" to it.getLong("amount_minor"), "reference" to it.getString("reference"), "method" to it.getString("method"), "paidOn" to it.getDate("paid_on").toString(), "reversed" to (it.getTimestamp("reversed_at") != null), "reversalReason" to it.getString("reversal_reason")) },
             "paymentCount" to c.one("SELECT count(*) FROM billing_payments WHERE tenant_id=?", tenant) { it.getLong(1) }, "offset" to offset, "notices" to notices,
             "accessHistory" to c.rows("SELECT state,reason,created_at FROM business_access_history WHERE tenant_id=? ORDER BY version DESC LIMIT 50", tenant) { obj("state" to it.getString(1), "reason" to it.getString(2), "at" to it.getTimestamp(3).toInstant()) },
             "history" to c.rows("SELECT action,target_id,created_at FROM audit_events WHERE tenant_id=? AND (action LIKE 'BILLING_%' OR action LIKE 'BUSINESS_%' OR action LIKE 'WALLET_SUBSCRIPTION_%') ORDER BY created_at DESC,id DESC LIMIT 50", tenant) { obj("action" to it.getString(1), "target" to it.getString(2), "at" to it.getTimestamp(3).toInstant()) })

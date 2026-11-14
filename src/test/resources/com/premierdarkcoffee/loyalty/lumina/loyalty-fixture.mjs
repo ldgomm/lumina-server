@@ -110,6 +110,7 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
       const answer=await configuration.subscription({path,method:req.method,payload:raw?JSON.parse(raw):null,company:p.company,staff:p,key:req.headers['idempotency-key']});
       return json(res,answer.status||200,answer.body);
     }
+    if(req.method==='GET'&&/^\/api\/staff\/payments\/[^/]+$/.test(path)&&configuration.receipt&&p.role==='OWNER'){const result=await configuration.receipt(p.company,path.split('/').at(-1));return json(res,result.status||200,result.body);}
     if(path==='/api/staff/account'&&configuration.account&&p.role==='OWNER')return json(res,200,await configuration.account(p.company,new URL(req.url,'http://127.0.0.1')));
     if(req.method==='GET'&&path==='/api/staff/account'&&p.role==='OWNER')return json(res,200,{membership:null,summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0,offset:0,today:'2026-11-13'});
     const b = branches.get(p.company.id);

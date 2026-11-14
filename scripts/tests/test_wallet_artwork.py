@@ -38,8 +38,8 @@ class WalletArtworkGatewayTests(unittest.TestCase):
             if path in ['/api/me/wallet-status','/api/me/access']:return 401,b''
             if path=='/api/public/demo/join':return 400,b''
             return 404,b''
-        with patch.object(w,'request',side_effect=respond):self.assertEqual(114,w.verify_gateway('http://local','demo'))
-        self.assertEqual(114,len(calls))
+        with patch.object(w,'request',side_effect=respond):self.assertEqual(116,w.verify_gateway('http://local','demo'))
+        self.assertEqual(116,len(calls))
         self.assertIn(('http://local/api/platform/lumina/businesses','POST'),calls)
         for endpoint,methods in [('/api/staff/administration',['GET']),('/api/staff/branch-directory',['GET','POST']),('/api/staff/branch-directory/example',['PUT']),('/api/platform/tenants/example/administration',['GET']),('/api/platform/tenants/example/branch-directory',['GET','POST']),('/api/platform/tenants/example/branch-directory/example',['PUT'])]:
             for method in methods:self.assertIn(('http://local'+endpoint,method),calls)

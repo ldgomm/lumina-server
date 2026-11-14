@@ -278,6 +278,55 @@ class CommercialPostgresTest {
             assertEquals("BUSINESS_SUSPENDED", (waiting!!.get(10, TimeUnit.SECONDS) as Problem).code)
         } finally { pool.shutdownNow() }
     }
+    @Test fun `receipt joins exact payment and current invoice without changing amounts`() {
+        val f = fixture(); val invoice = charge(f, 5000); val payment = pay(f, invoice, 499, "REC-4.99").str("id")
+        val receipt = billing.paymentReceipt(f.tenant, payment, f.staff)
+        assertEquals(f.tenant, receipt.getValue("business").jsonObject.str("id"))
+        assertEquals(499, receipt.getValue("payment").jsonObject.getValue("amountMinor").jsonPrimitive.int)
+        assertEquals("REC-4.99", receipt.getValue("payment").jsonObject.str("reference"))
+        assertEquals(4501, receipt.getValue("invoice").jsonObject.getValue("remainingMinor").jsonPrimitive.int)
+        assertEquals("Cargo", account(f).getValue("payments").jsonArray[0].jsonObject.str("invoiceDescription"))
+    }
+    @Test fun `reversed receipt remains available and clearly reports restored debt`() {
+        val f = fixture(); val payment = pay(f, charge(f)).str("id")
+        billing.reverse(f.tenant, payment, Correction("Referencia equivocada"), id())
+        val receipt = billing.paymentReceipt(f.tenant, payment, f.staff)
+        assertTrue(receipt.getValue("payment").jsonObject.getValue("reversed").jsonPrimitive.boolean)
+        assertEquals("Referencia equivocada", receipt.getValue("payment").jsonObject.str("reversalReason"))
+        assertEquals(1000, receipt.getValue("invoice").jsonObject.getValue("remainingMinor").jsonPrimitive.int)
+        setState(f, "SUSPENDED")
+        assertEquals(payment, billing.paymentReceipt(f.tenant, payment, f.staff).getValue("payment").jsonObject.str("id"))
+    }
+    @Test fun `receipt is read only and does not generate late recurring charges`() {
+        val f = fixture(); billing.configure(f.tenant, MembershipChange(0, plan()))
+        val invoice = account(f).getValue("invoices").jsonArray[0].jsonObject.str("id"); val payment = pay(f, invoice).str("id")
+        fun rows(table: String) = db.tx { it.one("SELECT count(*) FROM $table WHERE tenant_id=?", f.tenant) { row -> row.getLong(1) }!! }
+        val tables = listOf("billing_invoices", "billing_payments", "audit_events", "idempotency")
+        val before = tables.associateWith { rows(it) }
+        time.value = Instant.parse("2027-03-03T15:00:00Z")
+        repeat(2) { assertEquals(payment, billing.paymentReceipt(f.tenant, payment).getValue("payment").jsonObject.str("id")) }
+        assertEquals(before, tables.associateWith { rows(it) })
+    }
+    @Test fun `receipt denies another tenant cashier and a revoked owner`() {
+        val f = fixture(); val other = fixture(); val payment = pay(f, charge(f)).str("id")
+        assertEquals(404, assertFailsWith<Problem> { billing.paymentReceipt(other.tenant, payment, other.staff) }.status)
+        assertEquals(401, assertFailsWith<Problem> { billing.paymentReceipt(f.tenant, payment, other.staff) }.status)
+        val branch = service.newBranch(f.staff, NewBranch("Caja", "CAJA")).str("id")
+        val cashier = service.staff(service.newStaff(f.staff, NewStaff("CASHIER", branch)).str("token"))
+        assertEquals(403, assertFailsWith<Problem> { billing.paymentReceipt(f.tenant, payment, cashier) }.status)
+        db.tx { it.exec("UPDATE staff_tokens SET revoked_at=? WHERE tenant_id=? AND id=?", Timestamp.from(time.instant()), f.tenant, f.staff.id) }
+        assertEquals(401, assertFailsWith<Problem> { billing.paymentReceipt(f.tenant, payment, f.staff) }.status)
+    }
+    @Test fun `HTTP payment receipts require correct account and platform authorization`() = testApplication {
+        val f = fixture(); val other = fixture(); val payment = pay(f, charge(f)).str("id")
+        application { loyaltyRoutes(service, "platform-token-for-tests-32-characters", "http://localhost") }
+        val path = "/api/staff/payments/$payment"
+        assertEquals(HttpStatusCode.Unauthorized, client.get(path).status)
+        assertEquals(HttpStatusCode.NotFound, client.get(path) { bearerAuth(other.token) }.status)
+        assertEquals(HttpStatusCode.OK, client.get(path + "?tenantId=${other.tenant}") { bearerAuth(f.token) }.status)
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/api/platform/tenants/${f.tenant}/payments/$payment") { bearerAuth(f.token) }.status)
+        assertEquals(HttpStatusCode.OK, client.get("/api/platform/tenants/${f.tenant}/payments/$payment") { bearerAuth("platform-token-for-tests-32-characters") }.status)
+    }
     private class TestClock(@Volatile var value: Instant, private val zone: ZoneId = ZoneOffset.UTC) : Clock() {
         override fun getZone() = zone
         override fun withZone(zone: ZoneId): Clock = object : Clock() {

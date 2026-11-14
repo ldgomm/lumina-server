@@ -1,3 +1,6 @@
+import { businessDirectory } from '../businesses/directory.mjs';
+import { businessDirectoryPage } from '../presentation/pages/business-directory-pages.mjs';
+import { receiptPage, receiptText } from '../presentation/pages/billing-account-pages.mjs';
 import { businessControl, requireOperating, requestBusinessChange, createBusinessControlSync, businessStates } from '../businesses/control.mjs';
 import { controlPage, accountPage as billingAccountPage } from '../presentation/pages/business-control-pages.mjs';
 import { paymentInput, chargeInput } from '../billing/payment-input.mjs';
@@ -32,7 +35,7 @@ import { accountPage, publicPage } from '../presentation/pages/account-pages.mjs
 import { invitePage, memberPage, newMemberPage, teamPage } from '../presentation/pages/team-pages.mjs';
 import { card, esc, localLink, page, pathFor } from '../presentation/pages/components.mjs';
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
-import { agendaPage, companiesPage, homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
+import { agendaPage, homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
 import { mapsPage, metricsPage } from '../presentation/pages/service-pages.mjs';
 import { cajaHtml, loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
 import { agencyAgenda, agencyOverview, agencyProduction, channelWorkspace, comingSoonPage } from '../presentation/pages/workspace-pages.mjs';
@@ -46,6 +49,8 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/billing-workspace.css':['billing-workspace.css','text/css; charset=utf-8'],
+  '/assets/billing-workspace.js':['billing-workspace.js','text/javascript; charset=utf-8'],
   '/assets/wallet-campaigns.js':['wallet-campaigns.js','text/javascript; charset=utf-8'],
   '/assets/black-friday.css':['black-friday.css','text/css; charset=utf-8'],
   '/assets/black-friday.js':['black-friday.js','text/javascript; charset=utf-8'],
@@ -190,7 +195,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if (method==='GET' && !api) return redirect(res,'/');
         throw new Problem('Inicia sesión para continuar.',401);
       }
-      const serviceAllowed=()=>path==='/salir'||path.startsWith('/cuenta')||path==='/ayuda'||path==='/mi-estado-cuenta'||path==='/planes/wallet/cancelar'||method==='GET'&&(path.startsWith('/planes/wallet')||path==='/inicio'||path==='/wallet/ventajas');
+      const serviceAllowed=()=>path==='/salir'||path.startsWith('/cuenta')||path==='/ayuda'||(method==='GET'&&(path==='/mi-estado-cuenta'||path.startsWith('/mi-estado-cuenta/pagos/')))||path==='/planes/wallet/cancelar'||method==='GET'&&(path.startsWith('/planes/wallet')||path==='/inicio'||path==='/wallet/ventajas');
       const scopedCompany=actor.kind==='AGENCY'?(target.searchParams.get('empresa')||req.headers['x-lumina-company']):actor.company_id;
       if(scopedCompany) {
         const state=businessControl(db,scopedCompany);
@@ -293,32 +298,51 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const provider=legalProfile(db);
         return render({title:'Ayuda de Lúmina',body:card('Soporte prioritario de Wallet',`<p>Indica el negocio, la sucursal y qué operación necesitas resolver. Damos prioridad a incidencias que impiden registrar compras o canjear.</p>${provider?`<div class="actions"><a class="btn" href="mailto:${esc(provider.email)}?subject=Soporte%20Wallet">${esc(provider.email)}</a><a class="btn secondary" href="tel:${esc(provider.phone.replace(/[^+0-9]/g,''))}">${esc(provider.phone)}</a></div>`:'<p>El contacto de Lúmina está pendiente de configuración.</p>'}<p class="muted">No compartas contraseñas ni datos completos de clientes.</p>`)});
       }
+      const billingView=()=>{
+        const offset=Number(target.searchParams.get('offset')||0);
+        const view=target.searchParams.get('vista')||(offset?'cargos':'resumen');
+        requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000&&['resumen','cargos','pagos'].includes(view),'Página inválida.');
+        return {offset:view==='resumen'?0:offset,view};
+      };
+      const paymentReceipt=path.match(/^\/(mi-estado-cuenta|administracion\/negocios\/([0-9a-f-]{36}))\/pagos\/([0-9a-f-]{36})(\.txt)?$/i);
+      if(paymentReceipt) {
+        requireThat(method==='GET','Consulta no disponible.',405);
+        const administration=Boolean(paymentReceipt[2]);
+        if(administration)requireAgency(actor);else requireOwner(actor);
+        company=companyFor(db,actor,paymentReceipt[2]);
+        const receipt=administration?await wallets.administration(actor,company.id,'receipt',{id:paymentReceipt[3]}):await wallets.receipt(actor,paymentReceipt[3]);
+        requireThat(receipt.payment?.id===paymentReceipt[3]&&receipt.business?.id===company.loyalty_tenant,'No se pudo verificar el comprobante.',502);
+        const provider=legalProfile(db),base='/'+paymentReceipt[1];
+        if(paymentReceipt[4]){res.setHeader('Content-Disposition','attachment; filename="comprobante-'+receipt.payment.id+'.txt"');return send(res,200,receiptText(receipt,provider),'text/plain; charset=utf-8');}
+        return render({title:'Comprobante de pago',body:receiptPage(actor,receipt,base,provider)});
+      }
       if(path==='/mi-estado-cuenta'&&method==='GET') {
         requireOwner(actor);company=companyFor(db,actor);
-        const offset=Number(target.searchParams.get('offset')||0);requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000,'Página inválida.');
-        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,await wallets.account(actor,offset))});
+        const {offset,view}=billingView();
+        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,await wallets.account(actor,offset),'/mi-estado-cuenta','',{},{view})});
       }
       const administration=path.match(/^\/administracion\/negocios\/([0-9a-f-]{36})(?:\/(estado|reintentar|pago|revertir|cargo|anular))?$/i);
       if(administration) {
         requireAgency(actor);company=companyFor(db,actor,administration[1]);
         const base='/administracion/negocios/'+company.id;let issueText='';
-        const offset=Number(target.searchParams.get('offset')||0);requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000,'Página inválida.');
+        const panel=billingView();
         const view=async(status=200)=>{
-          let account=null;try{account=await wallets.administration(actor,company.id,'account',{offset});}catch(error){issueText=issueText||error.message;}
-          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{})},status);
+          let account=null;try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
+          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{view:panel.view,action:method==='POST'?administration[2]:'',notice:{cargo:'Cargo registrado.',revertir:'Registro de pago revertido.',anular:'Cargo anulado.',estado:'Estado actualizado.',reintentar:'Sincronización confirmada.'}[target.searchParams.get('guardado')]||''})},status);
         };
         if(method==='POST')try {
+          let savedPayment=null;
           if(['pago','revertir','cargo','anular'].includes(administration[2])&&isId(data.requestKey)&&!db.get("SELECT seq FROM audit WHERE subject='BILLING_ATTEMPT' AND subject_id=? AND company_id=?",data.requestKey,company.id))event(db,actor,company.id,'BILLING_ATTEMPT',data.requestKey,'CUENTA_SOLICITADA',JSON.stringify({action:administration[2],invoice:data.invoiceId||null,payment:data.paymentId||null,reference:data.reference||null,reason:data.reason||null}),'WALLET');
           if(administration[2]==='estado'){requestBusinessChange(db,actor,company.id,data);await controls.sync(company.id);}
           else if(administration[2]==='reintentar'){requireThat(data.confirm==='yes','Confirma que deseas aplicar el cambio pendiente.');await controls.reconcile(company.id);}
-          else if(administration[2]==='pago'){const payment=paymentInput(data);await wallets.administration(actor,company.id,'payments',{method:'POST',body:payment,key:data.requestKey});}
+          else if(administration[2]==='pago'){const payment=paymentInput(data);savedPayment=await wallets.administration(actor,company.id,'payments',{method:'POST',body:payment,key:data.requestKey});requireThat(isId(savedPayment.id),'No se pudo confirmar el comprobante. Reintenta el mismo pago.',502);}
           else if(administration[2]==='revertir'){requireThat(data.confirm==='yes'&&isId(data.paymentId)&&isId(data.requestKey),'Confirma la corrección.');await wallets.administration(actor,company.id,'reverse',{id:data.paymentId,method:'POST',body:{reason:text(data.reason,'motivo',5,500)},key:data.requestKey});}
           else if(administration[2]==='cargo'){await wallets.administration(actor,company.id,'charges',{method:'POST',body:chargeInput(data),key:data.requestKey});}
           else if(administration[2]==='anular'){requireThat(data.confirm==='yes'&&isId(data.invoiceId)&&isId(data.requestKey),'Confirma la anulación.');await wallets.administration(actor,company.id,'void',{id:data.invoiceId,method:'POST',body:{reason:text(data.reason,'motivo',5,500)},key:data.requestKey});}
           else throw new Problem('Acción no encontrada.',404);
           if(['pago','revertir','cargo','anular'].includes(administration[2])&&!db.get("SELECT seq FROM audit WHERE subject='BILLING' AND subject_id=? AND company_id=?",data.requestKey,company.id))event(db,actor,company.id,'BILLING',data.requestKey,'CUENTA_'+administration[2].toUpperCase(),JSON.stringify({invoice:data.invoiceId||null,payment:data.paymentId||null,reference:data.reference||null,reason:data.reason||null}),'WALLET');
-          return redirect(res,base);
-        }catch(issue){if(!(issue instanceof Problem))throw issue;issueText=issue.message;return view(issue.status);}
+          return redirect(res,savedPayment?base+'/pagos/'+savedPayment.id:base+'?'+new URLSearchParams({vista:administration[2]==='revertir'?'pagos':['cargo','anular'].includes(administration[2])?'cargos':'resumen',guardado:administration[2]}));
+        }catch(issue){if(!(issue instanceof Problem))throw issue;issueText=issue.message;panel.view=['pago','cargo','anular'].includes(administration[2])?'cargos':administration[2]==='revertir'?'pagos':panel.view;return view(issue.status);}
         requireThat(!administration[2],'Página no encontrada.',404);
         try{await wallets.ensureCompany(company.id);}catch(issue){issueText=issue.message;}
         company=companyFor(db,actor,company.id);
@@ -448,10 +472,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (path==='/clientes' && method==='GET') {
         requireAgency(actor);
-        const q = text(target.searchParams.get('q') || '','búsqueda',0,100);
-        const companies = db.all(`SELECT id,name,approved,phone,created_at FROM companies
-          WHERE instr(lower(name),lower(?))>0 OR ?='' ORDER BY approved,name,id LIMIT 100`,q,q);
-        return render({title:'Clientes',description:'Consulta la información y el avance de cada negocio. Conservas tu identidad de agencia.',body:companiesPage(companies,q)});
+        return render({title:'Clientes',description:'Negocios, estados y contactos en un solo lugar.',body:businessDirectoryPage(businessDirectory(db,actor,target.searchParams))});
       }
       if (path==='/equipos') {
         if(actor.kind==='OWNER'&&method==='GET')return redirect(res,'/equipo');

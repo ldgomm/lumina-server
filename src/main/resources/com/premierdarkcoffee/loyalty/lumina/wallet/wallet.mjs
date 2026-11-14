@@ -217,9 +217,9 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     return result;
   }
   async function controlRemote(tenant,action,options={}) {
-    requireThat(isId(tenant)&&['access','account','payments','charges','reverse','void'].includes(action),'Acción inválida.');
-    const suffix=action==='reverse'?'/payments/'+options.id+'/reverse':action==='void'?'/charges/'+options.id+'/void':'/'+action;
-    if(['reverse','void'].includes(action))requireThat(isId(options.id),'Registro inválido.');
+    requireThat(isId(tenant)&&['access','account','payments','receipt','charges','reverse','void'].includes(action),'Acción inválida.');
+    const suffix=action==='receipt'?'/payments/'+options.id:action==='reverse'?'/payments/'+options.id+'/reverse':action==='void'?'/charges/'+options.id+'/void':'/'+action;
+    if(['receipt','reverse','void'].includes(action))requireThat(isId(options.id),'Registro inválido.');
     const offset=options.offset??0;requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000,'Página inválida.');
     return remote('/api/platform/tenants/'+tenant+suffix+(action==='account'?'?offset='+offset:''),{...options,token:configured()});
   }
@@ -230,7 +230,8 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     requireThat(current(actor).revision===fresh.revision,message,403);
     return result;
   }
-  async function account(actor,offset=0){requireOwner(actor);const {item}=await validated(actor);const result=await remote('/api/staff/account?offset='+offset,{token:item.token});current(actor);return result;}
-  return {controlRemote,administration,account,subscription,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
+  async function account(actor,offset=0){requireOwner(actor);const {item,fresh}=await validated(actor);const result=await remote('/api/staff/account?offset='+offset,{token:item.token});const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);return result;}
+  async function receipt(actor,id){requireOwner(actor);requireThat(isId(id),'Pago no encontrado.',404);const {item,fresh}=await validated(actor);const result=await remote('/api/staff/payments/'+id,{token:item.token});const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);return result;}
+  return {controlRemote,administration,account,receipt,subscription,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
     forget:()=>{},ownerCredential:async actor=>{requireOwner(actor);const {item}=await validated(actor);return item.token;}};
 }

@@ -17,6 +17,7 @@ export function dataDirectory() {
 }
 export function openDatabase(path) {
   const db = new DatabaseSync(path, { timeout: 5000 });
+  db.function('search_text', { deterministic: true }, value => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase());
   db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
   const version = db.prepare('PRAGMA user_version').get().user_version;
   if (version > 8) { db.close(); throw new Error('Esta versión de Lúmina no reconoce el esquema de datos.'); }

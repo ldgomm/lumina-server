@@ -89,6 +89,7 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
             put("/membership") { val input = call.body<MembershipChange>(); call.respond(io { commercial.configure(call.parameters["tenant"]!!, input) }) }
             post("/charges") { val input = call.body<NewCharge>(); call.respond(HttpStatusCode.Created, io { commercial.charge(call.parameters["tenant"]!!, input, call.key()) }) }
             post("/payments") { val input = call.body<RecordPayment>(); call.respond(HttpStatusCode.Created, io { commercial.pay(call.parameters["tenant"]!!, input, call.key()) }) }
+            get("/payments/{id}") { call.respond(io { commercial.paymentReceipt(call.parameters["tenant"]!!, call.parameters["id"]!!) }) }
             post("/payments/{id}/reverse") { val input = call.body<Correction>(); call.respond(io { commercial.reverse(call.parameters["tenant"]!!, call.parameters["id"]!!, input, call.key()) }) }
             post("/charges/{id}/void") { val input = call.body<Correction>(); call.respond(io { commercial.void(call.parameters["tenant"]!!, call.parameters["id"]!!, input, call.key()) }) }
             post("/notices") { val input = call.body<BusinessNotice>(); call.respond(HttpStatusCode.Created, io { commercial.notify(call.parameters["tenant"]!!, input, call.key()) }) }
@@ -99,6 +100,7 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
     post("/api/staff/lumina-subscription/accept") { val s=io {service.staff(call.bearer())};val input=call.body<WalletAcceptInput>();call.respond(io {service.acceptWalletSubscription(s,input,call.key())}) }
     post("/api/staff/lumina-subscription/cancel") { val s=io {service.staff(call.bearer())};val input=call.body<WalletCancelInput>();call.respond(io {service.cancelWalletSubscription(s,input,call.key())}) }
     get("/api/staff/account") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.ownerAccount(s, call.offset()) }) }
+    get("/api/staff/payments/{id}") { val s = io { service.staff(call.bearer()) }; call.respond(io { commercial.paymentReceipt(s.tenant, call.parameters["id"]!!, s) }) }
     get("/api/staff/business-profile") { val s=io { service.staff(call.bearer()).also { it.owner() } };call.respond(io { service.businessProfile(s.tenant) }) }
     put("/api/staff/business-profile") { val s=io { service.staff(call.bearer()).also { it.owner() } };val input=call.body<BusinessProfileChange>();call.respond(io { service.saveBusinessProfile(s.tenant,input,s.id) }) }
     post("/api/staff/business-profile/requests") { val s=io { service.staff(call.bearer()).also { it.owner() } };val input=call.body<ProfileCorrectionRequest>();call.respond(HttpStatusCode.Created,io { service.requestProfileCorrection(s,input,call.key()) }) }
