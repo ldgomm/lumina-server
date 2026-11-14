@@ -1,5 +1,17 @@
 # Loyalty
 
+## Lúmina v024r1 / Loyalty v063 — entregas y revisión claras
+
+- Baseline: v023 instalada y validada, commit 90fd692782e391222416298ffa555f7fc9be46e0. Esta sección prevalece para versiones y gates.
+- Ficha compartida de solicitudes en request-detail-pages.mjs; conserva la shell de Contenido y la principal en los demás servicios. Siguiente paso según estado y permiso, archivos por entregable, decisiones separadas y anclas accesibles. Equipos y roles conserva su posición y los menús sus dimensiones.
+- Recuperar datos únicamente en errores 400/409 de operaciones autorizadas, nunca ante 403/404. Mantener los valores de la operación y objeto exactos, el quote ID y la revisión originales. Si la acción dejó de estar disponible, mostrar los datos escapados sin reabrirla. Ningún borrador en almacenamiento local.
+- Adjuntar evidencia incrementa revisión de la pieza para invalidar aprobaciones abiertas antes del cambio. Rechazar URL duplicada dentro de la transacción. Nuevos formularios de estado, cotización, pieza y visita llevan revisión; omisión heredada continúa compatible. Conservar autorización en servidor y el aislamiento entre negocios.
+- Notas de cierre de visita se agregan a sus indicaciones, sin borrarlas. Cambios solicitados registran nombre de pieza y comentario. No publicar automáticamente ni aprobar por el negocio.
+- Sin cambios en Kotlin, SQL, esquema SQLite10/PostgreSQLV017, representación Wallet34, identidades, claves, certificados, dominios, asociaciones, cargos, suscripciones o contratos.
+- Regresión v024r1: comprobar visitas canceladas en su sección y recuento, nunca buscar un año en el HTML completo: los UUID también pueden contener 2099. Conservar una prueba determinista con ese identificador y controles con agenda vacía y una visita vigente. No omitir pruebas ni reintentar automáticamente para esconder fallos.
+- Gates: 28 suites / 315 pruebas portal; 170 Python; 312 unidades/HTTP y 347 PostgreSQL. Docker y gateway antes de commit local; no push. 22 suites DOM, distintas de comprobación visual y recepción física.
+- Terminal solo RESULTADO y URL después de salud confirmada. Instalador de desarrollo bloquea producción. Ver docs/lumina-entregas-claras-v063.md.
+
 ## Lúmina v023 / Loyalty v062 — jornada y navegación claras
 
 - Baseline: v022 instalada y validada, commit 6bb8c0d534df0d775dc6a335889cf7451cd1653b. Esta sección prevalece para versiones y gates.

@@ -4,6 +4,7 @@ import {agency,colleague,documentFor,owner,portal} from './helpers.mjs';
 import {getSession} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/access/accounts.mjs';
 import {attentionData} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/production/overview.mjs';
 import {agendaData} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/production/agenda.mjs';
+import {agencyOverview} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/workspace-pages.mjs';
 import {uuid,now,localDay} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 const idea={type:'CONTENT',channel:'SOCIAL',service:'VIDEO',quantity:'3',title:'Una idea concreta',phone:'0991234567'};
 const selected=(path,id)=>'/agencia'+path+'?empresa='+id;
@@ -12,6 +13,16 @@ const actor=(w,client=w.client)=>getSession(w.db,client.cookie.split('=')[1]);
 async function request(w,extra={},client=w.client){const r=await client.post('/solicitudes',{...idea,...extra});assert.equal(r.status,303,r.body);return {id:r.location.split('/').at(-1),path:r.location};}
 function review(w,id,company=w.id){w.db.run("INSERT INTO pieces(id,company_id,request_id,title,service,status,observations,created_at) VALUES(?,?,?,'Entrega','VIDEO','REVIEW','',?)",uuid(),company,id,now());}
 function visit(w,r,{company=w.id,status='SCHEDULED',date='2099-04-01T15:00:00.000Z',place='Local de prueba'}={}){w.db.run('INSERT INTO visits(id,company_id,request_id,starts_at,place,notes,status,created_at) VALUES(?,?,?,?,?,?,?,?)',uuid(),company,r.id,date,place,'',status,now());}
+function upcomingAgencyVisits(body){
+ const section=body.match(/<h2>Próximas grabaciones<\/h2>([\s\S]*?)<\/section>/);
+ assert.ok(section,'La agencia debe mostrar su sección de próximas grabaciones.');
+ return section[1];
+}
+function assertAgencyVisitCount(body,expected){
+ const metric=body.match(/<span>Visitas programadas<\/span><\/div><strong>(\d+)<\/strong>/);
+ assert.ok(metric,'La agencia debe mostrar el recuento de visitas programadas.');
+ assert.equal(Number(metric[1]),expected);
+}
 
 test('bandeja completa y paginada sin perder tareas del inicio',async t=>{
  const w=await setup(t);for(let i=0;i<23;i++){const r=await request(w,{title:'Entrega '+i});review(w,r.id);}
@@ -88,7 +99,39 @@ test('la agenda de Contenido mantiene módulo, período, empresa y modo de consu
  assert.equal((await w.client.get('/contenido?vista=agenda&periodo=falso')).status,400);
 });
 test('los recuentos de inicio y agencia excluyen visitas de solicitudes canceladas',async t=>{
- const w=await setup(t),r=await request(w);visit(w,r);w.db.run("UPDATE requests SET status='CANCELLED' WHERE id=?",r.id);
- const home=await w.client.get('/inicio');assert.match(home.body,/<strong>0<\/strong><span>Próximas visitas/);
- const agencyView=await w.admin.get('/resumen');assert.doesNotMatch(agencyView.body,/2099/);
+ const w=await setup(t),cancelled=await request(w,{title:'Grabación cancelada'});
+ visit(w,cancelled,{place:'Sede de la visita cancelada'});
+ w.db.run("UPDATE requests SET status='CANCELLED' WHERE id=?",cancelled.id);
+ const home=await w.client.get('/inicio');assert.equal(home.status,200);
+ assert.match(home.body,/<strong>0<\/strong><span>Próximas visitas/);
+ const agencyView=await w.admin.get('/resumen');assert.equal(agencyView.status,200);
+ assertAgencyVisitCount(agencyView.body,0);
+ assert.match(upcomingAgencyVisits(agencyView.body),/Tu agenda está al día/);
+ assert.doesNotMatch(upcomingAgencyVisits(agencyView.body),/appointment-list|Grabación cancelada|Sede de la visita cancelada/);
+ // The cancelled request remains in recent activity; only its upcoming visit is excluded.
+ assert.match(agencyView.body,/Grabación cancelada/);
+
+ const active=await request(w,{title:'Grabación vigente'});
+ visit(w,active,{place:'Sede de la visita vigente'});
+ const mixedHome=await w.client.get('/inicio');assert.equal(mixedHome.status,200);
+ assert.match(mixedHome.body,/<strong>1<\/strong><span>Próximas visitas/);
+ const mixedAgency=await w.admin.get('/resumen');assert.equal(mixedAgency.status,200);
+ assertAgencyVisitCount(mixedAgency.body,1);
+ const upcoming=upcomingAgencyVisits(mixedAgency.body);
+ assert.match(upcoming,/Grabación vigente/);assert.match(upcoming,/Sede de la visita vigente/);
+ assert.doesNotMatch(upcoming,/Grabación cancelada|Sede de la visita cancelada/);
+ assert.equal(w.db.get('SELECT status FROM visits WHERE request_id=?',cancelled.id).status,'SCHEDULED');
+ assert.equal(agendaData(w.db,actor(w),w.id).counts.historial,1);
+});
+test('la agenda vacía admite un identificador de negocio que contiene 2099 en actividad reciente',()=>{
+ const companyId='00002099-0000-4000-8000-000000000001';
+ const body=agencyOverview({counts:{companies:1,pending:0,open:0,delivered:0,visits:0},pipeline:[],visits:[],recent:[{
+  id:'00000000-0000-4000-8000-000000000002',company_id:companyId,company_name:'Negocio de prueba',
+  title:'Grabación cancelada',channel:'SOCIAL',status:'CANCELLED',quantity:1,created_at:'2026-01-01T15:00:00.000Z',
+ }]});
+ // Reproduce the former false positive without depending on a randomly generated UUID.
+ assert.ok(body.includes('?empresa='+companyId));assert.match(body,/Grabación cancelada/);
+ assertAgencyVisitCount(body,0);
+ assert.match(upcomingAgencyVisits(body),/Tu agenda está al día/);
+ assert.doesNotMatch(upcomingAgencyVisits(body),/appointment-list|Grabación cancelada/);
 });

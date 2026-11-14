@@ -1,3 +1,4 @@
+import { checkRevision } from '../shared/revision.mjs';
 import { requireService } from '../businesses/services.mjs';
 import { requestPhone } from '../shared/contact.mjs';
 import { compatibleContentQuota } from '../content/service-options.mjs';
@@ -90,6 +91,7 @@ export function createRequest(db, actor, company, data) {
 }
 export function updateRequest(db, actor, company, request, data) {
   requireAgency(actor);
+  checkRevision(request,data);
   const target = choice(data.status,['REVIEW','APPROVED','CANCELLED','NEW'],'estado');
   const allowed = {
     NEW:['REVIEW','APPROVED','CANCELLED'], REVIEW:['APPROVED','CANCELLED'],
@@ -117,6 +119,7 @@ export function updateRequest(db, actor, company, request, data) {
 }
 export function addVisit(db, actor, company, request, data) {
   requireAgency(actor);
+  checkRevision(request,data);
   requireThat(company.approved && request.type !== 'PLAN' && !finalStates.includes(request.status),
     'La solicitud no está disponible para programar visitas.',409);
   requireThat(request.status !== 'QUOTED','Espera la aceptación de la cotización.',409);
@@ -129,9 +132,8 @@ export function addVisit(db, actor, company, request, data) {
     const id = uuid();
     db.run(`INSERT INTO visits(id,company_id,request_id,starts_at,place,notes,status,created_at)
       VALUES(?,?,?,?,?,?,'SCHEDULED',?)`,id,company.id,request.id,starts,place,note,now());
-    if (!['PRODUCTION','SCHEDULED'].includes(request.status)) {
-      db.run("UPDATE requests SET status='SCHEDULED',revision=revision+1 WHERE id=?",request.id);
-    }
+    db.run('UPDATE requests SET status=?,revision=revision+1 WHERE id=?',
+      request.status==='PRODUCTION'?'PRODUCTION':'SCHEDULED',request.id);
     event(db,actor,company.id,'REQUEST',request.id,'VISITA_PROGRAMADA',place,request.channel);
   });
 }
@@ -141,11 +143,13 @@ export function finishVisit(db, actor, company, request, data) {
   const visit = db.get("SELECT * FROM visits WHERE id=? AND company_id=? AND request_id=? AND status='SCHEDULED'",
     data.visit || '',company.id,request.id);
   requireThat(visit,'La visita ya fue cerrada.',409);
+  checkRevision(visit,data);
   const recorded = status === 'DONE' ? localInstant(data.recorded,'hora de grabación o visita') : null;
   requireThat(!recorded || recorded <= now(),'La fecha real de visita no puede estar en el futuro.');
   const note = text(data.notes || '', 'observaciones',status === 'CANCELLED' ? 5 : 0,1500);
   db.transaction(() => {
-    db.run('UPDATE visits SET status=?,recorded_at=?,revision=revision+1 WHERE id=?',status,recorded,visit.id);
+    const notes=note?[visit.notes,'Resultado: '+note].filter(Boolean).join('\n\n'):visit.notes;
+    db.run('UPDATE visits SET status=?,recorded_at=?,notes=?,revision=revision+1 WHERE id=?',status,recorded,notes,visit.id);
     event(db,actor,company.id,'REQUEST',request.id,status === 'DONE' ? 'VISITA_REALIZADA' : 'VISITA_CANCELADA',note,request.channel);
     if (status === 'DONE' && request.type === 'VISIT' && !db.get("SELECT id FROM visits WHERE request_id=? AND status='SCHEDULED'",request.id)) {
       db.run("UPDATE requests SET status='DELIVERED',revision=revision+1 WHERE id=?",request.id);
@@ -154,6 +158,7 @@ export function finishVisit(db, actor, company, request, data) {
 }
 export function addPiece(db, actor, company, request, data) {
   requireAgency(actor);
+  checkRevision(request,data);
   requireThat(company.approved && !['PLAN','VISIT'].includes(request.type) && productionStates.includes(request.status),
     'Aprueba la solicitud antes de crear entregables.',409);
   const title = text(data.title,'título de la pieza',2,150);
@@ -210,16 +215,21 @@ export function reviewPiece(db, actor, company, request, piece, data) {
   const note = text(data.notes || '','observaciones',status === 'PRODUCTION' ? 5 : 0,1000);
   db.transaction(() => {
     db.run('UPDATE pieces SET status=?,revision=revision+1 WHERE id=?',status,piece.id);
-    event(db,actor,company.id,'REQUEST',request.id,status === 'APPROVED' ? 'PIEZA_APROBADA' : 'CAMBIOS_SOLICITADOS',note || piece.title,request.channel);
+    event(db,actor,company.id,'REQUEST',request.id,status === 'APPROVED' ? 'PIEZA_APROBADA' : 'CAMBIOS_SOLICITADOS',note ? piece.title+' · '+note : piece.title,request.channel);
   });
 }
 export function addEvidence(db, actor, company, request, piece, data) {
   requireAgency(actor);
-  requireThat(piece.status !== 'CANCELLED','La pieza está cancelada.',409);
+  requireThat(piece.status !== 'CANCELLED' && request.status !== 'CANCELLED','La pieza está cancelada.',409);
+  checkRevision(piece,data);
   const label = text(data.label,'nombre de la evidencia',2,100);
   const url = httpsUrl(data.url);
   db.transaction(() => {
+    requireThat(!db.get('SELECT id FROM evidence WHERE company_id=? AND piece_id=? AND url=?',company.id,piece.id,url),
+      'Este enlace ya está adjunto al entregable.',409);
     db.run('INSERT INTO evidence VALUES(?,?,?,?,?,?)',uuid(),company.id,piece.id,label,url,now());
+    // A review opened before a new attachment cannot approve the changed version.
+    db.run('UPDATE pieces SET revision=revision+1 WHERE id=?',piece.id);
     event(db,actor,company.id,'REQUEST',request.id,'EVIDENCIA_ADJUNTADA',label,request.channel);
   });
 }

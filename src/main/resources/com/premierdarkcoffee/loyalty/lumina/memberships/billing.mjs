@@ -1,3 +1,4 @@
+import { checkRevision } from '../shared/revision.mjs';
 import { attachCampaign, offerAvailable } from '../campaigns/season.mjs';
 import { normalizeOffer } from './offers.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
@@ -115,6 +116,7 @@ export function currentQuote(db, companyId, requestId) {
 }
 export function offerQuote(db, actor, company, request, input) {
   requireAgency(actor);
+  checkRevision(request,input);
   requireThat(request.type !== 'COURTESY','El video de bienvenida es de cortesía.',409);
   const amount = money(input.amount);
   const terms = text(input.terms,'condiciones de la cotización',5,4000);

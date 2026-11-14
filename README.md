@@ -98,3 +98,9 @@ Teléfono para colaboradores y clientes Wallet, alta más clara, contacto editab
 ### Lúmina v023 / Loyalty v062
 
 Pendientes completos, agenda por próximas visitas e historial, solicitudes con filtros y totales, y buscador de secciones. Conserva roles y conexiones Wallet. [Guía de actualización](docs/lumina-jornada-simple-v062.md).
+
+### Lúmina v024r1 / Loyalty v063
+
+Ficha de solicitud con siguiente paso, archivos y revisión clara; recuperación de formularios y protección ante versiones antiguas; resultados de visitas visibles. [Guía de actualización](docs/lumina-entregas-claras-v063.md).
+
+La revisión r1 corrige una prueba que confundía un identificador con una fecha. Comprueba los recuentos y la agenda real, conserva las mejoras v024 y exige las 315 pruebas completas antes de continuar la instalación.

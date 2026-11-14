@@ -53,6 +53,8 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/deliveries.css':['deliveries.css','text/css; charset=utf-8'],
+  '/assets/deliveries.js':['deliveries.js','text/javascript; charset=utf-8'],
   '/assets/welcome.css':['welcome.css','text/css; charset=utf-8'],
   '/assets/identity.js':['identity.js','text/javascript; charset=utf-8'],
   '/assets/identity-rules.mjs':['identity-rules.mjs','text/javascript; charset=utf-8'],
@@ -102,7 +104,7 @@ function teamInvitation(db,actor,id,code) {
   const member = teamMember(db,actor,id);
   return {title:'Acceso creado',description:'Comparte el código con la persona por tu canal habitual.',body:invitePage(member,code)};
 }
-function getRequestPage(db,actor,company,url,request) {
+function getRequestPage(db,actor,company,url,request,feedback=null) {
   const pieces = db.all('SELECT * FROM pieces WHERE company_id=? AND request_id=? ORDER BY created_at,id',company.id,request.id)
     .map(piece=>({
       ...piece,
@@ -114,9 +116,9 @@ function getRequestPage(db,actor,company,url,request) {
   const quote = actor.kind === 'COLLABORATOR' ? null : currentQuote(db,company.id,request.id);
   const plan = request.plan_id ? getPlan(db,request.plan_id) : null;
   const contracts = actor.kind === 'AGENCY' ? contractsFor(db,company.id) : [];
-  return {title:request.title,description:'Solicitud, visitas, piezas e historial del negocio.',
+  return {title:request.title,description:'',
     layout:request.channel==='SOCIAL'?'content':undefined,contentView:'solicitudes',
-    body:requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan})};
+    body:requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan,feedback})};
 }
 
 export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {}, readiness = null }) {
@@ -679,12 +681,21 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if (method==='GET' && !rest) return render(getRequestPage(db,actor,company,url,request));
         if (method==='POST') {
           const pieceMatch = rest.match(/^\/piezas\/([^/]+)\/(editar|revisar|evidencia|publicacion|medir)$/);
-          if (Object.hasOwn(operations,rest)) operations[rest](db,actor,company,request,data);
-          else if (pieceMatch && isId(pieceMatch[1])) {
-            const piece = getPiece(db,company.id,request.id,pieceMatch[1]);
-            pieceOperations[pieceMatch[2]](db,actor,company,request,piece,data);
-          } else throw new Problem('Acción no encontrada.',404);
-          return redirect(res,url('/solicitudes/'+request.id));
+          try {
+            if (Object.hasOwn(operations,rest)) operations[rest](db,actor,company,request,data);
+            else if (pieceMatch && isId(pieceMatch[1])) {
+              const piece = getPiece(db,company.id,request.id,pieceMatch[1]);
+              pieceOperations[pieceMatch[2]](db,actor,company,request,piece,data);
+            } else throw new Problem('Acción no encontrada.',404);
+          } catch(issue) {
+            // Access failures keep the generic response; only an authorized form
+            // can recover its values, against a fresh, tenant-scoped request.
+            if (!(issue instanceof Problem) || ![400,409].includes(issue.status)) throw issue;
+            const latest=getRequest(db,actor,company.id,request.id);
+            return render(getRequestPage(db,actor,company,url,latest,{action:rest,values:data,error:issue.message}),issue.status);
+          }
+          const anchor=pieceMatch?'#pieza-'+pieceMatch[1]:rest.startsWith('/visitas')?'#visitas':rest==='/cotizar'||rest==='/aceptar'?'#cotizacion':rest==='/piezas'?'#entregables':'#detalle';
+          return redirect(res,url('/solicitudes/'+request.id)+anchor);
         }
       }
       if (path==='/agenda' && method==='GET') {

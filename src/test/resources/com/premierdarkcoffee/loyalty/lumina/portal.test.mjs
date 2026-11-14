@@ -58,12 +58,12 @@ test('una solicitud conserva fecha, visita, evidencia, aprobación y estadístic
   const piecePath = path+'/piezas/'+piece.id;
   assert.equal((await admin.post(selected(piecePath+'/evidencia',id),{label:'Video de revisión',url:'https://example.test/material'})).status,303);
   assert.equal((await admin.post(selected(piecePath+'/evidencia',id),{label:'Inválido',url:'javascript:alert(1)'})).status,400);
-  assert.equal((await admin.post(selected(piecePath+'/editar',id),{revision:'1',status:'REVIEW',recorded:date(10,'10:20'),notes:'Grabado con luz natural'})).status,303);
+  assert.equal((await admin.post(selected(piecePath+'/editar',id),{revision:'2',status:'REVIEW',recorded:date(10,'10:20'),notes:'Grabado con luz natural'})).status,303);
   const view = await client.get(path);
   assert.match(view.body,/Grabado con luz natural/);
   assert.match(view.body,/Video de revisión/);
-  assert.equal((await client.post(piecePath+'/revisar',{revision:'2',status:'APPROVED'})).status,303);
-  assert.equal((await admin.post(selected(piecePath+'/editar',id),{revision:'3',status:'DELIVERED',recorded:date(10,'10:20'),notes:'Entregado'})).status,303);
+  assert.equal((await client.post(piecePath+'/revisar',{revision:'3',status:'APPROVED'})).status,303);
+  assert.equal((await admin.post(selected(piecePath+'/editar',id),{revision:'4',status:'DELIVERED',recorded:date(10,'10:20'),notes:'Entregado'})).status,303);
   assert.equal((await admin.post(selected(piecePath+'/publicacion',id),{channel:'INSTAGRAM',url:'https://example.test/post/1',published:date(9)})).status,303);
   const pub = world.db.get('SELECT id FROM publications WHERE piece_id=?',piece.id);
   assert.equal((await admin.post(selected(piecePath+'/medir',id),{publication:pub.id,observed:date(8),views:'20',likes:'0'})).status,303);

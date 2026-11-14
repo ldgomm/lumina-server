@@ -19,15 +19,15 @@ async function produce(w) {
   const piece=w.db.get('SELECT * FROM pieces');
   const route=path+'/piezas/'+piece.id;
   await w.admin.post(selected(route+'/evidencia',w.id),{label:'Archivo maestro',url:'https://example.test/master'});
-  assert.equal((await w.admin.post(selected(route+'/editar',w.id),{status:'REVIEW',revision:'1',notes:'Revisar el cierre',recorded:yesterday()})).status,303);
+  assert.equal((await w.admin.post(selected(route+'/editar',w.id),{status:'REVIEW',revision:'2',notes:'Revisar el cierre',recorded:yesterday()})).status,303);
   return {path,route,piece};
 }
 
 test('módulo completo: solicitud común, revisión, entrega, cuatro publicaciones y métricas de una única pieza',async t=>{
   const w=await setup(t),p=await produce(w);
   const reviews=await w.client.get('/contenido?vista=revisiones');assert.equal(reviews.status,200);assert.match(reviews.body,/Video del producto/);assert.match(reviews.body,/Revisar pieza/);
-  assert.equal((await w.client.post(p.route+'/revisar',{status:'APPROVED',revision:'2'})).status,303);
-  assert.equal((await w.admin.post(selected(p.route+'/editar',w.id),{status:'DELIVERED',revision:'3',notes:'Entrega final',recorded:yesterday()})).status,303);
+  assert.equal((await w.client.post(p.route+'/revisar',{status:'APPROVED',revision:'3'})).status,303);
+  assert.equal((await w.admin.post(selected(p.route+'/editar',w.id),{status:'DELIVERED',revision:'4',notes:'Entrega final',recorded:yesterday()})).status,303);
   for(const channel of ['INSTAGRAM','TIKTOK','FACEBOOK','YOUTUBE'])assert.equal((await w.admin.post(selected(p.route+'/publicacion',w.id),{channel,url:'https://example.test/'+channel,published:yesterday()})).status,303);
   const publication=w.db.get("SELECT * FROM publications WHERE channel='TIKTOK'");
   await w.admin.post(selected(p.route+'/medir',w.id),{publication:publication.id,observed:yesterday(),views:'12',likes:'0'});
@@ -41,7 +41,7 @@ test('módulo completo: solicitud común, revisión, entrega, cuatro publicacion
 
 test('permisos de plataforma, solicitudes históricas y aislamiento se conservan en todas las vistas del módulo',async t=>{
   const w=await setup(t),p=await produce(w);
-  await w.client.post(p.route+'/revisar',{status:'APPROVED',revision:'2'});
+  await w.client.post(p.route+'/revisar',{status:'APPROVED',revision:'3'});
   for(const channel of ['INSTAGRAM','TIKTOK'])await w.admin.post(selected(p.route+'/publicacion',w.id),{channel,url:'https://example.test/private-'+channel,published:yesterday()});
   const member=await colleague(w,w.client,{name:'Solo TikTok',document:'1733968380','TIKTOK.VIEW':'yes'});
   const pubs=await member.session.get('/contenido?vista=publicaciones');assert.equal(pubs.status,200);assert.match(pubs.body,/private-TIKTOK/);assert.doesNotMatch(pubs.body,/private-INSTAGRAM/);

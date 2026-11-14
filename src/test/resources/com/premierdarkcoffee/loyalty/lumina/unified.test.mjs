@@ -35,7 +35,7 @@ test('una pieza, cuatro publicaciones y cuatro métricas consumen un solo cupo m
  }
  assert.equal(world.db.get('SELECT count(*) AS n FROM request_platforms').n,0);
  assert.equal(world.db.get('SELECT count(*) AS n FROM requests').n,1);assert.equal(world.db.get('SELECT count(*) AS n FROM pieces').n,1);assert.equal(world.db.get('SELECT count(*) AS n FROM publications').n,4);
- const view=await client.get(path);assert.equal(view.status,200);assert.match(view.body,/Contenido común/);assert.match(view.body,/cuenta una sola vez/);
+ const view=await client.get(path);assert.equal(view.status,200);assert.equal((view.body.match(/class="delivery-card/g)||[]).length,1);assert.equal((view.body.match(/class="detail-publication"/g)||[]).length,4);
  for(const platform of platforms)assert.ok(view.body.includes('https://example.test/'+platform));
  const reports=await client.get('/reportes?desde='+when(2)+'&hasta='+localDay());for(const count of [100,101,102,103])assert.match(reports.body,new RegExp('>'+count+'<'));
  const extra=await client.post('/solicitudes',{...social,title:'Otra pieza'});
