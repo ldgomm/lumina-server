@@ -24,20 +24,21 @@ export function publicPage(path,setupAvailable,{values={},error=''}={}) {
         check('consent','Autorizo el registro de estos datos para gestionar mi cuenta.',values.consent==='yes',true)+
         submit('Crear mi cuenta','Creando tu cuenta…'),'access-form')+foot('¿Ya tienes una cuenta?','/login','Ingresar')};
   } else if(path==='/activate') {
-    view={title:'Tu equipo te espera.',description:'Activa el acceso que te asignó el dueño del negocio.',mode:'activate',
+    view={title:'Tu equipo te espera.',description:'Usa la cédula y el teléfono que registró el dueño del negocio.',mode:'activate',
       body:form('/activate',null,
         input('code','Código de invitación','password','required minlength="43" maxlength="43" autocomplete="off" aria-describedby="invitation-hint"')+
         '<p class="field-hint" id="invitation-hint">Copia el código completo que te compartió el negocio.</p>'+
+        input('document','Tu cédula','text','required inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="username" data-identity="document"',values.document||'')+
         input('phone','Tu teléfono','tel','required maxlength="30" autocomplete="tel" placeholder="099 123 4567" data-identity="contact"',values.phone||'')+
         password('password','Crea tu contraseña','required minlength="12" maxlength="128" autocomplete="new-password" aria-describedby="password-hint"')+
         '<p class="field-hint" id="password-hint">Al menos 12 caracteres. Después ingresarás con tu cédula y esta contraseña.</p>'+
         submit('Activar y entrar','Activando tu acceso…'),'access-form')+foot('¿Ya activaste tu acceso?','/login','Ingresar')};
   } else if(path==='/legacy-login') {
-    view={title:'Conserva tu cuenta.',description:'Si antes ingresabas con correo, actualiza tu acceso una sola vez.',mode:'legacy',
+    view={title:'Conserva tu cuenta.',description:'Para cuentas que antes ingresaban con correo.',mode:'legacy',
       body:form('/legacy-login',null,
         input('email','Correo anterior','email','required maxlength="180" autocomplete="username"',values.email||'')+
         password('password','Contraseña actual','required maxlength="128" autocomplete="current-password"')+
-        hint('Después registrarás tu cédula. Tus datos y servicios se conservan.')+
+        hint('Ingresa con tu correo y contraseña de siempre para continuar con la misma cuenta, permisos y servicios.')+
         submit('Verificar mi cuenta','Verificando…'),'access-form')+foot('¿Ya usas tu cédula?','/login','Ingresar')};
   } else if(path==='/setup') {
     view={title:'El inicio de Lúmina.',description:'Configura una sola vez la cuenta que administra la agencia.',mode:'setup',
@@ -55,7 +56,8 @@ export function publicPage(path,setupAvailable,{values={},error=''}={}) {
         '<p class="field-hint" id="document-hint">Usa tu cédula. Si eres dueño, también puedes usar el RUC del negocio.</p>'+
         password('password','Contraseña','required maxlength="128" autocomplete="current-password"')+
         submit('Ingresar','Ingresando…'),'access-form')+
-        `<div class="access-help"><details><summary>¿Necesitas ayuda para ingresar?</summary><p>Comprueba tu cédula y contraseña. Si eres colaborador y es tu primera vez, activa el código que te entregó el negocio.</p>${localLink('/legacy-login','Ya tenía una cuenta con correo','legacy-access')}</details></div>`+
+        `<p class="access-switch">${localLink('/legacy-login','Ya tenía una cuenta con correo','legacy-access')}</p>`+
+        `<div class="access-help"><details><summary>¿Necesitas ayuda para ingresar?</summary><p>Comprueba tu cédula y contraseña. Si eres colaborador y es tu primera vez, activa el código que te entregó el negocio.</p></details></div>`+
         `<div class="access-choices"><a class="access-choice" href="/register"><span>¿Tienes un negocio?</span><strong>Crear mi cuenta <span aria-hidden="true">→</span></strong></a><a class="access-choice" href="/activate"><span>¿Te invitaron a un equipo?</span><strong>Activar mi acceso <span aria-hidden="true">→</span></strong></a></div>`+
         (setupAvailable?`<div class="agency-setup-link">${localLink('/setup','Configurar la agencia')}</div>`:'')};
   }

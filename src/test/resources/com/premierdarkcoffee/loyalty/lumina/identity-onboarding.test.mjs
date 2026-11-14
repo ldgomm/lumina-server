@@ -87,8 +87,8 @@ test('cedula or business RUC plus password open the same owner and emails never 
 });
 test('collaborator sees one welcome with assigned active services and cannot activate other modules',async t=>{
  const w=await world(t),o=await signup(w);await o.client.post('/welcome',{service:'SOCIAL'});await o.client.get('/team');
- const data={name:'Colaboradora',document:documentFor('team-onboarding'),'SOCIAL.VIEW':'yes','WEB.VIEW':'yes'};
- const r=await o.client.post('/team',data);assert.equal(r.status,201,r.body);const code=r.body.match(/<code class="secret">([^<]+)/)[1],member=w.session();assert.equal((await member.post('/activate',{code,password,phone:'0991234567'})).location,'/welcome');
+ const data={phone:'0991234567',name:'Colaboradora',document:documentFor('team-onboarding'),'SOCIAL.VIEW':'yes','WEB.VIEW':'yes'};
+ const r=await o.client.post('/team',data);assert.equal(r.status,201,r.body);const code=r.body.match(/<code class="secret">([^<]+)/)[1],member=w.session();assert.equal((await member.post('/activate',{code,document:data.document,password,phone:'0991234567'})).location,'/welcome');
  const welcome=await member.get('/welcome');assert.match(welcome.body,/Contenido/);assert.doesNotMatch(welcome.body,/Acceso asignado<\/span>.*Web|name="service"/);
  assert.equal((await member.post('/services/activate',{service:'WEB'})).status,403);assert.equal((await member.post('/welcome',{service:'WEB'})).status,403);assert.equal((await member.post('/welcome',{})).location,'/home');assert.equal((await member.get('/content')).status,200);assert.equal((await member.get('/services/web')).status,409);
  const login=w.session();assert.equal((await login.post('/login',{document:data.document,password})).location,'/home');

@@ -1,6 +1,6 @@
-# Lúmina v029 / Loyalty v068
+# Lúmina v030 / Loyalty v069
 
-Business accounts, private content files with versioned review, useful notices, clear saved permissions and comparable metrics. [Installation and validation](docs/lumina-operations-v068.md). [Installed Wallet continuity](docs/wallet-continuity-v068.md). [Social API readiness](docs/social-sync-readiness-v068.md).
+Collaborator activation matches the cedula and phone assigned by the owner. Existing email-based administrators add a cedula to the same account. [Identity access update](docs/lumina-identity-access-v069.md). Business accounts, private content files with versioned review, useful notices and comparable metrics. [Installation and validation](docs/lumina-operations-v068.md). [Installed Wallet continuity](docs/wallet-continuity-v068.md). [Social API readiness](docs/social-sync-readiness-v068.md).
 
 Open `/` for the agency website, `/login` for account entry and `/services` as an owner to manage available services. Reading these pages never activates a service or changes a Wallet connection.
 

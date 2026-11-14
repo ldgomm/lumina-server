@@ -94,6 +94,7 @@ export async function authenticateLegacy(db,data) {
   return current.id;
 }
 export async function claimIdentity(db,actor,data) {
+  requireThat(actor.kind!=='COLLABORATOR','El dueño del negocio debe registrar tu cédula en Equipo y permisos.',403);
   const document=documentNumber(data.document);
   const ruc=actor.kind==='OWNER'?rucNumber(data.ruc):null;
   const phone=actor.kind==='OWNER'?whatsappNumber(data.phone):null;
@@ -215,7 +216,7 @@ export function createTeamMember(db, actor, input) {
   requireOwner(actor);
   const name = text(input.name,'nombre',2,100);
   const document = documentNumber(input.document);
-  const phone = input.phone?.trim() ? contactPhone(input.phone) : null;
+  const phone = contactPhone(input.phone);
   return db.transaction(() => {
     requireThat(!db.get('SELECT id FROM accounts WHERE document=?',document), 'Esa cédula ya tiene un acceso.', 409);
     const id = uuid();
@@ -260,6 +261,10 @@ export function manageAccount(db, actor, id, action, input) {
     requireTeamRevision(target,input);
     requireThat(['DISABLE','INVITE'].includes(action),'Acción de acceso inválida.');
     requireThat(input.confirm==='yes',action==='DISABLE'?'Confirma la baja del acceso completo.':'Confirma que se cerrarán sus sesiones y deberá elegir una nueva contraseña.');
+    if(action==='INVITE') {
+      requireThat(target.document&&target.contact_phone,'Completa la cédula y el teléfono en Datos y acceso antes de generar el código.');
+      documentNumber(target.document);contactPhone(target.contact_phone);
+    }
     db.run('DELETE FROM sessions WHERE account_id=?',id);
     db.run('DELETE FROM codes WHERE account_id=?',id);
     if (action === 'DISABLE') {
@@ -276,19 +281,27 @@ export function manageAccount(db, actor, id, action, input) {
 }
 export async function activate(db, data) {
   const initial = checkCode(db,data.code,'ACTIVATE');
+  const document = documentNumber(data.document);
   const phone = contactPhone(data.phone);
+  const invited = db.get("SELECT id,document,contact_phone,revision FROM accounts WHERE id=? AND kind='COLLABORATOR' AND company_id IS NOT NULL AND active=1 AND password IS NULL",initial.account_id);
+  requireThat(invited, 'El acceso cambió. Solicita un código vigente.', 409);
+  requireThat(invited.document&&invited.contact_phone,'El dueño debe completar tu cédula y teléfono en Equipo y permisos y compartirte un código vigente.',409);
+  requireThat(invited.document===document&&contactPhone(invited.contact_phone)===phone,'La cédula o el teléfono no coinciden con la invitación. Revisa los datos con el dueño del negocio.',403);
   const password = await hashPassword(data.password);
   return db.transaction(() => {
     const code = checkCode(db,data.code,'ACTIVATE');
     requireThat(code.account_id === initial.account_id, 'El acceso cambió. Solicita un código vigente.', 409);
-    requireThat(db.run('UPDATE accounts SET password=?,contact_phone=?,revision=revision+1 WHERE id=? AND active=1 AND password IS NULL',
-      password,phone,code.account_id).changes === 1, 'El acceso cambió. Solicita un código vigente.', 409);
-    db.run('DELETE FROM codes WHERE digest=?',code.digest);
+    requireThat(!db.get('SELECT id FROM accounts WHERE document=? AND id<>?',document,code.account_id), 'Esa cédula ya tiene un acceso. Contacta al dueño del negocio.', 409);
+    requireThat(db.run("UPDATE accounts SET password=?,revision=revision+1 WHERE id=? AND revision=? AND kind='COLLABORATOR' AND active=1 AND password IS NULL AND document=? AND contact_phone=?",
+      password,code.account_id,invited.revision,document,invited.contact_phone).changes === 1, 'El acceso cambió. Solicita un código vigente.', 409);
+    db.run('DELETE FROM sessions WHERE account_id=?',code.account_id);
+    db.run('DELETE FROM codes WHERE account_id=?',code.account_id);
     return code.account_id;
   });
 }
 
 export function updateContact(db,actor,input) {
+  requireThat(actor.kind!=='COLLABORATOR','El dueño del negocio administra tu teléfono en Equipo y permisos.',403);
   const phone=contactPhone(input.phone);
   return db.transaction(()=>{
     const current=db.get('SELECT id,revision,contact_phone FROM accounts WHERE id=? AND active=1',actor.id);

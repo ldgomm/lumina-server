@@ -183,7 +183,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (path==='/coming-soon') throw new Problem('Página no encontrada.',404);
       const publicPaths = ['/login','/register','/activate','/setup','/legacy-login'];
       if (method==='GET' && publicPaths.includes(path)) {
-        if (actor) return redirect(res,'/home');
+        if (actor) return redirect(res,!actor.document&&['/login','/legacy-login'].includes(path)?'/account/identity':'/home');
         const setupAvailable = !db.get("SELECT id FROM accounts WHERE kind='AGENCY'");
         if (path==='/setup') requireThat(setupAvailable,'La cuenta de agencia ya está configurada.',404);
         return render(publicPage(path,setupAvailable));
@@ -193,7 +193,10 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         limit(db,path+':'+req.socket.remoteAddress,path==='/login' ? 50 : 16);
         const data = await readForm(req);
         try {
-          if (path==='/login') {const id=await authenticate(db,data);return startSession(id,db.get('SELECT welcome_done FROM accounts WHERE id=?',id).welcome_done?'/home':'/welcome');}
+          if (path==='/login') {
+            const id=await authenticate(db,data),account=db.get('SELECT kind,document,welcome_done FROM accounts WHERE id=?',id);
+            return startSession(id,!account.document?'/account/identity':account.kind==='AGENCY'?'/dashboard':account.welcome_done?'/home':'/welcome');
+          }
           if(path==='/legacy-login')return startSession(await authenticateLegacy(db,data),'/account/identity');
           if (path==='/register') {
             const account=await register(db,key,data);

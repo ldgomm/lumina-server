@@ -7,3 +7,5 @@
 @media(max-width:760px){.signed-out main{padding-top:28px}.signed-out .page-title h1{font-size:clamp(1.8rem,7.2vw,2.5rem)}.access-choice{padding:16px}.auth-grid .card{height:auto}}
 
 .auth-grid .auth-logo{display:block;width:96px;height:96px;object-fit:contain;margin:0 0 20px}
+
+.account-identity{grid-column:1/-1}.account-identity form{max-width:36rem}

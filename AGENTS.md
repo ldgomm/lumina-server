@@ -1,5 +1,16 @@
 # Loyalty
 
+## Lúmina v030 / Loyalty v069 — assigned identity and existing account access
+
+- Baseline: installed v029/v068, commit 1bd85376daf54a23f418cd431503451f9d764b38. This section supersedes earlier identity behavior and gate counts.
+- Owners must assign both cedula and phone before inviting a business collaborator. Activation requires the same validated cedula and normalized phone plus an unexpired single-use invitation. It sets the password; it never changes assigned identity, contact, company, role or grants. Recheck revision, credentials and invitation after password hashing.
+- Old pending invitations missing assigned fields fail closed with an owner repair path. Keep existing activated accounts working. Only the owning business changes collaborator identity/contact; direct self-edit and self-claim endpoints must not bypass this policy.
+- Existing email administrators/owners authenticate with their existing password before adding a unique validated cedula to the same account. Preserve account IDs, password hashes, roles, business and Wallet links. Identity updates invalidate prior sessions/codes and create one current session. Never infer an administrator identity from a business RUC.
+- Public login visibly links to `/legacy-login`. Agency login opens `/dashboard`, including accounts with unfinished historical welcome flags. Keep English paths, Spanish UI and no secret reflection or browser storage of credentials.
+- No SQL/Kotlin/native Wallet changes, provider calls during identity claim, automatic identity reassignment or production deployment. SQLite11, PostgreSQLV017 and Wallet representation34 are unchanged.
+- Gates: 36 suites / 413 portal tests, 185 Python, 312 native unit/HTTP, 347 PostgreSQL; Docker staging and gateway before local commit, no push. 26 DOM suites and fixture browser QA remain separate from native/device tests.
+- Installer output is RESULTADO plus the URL after confirmed startup. Preserve rollback, source conflict checks, production guard and pending physical Wallet verification. See docs/lumina-identity-access-v069.md.
+
 ## Lúmina v029 / Loyalty v068 — business operations and continuity evidence
 
 - Baseline: installed v028/v067, commit 719cb09910352fdef9e36220a218476fded60902. This section supersedes previous release and gate counts.

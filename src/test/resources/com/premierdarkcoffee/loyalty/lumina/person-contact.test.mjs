@@ -11,23 +11,29 @@ test('contact normalizes mobile fixed and international numbers without acceptin
  for(const raw of ['',null,'099123','09912345678','abc0991234567','09+91234567','+00012345678','+1234567890123456','0991234567\n0'])assert.throws(()=>contactPhone(raw),String(raw));
 });
 test('activation requires a phone and failure leaves the invitation usable and the account unchanged',async t=>{
- const w=await world(t),invite=await w.client.post('/team',{name:'Colaboradora',document:'1738277993'}),code=invite.body.match(/<code class="secret">([^<]+)/)[1],s=w.session();
- for(const phone of ['', 'abc']){const r=await s.post('/activate',{code,password,phone});assert.equal(r.status,400);assert.equal(contact(w).password,null);assert.equal(w.db.get('SELECT count(*) n FROM codes WHERE account_id=?',contact(w).id).n,1);}
- assert.equal((await s.post('/activate',{code,password,phone:'099 123 4567'})).status,303);assert.equal(contact(w).contact_phone,'+593991234567');assert.equal((await w.session().post('/activate',{code,password,phone:'0991234567'})).status,403);
+ const w=await world(t),invite=await w.client.post('/team',{name:'Colaboradora',document:'1738277993',phone:'0991234567'}),code=invite.body.match(/<code class="secret">([^<]+)/)[1],s=w.session();
+ for(const phone of ['', 'abc']){const r=await s.post('/activate',{code,document:'1738277993',password,phone});assert.equal(r.status,400);assert.equal(contact(w).password,null);assert.equal(w.db.get('SELECT count(*) n FROM codes WHERE account_id=?',contact(w).id).n,1);}
+ assert.equal((await s.post('/activate',{code,document:'1738277993',password,phone:'099 123 4567'})).status,303);assert.equal(contact(w).contact_phone,'+593991234567');assert.equal((await w.session().post('/activate',{code,document:'1738277993',password,phone:'0991234567'})).status,403);
 });
-test('optional invitation phone is validated and activation confirms the personal number',async t=>{
- const w=await world(t);assert.equal((await w.client.post('/team',{name:'Colaboradora',document:'1738277993',phone:'bad'})).status,400);assert.equal(contact(w),undefined);
- const r=await w.client.post('/team',{name:'Colaboradora',document:'1738277993',phone:'0981234567'}),code=r.body.match(/<code class="secret">([^<]+)/)[1];assert.equal(contact(w).contact_phone,'+593981234567');
- assert.equal((await w.session().post('/activate',{code,password,phone:'0991234567'})).status,303);assert.equal(contact(w).contact_phone,'+593991234567');
+test('owner must assign a phone and activation cannot replace it with a different number',async t=>{
+ const w=await world(t);
+ for(const phone of ['',null,'bad']){assert.equal((await w.client.post('/team',{name:'Colaboradora',document:'1738277993',phone})).status,400);assert.equal(contact(w),undefined);}
+ const r=await w.client.post('/team',{name:'Colaboradora',document:'1738277993',phone:'0981234567'}),code=r.body.match(/<code class="secret">([^<]+)/)[1];
+ assert.equal((await w.session().post('/activate',{code,document:'1738277993',password,phone:'0991234567'})).status,403);
+ assert.equal(contact(w).contact_phone,'+593981234567');assert.equal(contact(w).password,null);
+ assert.equal((await w.session().post('/activate',{code,document:'1738277993',password,phone:'+593 (98) 123-4567'})).status,303);
+ assert.equal(contact(w).contact_phone,'+593981234567');
 });
-test('collaborator can edit their phone without changing identity permissions or business WhatsApp',async t=>{
+test('collaborator contact is read-only and forged self edits cannot replace the assigned phone',async t=>{
  const w=await world(t),m=await person(w),before=contact(w),grants=w.db.all('SELECT * FROM grants WHERE account_id=?',m.id),business=w.db.get('SELECT * FROM companies WHERE id=?',w.id);
- await m.session.get('/account');assert.equal((await m.session.post('/account/contact',{phone:'0981234567',revision:teamRevision(w,m.id),id:business.id,kind:'OWNER'})).status,303);
- const after=contact(w);assert.equal(after.contact_phone,'+593981234567');for(const key of ['id','document','password','company_id','kind'])assert.equal(after[key],before[key]);assert.deepEqual(w.db.all('SELECT * FROM grants WHERE account_id=?',m.id),grants);assert.deepEqual(w.db.get('SELECT * FROM companies WHERE id=?',w.id),business);assert.equal((await m.session.get('/content')).status,200);
+ const page=await m.session.get('/account');assert.doesNotMatch(page.body,/action="\/account\/contact"/);
+ assert.equal((await m.session.post('/account/contact',{phone:'0981234567',revision:teamRevision(w,m.id),id:business.id,kind:'OWNER'})).status,403);
+ assert.deepEqual(contact(w),before);assert.deepEqual(w.db.all('SELECT * FROM grants WHERE account_id=?',m.id),grants);assert.deepEqual(w.db.get('SELECT * FROM companies WHERE id=?',w.id),business);assert.equal((await m.session.get('/content')).status,200);
 });
-test('contact update rejects stale form and preserves draft and current value',async t=>{
- const w=await world(t),m=await person(w),revision=teamRevision(w,m.id);await m.session.get('/account');await m.session.post('/account/contact',{phone:'0981234567',revision});
- const r=await m.session.post('/account/contact',{phone:'0971234567',revision});assert.equal(r.status,409);assert.match(r.body,/value="0971234567"/);assert.equal(contact(w).contact_phone,'+593981234567');
+test('owner personal contact rejects stale form and preserves draft and current value',async t=>{
+ const w=await world(t),account=w.db.get("SELECT * FROM accounts WHERE company_id=? AND kind='OWNER'",w.id),revision=String(account.revision);await w.client.get('/account');
+ assert.equal((await w.client.post('/account/contact',{phone:'0981234567',revision})).status,303);
+ const r=await w.client.post('/account/contact',{phone:'0971234567',revision});assert.equal(r.status,409);assert.match(r.body,/value="0971234567"/);assert.equal(w.db.get('SELECT contact_phone FROM accounts WHERE id=?',account.id).contact_phone,'+593981234567');
 });
 test('self contact requires authenticated CSRF and cannot edit another account through ids',async t=>{
  const w=await world(t),m=await person(w),before=contact(w);assert.equal((await w.session().post('/account/contact',{phone:'0981234567',revision:'0'})).status,401);
@@ -36,8 +42,8 @@ test('self contact requires authenticated CSRF and cannot edit another account t
 test('owner can correct member phone without revoking their session or disclosing it in audit',async t=>{
  const w=await world(t),m=await person(w);const r=await w.client.post('/team/'+m.id+'/details',{revision:teamRevision(w,m.id),name:'Colaboradora',document:'1738277993',phone:'0981234567'});assert.equal(r.status,303,r.body);assert.equal(contact(w).contact_phone,'+593981234567');assert.equal((await m.session.get('/content')).status,200);assert.doesNotMatch(JSON.stringify(w.db.all('SELECT * FROM audit')),/981234567/);
 });
-test('old active accounts without phone keep access and can add contact later',async t=>{
- const w=await world(t),m=await person(w);w.db.run('UPDATE accounts SET contact_phone=NULL WHERE id=?',m.id);assert.equal((await m.session.get('/content')).status,200);const page=await m.session.get('/account');assert.equal(page.status,200);assert.match(page.body,/name="phone"/);assert.equal(contact(w).contact_phone,null);
+test('old active collaborators keep access while the owner completes their contact',async t=>{
+ const w=await world(t),m=await person(w);w.db.run('UPDATE accounts SET contact_phone=NULL WHERE id=?',m.id);assert.equal((await m.session.get('/content')).status,200);const page=await m.session.get('/account');assert.equal(page.status,200);assert.doesNotMatch(page.body,/action="\/account\/contact"/);assert.match(page.body,/dueño del negocio/);assert.equal(contact(w).contact_phone,null);
 });
 test('team phone search is literal and remains within the owning business',async t=>{
  const w=await world(t),m=await person(w);

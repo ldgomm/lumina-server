@@ -40,7 +40,7 @@ try{
   const submitted=Object.fromEntries(new w.FormData(form)),saved=await client.post(form.getAttribute('action'),submitted);assert.equal(saved.status,303,saved.body);assert.equal((await initial.session.get('/wallet')).location,'/cashier');
   form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));const afterSubmit=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(afterSubmit);assert.equal(afterSubmit.defaultPrevented,false);assert.equal(form.querySelector('button[type=submit]').disabled,true);
   checks.push('Unified UI payload activates real session access through HTTP; draft navigation and double submit are guarded');
-  const invite=await client.post('/team',{name:'Por activar',document:documentFor('activar@example.test')}),code=invite.body.match(/<code class="secret">([^<]+)</)[1];
+  const invite=await client.post('/team',{phone:'0991234567',name:'Por activar',document:documentFor('activar@example.test')}),code=invite.body.match(/<code class="secret">([^<]+)</)[1];
   const copied=dom(invite.body);let value=null;Object.defineProperty(copied.navigator,'clipboard',{value:{writeText:async text=>{value=text;}}});load(copied,'team.js');assert.equal(value,null);copied.document.querySelector('[data-copy-activation]').click();await settle(()=>copied.document.querySelector('[data-copy-status]').textContent.includes('copiado'));assert.equal(value,code);assert.match(copied.document.querySelector('[data-copy-status]').textContent,/copiado/);
   checks.push('Activation code copies only after an explicit click; no automatic sharing or storage');
   const member=await colleague(world,client,{name:'Revisora',document:documentFor('revisora@example.test'),'WALLET.VIEW':'yes','WALLET_PROGRAMS.VIEW':'yes'});

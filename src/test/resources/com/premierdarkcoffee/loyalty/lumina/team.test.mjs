@@ -27,7 +27,7 @@ const audit = (w,id) => w.db.all("SELECT * FROM audit WHERE subject='ACCOUNT' AN
 test('directorio: búsqueda, filtros, estados y paginación no mezclan personas de otros negocios',async t=>{
   const w=await setup(t),m=await person(w),other=await owner(w,'Negocio privado','2');
   await colleague(w,other.client,{name:'Persona secreta',document:'1705666814'});
-  for(let i=0;i<21;i++)assert.equal((await w.client.post('/team',{name:'Invitada '+String(i).padStart(2,'0'),document:documentFor('invitada'+i+'@example.test'),'WEB.VIEW':'yes'})).status,201);
+  for(let i=0;i<21;i++)assert.equal((await w.client.post('/team',{phone:'0991234567',name:'Invitada '+String(i).padStart(2,'0'),document:documentFor('invitada'+i+'@example.test'),'WEB.VIEW':'yes'})).status,201);
   const first=await w.client.get('/team');assert.equal(first.status,200);assert.match(first.body,/22 personas/);assert.match(first.body,/Siguiente/);assert.doesNotMatch(first.body,/Persona secreta|secreta@example/);
   assert.match((await w.client.get('/team?page=1')).body,/Anterior/);
   assert.match((await w.client.get('/team?q=persona&state=ACTIVE&area=SOCIAL')).body,/1 persona/);
@@ -40,31 +40,31 @@ test('directorio: búsqueda, filtros, estados y paginación no mezclan personas 
 test('crear una persona rechaza permisos desconocidos, dependencias incompletas y privilegios de dueño',async t=>{
   const w=await setup(t);
   for(const grants of [{'SOCIAL.APPROVE':'yes'},{'WALLET_DESIGN.VIEW':'yes'},{'WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes','WALLET_REPORTS.EDIT':'yes'},{'ADMIN.VIEW':'yes'},{'SOCIAL.VIEW':'no'},{'SOCIAL.VIEW.extra':'yes'}]){
-    const r=await w.client.post('/team',{name:'Borrador intacto',document:'1736305879',...grants});assert.equal(r.status,400);assert.match(r.body,/value="Borrador intacto"/);assert.equal(w.db.get('SELECT id FROM accounts WHERE document=?','1736305879'),undefined);
+    const r=await w.client.post('/team',{phone:'0991234567',name:'Borrador intacto',document:'1736305879',...grants});assert.equal(r.status,400);assert.match(r.body,/value="Borrador intacto"/);assert.equal(w.db.get('SELECT id FROM accounts WHERE document=?','1736305879'),undefined);
   }
   const m=await person(w,{kind:'OWNER',company_id:uuid()});assert.equal(w.db.get('SELECT kind FROM accounts WHERE id=?',m.id).kind,'COLLABORATOR');
 });
 test('una invitación se usa una vez, no inicia sesión antes de activarse y no guarda su código en el historial',async t=>{
-  const w=await setup(t),r=await w.client.post('/team',{name:'Invitación única',document:'1723435424','WEB.VIEW':'yes'}),code=inviteCode(r);
+  const w=await setup(t),r=await w.client.post('/team',{phone:'0991234567',name:'Invitación única',document:'1723435424','WEB.VIEW':'yes'}),code=inviteCode(r);
   const id=w.db.get('SELECT id FROM accounts WHERE document=?','1723435424').id;
   assert.ok(code);assert.equal((await w.session().post('/login',{document:'1723435424',password})).status,401);
   assert.match((await w.client.get('/team/'+id)).body,/Por activar/);
-  assert.equal((await w.session().post('/activate',{code,password,phone:'0991234567'})).status,303);
-  assert.equal((await w.session().post('/activate',{code,password,phone:'0991234567'})).status,403);
+  assert.equal((await w.session().post('/activate',{code,document:'1723435424',password,phone:'0991234567'})).status,303);
+  assert.equal((await w.session().post('/activate',{code,document:'1723435424',password,phone:'0991234567'})).status,403);
   assert.ok(!JSON.stringify(audit(w,id)).includes(code));
   assert.doesNotMatch((await w.client.get('/team/'+id)).body,/<code class="secret">/);
 });
 test('códigos vencidos y renovados: sólo funciona el vigente y los formularios antiguos no reinician accesos',async t=>{
-  const w=await setup(t),r=await w.client.post('/team',{name:'Invitación',document:'1722743307'}),code=inviteCode(r);
+  const w=await setup(t),r=await w.client.post('/team',{phone:'0991234567',name:'Invitación',document:'1722743307'}),code=inviteCode(r);
   const id=w.db.get('SELECT id FROM accounts WHERE document=?','1722743307').id,old=teamRevision(w,id);
   w.db.run("UPDATE codes SET expires_at='2001-01-01T00:00:00.000Z' WHERE account_id=?",id);
-  assert.equal((await w.session().post('/activate',{code,password,phone:'0991234567'})).status,403);
+  assert.equal((await w.session().post('/activate',{code,document:'1722743307',password,phone:'0991234567'})).status,403);
   assert.match((await w.client.get('/team?state=EXPIRED')).body,/Cédula ····3307/);
   assert.equal((await write(w,id,'invite')).status,400);
   const next=await write(w,id,'invite',{confirm:'yes'});assert.equal(next.status,200);
   assert.equal((await write(w,id,'invite',{revision:old,confirm:'yes'})).status,409);
-  assert.equal((await w.session().post('/activate',{code,password,phone:'0991234567'})).status,403);
-  assert.equal((await w.session().post('/activate',{code:inviteCode(next),password,phone:'0991234567'})).status,303);
+  assert.equal((await w.session().post('/activate',{code,document:'1722743307',password,phone:'0991234567'})).status,403);
+  assert.equal((await w.session().post('/activate',{code:inviteCode(next),document:'1722743307',password,phone:'0991234567'})).status,303);
 });
 test('renovar el acceso explica y cierra sesiones, invalida la contraseña anterior y conserva los permisos',async t=>{
   const w=await setup(t),m=await person(w),before=w.db.all('SELECT scope,action FROM grants WHERE account_id=?',m.id);
@@ -73,7 +73,7 @@ test('renovar el acceso explica y cierra sesiones, invalida la contraseña anter
   assert.equal((await m.session.post('/requests',{})).status,401);
   assert.equal((await w.session().post('/login',{document:'1738277993',password})).status,401);
   assert.deepEqual(w.db.all('SELECT scope,action FROM grants WHERE account_id=?',m.id),before);
-  const restored=w.session();assert.equal((await restored.post('/activate',{code:inviteCode(reset),password,phone:'0991234567'})).status,303);assert.equal((await restored.get('/content')).status,200);
+  const restored=w.session();assert.equal((await restored.post('/activate',{code:inviteCode(reset),document:'1738277993',password,phone:'0991234567'})).status,303);assert.equal((await restored.get('/content')).status,200);
 });
 test('permisos: dos pestañas no se sobrescriben y el conflicto conserva el borrador con la versión antigua',async t=>{
   const w=await setup(t),m=await person(w),old=teamRevision(w,m.id);
@@ -93,7 +93,7 @@ test('baja, reactivación y edición usan revisión y confirmación sin reactiva
   assert.equal((await m.session.get('/api/staff/dashboard')).status,401);
   assert.equal((await write(w,m.id,'invite',{revision:old,confirm:'yes'})).status,409);
   assert.equal((await write(w,m.id,'permissions',{'WEB.VIEW':'yes'})).status,303);assert.equal(w.db.get('SELECT active FROM accounts WHERE id=?',m.id).active,0);
-  const code=inviteCode(await write(w,m.id,'invite',{confirm:'yes'})),s=w.session();assert.equal((await s.post('/activate',{code,password,phone:'0991234567'})).status,303);assert.equal((await s.get('/services/web')).status,200);assert.equal((await s.get('/content')).status,403);
+  const code=inviteCode(await write(w,m.id,'invite',{confirm:'yes'})),s=w.session();assert.equal((await s.post('/activate',{code,document:'1738277993',password,phone:'0991234567'})).status,303);assert.equal((await s.get('/services/web')).status,200);assert.equal((await s.get('/content')).status,403);
 });
 test('corregir cédula cierra sesiones y códigos; duplicados e identidad ajena no se aceptan',async t=>{
   const w=await setup(t),m=await person(w),old=teamRevision(w,m.id);

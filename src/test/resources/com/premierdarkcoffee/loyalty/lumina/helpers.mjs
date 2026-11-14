@@ -78,12 +78,13 @@ export async function owner(world, name, identifier, override = {}) {
   return {client,id};
 }
 export async function colleague(world,client,data) {
-  const result = await client.post('/team',data);
+  const phone=data.phone??'0991234567';
+  const result = await client.post('/team',{...data,phone});
   const code = result.body.match(/<code class="secret">([A-Za-z0-9_-]{43})<\/code>/)?.[1];
   if (!code) throw new Error('No se creó invitación de prueba.');
   const accountId = world.db.get('SELECT id FROM accounts WHERE document=?',data.document).id;
   const session = world.session();
-  if ((await session.post('/activate',{code,password,phone:'0991234567'})).status!==303) throw new Error('No se activó prueba.');
+  if ((await session.post('/activate',{code,document:data.document,password,phone})).status!==303) throw new Error('No se activó prueba.');
   world.db.run('UPDATE accounts SET welcome_done=1 WHERE id=?',accountId);
   await session.get('/home');
   return {id:accountId,session,code};

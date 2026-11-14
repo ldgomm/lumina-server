@@ -53,7 +53,7 @@ test('entrada común de equipos dirige al dueño a su editor e ignora un negocio
   const response=await w.client.get('/teams?company='+other.id);assert.equal(response.status,303);assert.equal(response.location,'/team');
   const own=await w.client.get(response.location+'?company='+other.id);assert.equal(own.status,200);assert.doesNotMatch(own.body,/Persona ajena|ajena@example.test/);
   assert.equal((await w.client.get('/team/'+m.id+'?company='+other.id)).status,404);
-  const added=await w.client.post('/team',{name:'Nueva persona propia',document:'1705288023'});assert.equal(added.status,201);
+  const added=await w.client.post('/team',{phone:'0991234567',name:'Nueva persona propia',document:'1705288023'});assert.equal(added.status,201);
   const addedId=w.db.get('SELECT id,company_id FROM accounts WHERE document=?','1705288023');assert.equal(addedId.company_id,w.id);
   assert.equal((await w.client.post('/team/'+addedId.id+'/access',{revision:teamRevision(w,addedId.id),cash_mode:'OFF','WEB.VIEW':'yes'})).status,303);
 });
@@ -86,7 +86,7 @@ test('directorio de negocios filtra antes de paginar y mantiene una página acot
 test('consulta paginada de personas respeta el negocio, búsqueda y estados de acceso',async t=>{
   const w=await setup(t),other=await owner(w,'Negocio ajeno','2');
   await colleague(w,other.client,{name:'Persona privada ajena',document:'1744493808'});
-  for(let i=0;i<21;i++)assert.equal((await w.client.post('/team',{name:'Persona '+i,document:documentFor('p'+i+'@example.test')})).status,201);
+  for(let i=0;i<21;i++)assert.equal((await w.client.post('/team',{phone:'0991234567',name:'Persona '+i,document:documentFor('p'+i+'@example.test')})).status,201);
   w.db.run("UPDATE codes SET expires_at='2000-01-01T00:00:00.000Z' WHERE account_id=(SELECT id FROM accounts WHERE document='1708600802')");
   w.db.run("UPDATE accounts SET active=0 WHERE document='1754063319'");
   const query=new URLSearchParams({company:w.id}),admin=actor(w,w.admin),first=consultTeams(w.db,admin,query);
