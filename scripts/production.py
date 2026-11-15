@@ -182,7 +182,7 @@ def package(c,receipt):
         (target/'businesses').mkdir()
         shutil.copy2(SQL_ROOT/'businesses/business-categories.json',target/'businesses/business-categories.json')
         (target/'scripts').mkdir()
-        for name in ('production.py','wallet_local.py','wallet_config.py','staging.py','checkpoint.py'):
+        for name in ('production.py','content_backup.py','wallet_local.py','wallet_config.py','staging.py','checkpoint.py'):
             shutil.copy2(ROOT/'scripts'/name,target/'scripts'/name)
         for p in SQL_ROOT.rglob('*.sql'):
             dest=target/'src/main/resources/com/premierdarkcoffee/loyalty'/p.relative_to(SQL_ROOT)

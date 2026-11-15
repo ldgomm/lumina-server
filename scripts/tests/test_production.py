@@ -167,7 +167,7 @@ class ProductionTests(unittest.TestCase):
         (source/'build/install/loyalty/bin').mkdir(parents=True)
         (source/'build/install/loyalty/bin/loyalty').write_text('# fictional distribution\n')
         (source/'scripts').mkdir()
-        for name in ('production.py','wallet_local.py','wallet_config.py','staging.py','checkpoint.py'):
+        for name in ('production.py','content_backup.py','wallet_local.py','wallet_config.py','staging.py','checkpoint.py'):
             shutil.copy2(p.ROOT/'scripts'/name,source/'scripts'/name)
         (source/'.env').write_text('PRIVATE_TEST_MARKER=not-for-release\n')
         commit='a'*40;manifest={'source':'checked'}
@@ -186,5 +186,19 @@ class ProductionTests(unittest.TestCase):
         loaded=subprocess.run(['node','--input-type=module','-e',"const m=await import(process.argv[1]);console.log(m.businessCategory('CAFE'));",(release/'portal/businesses/categories.mjs').as_uri()],capture_output=True,text=True,timeout=15)
         self.assertEqual(loaded.returncode,0,loaded.stderr)
         self.assertEqual(loaded.stdout,'CAFE\n')
+        # Run from the standalone candidate after removing its source checkout.
+        # An inherited PYTHONPATH must not hide missing packaged dependencies.
+        environment = {k: v for k, v in os.environ.items() if k not in ('PYTHONPATH', 'PYTHONHOME')}
+        command = subprocess.run([sys.executable, str(release/'scripts/production.py'), '--help'],
+                                 cwd=self.root, env=environment, capture_output=True, text=True, timeout=15)
+        self.assertEqual(command.returncode, 0, command.stderr)
+        self.assertIn('verify-backup', command.stdout)
+        self.assertIn('scripts/content_backup.py', checked['files'])
+        gateway = subprocess.run([sys.executable, '-c',
+            "import sys; sys.path.insert(0, sys.argv[1]); import production; "
+            "print(production.gateway({'runtime_dir':'/var/lib/lumina/runtime'},'blue','a'*64))",
+            str(release/'scripts')], cwd=self.root, env=environment, capture_output=True, text=True, timeout=15)
+        self.assertEqual(gateway.returncode, 0, gateway.stderr)
+        self.assertIn('listen 127.0.0.1:8101;', gateway.stdout)
 
 if __name__=='__main__':unittest.main()
