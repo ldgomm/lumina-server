@@ -76,9 +76,9 @@ test('agenda limita filas y recuentos al negocio y plataforma autorizados',async
 });
 test('agenda de agencia conserva destinos de trabajo y consulta sin suplantar',async t=>{
  const w=await setup(t),r=await request(w);visit(w,r,{place:'Sede elegida'});
- const global=await w.admin.get('/agency-calendar?q=Sede+elegida');assert.equal(global.status,200);assert.ok(global.body.includes('href="'+selected(r.path,w.id)+'"'));
- const consult=await w.admin.get('/calendar?company='+w.id);assert.ok(consult.body.includes('href="'+r.path+'?company='+w.id+'"'));assert.doesNotMatch(consult.body,/Solicitar grabación/);
- const work=await w.admin.get('/agency/calendar?company='+w.id);assert.ok(work.body.includes('href="'+selected(r.path,w.id)+'"'));assert.match(work.body,/name="company" value="/);
+ const global=await w.admin.get('/agency-calendar?q=Sede+elegida');assert.equal(global.status,200);assert.ok(global.body.includes('href="'+selected(r.path,w.id)+'#visits"'));
+ const consult=await w.admin.get('/calendar?company='+w.id);assert.ok(consult.body.includes('href="'+r.path+'?company='+w.id+'#visits"'));assert.doesNotMatch(consult.body,/Solicitar grabación/);
+ const work=await w.admin.get('/agency/calendar?company='+w.id);assert.ok(work.body.includes('href="'+selected(r.path,w.id)+'#visits"'));assert.match(work.body,/name="company" value="/);
 });
 test('solicitudes filtra antes de paginar y da totales exactos sin filtrar otros negocios',async t=>{
  const w=await setup(t);for(let i=0;i<32;i++)await request(w,{title:'Trabajo '+i});const closed=await request(w,{title:'Trabajo cerrado'});w.db.run("UPDATE requests SET status='DELIVERED' WHERE id=?",closed.id);

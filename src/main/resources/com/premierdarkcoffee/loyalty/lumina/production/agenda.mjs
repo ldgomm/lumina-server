@@ -20,12 +20,13 @@ export function agendaData(db,actor,companyId,params=new URLSearchParams(),onlyS
     history:"(v.status<>'SCHEDULED' OR r.status='CANCELLED')",
   };
   const base=`FROM visits v JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
-    JOIN companies c ON c.id=v.company_id WHERE (?='' OR v.company_id=?) AND ${policy.sql}${onlySocial?" AND r.channel='SOCIAL'":''}`;
-  const args=[companyId||'',companyId||'',...policy.params];
+    JOIN companies c ON c.id=v.company_id WHERE (?='' OR v.company_id=?) AND ${policy.sql}${onlySocial?" AND r.channel='SOCIAL'":''}
+    AND (?='' OR instr(search_text(r.title||' '||c.name||' '||coalesce(v.place,'')),search_text(?))>0)`;
+  const args=[companyId||'',companyId||'',...policy.params,q,q];
   const counts=Object.fromEntries(Object.entries(filters).map(([key,filter])=>[key,
     db.get(`SELECT count(*) n ${base} AND ${filter}`,...args,...(key==='history'?[]:[instant])).n]));
-  const where=`${base} AND ${filters[view]} AND (?='' OR instr(lower(r.title||' '||c.name||' '||coalesce(v.place,'')),lower(?))>0)`;
-  const values=[...args,...(view==='history'?[]:[instant]),q,q];
+  const where=`${base} AND ${filters[view]}`;
+  const values=[...args,...(view==='history'?[]:[instant])];
   const total=db.get(`SELECT count(*) n ${where}`,...values).n;
   const page=Math.min(requested,Math.max(0,Math.ceil(total/20)-1));
   const rows=db.all(`SELECT v.*,r.title,r.status AS request_status,c.name AS company_name ${where}

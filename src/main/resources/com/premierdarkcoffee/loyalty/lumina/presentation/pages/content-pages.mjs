@@ -24,7 +24,7 @@ export function contentPage({actor,company,url,data,metricsHtml='',calendar=null
       const {view,...rest}=params;
       return url('/content',{...rest,view:'calendar',...(view?{period:view}:{})});
     };
-    return workdayAgenda({actor,data:calendar,url:agendaUrl,global:actor.kind==='AGENCY'&&!company,viewKey:'period'});
+    return workdayAgenda({actor,data:calendar,url:agendaUrl,global:actor.kind==='AGENCY'&&!company});
   }
   const requestLink=row=>actor.kind==='AGENCY'?(actor.agencyWork||!company?'/agency':'')+'/requests/'+(row.request_id||row.id)+'?company='+row.company_id:'/requests/'+(row.request_id||row.id);
   const context=company?hidden('company',company.id):'';

@@ -1,4 +1,6 @@
-# Lúmina v032 / Loyalty v071
+# Lúmina v033 / Loyalty v072
+
+Daily notices keep their filters when marked seen and can be marked new again by the same person. Recording visits are grouped by Ecuador day, with clear times, locations and private calendar downloads. [Daily workflow and validation](docs/lumina-daily-work-v072.md).
 
 Every service shows its effective business state. Owners can see the reason for a block and their next steps; collaborators see only assigned areas. Reactivation preserves the original activation choices, grants and Wallet identity. [Service status and validation](docs/lumina-service-status-v071.md).
 

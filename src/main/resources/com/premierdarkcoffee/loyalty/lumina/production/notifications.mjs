@@ -30,14 +30,26 @@ export function notificationRows(db,actor,companyId,account=null) {
   const seen=new Map(db.all('SELECT notification_key,fingerprint FROM attention_seen WHERE account_id=?',actor.id).map(r=>[r.notification_key,r.fingerprint]));
   return result.map(row=>({...row,seen:seen.get(row.key)===row.fingerprint})).sort((a,b)=>Number(a.seen)-Number(b.seen)||a.created_at.localeCompare(b.created_at)||a.key.localeCompare(b.key));
 }
-export function notifications(db,actor,companyId,params=new URLSearchParams(),account=null) {
+export function notificationFilters(params=new URLSearchParams()) {
   const view=params.get('view')||'all',state=params.get('state')||'all',q=text(params.get('q')||'','búsqueda',0,100);
   requireThat(view==='all'||Object.hasOwn(notificationKinds,view),'Vista de pendientes no disponible.');
   requireThat(['all','new','seen'].includes(state),'Filtro de avisos inválido.');
-  const requested=integer(params.get('page')||'0','página',{max:10000}),all=notificationRows(db,actor,companyId,account);
-  const counts={all:all.length,...Object.fromEntries(Object.keys(notificationKinds).map(k=>[k,all.filter(r=>r.kind===k).length]))};
+  return {view,state,q,page:integer(params.get('page')||'0','página',{max:10000})};
+}
+export function notificationReturn(filters) {
+  const params=new URLSearchParams();
+  if(filters.view!=='all')params.set('view',filters.view);
+  if(filters.state!=='all')params.set('state',filters.state);
+  if(filters.q)params.set('q',filters.q);
+  if(filters.page)params.set('page',String(filters.page));
+  return '/attention'+(params.size?'?'+params:'');
+}
+export function notifications(db,actor,companyId,params=new URLSearchParams(),account=null) {
+  const {view,state,q,page:requested}=notificationFilters(params),all=notificationRows(db,actor,companyId,account);
   const fold=s=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
-  const filtered=all.filter(r=>(view==='all'||r.kind===view)&&(state==='all'||r.seen===(state==='seen'))&&fold(r.title).includes(fold(q)));
+  const matching=all.filter(r=>(state==='all'||r.seen===(state==='seen'))&&fold(r.title+' '+(r.detail||'')).includes(fold(q)));
+  const counts={all:matching.length,...Object.fromEntries(Object.keys(notificationKinds).map(k=>[k,matching.filter(r=>r.kind===k).length]))};
+  const filtered=matching.filter(r=>view==='all'||r.kind===view);
   const total=filtered.length,page=Math.min(requested,Math.max(0,Math.ceil(total/20)-1));
   return {view,state,q,counts,total,page,newCount:all.filter(r=>!r.seen).length,rows:filtered.slice(page*20,(page+1)*20)};
 }
@@ -46,4 +58,9 @@ export function seeNotification(db,actor,companyId,data,account=null) {
   requireThat(row&&row.fingerprint===data.fingerprint,'Este pendiente cambió. Actualiza la bandeja.',409);
   db.run(`INSERT INTO attention_seen VALUES(?,?,?,?) ON CONFLICT(account_id,notification_key)
     DO UPDATE SET fingerprint=excluded.fingerprint,seen_at=excluded.seen_at`,actor.id,row.key,row.fingerprint,now());
+}
+export function reopenNotification(db,actor,companyId,data,account=null) {
+  const row=notificationRows(db,actor,companyId,account).find(r=>r.key===data.key);
+  requireThat(row&&row.fingerprint===data.fingerprint,'Este pendiente cambió. Actualiza la bandeja.',409);
+  db.run('DELETE FROM attention_seen WHERE account_id=? AND notification_key=? AND fingerprint=?',actor.id,row.key,row.fingerprint);
 }

@@ -2,7 +2,8 @@ import { teamAdministrator } from '../access/team-administration.mjs';
 import { teamRoutes } from './team-routes.mjs';
 import { fileDetails, saveFile, commentPiece } from '../content/deliverables.mjs';
 import { contractSummary } from '../presentation/pages/contract-summary.mjs';
-import { notifications, seeNotification } from '../production/notifications.mjs';
+import { notificationFilters, notificationReturn, notifications, seeNotification, reopenNotification } from '../production/notifications.mjs';
+import { calendarVisit, visitCalendar } from '../production/calendar-file.mjs';
 import { accessShell } from '../presentation/pages/public-shell.mjs';
 import { homepage } from '../presentation/pages/homepage.mjs';
 import { canonicalTarget, legacyRedirectAllowed } from '../shared/routes.mjs';
@@ -591,6 +592,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         company=directory.company;
         return render({title:'Equipos y roles',body:teamsConsultationPage(directory)});
       }
+      const calendarDownload=/^\/calendar\/visits\/([^/]+)\.ics$/.exec(path);
+      if(calendarDownload) {
+        requireThat(method==='GET','Descarga no disponible para esta acción.',405);
+        const selected=actor.kind==='AGENCY'?target.searchParams.get('company'):actor.company_id;
+        const visit=calendarVisit(db,actor,selected,calendarDownload[1]);
+        res.setHeader('Content-Disposition','attachment; filename="recording-'+visit.id+'.ics"');
+        return send(res,200,visitCalendar(visit),'text/calendar; charset=utf-8');
+      }
       const companyId = target.searchParams.get('company');
       if(path==='/team'||path.startsWith('/team/'))requireOwner(actor);
       const catalog = ['/plans','/plans/withdraw','/plans/new','/plans/black-friday'].includes(path);
@@ -600,16 +609,23 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (actor.kind!=='AGENCY' || companyId) company = companyFor(db,actor,companyId);
       const url = pathFor(actor,company);
-      if(path==='/attention'||path==='/attention/seen') {
+      if(['/attention','/attention/seen','/attention/new'].includes(path)) {
         requireThat(actor.kind!=='AGENCY','Esta bandeja corresponde al negocio.',403);
+        const mutation=path!=='/attention';
+        requireThat(method===(mutation?'POST':'GET'),'Acción no disponible.',405);
+        const params=mutation?new URLSearchParams(data):target.searchParams;
+        const filters=notificationFilters(params);
         let account=null,billingUnavailable=false;
         if(actor.kind==='OWNER'&&company.loyalty_tenant)try{account=await wallets.account(actor);}catch{billingUnavailable=true;}
-        if(path==='/attention/seen'){
-          requireThat(method==='POST','Acción no disponible.',405);
-          actor=getSession(db,cookie);requireThat(actor&&equal(actor.csrf,data._csrf),'Tu sesión cambió. Ingresa nuevamente.',403);
-          seeNotification(db,actor,company.id,data,account);return redirect(res,'/attention');
+        actor=getSession(db,cookie);
+        requireThat(actor&&actor.kind!=='AGENCY'&&actor.company_id===company.id,'Tu sesión cambió. Ingresa nuevamente.',403);
+        requireOperating(db,company.id);
+        if(mutation){
+          requireThat(equal(actor.csrf,data._csrf),'Tu sesión cambió. Ingresa nuevamente.',403);
+          (path==='/attention/seen'?seeNotification:reopenNotification)(db,actor,company.id,data,account);
+          const result=notifications(db,actor,company.id,params,account);
+          return redirect(res,notificationReturn({...filters,page:result.page}));
         }
-        requireThat(method==='GET','Acción no disponible.',405);
         return render({title:'Pendientes',description:'Lo que necesita tu atención.',body:attentionPage({actor,data:{...notifications(db,actor,company.id,target.searchParams,account),billingUnavailable},url})});
       }
       if (path==='/home' && method==='GET') {

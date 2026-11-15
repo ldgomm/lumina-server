@@ -1,5 +1,16 @@
 # Loyalty
 
+## Lúmina v033 / Loyalty v072 — daily notices and recording agenda
+
+- Baseline: installed v032/v071, commit d249eea6f2d74222582d517d0caf8a29bb43a88c. This section supersedes release and gate counts; retain all lifecycle, team, identity and service-activation restrictions.
+- Notification filters, counts and pagination share the same authorized, searched and seen-state scope. Seen/new changes are per account and current fingerprint; preserve filters, clamp the remaining page and never accept a caller-supplied return URL. Marking a notice seen never approves or resolves the underlying work.
+- Revalidate the session, current company, actor grants and business lifecycle after asynchronous account retrieval and before returning notices or changing their seen state. Agency accounts cannot impersonate a business. Billing notices remain owner-only.
+- Agenda groups by America/Guayaquil day. Keep dates, relative labels, times, search counts and pagination consistent. Detail links target the existing visits section. Content and agency routes retain their own navigation context.
+- Calendar downloads are authenticated GET-only read operations, scoped by company and the existing request permissions. Block suspended businesses, inactive Content, revoked collaborators and cancelled/completed visits. Never expose internal notes, phone numbers, tokens or public subscription URLs. Preserve stable event UID and revision; escape/fold iCalendar text. Do not invent a duration or claim automatic calendar synchronization.
+- No schema, native Kotlin/Wallet, provider configuration, identities, domains, balances, contracts or subscription changes. SQLite12, PostgreSQLV017 and Wallet representation34 remain unchanged. Keep private data/files outside releases and production installation guards intact.
+- Gates: 39 suites / 459 portal tests, 185 Python, 312 native unit/HTTP and 347 PostgreSQL; Docker staging/gateway before local commit, no push. 29 DOM suites and fixture browser review remain separate from native/device verification.
+- Validate the actual v032 baseline, idempotence, rollback without overwriting concurrent edits, conflicts, symlinks, production guard, UTF-8 paths and payload integrity. Terminal prints RESULTADO plus the URL only after confirmed startup. See docs/lumina-daily-work-v072.md.
+
 ## Lúmina v032 / Loyalty v071 — effective service status
 
 - Cumulative baselines: installed v030/v069 (commit 824e6658ec03dfcb22a792a56c32d684088dc6bd) or the exact prepared v031/v070 source. Retain all v031 administration and assigned-identity restrictions. This section supersedes earlier service visibility and test counts.
