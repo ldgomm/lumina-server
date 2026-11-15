@@ -60,10 +60,10 @@ test('entrada común de equipos dirige al dueño a su editor e ignora un negocio
 test('agencia encuentra equipos junto a Clientes y consulta un negocio manteniendo su identidad',async t=>{
   const w=await setup(t),m=await person(w),home=await w.admin.get('/dashboard'),menu=nav(home.body);
   assert.deepEqual([...menu.matchAll(/<a href="([^"]+)"/g)].slice(0,4).map(x=>x[1]),['/dashboard','/businesses','/teams','/production']);
-  assert.match((await w.admin.get('/businesses')).body,new RegExp('/teams\\?company='+w.id));
+  assert.match((await w.admin.get('/businesses')).body,new RegExp('/admin/businesses/'+w.id+'/team'));
   const directory=await w.admin.get('/teams');assert.equal(directory.status,200);assert.match(directory.body,/Negocio de prueba/);
   const detail=await w.admin.get('/teams?company='+w.id);assert.equal(detail.status,200);assert.match(detail.body,/Persona de prueba/);
-  assert.match(detail.body,/Los permisos los administra el dueño/);assert.match(detail.body,/Consulta del negocio · Solo lectura/);
+  assert.match(detail.body,/Gestionar colaboradores/);assert.match(detail.body,/Consulta del negocio · Solo lectura/);
   assert.equal(actor(w,w.admin).kind,'AGENCY');assert.equal((await w.admin.get('/team/'+m.id)).status,403);
 });
 test('los colaboradores y las sesiones públicas no reciben enlaces ni acceso a equipos',async t=>{
@@ -108,7 +108,7 @@ test('la consulta muestra compras, canjes y permisos exactos sin preparar acceso
 });
 test('proyección de consulta excluye contraseñas, tokens, códigos, sesiones y datos cifrados',async t=>{
   const w=await setup(t),m=await person(w),data=consultTeams(w.db,actor(w,w.admin),new URLSearchParams({company:w.id}));
-  const allowed=['id','name','document','kind','active','activated','cash_status','branch_name','purchases','rewards','activation_expires','grants'];
+  const allowed=['id','name','document','kind','active','archived_at','suspended_at','activated','cash_status','branch_name','purchases','rewards','activation_expires','grants'];
   for(const row of data.rows)assert.deepEqual(Object.keys(row).sort(),allowed.sort());
   const view=await w.admin.get('/teams?company='+w.id);
   const secrets=[m.code,w.native.platformToken,...w.db.all('SELECT password FROM accounts WHERE password IS NOT NULL').map(r=>r.password),...w.db.all('SELECT digest FROM codes').map(r=>r.digest)];

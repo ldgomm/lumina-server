@@ -122,7 +122,7 @@ def sql_hashes(root=SQL_ROOT):
 def observe(c):
     n=c['native'];a=c['portal'];folder=Path(a['LUMINA_DATA_DIR'])
     with sqlite3.connect((folder/'agency.sqlite').as_uri()+'?mode=ro',uri=True) as db:
-        need(db.execute('PRAGMA user_version').fetchone()[0]==11,'PORTAL_MIGRATION_REQUIRED')
+        need(db.execute('PRAGMA user_version').fetchone()[0]==12,'PORTAL_MIGRATION_REQUIRED')
         agency=db.execute("SELECT id FROM accounts WHERE kind='AGENCY' ORDER BY id LIMIT 1").fetchone()
         need(agency,'AGENCY_SETUP_REQUIRED')
         need(db.execute('PRAGMA quick_check').fetchone()[0]=='ok','PORTAL_DATABASE_CHECK_FAILED')

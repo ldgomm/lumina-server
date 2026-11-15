@@ -1,3 +1,5 @@
+import { teamAdministrator } from '../access/team-administration.mjs';
+import { teamRoutes } from './team-routes.mjs';
 import { fileDetails, saveFile, commentPiece } from '../content/deliverables.mjs';
 import { contractSummary } from '../presentation/pages/contract-summary.mjs';
 import { notifications, seeNotification } from '../production/notifications.mjs';
@@ -5,6 +7,8 @@ import { accessShell } from '../presentation/pages/public-shell.mjs';
 import { homepage } from '../presentation/pages/homepage.mjs';
 import { canonicalTarget, legacyRedirectAllowed } from '../shared/routes.mjs';
 import { serviceState, requireService, serviceCatalog, beginService, completeWalletActivation, finishWelcome, routeService } from '../businesses/services.mjs';
+import { serviceStatus } from '../businesses/service-status.mjs';
+import { businessStatusPage, collaboratorServicesPage } from '../presentation/pages/service-status-pages.mjs';
 import { welcomePage, servicesPage, inactiveServicePage } from '../presentation/pages/welcome-pages.mjs';
 import { businessDirectory } from '../businesses/directory.mjs';
 import { businessDirectoryPage } from '../presentation/pages/business-directory-pages.mjs';
@@ -109,10 +113,6 @@ const operations = {
 const pieceOperations = {
   edit:editPiece, review:reviewPiece, evidence:addEvidence, publication:addPublication, measure:addSocialMetric, comment:commentPiece,
 };
-function teamInvitation(db,actor,id,code) {
-  const member = teamMember(db,actor,id);
-  return {title:'Acceso creado',description:'Comparte el código con la persona por tu canal habitual.',body:invitePage(member,code)};
-}
 function getRequestPage(db,actor,company,url,request,feedback=null) {
   const pieces = db.all('SELECT * FROM pieces WHERE company_id=? AND request_id=? ORDER BY created_at,id',company.id,request.id)
     .map(piece=>({...fileDetails(db,company.id,piece.id),
@@ -132,8 +132,8 @@ function getRequestPage(db,actor,company,url,request,feedback=null) {
 
 export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integration = {}, readiness = null, fileStore = null }) {
   let uploadsInProgress=0;
-  const bridge = createLoyaltyBridge({db,key,origin:loyaltyUrl});
   const wallets = createWalletWorkspace({db,key,origin:loyaltyUrl,integration});
+  const bridge = createLoyaltyBridge({db,key,origin:loyaltyUrl,administration:wallets.teamAdministration});
   const commercialWork=new Map();
   const commercialTurn=async(companyId,work)=>{const previous=commercialWork.get(companyId)||Promise.resolve();const next=previous.catch(()=>{}).then(work);commercialWork.set(companyId,next);try{return await next;}finally{if(commercialWork.get(companyId)===next)commercialWork.delete(companyId);}};
   const controls=createBusinessControlSync({db,remote:wallets.controlRemote,ensureCompany:wallets.ensureCompany});
@@ -145,7 +145,9 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
     let api = false;
     let agencyWork=false;
     const render = (view,status=200) => {
-      const viewer=actor?{...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(company)&&!agencyWork}:null;
+      const control=actor?.company_id&&businessControl(db,actor.company_id);
+      const viewer=actor?{...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(company)&&!agencyWork,
+        businessBlocked:actor.kind!=='AGENCY'&&Boolean(control&&(control.state!=='ACTIVE'||control.pending_id||control.archived_at))}:null;
       return send(res,status,(view.layout==='content'?contentShell:view.layout==='access'?accessShell:page)({actor:viewer,company,path,cash,...view}));
     };
     try {
@@ -214,14 +216,17 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if (method==='GET' && !api) return redirect(res,'/login');
         throw new Problem('Inicia sesión para continuar.',401);
       }
-      const serviceAllowed=()=>path==='/logout'||path.startsWith('/account')||path==='/help'||(method==='GET'&&(path==='/billing'||path.startsWith('/billing/payments/')))||path==='/plans/wallet/cancel'||method==='GET'&&(path.startsWith('/plans/wallet')||path==='/home'||path==='/wallet/benefits');
+      const serviceAllowed=()=>path==='/logout'||path.startsWith('/account')||path==='/help'||(method==='GET'&&(path==='/billing'||path.startsWith('/billing/payments/')))||path==='/plans/wallet/cancel'||method==='GET'&&(path.startsWith('/plans/wallet')||path==='/home'||path==='/services'||path==='/wallet/benefits');
       const scopedCompany=actor.kind==='AGENCY'?(target.searchParams.get('company')||req.headers['x-lumina-company']):actor.company_id;
       if(scopedCompany) {
         const state=businessControl(db,scopedCompany);
-        if(actor.kind!=='AGENCY'&&(state.state!=='ACTIVE'||state.pending_id)) {
+        if(actor.kind!=='AGENCY'&&(state.state!=='ACTIVE'||state.pending_id||state.archived_at)) {
           const permitted=serviceAllowed();
+          if(method==='GET'&&!api&&(!permitted||path==='/home'||path==='/services')) {
+            company=companyFor(db,actor);
+            return render({title:'Estado de tus servicios',body:businessStatusPage(actor,serviceStatus(db,actor,company.id))},permitted?200:423);
+          }
           if(!permitted)requireOperating(db,scopedCompany);
-          if(method==='GET'&&path==='/home')return render({title:businessStates[state.state],body:card('Estado de tus servicios',`<p>${esc(state.reason)}</p><p>${state.pending_id?'Cambio pendiente de sincronización.':''} Tu información y saldos se conservan.</p><div class="actions"><a class="btn" href="/billing">Ver cuenta y pagos</a><a class="btn secondary" href="/help">Contactar a Lúmina</a><a class="btn secondary" href="/account">Mi cuenta</a></div>`)});
         }
         if(actor.kind==='AGENCY'&&method!=='GET')requireOperating(db,scopedCompany);
       }
@@ -377,8 +382,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           beginService(db,actor,data.service);finishWelcome(db,actor);
           return redirect(res,data.service==='WALLET'?'/plans/wallet':serviceCatalog[data.service].path);
         }
+        if(path==='/services'&&method==='GET')return render({title:'Mis servicios',body:actor.kind==='OWNER'?servicesPage(db,actor):collaboratorServicesPage(serviceStatus(db,actor,company.id))});
         requireOwner(actor);
-        if(path==='/services'&&method==='GET')return render({title:'Mis servicios',body:servicesPage(db,actor)});
         requireThat(path==='/services/activate'&&method==='POST','Acción no encontrada.',404);
         beginService(db,actor,data.service);
         return redirect(res,data.service==='WALLET'?'/plans/wallet':serviceCatalog[data.service].path);
@@ -415,7 +420,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         catch(error){if(!(error instanceof Problem))throw error;return render({title:'Mi cuenta y pagos',body:card('Saldo no disponible','<p>No pudimos consultar los cargos y pagos. Tus registros se conservan.</p>'+localLink('/billing','Reintentar','btn secondary'))+contractSummary(contracts,localDay())},503);}
         return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,account,'/billing','',{},{view,contracts})});
       }
-      const administration=path.match(/^\/admin\/businesses\/([0-9a-f-]{36})(?:\/(state|retry|payment|reverse|charge|void))?$/i);
+      const administrationTeam=path.match(/^\/admin\/businesses\/([0-9a-f-]{36})\/team(?:\/|$)/i);
+      if(administrationTeam) {
+        requireAgency(actor);company=companyFor(db,actor,administrationTeam[1]);
+        const freshActor=()=>teamAdministrator(db,getSession(db,cookie),company.id);
+        return await teamRoutes({db,bridge,wallets,actor:freshActor(),company,path,method,data,query:target.searchParams,
+          render,redirect:location=>redirect(res,location),freshActor});
+      }
+      const administration=path.match(/^\/admin\/businesses\/([0-9a-f-]{36})(?:\/(state|delete|restore|retry|payment|reverse|charge|void))?$/i);
       if(administration) {
         requireAgency(actor);company=companyFor(db,actor,administration[1]);
         const base='/admin/businesses/'+company.id;let issueText='';
@@ -423,12 +435,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const view=async(status=200)=>{
           company=companyFor(db,actor,company.id);
           let account=company.loyalty_tenant?null:emptyAccount(company,localDay());if(company.loyalty_tenant)try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
-          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{contracts:contractsFor(db,company.id),view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
+          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:contractsFor(db,company.id),view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',delete:'Negocio eliminado. Su historial se conserva.',restore:'Negocio restaurado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
         };
         if(method==='POST')try {
           let savedPayment=null;
           if(['payment','reverse','charge','void'].includes(administration[2])&&isId(data.requestKey)&&!db.get("SELECT seq FROM audit WHERE subject='BILLING_ATTEMPT' AND subject_id=? AND company_id=?",data.requestKey,company.id))event(db,actor,company.id,'BILLING_ATTEMPT',data.requestKey,'CUENTA_SOLICITADA',JSON.stringify({action:administration[2],invoice:data.invoiceId||null,payment:data.paymentId||null,reference:data.reference||null,reason:data.reason||null}),'WALLET');
-          if(administration[2]==='state'){requestBusinessChange(db,actor,company.id,data);await controls.sync(company.id);}
+          if(['state','delete','restore'].includes(administration[2])){
+            requestBusinessChange(db,actor,company.id,{...data,operation:administration[2]==='delete'?'DELETE':administration[2]==='restore'?'RESTORE':'STATE',state:administration[2]==='delete'?'CLOSED':administration[2]==='restore'?'ACTIVE':data.state});await controls.sync(company.id);
+          }
           else if(administration[2]==='retry'){requireThat(data.confirm==='yes','Confirma que deseas aplicar el cambio pendiente.');await controls.reconcile(company.id);}
           else if(administration[2]==='payment'){const payment=paymentInput(data);savedPayment=await wallets.administration(actor,company.id,'payments',{method:'POST',body:payment,key:data.requestKey});requireThat(isId(savedPayment.id),'No se pudo confirmar el comprobante. Reintenta el mismo pago.',502);}
           else if(administration[2]==='reverse'){requireThat(data.confirm==='yes'&&isId(data.paymentId)&&isId(data.requestKey),'Confirma la corrección.');await wallets.administration(actor,company.id,'reverse',{id:data.paymentId,method:'POST',body:{reason:text(data.reason,'motivo',5,500)},key:data.requestKey});}
@@ -632,79 +646,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const slug=path.slice('/management/'.length);requireThat(Object.hasOwn(managementTitles,slug),'Sección no disponible.',404);
         return render({title:managementTitles[slug],description:'Administración del negocio desde Lúmina.',body:managementFramePage(slug,target.searchParams)});
       }
-      if (path==='/team' && method==='GET') {
-        return render({title:'Equipos y roles',body:teamPage(actor,company,teamDirectory(db,actor,target.searchParams))});
-      }
-      if (path==='/team/new' && method==='GET') {
-        requireOwner(actor);
-        return render({title:'Añadir persona',body:newMemberPage(actor)});
-      }
-      if (path==='/team' && method==='POST') {
-        requireOwner(actor);
-        try {
-          const result = createTeamMember(db,actor,data);
-          return render(teamInvitation(db,actor,result.id,result.code),201);
-        } catch(issue) {
-          if(!(issue instanceof Problem)||![400,409].includes(issue.status))throw issue;
-          return render({title:'Añadir persona',body:newMemberPage(actor,data,issue.message)},issue.status);
-        }
-      }
-      const teamMatch = path.match(/^\/team\/([^/]+)(?:\/(access|permissions|details|invite|disable|cashier\/(?:branches|save|revoke)))?$/);
-      if (teamMatch && isId(teamMatch[1])) {
-        const [,id,action] = teamMatch;
-        teamMember(db,actor,id);
-        const memberView = async (options={},loadBranches=true) => {
-          let branches=null;
-          const member=teamMember(db,actor,id);
-          if(loadBranches&&member.active&&member.cash_status!=='REVOKING')try {
-            branches=await bridge.branches(actor,await wallets.ownerCredential(actor));
-          } catch(issue) {
-            if(!(issue instanceof Problem))throw issue;
-            options={...options,branchError:'No se pudieron cargar las sucursales. Los demás permisos se pueden gestionar.'};
-          }
-          actor=getSession(db,cookie);
-          requireThat(actor,'Tu sesión terminó. Ingresa nuevamente.',401);
-          const current=teamMember(db,actor,id);
-          return {title:current.name,body:memberPage(actor,company,current,branches,{...options,history:teamHistory(db,actor,id)})};
-        };
-        if (method==='GET' && !action) {
-          const notices={access:'Acceso guardado.',permissions:'Permisos guardados.',details:'Datos guardados.',cashier:'Acceso de Caja guardado.',disabled:'Acceso desactivado.',revoked:'Caja retirada.'};
-          return render(await memberView({notice:notices[target.searchParams.get('saved')]||''}));
-        }
-        if (method==='POST') {
-          try {
-            if (action==='access') {
-              limit(db,'loyalty:'+actor.id,40);
-              await saveTeamAccess({db,bridge,wallets},actor,id,data);
-            }
-            if (action==='permissions') updateGrants(db,actor,id,data);
-            if (action==='details') updateMember(db,actor,id,data);
-            if (action==='invite') return render(teamInvitation(db,actor,id,manageAccount(db,actor,id,'INVITE',data)));
-            if (action==='disable') {
-              manageAccount(db,actor,id,'DISABLE',data);
-              if(teamMember(db,actor,id).cash_status==='REVOKING')try {
-                await bridge.revoke(actor,id,{revision:String(teamMember(db,actor,id).revision),reason:'Baja del acceso completo en Lúmina.',credential:()=>wallets.ownerCredential(actor)});
-              } catch(issue) {
-                if(!(issue instanceof Problem))throw issue;
-                return render(await memberView({notice:'Acceso desactivado. Caja está bloqueada; queda pendiente confirmar su retiro con Wallet.'},false));
-              }
-            }
-            if (action?.startsWith('cashier/')) limit(db,'loyalty:'+actor.id,40);
-            if (action==='cashier/branches') return render(await memberView());
-            if (action==='cashier/save') await bridge.configure(actor,id,{...data,credential:await wallets.ownerCredential(actor)});
-            if (action==='cashier/revoke') await bridge.revoke(actor,id,{...data,credential:()=>wallets.ownerCredential(actor)});
-            requireThat(action,'Acción no encontrada.',404);
-            const notice={access:'access',permissions:'permissions',details:'details',disable:'disabled','cashier/save':'cashier','cashier/revoke':'revoked'}[action];
-            return redirect(res,'/team/'+id+(notice?'?saved='+notice:''));
-          } catch(issue) {
-            if(!(issue instanceof Problem)||![400,409,503].includes(issue.status))throw issue;
-            const section=action==='cashier/save'?'cashier':action==='cashier/revoke'?'revoke':action;
-            const values=issue.localAccessBlocked?{...data,revision:String(issue.committedRevision)}:data;
-            const message=issue.localAccessBlocked&&action==='access'?'El cambio de permisos se guardó. '+issue.message:issue.message;
-            return render(await memberView({values,error:message,section},issue.status<500),issue.status);
-          }
-        }
-      }
+      if(path==='/team'||path.startsWith('/team/'))return await teamRoutes({db,bridge,wallets,actor,company,path,method,data,
+        query:target.searchParams,render,redirect:location=>redirect(res,location),freshActor:()=>getSession(db,cookie)});
       if(path==='/requests/new'&&method==='GET') {
         requireThat(actor.kind!=='AGENCY','Las solicitudes las realiza el negocio.',403);
         const area=target.searchParams.get('area')||'';

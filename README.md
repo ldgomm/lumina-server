@@ -1,8 +1,12 @@
-# Lúmina v030 / Loyalty v069
+# Lúmina v032 / Loyalty v071
+
+Every service shows its effective business state. Owners can see the reason for a block and their next steps; collaborators see only assigned areas. Reactivation preserves the original activation choices, grants and Wallet identity. [Service status and validation](docs/lumina-service-status-v071.md).
+
+Agency administration now manages business lifecycle and collaborator access through dedicated routes with the real administrator identity. Deletion is recoverable and preserves Wallet links and history. [Administration update and validation](docs/lumina-administration-v070.md).
 
 Collaborator activation matches the cedula and phone assigned by the owner. Existing email-based administrators add a cedula to the same account. [Identity access update](docs/lumina-identity-access-v069.md). Business accounts, private content files with versioned review, useful notices and comparable metrics. [Installation and validation](docs/lumina-operations-v068.md). [Installed Wallet continuity](docs/wallet-continuity-v068.md). [Social API readiness](docs/social-sync-readiness-v068.md).
 
-Open `/` for the agency website, `/login` for account entry and `/services` as an owner to manage available services. Reading these pages never activates a service or changes a Wallet connection.
+Open `/` for the agency website, `/login` for account entry and `/services` to review assigned services. Only the owner manages activation. Reading these pages never activates a service or changes a Wallet connection.
 
 # loyalty
 

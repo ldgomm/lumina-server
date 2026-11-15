@@ -105,7 +105,7 @@ test('content, comments, permissions and session visibility survive a persistent
  const path=join(w.dir,'agency.sqlite');w.db.run('VACUUM INTO ?',path);
  const db=openDatabase(path),server=createPortal({db,key:w.key,loyaltyUrl:'http://127.0.0.1:65533',fileStore:createFileStore(join(w.dir,'uploads'))});
  const origin=await listen(server);try{
-   assert.equal(db.get('PRAGMA user_version').user_version,11);assert.deepEqual(db.all('PRAGMA foreign_key_check'),[]);
+   assert.equal(db.get('PRAGMA user_version').user_version,12);assert.deepEqual(db.all('PRAGMA foreign_key_check'),[]);
    assert.deepEqual(db.all('SELECT * FROM content_files'),files(w));assert.equal(db.get('SELECT count(*) n FROM piece_comments').n,1);
    const response=await fetch(origin+filePath(w,file),{headers:{Cookie:w.client.cookie}});assert.equal(response.status,200);assert.deepEqual(Buffer.from(await response.arrayBuffer()),image);
    const detail=await fetch(origin+w.requestPath,{headers:{Cookie:w.client.cookie}});assert.match(await detail.text(),/Esta es la versión aprobada/);

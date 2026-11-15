@@ -1,4 +1,6 @@
 const paths={
+  shield:'M12 3 3 7v5c0 5 9 10 9 10s9-5 9-10V7Z M8 12l3 3 5-6',
+  clock:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18 M12 7v5l3 2',
   home:'M3 10 12 3l9 7v10H3Z M9 20v-7h6v7',
   clients:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M17 4a4 4 0 0 1 0 8 M18 15a4 4 0 0 1 4 4v2',
   content:'M4 4h16v16H4Z M8 8h8 M8 12h8 M8 16h5',

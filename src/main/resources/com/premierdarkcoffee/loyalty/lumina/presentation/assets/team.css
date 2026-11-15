@@ -64,3 +64,5 @@
 }
 
 .team-phone{display:inline-block;margin-top:6px;font-size:.875rem;text-decoration:none}.team-phone:hover{text-decoration:underline}.team-contact{overflow-wrap:anywhere}
+
+.team-state.suspended{background:#fff1d4;color:#794d11}.team-state.archived{background:#fce9e9;color:#963c3c}

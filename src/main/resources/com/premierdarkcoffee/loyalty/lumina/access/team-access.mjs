@@ -12,11 +12,12 @@ export function cashMode(member) {
 export async function saveTeamAccess({db,bridge,wallets}, actor, id, input) {
   const member=teamMember(db,actor,id);
   requireTeamRevision(member,input);
+  requireThat(!member.archived_at,'Restaura primero a esta persona.',409);
   const grants=parseGrants(input);
   requireThat(['OFF','BOTH','PURCHASES','REWARDS'].includes(input.cash_mode),'Elige el acceso a Caja.');
   const desired=input.cash_mode;
   const commit=current=>replaceTeamGrants(db,actor,current,grants);
-  const credential=()=>wallets.ownerCredential(actor);
+  const credential=actor.kind==='AGENCY'?undefined:()=>wallets.ownerCredential(actor);
   if(desired==='OFF') {
     if(['ACTIVE','PENDING','REVOKING'].includes(member.cash_status)) {
       await bridge.revoke(actor,id,{revision:input.revision,reason:'Cambio de permisos desde el equipo de Lúmina.',credential},commit);

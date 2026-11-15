@@ -57,7 +57,9 @@ test('service state shown in the owner workspace is isolated per business',async
 });
 test('agency and collaborator cannot acquire owner service controls or activate a business service',async t=>{
  const w=await portal(t),admin=await agency(w),a=await owner(w,'Restricted workspace',22),member=await colleague(w,a.client,{name:'Colaborador',document:documentFor('entry-member'),'SOCIAL.VIEW':'yes'}),before=snapshot(w.db);
- for(const client of [admin,member.session]){assert.equal((await client.get('/services')).status,403);assert.equal((await client.post('/services/activate',{service:'WEB'})).status,403);}
+ assert.equal((await admin.get('/services')).status,403);
+ const assigned=await member.session.get('/services');assert.equal(assigned.status,200);assert.doesNotMatch(assigned.body,/action="\/services\/activate"|data-service="WEB"/);
+ for(const client of [admin,member.session])assert.equal((await client.post('/services/activate',{service:'WEB'})).status,403);
  assert.deepEqual(snapshot(w.db),before);
 });
 test('package explanations are public and do not invent prices offers or create contracts',async t=>{

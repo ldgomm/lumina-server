@@ -32,7 +32,9 @@ try{
   const own=dom((await business.client.get('/team/'+member.id)).body);
   assert.equal(own.document.querySelectorAll('[data-module="WALLET"]').length,1);assert.ok(own.document.querySelector('form[action$="/access"] button[type="submit"]'));
   const directory=dom((await admin.get('/teams')).body),link=directory.document.querySelector('.team-company-card');assert.ok(link);
-  const selected=dom((await admin.get(link.getAttribute('href'))).body),d=selected.document;
+  assert.equal(link.getAttribute('href'),'/admin/businesses/'+business.id+'/team');
+  const managed=dom((await admin.get(link.getAttribute('href'))).body);assert.ok(managed.document.querySelector('a[href$="/team/new"]'));
+  const selected=dom((await admin.get('/teams?company='+business.id)).body),d=selected.document;
   assert.equal(d.querySelector('main form').method,'get');assert.equal(d.querySelector('main [name="company"]').value,business.id);
   assert.equal(d.querySelector('main form[method="post"]'),null);assert.equal(d.querySelector('main input[type="checkbox"]'),null);assert.equal(d.querySelector('main input[type="password"]'),null);
   const tasks=d.querySelector('main details');assert.equal(tasks.open,false);tasks.querySelector('summary').click();assert.equal(tasks.open,true);assert.match(tasks.textContent,/consultar, solicitar/);

@@ -24,7 +24,7 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v069'
+VERSION = 'v071'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.production', '.lumina-digital', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}

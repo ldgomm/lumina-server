@@ -12,7 +12,7 @@ function fixture(t,count=61){
   const id=randomUUID();ids.push(id);
   db.run('INSERT INTO companies(id,name,registration_key,document_hint,phone,approved,created_at) VALUES(?,?,?,?,?,?,?)',id,i===0?'Café Órbita':i===1?'<Taller & Sol>':'Negocio '+String(i).padStart(3,'0'),randomUUID(),'1234','099000'+String(i).padStart(4,'0'),i%2,'2026-11-13T18:00:00.000Z');
   db.run("INSERT INTO accounts(id,company_id,name,email,document,kind) VALUES(?,?,?,?,?,'OWNER')",randomUUID(),id,i===0?'José Ruiz':'Responsable '+i,'owner'+i+'@example.test',documentFor('owner'+i+'@example.test'));
-  if(i%4)db.run('INSERT INTO business_controls VALUES(?,?,?,?,?,?)',id,['ACTIVE','PAUSED','SUSPENDED','CLOSED'][i%4],'Motivo de prueba',1,null,'2026-11-13T18:00:00.000Z');
+  if(i%4)db.run('INSERT INTO business_controls(company_id,state,reason,revision,pending_id,updated_at) VALUES(?,?,?,?,?,?)',id,['ACTIVE','PAUSED','SUSPENDED','CLOSED'][i%4],'Motivo de prueba',1,null,'2026-11-13T18:00:00.000Z');
  }
  return {db,ids};
 }
@@ -30,7 +30,7 @@ test('lifecycle and verification filters apply before pagination and counts desc
  const pending=businessDirectory(db,actor,query({state:'PENDING'}));assert.equal(pending.total,1);assert.equal(pending.rows[0].id,ids[1]);assert.equal(pending.counts.total,61);assert.equal(pending.counts.pending,1);
  const paused=businessDirectory(db,actor,query({state:'PAUSED',verification:'VERIFIED'}));assert.equal(paused.total,15);assert.ok(paused.rows.every(row=>row.state==='PAUSED'&&row.approved===1));
  assert.equal(businessDirectory(db,actor).rows[0].id,ids[1]);
- db.run('INSERT INTO business_controls VALUES(?,?,?,?,?,?)',ids[0],'ACTIVE','Pendiente de confirmar',1,randomUUID(),'2026-11-13T18:00:00.000Z');
+ db.run('INSERT INTO business_controls(company_id,state,reason,revision,pending_id,updated_at) VALUES(?,?,?,?,?,?)',ids[0],'ACTIVE','Pendiente de confirmar',1,randomUUID(),'2026-11-13T18:00:00.000Z');
  const active=businessDirectory(db,actor,query({state:'ACTIVE'}));assert.equal(active.total,active.counts.active);assert.ok(active.rows.every(row=>!row.pending_id));
 });
 test('directory projection is private read only and omits credentials and personal documents',t=>{

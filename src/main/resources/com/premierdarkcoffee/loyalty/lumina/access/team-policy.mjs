@@ -39,6 +39,8 @@ export function grantsSnapshot(grants) {
   return grants.map(g => `${g.scope}.${g.action}`).sort();
 }
 export function memberState(member, at = new Date().toISOString()) {
+  if(member.archived_at)return 'ARCHIVED';
+  if(member.suspended_at)return 'SUSPENDED';
   if (!member.active) return 'INACTIVE';
   if (member.activated) return 'ACTIVE';
   return member.activation_expires > at ? 'PENDING' : 'EXPIRED';

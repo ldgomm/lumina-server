@@ -50,7 +50,12 @@ export function pathFor(actor,company) {
 }
 function navLinks(actor,company,url,cash) {
   const items=[];
-  if(actor.kind==='AGENCY')items.push(['/dashboard','Vista general','home','Agencia'],['/businesses','Clientes','clients'],[url('/teams'),'Equipos y roles','clients'],['/production','Producción','content'],['/agency-calendar','Agenda','calendar']);
+  if(actor.businessBlocked&&actor.kind!=='AGENCY')return [
+    ['/home','Mi negocio','home','Mi espacio'],['/services','Estado de mis servicios','plans'],
+    ...(actor.kind==='OWNER'?[['/billing','Mi cuenta y pagos','plans','Gestión']]:[]),
+    ['/help','Ayuda','content'],['/account','Mi cuenta','settings'],
+  ];
+  if(actor.kind==='AGENCY')items.push(['/dashboard','Vista general','home','Agencia'],['/businesses','Clientes','clients'],[company?'/admin/businesses/'+company.id+'/team':'/teams','Equipos y roles','clients'],['/production','Producción','content'],['/agency-calendar','Agenda','calendar']);
   if(actor.kind!=='AGENCY'||company){
     items.push([url('/home'),company&&actor.kind==='AGENCY'?'Resumen del negocio':'Mi negocio','home',company&&actor.kind==='AGENCY'?'Negocio seleccionado':'Mi espacio']);
     if(actor.kind==='OWNER')items.push(['/team','Equipos y roles','clients']);
@@ -58,7 +63,7 @@ function navLinks(actor,company,url,cash) {
     if(Object.keys(channels).some(scope=>can(actor,scope)))items.push([url('/requests'),'Solicitudes','content'],[url('/calendar'),'Grabaciones','calendar']);
     if(actor.kind!=='AGENCY'&&(actor.kind==='OWNER'||Object.keys(areas).some(scope=>can(actor,scope,'APPROVE'))))items.push([url('/attention'),'Pendientes','check']);
   }
-  if(actor.kind==='OWNER')items.push(['/services','Mis servicios','plans','Servicios']);
+  if(actor.kind!=='AGENCY')items.push(['/services','Mis servicios','plans','Servicios']);
   if(can(actor,'WALLET')||cash)items.push([url('/wallet'),'Fidelización digital · Wallet','wallet',actor.kind==='OWNER'?undefined:'Servicios']);
   for(const [scope,route,mark] of [['SOCIAL','/content','social'],['MAPS','/services/maps','maps'],['WEB','/services/web','web'],['BRAND','/services/brand','content']])if(can(actor,scope))items.push([url(route),areas[scope],mark]);
   if(actor.kind!=='COLLABORATOR')items.push([url('/plans'),'Paquetes y servicios','plans','Gestión']);
@@ -78,7 +83,8 @@ export function page({actor,company,path='/',title,description='',body,cash=fals
   const url=pathFor(actor,company);
   const links=actor?navLinks(actor,company,url,cash):[];
   const navBase=href=>href.split('?')[0].replace(/^\/agency(?=\/)/,'');
-  const activeBase=links.map(([href])=>navBase(href)).filter(base=>path===base||path.startsWith(base+'/')).sort((a,b)=>b.length-a.length)[0];
+  const activePath=actor?.kind==='AGENCY'&&company&&path==='/teams'?'/admin/businesses/'+company.id+'/team':path;
+  const activeBase=links.map(([href])=>navBase(href)).filter(base=>activePath===base||activePath.startsWith(base+'/')).sort((a,b)=>b.length-a.length)[0];
   const menu=actor?links.map(([href,name,mark,group])=>{
     const base=navBase(href),active=base===activeBase;
     return `${group?`<p class="nav-label">${esc(group)}</p>`:''}<a href="${esc(href)}"${active?' aria-current="page"':''}>${icon(mark)}<span>${esc(name)}</span>${mark==='wallet'?'<span class="nav-dot" aria-hidden="true"></span>':''}</a>`;

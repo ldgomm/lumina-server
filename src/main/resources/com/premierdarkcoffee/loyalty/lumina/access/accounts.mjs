@@ -1,3 +1,4 @@
+import { requireTeamManager, requireLiveTeamManager } from './team-administration.mjs';
 import { documentNumber, rucNumber, whatsappNumber, contactPhone } from './identity.mjs';
 import { activeServices } from '../businesses/services.mjs';
 import { businessCategory } from '../businesses/categories.mjs';
@@ -179,8 +180,9 @@ export function approveCompany(db, actor, company) {
   });
 }
 export function teamMember(db, actor, id) {
-  requireOwner(actor);
-  const target = db.get(`SELECT a.id,a.name,a.email,a.document,a.contact_phone,a.revision,a.active,a.password IS NOT NULL AS activated,
+  requireTeamManager(actor);
+  if(actor.kind==='AGENCY')requireLiveTeamManager(db,actor);
+  const target = db.get(`SELECT a.id,a.company_id,a.kind,a.name,a.email,a.document,a.contact_phone,a.revision,a.active,a.archived_at,a.suspended_at,a.control_reason,a.password IS NOT NULL AS activated,
     c.status AS cash_status,c.branch_id,c.branch_name,c.purchases,c.rewards,
     (SELECT max(expires_at) FROM codes WHERE account_id=a.id AND kind='ACTIVATE') AS activation_expires,
     (SELECT count(*) FROM sessions WHERE account_id=a.id AND expires_at>?) AS session_count,
@@ -192,7 +194,8 @@ export function teamMember(db, actor, id) {
   return target;
 }
 export function teamList(db, actor) {
-  requireOwner(actor);
+  requireTeamManager(actor);
+  if(actor.kind==='AGENCY')requireLiveTeamManager(db,actor);
   return db.all("SELECT id FROM accounts WHERE company_id=? AND kind='COLLABORATOR' ORDER BY active DESC,name,id", actor.company_id)
     .map(row => teamMember(db,actor,row.id));
 }
@@ -204,7 +207,7 @@ export function requireTeamRevision(member, input) {
     'Este acceso cambió o el formulario venció. Revisa la versión actual antes de guardar.',409);
 }
 export function auditTeamChange(db, actor, member, action, before, after) {
-  event(db,actor,actor.company_id,'ACCOUNT',member.id,action,JSON.stringify({v:1,before,after}));
+  event(db,actor,actor.company_id,'ACCOUNT',member.id,action,JSON.stringify({v:1,actorKind:actor.kind,before,after}));
 }
 function issueActivation(db, accountId) {
   const code = randomCode();
@@ -213,7 +216,8 @@ function issueActivation(db, accountId) {
   return code;
 }
 export function createTeamMember(db, actor, input) {
-  requireOwner(actor);
+  requireTeamManager(actor);
+  if(actor.kind==='AGENCY')requireLiveTeamManager(db,actor);
   const name = text(input.name,'nombre',2,100);
   const document = documentNumber(input.document);
   const phone = contactPhone(input.phone);
@@ -231,6 +235,7 @@ export function updateGrants(db, actor, id, input) {
   return db.transaction(() => {
     const target = teamMember(db,actor,id);
     requireTeamRevision(target,input);
+    requireThat(!target.archived_at,'Restaura primero a esta persona.',409);
     const next = parseGrants(input);
     if (replaceTeamGrants(db,actor,target,next)) db.run('UPDATE accounts SET revision=revision+1 WHERE id=?',id);
   });
@@ -248,6 +253,7 @@ export function updateMember(db, actor, id, input) {
   const name=text(input.name,'nombre',2,100),document=documentNumber(input.document),phone=contactPhone(input.phone);
   return db.transaction(()=>{
     const target=teamMember(db,actor,id);requireTeamRevision(target,input);
+    requireThat(!target.archived_at,'Restaura primero a esta persona.',409);
     requireThat(!db.get('SELECT id FROM accounts WHERE document=? AND id<>?',document,id),'Esa cédula ya tiene un acceso.',409);
     if(name===target.name&&document===target.document&&phone===target.contact_phone)return;
     db.run('UPDATE accounts SET name=?,document=?,contact_phone=?,revision=revision+1 WHERE id=?',name,document,phone,id);
@@ -260,6 +266,7 @@ export function manageAccount(db, actor, id, action, input) {
     const target = teamMember(db,actor,id);
     requireTeamRevision(target,input);
     requireThat(['DISABLE','INVITE'].includes(action),'Acción de acceso inválida.');
+    requireThat(!target.archived_at,'Restaura primero a esta persona.',409);
     requireThat(input.confirm==='yes',action==='DISABLE'?'Confirma la baja del acceso completo.':'Confirma que se cerrarán sus sesiones y deberá elegir una nueva contraseña.');
     if(action==='INVITE') {
       requireThat(target.document&&target.contact_phone,'Completa la cédula y el teléfono en Datos y acceso antes de generar el código.');
@@ -268,17 +275,43 @@ export function manageAccount(db, actor, id, action, input) {
     db.run('DELETE FROM sessions WHERE account_id=?',id);
     db.run('DELETE FROM codes WHERE account_id=?',id);
     if (action === 'DISABLE') {
-      db.run('UPDATE accounts SET active=0,password=NULL,revision=revision+1 WHERE id=?',id);
+      db.run('UPDATE accounts SET active=0,password=NULL,suspended_at=NULL,revision=revision+1 WHERE id=?',id);
       db.run("UPDATE cash_grants SET status='REVOKING' WHERE account_id=? AND status='ACTIVE'",id);
       auditTeamChange(db,actor,target,'ACCESO_DESACTIVADO',{active:Boolean(target.active)},{active:false});
       return null;
     }
-    db.run('UPDATE accounts SET active=1,password=NULL,revision=revision+1 WHERE id=?',id);
+    db.run("UPDATE accounts SET active=1,password=NULL,archived_at=NULL,suspended_at=NULL,control_reason='',revision=revision+1 WHERE id=?",id);
     const code = issueActivation(db,id);
     auditTeamChange(db,actor,target,'ACTIVACIÓN_EMITIDA',{active:Boolean(target.active)},{active:true,grants:grantsSnapshot(target.grants)});
     return code;
   });
 }
+
+export function changeMemberState(db, actor, id, action, input) {
+  requireTeamManager(actor);
+  requireThat(['SUSPEND','RESUME','DELETE','RESTORE'].includes(action),'Acción inválida.');
+  requireThat(input.confirm==='yes','Confirma el cambio de acceso.');
+  const reason=text(input.reason,'motivo',5,500);
+  return db.transaction(()=>{
+    const target=teamMember(db,actor,id);requireTeamRevision(target,input);
+    if(action==='DELETE')requireThat(!target.archived_at&&input.name===target.name,'Escribe el nombre de la persona para confirmar la eliminación.');
+    if(action==='SUSPEND')requireThat(target.active&&!target.archived_at,'La persona ya no tiene acceso activo.',409);
+    if(action==='RESUME')requireThat(target.suspended_at&&!target.archived_at,'Este acceso no está suspendido.',409);
+    if(action==='RESTORE')requireThat(target.archived_at,'La persona no está eliminada.',409);
+    db.run('DELETE FROM sessions WHERE account_id=?',id);
+    db.run('DELETE FROM codes WHERE account_id=?',id);
+    if(action==='SUSPEND')db.run('UPDATE accounts SET active=0,suspended_at=?,control_reason=?,revision=revision+1 WHERE id=?',now(),reason,id);
+    if(action==='RESUME')db.run('UPDATE accounts SET active=1,suspended_at=NULL,control_reason=?,revision=revision+1 WHERE id=?',reason,id);
+    if(action==='DELETE'){
+      db.run('UPDATE accounts SET active=0,password=NULL,archived_at=?,suspended_at=NULL,control_reason=?,revision=revision+1 WHERE id=?',now(),reason,id);
+      db.run("UPDATE cash_grants SET status='REVOKING' WHERE account_id=? AND status IN ('ACTIVE','PENDING')",id);
+    }
+    if(action==='RESTORE')db.run('UPDATE accounts SET active=0,archived_at=NULL,suspended_at=NULL,control_reason=?,revision=revision+1 WHERE id=?',reason,id);
+    auditTeamChange(db,actor,target,({SUSPEND:'ACCESS_SUSPENDED',RESUME:'ACCESS_RESUMED',DELETE:'MEMBER_REMOVED',RESTORE:'MEMBER_RESTORED'})[action],
+      {active:Boolean(target.active),archived:Boolean(target.archived_at)}, {active:['RESUME'].includes(action),archived:action==='DELETE',reason});
+  });
+}
+
 export async function activate(db, data) {
   const initial = checkCode(db,data.code,'ACTIVATE');
   const document = documentNumber(data.document);

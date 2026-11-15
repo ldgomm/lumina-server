@@ -1,5 +1,28 @@
 # Loyalty
 
+## Lúmina v032 / Loyalty v071 — effective service status
+
+- Cumulative baselines: installed v030/v069 (commit 824e6658ec03dfcb22a792a56c32d684088dc6bd) or the exact prepared v031/v070 source. Retain all v031 administration and assigned-identity restrictions. This section supersedes earlier service visibility and test counts.
+- The business lifecycle is a global operational gate over Content, Wallet, Maps, Web and Brand Design. Show effective state without overwriting each service's ACTIVE/SETUP/INACTIVE choice. Pending commands and archived businesses remain blocked. Reactivation restores previous service choices and collaborator grants; it must not activate previously inactive services.
+- Owners and collaborators can read `/services` while blocked. Collaborators see only their assigned services, including explicit cashier access. Reading never activates services or retries synchronization. Only owners can activate; agency support never impersonates business consent.
+- Blocked HTML operational requests retain status423 and offer a useful status page. APIs and mutations remain denied. The minimal blocked navigation exposes status, help, own account and owner-only billing. Revalidate lifecycle/account/grants at the operation boundary.
+- Administration shows all five effective service states and separately labels the native Wallet response, unavailable/invalid responses, contradictory active state, or pending synchronization. Owner views label the last acknowledged change and timestamp, not current provider health. Never claim installed phone refresh from a server response.
+- External websites, already-published content and Google Business Profiles retain their external state. Lúmina blocks management and new operations in its own modules. Suspension is not contract cancellation; preserve charge and consent rules.
+- v032 adds no database migration or native Wallet changes. The cumulative v031 update includes additive SQLite012. PostgreSQLV017 and Wallet representation34 remain unchanged. Preserve original tenant/pass identities, keys, domains, balances, files and grants. Production installation remains guarded.
+- Gates: 38 suites / 441 portal tests, 185 Python, 312 native unit/HTTP, 347 PostgreSQL; Docker staging/gateway before local commit, no push. 28 DOM suites and fixture browser checks are separate from native/device verification.
+- Terminal prints RESULTADO plus the URL only after verified startup. Both supported source baselines, idempotence, actual-baseline rollback, conflicts, production profile and payload integrity must be validated. See docs/lumina-service-status-v071.md.
+
+## Lúmina v031 / Loyalty v070 — business and team administration
+
+- Baseline: installed v030/v069, commit 824e6658ec03dfcb22a792a56c32d684088dc6bd. This section supersedes older identity ownership restrictions, team read-only rules and gate/schema counts only within the administration scope described here.
+- The user's explicit authorization permits agency management of business lifecycle and its collaborators. Keep the real AGENCY account ID/kind; construct company-bounded support context only in dedicated `/admin/businesses/:company/team` routes. Revalidate the agency session/revision before and after asynchronous native work. Never accept support scope, identity, tenant or role from posted fields.
+- Owner and agency share the team editor and policy. Agency may assign cedula/phone, invitations, service grants and cashier branch/abilities. Activation still matches the assigned identity/contact. Collaborators cannot administer teams; owners cannot edit another business. Business requests, purchases, service acceptance and approvals remain owner-scoped; no impersonation.
+- Delete means recoverable archive. Require reason, CSRF, revision and exact-name confirmation; retain account/company/tenant/pass IDs, balances, agreements, files and audit. Restore a person as inactive, then invite again. Business restore retains original links and becomes operative only after native acknowledgement. Business deletion closes sessions/codes and native access; no SQL deletion of historic business/person data.
+- Suspend collaborators by invalidating sessions/codes and active account access, retaining password and tasks. Private sealed native cashier credentials may remain for resumption, but every proxy request must freshly check active account/session/scope. Deletion and disable also withdraw native cashier credentials; on provider failure keep the local block and explicit retry. Never expose the platform token or private adapter to the browser.
+- SQLite012 is additive; preserve all historical SQL migrations. Production now requires schema12 with a planned migration and compatible identity seal. This installer must not apply to production or bypass its seal. PostgreSQLV017 and Wallet representation34 are unchanged. Native Wallet code/credentials/identifiers are unchanged.
+- Gates: 37 suites / 429 portal tests, 185 Python, 312 native unit/HTTP, 347 PostgreSQL; Docker staging/gateway before local commit, no push. 27 DOM suites and fixture browser checks are separate from Mac native/device verification.
+- Terminal prints RESULTADO and only the verified startup URL. Preserve source conflict checks, rollback, private backups, English paths, Spanish UI, and physical Wallet verification pending. See docs/lumina-administration-v070.md.
+
 ## Lúmina v030 / Loyalty v069 — assigned identity and existing account access
 
 - Baseline: installed v029/v068, commit 1bd85376daf54a23f418cd431503451f9d764b38. This section supersedes earlier identity behavior and gate counts.

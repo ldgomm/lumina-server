@@ -1,3 +1,4 @@
+import { requireTeamManager, requireLiveTeamManager } from '../access/team-administration.mjs';
 import { requireService } from '../businesses/services.mjs';
 import { requireOperating } from '../businesses/control.mjs';
 import { requireOwner, teamMember, requireTeamRevision, auditTeamChange } from '../access/accounts.mjs';
@@ -43,6 +44,7 @@ function contract(condition) {
   requireThat(condition,'El servidor de Loyalty no respondió con el contrato de equipo esperado.',502);
 }
 function currentSession(db, actor) {
+  if(actor.kind==='AGENCY'){requireLiveTeamManager(db,actor);return;}
   requireOperating(db,actor.company_id);
   requireThat(db.get(`SELECT 1 FROM sessions s JOIN accounts a ON a.id=s.account_id
     WHERE s.digest=? AND s.expires_at>? AND a.id=? AND a.active=1 AND a.kind=? AND a.company_id=? AND a.revision=?`,actor.session_id,now(),actor.id,actor.kind,actor.company_id,actor.revision),
@@ -51,7 +53,7 @@ function currentSession(db, actor) {
 function context(grant) {
   return `cashier:${grant.company_id}:${grant.account_id}:${grant.staff_id}`;
 }
-export function createLoyaltyBridge({ db, key, origin }) {
+export function createLoyaltyBridge({ db, key, origin, administration }) {
   const busy = new Set();
   async function request(path, { method = 'GET', token, body, idempotency, asset = false } = {}) {
     const headers = {};
@@ -85,7 +87,19 @@ export function createLoyaltyBridge({ db, key, origin }) {
     }
     return result;
   }
+  async function teamRequest(actor,path,options={}) {
+    return actor.kind==='AGENCY'?administration(actor,path,options):request(path,options);
+  }
   async function ownerContext(actor, credential, bound = true) {
+    if(actor.kind==='AGENCY') {
+      requireLiveTeamManager(db,actor);
+      const company=db.get('SELECT * FROM companies WHERE id=?',actor.company_id);
+      requireThat(company?.loyalty_tenant,'Este negocio todavía no tiene Wallet activa.',409);
+      const team=await teamRequest(actor,teamRoute);
+      contract(Array.isArray(team.users)&&Array.isArray(team.branches));
+      currentSession(db,actor);
+      return {company,business:{id:company.loyalty_tenant},team};
+    }
     requireOwner(actor);
     currentSession(db,actor);
     const company = db.get('SELECT * FROM companies WHERE id=?',actor.company_id);
@@ -105,6 +119,7 @@ export function createLoyaltyBridge({ db, key, origin }) {
     return { company, business: dashboard.business, team };
   }
   async function link(actor, data) {
+    requireOwner(actor);
     requireThat(data.confirm === 'yes','Confirma que ambos perfiles pertenecen al mismo negocio.');
     const { business } = await ownerContext(actor,data.credential,false);
     requireThat(business.slug === data.slug,'El código del negocio de Loyalty no coincide con la credencial.',403);
@@ -127,8 +142,8 @@ export function createLoyaltyBridge({ db, key, origin }) {
     contract(isId(result?.id) && tokenPattern.test(result?.token || '') && result.credentialIssued === true);
     return result.token;
   }
-  async function staffAction(credential, staff, action, reason) {
-    return request(teamRoute + '/' + staff.id + '/actions', {
+  async function staffAction(actor, credential, staff, action, reason) {
+    return teamRequest(actor,teamRoute + '/' + staff.id + '/actions', {
       method:'POST', token:credential, body:{expectedVersion:staff.version,action,reason,confirmed:true},
     });
   }
@@ -144,12 +159,13 @@ export function createLoyaltyBridge({ db, key, origin }) {
     try { return await work(); } finally { busy.delete(id); }
   }
   async function configure(actor, id, data, commit = () => false) {
-    requireOwner(actor);
+    requireTeamManager(actor);
+    requireOperating(db,actor.company_id);
     requireService(db,actor.company_id,'WALLET');
     return runExclusive(id,async () => {
       const target = teamMember(db,actor,id);
       requireTeamRevision(target,data);
-      requireThat(target.active,'Reactiva primero el acceso de la persona.',409);
+      requireThat(target.active&&!target.archived_at,'Reactiva primero el acceso de la persona.',409);
       const credential=typeof data.credential==='function'?await data.credential():data.credential;
       data={...data,credential};
       const { team, company } = await ownerContext(actor,credential);
@@ -172,7 +188,7 @@ export function createLoyaltyBridge({ db, key, origin }) {
       if (grant.status === 'PENDING') {
         requireThat(grant.branch_id === branch.id && grant.purchases === Number(purchases) && grant.rewards === Number(rewards),
           'Reintenta el alta pendiente con la misma sucursal y permisos.',409);
-        const result = await request('/api/staff/credentials', {
+        const result = await teamRequest(actor,'/api/staff/credentials', {
           method:'POST', token:data.credential, body:{role:'CASHIER',name:target.name,branchId:branch.id,requestId:grant.request_id,permissions},
         });
         contract(isId(result?.id));
@@ -181,18 +197,18 @@ export function createLoyaltyBridge({ db, key, origin }) {
           token = issued(result);
         } else {
           contract(result.replayed === true && result.credentialIssued === false);
-          const refreshed = await request(teamRoute,{token:data.credential});
+          const refreshed = await teamRequest(actor,teamRoute,{token:data.credential});
           const staff = staffRow(refreshed,staffId);
           requireThat(staff.state === 'ACTIVE' && staff.branchId === branch.id &&
             staff.permissions?.purchases === purchases && staff.permissions?.rewards === rewards,
           'El alta anterior cambió en Loyalty. Revisa el acceso antes de reintentar.',409);
-          token = issued(await staffAction(data.credential,staff,'ROTATE','Recuperación de un alta delegada de Lúmina.'));
+          token = issued(await staffAction(actor,data.credential,staff,'ROTATE','Recuperación de un alta delegada de Lúmina.'));
         }
       } else {
         let staff = staffRow(team,staffId);
         requireThat(staff.state !== 'ARCHIVED','El acceso fue archivado en Loyalty. Crea un colaborador nuevo.',409);
         if (staff.branchId !== branch.id || staff.permissions?.purchases !== purchases || staff.permissions?.rewards !== rewards) {
-          const saved = await request(teamRoute + '/' + staffId,{
+          const saved = await teamRequest(actor,teamRoute + '/' + staffId,{
             method:'PUT',token:data.credential,body:{expectedVersion:staff.version,name:staff.name,contact:staff.contact || '',
               role:'CASHIER',branchId:branch.id,reason:'Actualización de permisos de Caja desde Lúmina.',permissions},
           });
@@ -200,7 +216,7 @@ export function createLoyaltyBridge({ db, key, origin }) {
           staff = {...staff,version:saved.version};
         }
         if (staff.state === 'INACTIVE') {
-          token = issued(await staffAction(data.credential,staff,'REACTIVATE','Reactivación de Caja desde Lúmina.'));
+          token = issued(await staffAction(actor,data.credential,staff,'REACTIVATE','Reactivación de Caja desde Lúmina.'));
         } else {
           if (grant.sealed_token) {
             const previous = unseal(key,context(grant),grant.sealed_token);
@@ -212,7 +228,7 @@ export function createLoyaltyBridge({ db, key, origin }) {
               if (error.status !== 401) throw error;
             }
           }
-          if (!token) token = issued(await staffAction(data.credential,staff,'ROTATE','Sincronización de acceso de Caja desde Lúmina.'));
+          if (!token) token = issued(await staffAction(actor,data.credential,staff,'ROTATE','Sincronización de acceso de Caja desde Lúmina.'));
         }
       }
       currentSession(db,actor);
@@ -251,18 +267,18 @@ export function createLoyaltyBridge({ db, key, origin }) {
         if(!grant.staff_id){
           // Resolve a lost creation response by its existing idempotency key.
           // It stays blocked locally; never publish or retain the issued token.
-          const result=await request('/api/staff/credentials',{method:'POST',token:credential,
+          const result=await teamRequest(actor,'/api/staff/credentials',{method:'POST',token:credential,
             body:{role:'CASHIER',name:target.name,branchId:grant.branch_id,requestId:grant.request_id,
               permissions:{purchases:Boolean(grant.purchases),rewards:Boolean(grant.rewards)}}});
           contract(isId(result?.id));
-          team=await request(teamRoute,{token:credential});
+          team=await teamRequest(actor,teamRoute,{token:credential});
           const found=staffRow(team,result.id);
           requireThat(found.branchId===grant.branch_id,'La asignación pendiente cambió. Revisa su sucursal.',409);
           grant.staff_id=result.id;
           db.run("UPDATE cash_grants SET staff_id=? WHERE company_id=? AND account_id=? AND status='REVOKING'",result.id,actor.company_id,id);
         }
         const staff=staffRow(team,grant.staff_id);
-        if(staff.state==='ACTIVE')await staffAction(credential,staff,'DEACTIVATE',reason);
+        if(staff.state==='ACTIVE')await staffAction(actor,credential,staff,'DEACTIVATE',reason);
         currentSession(db,actor);
         db.transaction(()=>{
           db.run("UPDATE cash_grants SET status='INACTIVE',sealed_token=NULL WHERE company_id=? AND account_id=? AND status='REVOKING'",actor.company_id,id);

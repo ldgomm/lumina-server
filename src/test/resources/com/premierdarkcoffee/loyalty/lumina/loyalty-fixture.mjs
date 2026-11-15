@@ -81,22 +81,34 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
         const company=businesses.get(read[1]);if(!company)return fail(res,404,'NOT_FOUND');
         return json(res,200,read[2]==='wallet-health'?health:read[2]==='profile'?{business:company}:{businessId:company.id,totalClients:0});
       }
-      const match=path.match(/^\/api\/platform\/tenants\/([^/]+)\/(branches|credentials|team)(?:\/([^/]+)\/actions)?$/);
+      const match=path.match(/^\/api\/platform\/tenants\/([^/]+)\/(branches|credentials|team)(?:\/([^/]+)(?:\/actions)?)?$/);
       if(match) {
         const company=businesses.get(match[1]);if(!company)return fail(res,404,'NOT_FOUND');
         if(match[2]==='branches')return json(res,200,{business:company,branches:branches.get(company.id)});
-        if(req.method==='GET'&&match[2]==='team')return json(res,200,{users:[...staff.values()].filter(u=>u.company.id===company.id).map(({token,company,requestId,...row})=>row)});
+        if(req.method==='GET'&&match[2]==='team')return json(res,200,{users:[...staff.values()].filter(u=>u.company.id===company.id).map(({token,company,requestId,...row})=>row),branches:branches.get(company.id)});
         let body='';for await(const chunk of req)body+=chunk;const data=JSON.parse(body);
         if(match[2]==='credentials') {
           const prior=[...staff.values()].find(u=>u.company.id===company.id&&u.requestId===data.requestId);
           if(prior)return json(res,201,{id:prior.id,replayed:true,credentialIssued:false});
-          if(data.role!=='OWNER')return fail(res,400,'INVALID_ROLE');
-          const entry={id:uuid(),role:'OWNER',name:data.name,branchId:null,contact:'',permissions:{purchases:true,rewards:true},version:1,state:'ACTIVE',company,requestId:data.requestId};
+          if(!['OWNER','CASHIER'].includes(data.role))return fail(res,400,'INVALID_ROLE');
+          if(data.role==='CASHIER'&&!branches.get(company.id).some(b=>b.id===data.branchId))return fail(res,422,'BAD_GRANT');
+          const entry={id:uuid(),role:data.role,name:data.name,branchId:data.role==='CASHIER'?data.branchId:null,contact:'',permissions:data.role==='CASHIER'?data.permissions:{purchases:true,rewards:true},version:1,state:'ACTIVE',company,requestId:data.requestId};
           staff.set(entry.id,entry);const token=issue(entry);
           if(dropNextCreate){dropNextCreate=false;return res.destroy();}
           return json(res,201,{id:entry.id,token,version:1,credentialIssued:true});
         }
         const target=staff.get(match[3]);if(!target||target.company.id!==company.id)return fail(res,404,'NOT_FOUND');
+        if(req.method==='PUT') {
+          if(target.version!==data.expectedVersion)return fail(res,409,'VERSION_CONFLICT');
+          if(data.role!=='CASHIER'||!branches.get(company.id).some(b=>b.id===data.branchId))return fail(res,403,'SCOPE');
+          target.branchId=data.branchId;target.permissions=data.permissions;
+          return json(res,200,{id:target.id,version:++target.version});
+        }
+        if(data.action==='DEACTIVATE'){
+          if(target.version!==data.expectedVersion||data.confirmed!==true)return fail(res,409,'VERSION_CONFLICT');
+          target.state='INACTIVE';tokens.delete(target.token);
+          return json(res,200,{id:target.id,version:++target.version,credentialIssued:false});
+        }
         if(target.version!==data.expectedVersion||!['ACTIVE','INACTIVE'].includes(target.state)||!['ROTATE','REACTIVATE'].includes(data.action))return fail(res,409,'VERSION_CONFLICT');
         target.state='ACTIVE';return json(res,200,{id:target.id,token:issue(target),version:++target.version,credentialIssued:true});
       }
