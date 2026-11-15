@@ -27,8 +27,12 @@ try{
  assert.equal(adminPage.querySelectorAll('.service-impact-list>li').length,5);
  assert.ok(adminPage.querySelector('form[action="'+base+'/state"] [name="revision"]'));
  const script=adminPage.createElement('script');script.textContent=readFileSync(new URL('../../src/main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/assets/billing-workspace.js',import.meta.url),'utf8');adminPage.head.append(script);
- const select=adminPage.querySelector('[name="state"]');select.value='CLOSED';select.dispatchEvent(new adminPage.defaultView.Event('change'));
- const effects=[...adminPage.querySelectorAll('[data-state-effect]')].filter(node=>!node.hidden);assert.equal(effects.length,1);assert.equal(effects[0].dataset.stateEffect,'CLOSED');
+ const choices=[...adminPage.querySelectorAll('input[type="radio"][name="state"]')];
+ assert.equal(choices.length,3);assert.ok(choices.every(node=>node.required&&!node.checked));
+ const closing=choices.find(node=>node.value==='CLOSED');closing.click();
+ assert.equal(adminPage.querySelectorAll('input[name="state"]:checked').length,1);
+ assert.match(closing.closest('label').textContent,/próximos cargos de Wallet/);
+ const effects=[...adminPage.querySelectorAll('[data-state-effect]')];assert.equal(effects.length,choices.length);assert.ok(effects.every(node=>!node.hidden));
  const pending=randomUUID();w.db.run('UPDATE business_controls SET pending_id=? WHERE company_id=?',pending,business.id);
  const d=document((await business.client.get('/services')).body);assert.equal(d.querySelector('[data-wallet-sync]').dataset.walletSync,'PENDING');
  assert.ok(d.querySelector('main a[href="/services"]'));assert.equal(d.querySelector('main button'),null);

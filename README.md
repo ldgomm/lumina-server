@@ -1,4 +1,6 @@
-# Lúmina v034 / Loyalty v073
+# Lúmina v035 / Loyalty v074
+
+Business administration has one searchable directory with consistent lifecycle counts, direct access to pending work and teams, and native state choices with clear consequences. Local work summaries remain available when Wallet account retrieval fails. [Business workspace and validation](docs/lumina-business-workspace-v074.md).
 
 Paused, suspended, closed and archived businesses leave active work queues. Requests and visits remain available in a clearly labeled, read-only history; restoration preserves their last stage. Existing archived records are corrected without changing stored work. [Business state and work history](docs/lumina-work-lifecycle-v073.md).
 

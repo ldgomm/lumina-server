@@ -12,6 +12,7 @@ import { serviceState, requireService, serviceCatalog, beginService, completeWal
 import { serviceStatus } from '../businesses/service-status.mjs';
 import { businessStatusPage, collaboratorServicesPage } from '../presentation/pages/service-status-pages.mjs';
 import { welcomePage, servicesPage, inactiveServicePage } from '../presentation/pages/welcome-pages.mjs';
+import { businessWorkSummary } from '../businesses/work-summary.mjs';
 import { businessDirectory } from '../businesses/directory.mjs';
 import { businessDirectoryPage } from '../presentation/pages/business-directory-pages.mjs';
 import { receiptPage, receiptText } from '../presentation/pages/billing-account-pages.mjs';
@@ -442,7 +443,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const view=async(status=200)=>{
           company=companyFor(db,actor,company.id);
           let account=company.loyalty_tenant?null:emptyAccount(company,localDay());if(company.loyalty_tenant)try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
-          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:contractsFor(db,company.id),view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',delete:'Negocio eliminado. Su historial se conserva.',restore:'Negocio restaurado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
+          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{work:businessWorkSummary(db,actor,company.id),serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:contractsFor(db,company.id),view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',delete:'Negocio eliminado. Su historial se conserva.',restore:'Negocio restaurado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
         };
         if(method==='POST')try {
           let savedPayment=null;

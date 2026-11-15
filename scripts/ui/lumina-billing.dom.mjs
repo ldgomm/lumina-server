@@ -25,11 +25,13 @@ try {
   assert.equal(d.querySelectorAll('[data-state-effect]:not([hidden])').length, 3);
   assert.equal(d.querySelectorAll('.control-state-editor form [name=confirm]:checked').length, 0);
   run(window);
-  const state = d.querySelector('[name=state]');
+  const stateForm = d.querySelector('.control-state-editor form');
+  assert.equal(stateForm.querySelector('[name=state]:checked'), null);
   for (const value of ['CLOSED', 'PAUSED', 'SUSPENDED']) {
-    state.value = value; state.dispatchEvent(new window.Event('change'));
-    assert.equal(d.querySelectorAll('[data-state-effect]:not([hidden])').length, 1);
-    assert.equal(d.querySelector('[data-state-effect]:not([hidden])').dataset.stateEffect, value);
+    stateForm.querySelector('[name=state][value='+value+']').click();
+    assert.equal(stateForm.querySelectorAll('[name=state]:checked').length, 1);
+    assert.equal(stateForm.querySelector('[name=state]:checked').value, value);
+    assert.equal(stateForm.querySelector('[name=state]:checked').closest('label').querySelector('[data-state-effect]').dataset.stateEffect, value);
   }
   const payment = d.querySelector('form[action*="/payment?"]');
   assert.equal(payment.checkValidity(), false);

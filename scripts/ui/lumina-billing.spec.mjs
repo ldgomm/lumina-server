@@ -57,10 +57,10 @@ try {
         await fit();
         assert.equal(await page.getByLabel('Importe recibido (USD)').first().inputValue(), '45.01');
         if (output && width === 390) await page.screenshot({ path: resolve(output, 'agency-payment-form-390.png'), fullPage: true });
-        await page.locator('.control-state-editor summary').click();
-        await page.getByLabel('Nuevo estado').selectOption('CLOSED');
-        assert.equal(await page.locator('[data-state-effect]:visible').count(), 1);
-        assert.match(await page.locator('[data-state-effect]:visible').innerText(), /próximos cargos/);
+        await page.locator('.control-state-editor summary').first().click();
+        await page.locator('[name=state][value=CLOSED]').check();
+        assert.equal(await page.locator('[name=state]:checked').count(), 1);
+        assert.match(await page.locator('[data-state-effect=CLOSED]').innerText(), /próximos cargos/);
         await fit();
       }
     }
@@ -98,7 +98,7 @@ try {
   const nojs = await browser.newContext({ javaScriptEnabled: false });
   await nojs.addCookies([{ name: 'lumina_session', value: admin.cookie.split('=')[1], url: world.origin, httpOnly: true, sameSite: 'Strict' }]);
   const page = await nojs.newPage(); await page.goto(world.origin + base + '?view=charges');
-  await page.locator('.control-state-editor summary').click(); assert.equal(await page.locator('[data-state-effect]:visible').count(), 3);
+  await page.locator('.control-state-editor summary').first().click(); assert.equal(await page.locator('[data-state-effect]:visible').count(), 3);
   await page.locator('.billing-action').first().locator('summary').click(); assert.equal(await page.getByLabel('Importe recibido (USD)').first().isVisible(), true);
   assert.deepEqual(errors, []);
   if (output) await writeFile(resolve(output, 'result.json'), JSON.stringify({ status: 'PASS', widths: [320, 390, 1024, 1440], roles: ['agency', 'owner'], data: 'fictional', print: true, noJavaScript: true, retainedPaymentDraft: true }, null, 2));

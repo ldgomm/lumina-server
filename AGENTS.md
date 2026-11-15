@@ -1,5 +1,15 @@
 # Loyalty
 
+## Lúmina v035 / Loyalty v074 — business workspace
+
+- Baseline: installed v034/v073, commit 388357b383aeae22b299cfca22ed74b0a8146c26. This section supersedes release and gate counts; preserve existing lifecycle, identity, continuity and authority rules.
+- Directory facets and rows share search and verification scope. Derive operational state from the canonical business lifecycle, including archived and pending commands. Keep current, active, stopped and archived views consistent; preserve search/sort on filter changes and clamp stale pages.
+- Work summaries are agency-only, read-only, company-scoped and independent of native Wallet availability. Count unfinished requests, unfinished upcoming/overdue visits and activated, non-archived collaborator accounts without join multiplication. Blocked access must be labeled as preserved, never operational.
+- State controls use native required radio inputs with no default action. Keep explicit confirmation, reasons, CSRF, revision, idempotency, server authorization and real agency identity. Failed forms retain safe values and reset confirmation. Do not weaken delete/restore controls.
+- No schema, Kotlin, native Wallet, activation, billing, identity, provider, domain, grant, pass serial or balance changes. SQLite12, PostgreSQLV017 and representation34 stay unchanged. Reading does not synchronize or mutate state.
+- Gates: 41 files / 492 portal tests, 185 Python contracts, 312 native unit/HTTP and 347 PostgreSQL; Docker/gateway before local commit, no push. 31 DOM suites and browser fixtures remain distinct from physical device verification.
+- Validate exact v034 compatibility, check-only, idempotence, rollback preserving concurrent edits, conflicts, symlinks, production profile guards, UTF-8 and payload integrity. Terminal prints RESULTADO plus verified startup URL only. See docs/lumina-business-workspace-v074.md.
+
 ## Lúmina v034 / Loyalty v073 — business lifecycle across work queues
 
 - Baseline: installed v033/v072, commit b86d4d369ba71ec74a11f5d8a2054dc6b672fb0b. This section supersedes gate counts; retain all existing identity, Wallet continuity, permissions and production safeguards.

@@ -25,7 +25,7 @@ test('search is literal and ignores accents across business and owner contact',t
  const {db,ids}=fixture(t);for(const q of ['CAFE orbita','Jose Ruiz','1729279784','0990000000'])assert.deepEqual(businessDirectory(db,actor,query({q})).rows.map(r=>r.id),[ids[0]],q);
  assert.equal(businessDirectory(db,actor,query({q:'%_'})).total,0);
 });
-test('lifecycle and verification filters apply before pagination and counts describe all businesses',t=>{
+test('lifecycle and verification filters apply before pagination and counts describe the same search and verification scope',t=>{
  const {db,ids}=fixture(t);db.run('UPDATE business_controls SET pending_id=? WHERE company_id=?',randomUUID(),ids[1]);
  const pending=businessDirectory(db,actor,query({state:'PENDING'}));assert.equal(pending.total,1);assert.equal(pending.rows[0].id,ids[1]);assert.equal(pending.counts.total,61);assert.equal(pending.counts.pending,1);
  const paused=businessDirectory(db,actor,query({state:'PAUSED',verification:'VERIFIED'}));assert.equal(paused.total,15);assert.ok(paused.rows.every(row=>row.state==='PAUSED'&&row.approved===1));
