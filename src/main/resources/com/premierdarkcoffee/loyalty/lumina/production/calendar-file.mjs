@@ -1,3 +1,4 @@
+import { requireOperating } from '../businesses/control.mjs';
 import { requireAgency, requireBusinessActor } from '../access/accounts.mjs';
 import { requestAccessSql } from '../access/content-policy.mjs';
 import { isId, requireThat } from '../shared/domain.mjs';
@@ -13,6 +14,7 @@ export function calendarVisit(db,actor,companyId,id) {
     JOIN companies c ON c.id=v.company_id
     WHERE v.id=? AND (?='' OR v.company_id=?) AND ${policy.sql}`,id,companyId||'',companyId||'',...policy.params);
   requireThat(row,'Grabación no encontrada.',404);
+  requireOperating(db,row.company_id);
   requireThat(row.status==='SCHEDULED'&&row.request_status!=='CANCELLED','Esta visita ya no está programada. Revisa la agenda.',409);
   return row;
 }

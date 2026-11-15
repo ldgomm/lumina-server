@@ -57,7 +57,7 @@ test('pendientes impide suplantación, mutación y lectura de otra empresa',asyn
 });
 test('agenda separa futuras, atrasadas e historial sin marcar visitas realizadas',async t=>{
  const w=await setup(t),r=await request(w);visit(w,r);visit(w,r,{date:'2001-01-01T15:00:00.000Z'});visit(w,r,{status:'DONE',date:'2000-01-01T15:00:00.000Z'});visit(w,r,{status:'CANCELLED'});
- const data=agendaData(w.db,actor(w),w.id);assert.deepEqual(data.counts,{upcoming:1,pending:1,history:2});assert.equal(data.rows.length,1);assert.match((await w.client.get('/calendar?view=pending')).body,/falta registrar el resultado/);assert.equal(w.db.get("SELECT count(*) n FROM visits WHERE status='SCHEDULED'").n,2);
+ const data=agendaData(w.db,actor(w),w.id);assert.deepEqual(data.counts,{upcoming:1,pending:1,history:2,blocked:0});assert.equal(data.rows.length,1);assert.match((await w.client.get('/calendar?view=pending')).body,/falta registrar el resultado/);assert.equal(w.db.get("SELECT count(*) n FROM visits WHERE status='SCHEDULED'").n,2);
 });
 test('agenda busca en más de cien registros y ordena por cercanía con paginación',async t=>{
  const w=await setup(t),r=await request(w);for(let i=0;i<104;i++)visit(w,r,{date:new Date(Date.UTC(2099,0,i+1,15)).toISOString(),place:i===103?'Destino especial':'Lugar '+i});

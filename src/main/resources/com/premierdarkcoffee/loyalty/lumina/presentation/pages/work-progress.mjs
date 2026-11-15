@@ -1,11 +1,14 @@
+import { workHold } from '../../businesses/operation-state.mjs';
 import { canRequest } from '../../access/content-policy.mjs';
 import { areas } from '../../shared/domain.mjs';
 import { serviceName } from '../../memberships/catalog.mjs';
-import { badge, esc, localLink, timestamp } from './components.mjs';
+import { badge, workBadge, esc, localLink, timestamp } from './components.mjs';
 import { icon } from './icons.mjs';
 
 const marks={SOCIAL:'social',WALLET:'wallet',MAPS:'maps',WEB:'web',BRAND:'content'};
 export function requestNextStep(row,actor) {
+  const hold=workHold(row);
+  if(hold)return {title:hold.detail,caption:'Consultar historial',anchor:'#details'};
   if(row.status==='CANCELLED')return {title:'Solicitud cancelada',caption:'Ver historial',anchor:'#history'};
   if(row.status==='DELIVERED'&&row.type==='PLAN')return {title:'Solicitud completada',caption:'Ver solicitud',anchor:'#details'};
   if(row.status==='DELIVERED')return row.type==='VISIT'?
@@ -37,20 +40,21 @@ export function requestCards(rows,url,{actor=null,showCompany=false,resolveLink=
       <h3>${esc(row.title)}</h3><p class="work-next">${esc(next.title)}</p>
       ${work&&Number.isInteger(row.delivered)&&row.quantity>1?`<div class="work-progress"><span class="request-delivery-count">${row.delivered} de ${row.quantity} piezas entregadas</span><progress max="${row.quantity}" value="${row.delivered}" aria-label="Piezas entregadas de ${esc(row.title)}"></progress></div>`:''}
       ${row.created_at?`<time datetime="${esc(row.created_at)}">Solicitada: ${esc(timestamp(row.created_at))}</time>`:''}</div>
-      <div class="request-record-state">${badge(next.attention?'Tu revisión':row.status,row.status==='DELIVERED'?'success':'')}<span>${esc(next.caption)} ${icon('arrow')}</span></div></a>`;
+      <div class="request-record-state">${next.attention?badge('Tu revisión'):workBadge(row)}<span>${esc(next.caption)} ${icon('arrow')}</span></div></a>`;
   }).join('')||'<div class="request-empty"><h3>Tu próxima idea empieza aquí.</h3><p>Cuando envíes una solicitud, podrás seguir su avance y revisar las entregas en este espacio.</p></div>'}</div>`;
 }
 
 export function pieceCards(rows,actor,resolveLink,{showCompany=false}={}) {
   return `<div class="piece-grid">${rows.map(row=>{
     const request={...row,id:row.request_id,channel:'SOCIAL',type:row.request_type,platforms:row.targets?row.targets.split(','):[]};
-    const review=row.status==='REVIEW'&&row.request_status==='PRODUCTION';
+    const held=workHold(row);
+    const review=!held&&row.status==='REVIEW'&&row.request_status==='PRODUCTION';
     const approve=review&&actor.kind!=='AGENCY'&&canRequest(actor,request,'APPROVE');
-    const agencyWork=actor.kind==='AGENCY'&&!actor.readOnlyCompany&&!['CANCELLED','DELIVERED'].includes(row.request_status);
-    const action=approve?'Revisar pieza':row.status==='DELIVERED'?'Ver archivos y evidencias':agencyWork&&row.status==='APPROVED'?'Completar entrega':agencyWork?'Abrir producción':'Ver archivos y avance';
-    const hint=row.status==='DELIVERED'?'Entrega final':row.status==='APPROVED'?'Aprobada · pendiente de entrega':approve?'Abre los archivos y aprueba o pide cambios.':review?'En revisión por el negocio':'Lúmina está preparando esta pieza.';
+    const agencyWork=!held&&actor.kind==='AGENCY'&&!actor.readOnlyCompany&&!['CANCELLED','DELIVERED'].includes(row.request_status);
+    const action=held?'Consultar archivos':approve?'Revisar pieza':row.status==='DELIVERED'?'Ver archivos y evidencias':agencyWork&&row.status==='APPROVED'?'Completar entrega':agencyWork?'Abrir producción':'Ver archivos y avance';
+    const hint=held?held.detail:row.status==='DELIVERED'?'Entrega final':row.status==='APPROVED'?'Aprobada · pendiente de entrega':approve?'Abre los archivos y aprueba o pide cambios.':review?'En revisión por el negocio':'Lúmina está preparando esta pieza.';
     const anchor=agencyWork&&row.status==='APPROVED'?'#edit-'+row.id:'#piece-'+row.id;
-    return `<article class="piece-summary${approve?' work-needs-review':''}"><div class="piece-summary-top"><span class="service-symbol" aria-hidden="true">${icon('social')}</span>${badge(row.status,row.status==='DELIVERED'?'success':'')}</div>
+    return `<article class="piece-summary${approve?' work-needs-review':''}"><div class="piece-summary-top"><span class="service-symbol" aria-hidden="true">${icon('social')}</span>${workBadge(row)}</div>
       ${showCompany?`<p class="eyebrow">${esc(row.company_name)}</p>`:''}<h3>${esc(row.title)}</h3><p class="piece-request">${esc(row.request_title)}</p><p class="piece-hint">${esc(hint)}</p>
       <div class="piece-summary-meta"><span>${icon('content')}${row.evidence_count} ${row.evidence_count===1?'archivo o enlace':'archivos o enlaces'}</span>${row.recorded_at?`<time datetime="${esc(row.recorded_at)}">Grabado: ${esc(timestamp(row.recorded_at))}</time>`:''}</div>
       ${localLink(resolveLink(row)+anchor,action+' →','btn '+(approve?'':'secondary'))}</article>`;

@@ -1,4 +1,6 @@
-# Lúmina v033 / Loyalty v072
+# Lúmina v034 / Loyalty v073
+
+Paused, suspended, closed and archived businesses leave active work queues. Requests and visits remain available in a clearly labeled, read-only history; restoration preserves their last stage. Existing archived records are corrected without changing stored work. [Business state and work history](docs/lumina-work-lifecycle-v073.md).
 
 Daily notices keep their filters when marked seen and can be marked new again by the same person. Recording visits are grouped by Ecuador day, with clear times, locations and private calendar downloads. [Daily workflow and validation](docs/lumina-daily-work-v072.md).
 

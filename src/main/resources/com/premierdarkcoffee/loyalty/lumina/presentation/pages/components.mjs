@@ -1,3 +1,4 @@
+import { operationLabels, workHold } from '../../businesses/operation-state.mjs';
 import { brandSocial } from './brand-social.mjs';
 import { icon } from './icons.mjs';
 import { can } from '../../access/accounts.mjs';
@@ -97,6 +98,14 @@ export function page({actor,company,path='/',title,description='',body,cash=fals
     ${actor?`<nav class="lumina-sidebar-nav" id="workspace-nav" aria-label="Área de trabajo"><button class="navigation-close" type="button" aria-label="Cerrar navegación">Cerrar menú ×</button><div class="workspace-context"><small>ESPACIO DE TRABAJO</small><strong>${esc(company?.name||actor.company_name||(actor.kind==='AGENCY'?'Lúmina Digital':'Mi negocio'))}</strong><span>${esc(label(actor.kind))}</span></div>${navigationSearch()}${menu}<div class="nav-foot"><img class="lumina-symbol" src="/assets/lumina-symbol.png" alt="" width="28" height="28"><p>Marketing con propósito.<small>Lúmina Digital</small></p></div></nav>`:''}</header>
     ${actor?`<div class="workspace-topbar"><span>${esc(company?.name||actor.company_name||'Lúmina Digital')}<small>${actor.kind==='AGENCY'&&company?(path.startsWith('/admin/businesses/')?'Administración del negocio':'Consulta de cliente'):'Tu centro de trabajo'}</small></span><div class="identity"><span class="avatar" aria-hidden="true">${esc(actor.name.trim().charAt(0).toUpperCase())}</span><span>${esc(actor.name)}<small>${esc(label(actor.kind))}</small></span>${localLink('/account','Mi cuenta','account-link')}</div></div>`:''}
     <button class="navigation-backdrop" type="button" aria-label="Cerrar navegación" hidden></button><main id="content"><header class="page-title"><p class="eyebrow">${esc(company?.name||actor?.company_name||(actor?'LÚMINA / ESPACIO PRIVADO':'LÚMINA DIGITAL'))}</p><h1>${esc(title)}</h1>${description?`<p>${esc(description)}</p>`:''}</header>
-    ${actor?.kind==='AGENCY'&&company&&!path.startsWith('/admin/businesses/')?`<aside class="consultation-notice" role="note"><strong>${actor.agencyWork?'Trabajo de Lúmina':'Consulta del negocio · Solo lectura'}</strong><p>${actor.agencyWork?'Las acciones se registran a nombre de la agencia. Las solicitudes y aprobaciones corresponden al negocio.':'Estás consultando '+esc(company.name)+' como administrador de Lúmina. Conservas tu identidad de agencia.'}</p></aside>`:''}
+    ${actor?.kind==='AGENCY'&&company&&actor.businessBlocked&&!path.startsWith('/admin/businesses/')?businessNotice(actor,company):actor?.kind==='AGENCY'&&company&&!path.startsWith('/admin/businesses/')?`<aside class="consultation-notice" role="note"><strong>${actor.agencyWork?'Trabajo de Lúmina':'Consulta del negocio · Solo lectura'}</strong><p>${actor.agencyWork?'Las acciones se registran a nombre de la agencia. Las solicitudes y aprobaciones corresponden al negocio.':'Estás consultando '+esc(company.name)+' como administrador de Lúmina. Conservas tu identidad de agencia.'}</p></aside>`:''}
     ${notice?`<p class="notice" role="status">${esc(notice)}</p>`:''}${body}</main><footer><div><span>Lúmina Digital <span class="footer-dot">·</span> Marketing y fidelización</span>${brandSocial()}<span>Ecuador continental · UTC−5</span></div></footer></body></html>`;
+}
+
+export function businessNotice(actor,company) {
+  return `<aside class="business-operation-notice" data-business-state="${esc(actor.businessState)}" role="note"><div><span class="eyebrow">HISTORIAL · SOLO LECTURA</span><h2>Negocio ${esc((operationLabels[actor.businessState]||'no disponible').toLowerCase())}</h2><p>Sus servicios y trabajos están detenidos. Las solicitudes, entregas y registros se conservan para consulta.</p></div>${localLink('/admin/businesses/'+company.id,'Administrar estado','btn secondary')}</aside>`;
+}
+export function workBadge(row) {
+  const hold=workHold(row);
+  return hold?`<span class="badge warning" data-work-state="${esc(hold.state)}">${esc(hold.title)}</span><small class="work-last-state">Última etapa: ${esc(label(row.status))}</small>`:badge(row.status,row.status==='DELIVERED'?'success':'');
 }

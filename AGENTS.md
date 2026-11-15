@@ -1,5 +1,16 @@
 # Loyalty
 
+## Lúmina v034 / Loyalty v073 — business lifecycle across work queues
+
+- Baseline: installed v033/v072, commit b86d4d369ba71ec74a11f5d8a2054dc6b672fb0b. This section supersedes gate counts; retain all existing identity, Wallet continuity, permissions and production safeguards.
+- Derive effective work state from business_controls at query time. PAUSED, SUSPENDED, CLOSED, ARCHIVED and pending transitions block active work. Never overwrite request, piece or visit stages as a lifecycle side effect. Previously archived rows must immediately use the same rules without a data migration.
+- Operational production/review/upcoming/overdue queues exclude blocked businesses. Historical views remain available to authorized agency accounts. Use identical lifecycle predicates for rows, totals, filters and pagination. Keep completed/cancelled records separate from unfinished held work.
+- Selected blocked business home and all Content sections must identify historical read-only context. Show the reason/state and original stage, not an actionable next step. No edit/approval/scheduling forms in historical views. Dedicated agency state/team management retains its established authority and real actor identity.
+- Refresh the current actor/company/lifecycle after awaited form-body reads. Enforce business operation inside production domain writes and authenticated calendar downloads as well as the HTTP mutation boundary. Direct URLs and old forms must not bypass lifecycle state. Reading never changes or synchronizes state.
+- Reactivation requires the existing acknowledged transition and restores original work stages, activation choices and grants. Preserve contracts and payments. No Kotlin, SQL, identity, provider-key, domain, pass serial, balance or customer-card changes. SQLite12, PostgreSQLV017, Wallet representation34 remain unchanged.
+- Gates: 40 suites / 478 portal tests, 185 Python contracts, 312 native unit/HTTP and 347 PostgreSQL; Docker/gateway before local commit, no push. 30 DOM suites and browser fixtures are separate from physical Wallet verification.
+- Validate exact v033 compatibility, check-only, idempotence, actual-baseline rollback with concurrent edits preserved, conflicts, symlinks, production guards, UTF-8 and payload integrity. Terminal prints RESULTADO plus verified startup URL only. See docs/lumina-work-lifecycle-v073.md.
+
 ## Lúmina v033 / Loyalty v072 — daily notices and recording agenda
 
 - Baseline: installed v032/v071, commit d249eea6f2d74222582d517d0caf8a29bb43a88c. This section supersedes release and gate counts; retain all lifecycle, team, identity and service-activation restrictions.

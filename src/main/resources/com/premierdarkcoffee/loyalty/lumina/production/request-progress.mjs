@@ -1,3 +1,5 @@
+import { operatingSql } from '../businesses/operation-state.mjs';
+
 // Read-only summaries shared by the home, request inbox and content workspace.
 // Each correlated query includes both the business and request identifiers.
 export const requestProgressSql = `
@@ -8,5 +10,5 @@ export const requestProgressSql = `
   (SELECT group_concat(platform) FROM request_platforms rp WHERE rp.company_id=r.company_id AND rp.request_id=r.id) AS targets`;
 
 export const requestStages = Object.freeze({
-  all:'1=1',open:"r.status NOT IN ('DELIVERED','CANCELLED')",closed:"r.status IN ('DELIVERED','CANCELLED')",
+  all:'1=1',open:`r.status NOT IN ('DELIVERED','CANCELLED') AND ${operatingSql()}`,blocked:`r.status NOT IN ('DELIVERED','CANCELLED') AND NOT ${operatingSql()}`,closed:"r.status IN ('DELIVERED','CANCELLED')",
 });

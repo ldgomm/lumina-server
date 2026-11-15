@@ -60,7 +60,7 @@ test('account lookup cannot render or update notices after a concurrent suspensi
 });
 test('agenda counts apply the search across every period without altering visit status',async t=>{
  const w=await setup(t),r=await request(w);visit(w,r,{place:'Jardín norte'});visit(w,r,{place:'Centro'});visit(w,r,{place:'Jardín norte',date:'2001-01-01T15:00:00Z'});visit(w,r,{place:'Centro',status:'DONE'});
- const data=agendaData(w.db,actor(w),w.id,new URLSearchParams('q=jardin'));assert.deepEqual(data.counts,{upcoming:1,pending:1,history:0});assert.equal(data.total,1);assert.equal(data.rows[0].place,'Jardín norte');assert.equal(w.db.get("SELECT count(*) n FROM visits WHERE status='SCHEDULED'").n,3);
+ const data=agendaData(w.db,actor(w),w.id,new URLSearchParams('q=jardin'));assert.deepEqual(data.counts,{upcoming:1,pending:1,history:0,blocked:0});assert.equal(data.total,1);assert.equal(data.rows[0].place,'Jardín norte');assert.equal(w.db.get("SELECT count(*) n FROM visits WHERE status='SCHEDULED'").n,3);
 });
 test('agenda groups by Ecuador date and uses accessible times and exact visit links',async t=>{
  const w=await setup(t),r=await request(w);const first=visit(w,r,{date:'2099-01-02T04:30:00Z'});visit(w,r,{date:'2099-01-02T05:30:00Z'});

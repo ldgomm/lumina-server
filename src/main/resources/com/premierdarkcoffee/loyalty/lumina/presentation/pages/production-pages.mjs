@@ -56,9 +56,9 @@ export function requestsPage({actor,url,rows,channel,page,total,counts,q='',stat
   const states=[['','Todos los estados'],...['NEW','REVIEW','QUOTED','APPROVED','SCHEDULED','PRODUCTION','DELIVERED','CANCELLED'].map(key=>[key,label(key)])];
   const query={channel:channel,q,state:state,view:view};
   const create=actor.kind!=='AGENCY'&&Object.keys(areas).some(key=>can(actor,key,'REQUEST'));
-  return `<div class="request-tools"><p>${counts.open} en curso · ${counts.closed} ${counts.closed===1?'cerrada':'cerradas'}</p>${create?localLink(url('/requests/new'),'Nueva solicitud','btn'):''}</div>
+  return `<div class="request-tools"><p>${counts.open} en curso${counts.blocked?' · '+counts.blocked+' detenidas':''} · ${counts.closed} ${counts.closed===1?'cerrada':'cerradas'}</p>${create?localLink(url('/requests/new'),'Nueva solicitud','btn'):''}</div>
     <section class="card"><div class="split"><h2>Seguimiento de solicitudes</h2><span class="muted">${total} ${total===1?'solicitud':'solicitudes'}</span></div>
-    <nav class="workday-tabs" aria-label="Estado de solicitudes">${[['all','Todas'],['open','En curso'],['closed','Cerradas']].map(([key,name])=>`<a href="${esc(url('/requests',{channel:channel,q,view:key}))}"${key===view?' aria-current="page"':''}>${name} <span>${counts[key]}</span></a>`).join('')}</nav>
+    <nav class="workday-tabs" aria-label="Estado de solicitudes">${[['all','Todas'],['open','En curso'],['closed','Cerradas'],...(counts.blocked||view==='blocked'?[['blocked','Detenidas']]:[])].map(([key,name])=>`<a href="${esc(url('/requests',{channel:channel,q,view:key}))}"${key===view?' aria-current="page"':''}>${name} <span>${counts[key]}</span></a>`).join('')}</nav>
     <form action="${esc(url('/requests').split('?')[0])}" class="request-filter">${hidden('view',view)}${actor.kind==='AGENCY'?hidden('company',new URL(url('/requests'),'http://localhost').searchParams.get('company')):''}
     ${input('q','Buscar solicitud','search','maxlength="100" placeholder="Nombre o idea…"',q)}${button('Buscar','secondary')}
     <details class="request-filters"${channel||state?' open':''}><summary>Filtrar por servicio o estado${channel||state?' · Activo':''}</summary><div class="fields two">${select('channel','Servicio',filters,channel)}${select('state','Estado',states,state)}</div></details></form>

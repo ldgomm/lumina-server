@@ -1,5 +1,7 @@
 import { checkRevision } from '../shared/revision.mjs';
-import { requestProgressSql } from './request-progress.mjs';
+import { requestBusinessSql } from '../businesses/operation-state.mjs';
+import { requireOperating } from '../businesses/control.mjs';
+import { requestProgressSql, requestStages } from './request-progress.mjs';
 import { requireService } from '../businesses/services.mjs';
 import { requestPhone } from '../shared/contact.mjs';
 import { compatibleContentQuota } from '../content/service-options.mjs';
@@ -16,15 +18,15 @@ export function visibleRequests(db, actor, companyId, channel, page = 0, {q='',s
   const policy=requestAccessSql(actor);
   const area=socialChannels.includes(channel)?'SOCIAL':channel;
   requireThat(!state||['NEW','REVIEW','QUOTED','APPROVED','SCHEDULED','PRODUCTION','DELIVERED','CANCELLED'].includes(state),'Estado inválido.');
-  requireThat(['all','open','closed'].includes(view),'Vista de solicitudes no disponible.');
-  const stage={all:'1=1',open:"r.status NOT IN ('DELIVERED','CANCELLED')",closed:"r.status IN ('DELIVERED','CANCELLED')"};
+  requireThat(Object.hasOwn(requestStages,view),'Vista de solicitudes no disponible.');
+  const stage=requestStages;
   const filter="(?='' OR r.channel=?) AND (?='' OR r.status=?) AND (?='' OR instr(lower(r.title||' '||r.brief),lower(?))>0)";
   const values=[area||'',area||'',state,state,q,q];
   const base=`FROM requests r WHERE r.company_id=? AND ${policy.sql}`;
   const counts=Object.fromEntries(Object.entries(stage).map(([key,sql])=>[key,db.get(`SELECT count(*) n ${base} AND ${sql} AND (?='' OR r.channel=?) AND (?='' OR instr(lower(r.title||' '||r.brief),lower(?))>0)`,companyId,...policy.params,area||'',area||'',q,q).n]));
   const total=db.get(`SELECT count(*) n ${base} AND ${filter} AND ${stage[view]}`,companyId,...policy.params,...values).n;
   const currentPage=Math.min(page,Math.max(0,Math.ceil(total/30)-1));
-  const rows=db.all(`SELECT r.*,${requestProgressSql}
+  const rows=db.all(`SELECT r.*,${requestBusinessSql},${requestProgressSql}
     FROM requests r WHERE r.company_id=? AND ${policy.sql} AND ${filter} AND ${stage[view]}
     ORDER BY r.created_at DESC,r.id LIMIT 31 OFFSET ?`,companyId,...policy.params,...values,currentPage*30);
   return {rows:rows.slice(0,30).map(row=>({...row,platforms:platformTargets(db,row)})),more:rows.length>30,total,counts,page:currentPage};
@@ -34,12 +36,13 @@ export function requestCounts(db, actor, companyId) {
   return db.all(`SELECT channel,type,status,count(*) AS count,sum(quantity) AS pieces FROM requests r WHERE company_id=? AND ${policy.sql} GROUP BY channel,type,status`,companyId,...policy.params);
 }
 export function getRequest(db, actor, companyId, id) {
-  const request=db.get('SELECT * FROM requests WHERE company_id=? AND id=?',companyId,id||'');
+  const request=db.get(`SELECT r.*,${requestBusinessSql} FROM requests r WHERE company_id=? AND id=?`,companyId,id||'');
   if(request)request.platforms=platformTargets(db,request);
   requireThat(request && canRequest(actor,request),'Solicitud no encontrada.',404);
   return request;
 }
 export function createRequest(db, actor, company, data) {
+  requireOperating(db,company.id);
   requireBusinessActor(actor,company);
   const type = choice(data.type,['CONTENT','QUOTE','VISIT','COURTESY','PLAN'],'tipo de solicitud');
   if (['COURTESY','PLAN'].includes(type)) requireOwner(actor);
@@ -91,6 +94,7 @@ export function createRequest(db, actor, company, data) {
   });
 }
 export function updateRequest(db, actor, company, request, data) {
+  requireOperating(db,company.id);
   requireAgency(actor);
   checkRevision(request,data);
   const target = choice(data.status,['REVIEW','APPROVED','CANCELLED','NEW'],'estado');
@@ -119,6 +123,7 @@ export function updateRequest(db, actor, company, request, data) {
   });
 }
 export function addVisit(db, actor, company, request, data) {
+  requireOperating(db,company.id);
   requireAgency(actor);
   checkRevision(request,data);
   requireThat(company.approved && request.type !== 'PLAN' && !finalStates.includes(request.status),
@@ -139,6 +144,7 @@ export function addVisit(db, actor, company, request, data) {
   });
 }
 export function finishVisit(db, actor, company, request, data) {
+  requireOperating(db,company.id);
   requireAgency(actor);
   const status = choice(data.status,['DONE','CANCELLED'],'estado de la visita');
   const visit = db.get("SELECT * FROM visits WHERE id=? AND company_id=? AND request_id=? AND status='SCHEDULED'",
@@ -158,6 +164,7 @@ export function finishVisit(db, actor, company, request, data) {
   });
 }
 export function addPiece(db, actor, company, request, data) {
+  requireOperating(db,company.id);
   requireAgency(actor);
   checkRevision(request,data);
   requireThat(company.approved && !['PLAN','VISIT'].includes(request.type) && productionStates.includes(request.status),
@@ -185,6 +192,7 @@ export function getPiece(db, companyId, requestId, id) {
   return piece;
 }
 export function editPiece(db, actor, company, request, piece, data) {
+  requireOperating(db,company.id);
   requireAgency(actor);
   requireThat(!finalStates.includes(piece.status) && !finalStates.includes(request.status),
     'Este entregable ya fue cerrado.',409);
@@ -208,6 +216,7 @@ export function editPiece(db, actor, company, request, piece, data) {
   });
 }
 export function reviewPiece(db, actor, company, request, piece, data) {
+  requireOperating(db,company.id);
   requireThat(actor.kind !== 'AGENCY','La aprobación corresponde al cliente.',403);
   requireThat(canRequest(actor,request,'APPROVE'),'Necesitas permiso de aprobación de Contenido para redes para revisar esta pieza común.',403);
   requireThat(piece.status === 'REVIEW' && request.status === 'PRODUCTION' && String(piece.revision) === data.revision,
@@ -220,6 +229,7 @@ export function reviewPiece(db, actor, company, request, piece, data) {
   });
 }
 export function addEvidence(db, actor, company, request, piece, data) {
+  requireOperating(db,company.id);
   requireAgency(actor);
   requireThat(piece.status !== 'CANCELLED' && request.status !== 'CANCELLED','La pieza está cancelada.',409);
   checkRevision(piece,data);
@@ -235,6 +245,7 @@ export function addEvidence(db, actor, company, request, piece, data) {
   });
 }
 export function addPublication(db, actor, company, request, piece, data) {
+  requireOperating(db,company.id);
   requireAgency(actor);
   requireThat(piece.status === 'APPROVED' || piece.status === 'DELIVERED',
     'Registra la publicación después de la aprobación.',409);

@@ -1,3 +1,4 @@
+import { operationState, operatingSql, requestBusinessSql } from '../businesses/operation-state.mjs';
 import { teamAdministrator } from '../access/team-administration.mjs';
 import { teamRoutes } from './team-routes.mjs';
 import { fileDetails, saveFile, commentPiece } from '../content/deliverables.mjs';
@@ -146,9 +147,10 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
     let api = false;
     let agencyWork=false;
     const render = (view,status=200) => {
-      const control=actor?.company_id&&businessControl(db,actor.company_id);
-      const viewer=actor?{...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(company)&&!agencyWork,
-        businessBlocked:actor.kind!=='AGENCY'&&Boolean(control&&(control.state!=='ACTIVE'||control.pending_id||control.archived_at))}:null;
+      const businessState=company?.id?operationState(db,company.id):actor?.businessState;
+      const blocked=Boolean(businessState&&businessState!=='ACTIVE');
+      const viewer=actor?{...actor,agencyWork,businessState,businessBlocked:blocked,
+        readOnlyCompany:actor.kind==='AGENCY'&&Boolean(company)&&(!agencyWork||blocked)}:null;
       return send(res,status,(view.layout==='content'?contentShell:view.layout==='access'?accessShell:page)({actor:viewer,company,path,cash,...view}));
     };
     try {
@@ -236,7 +238,9 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         requireThat(/^\/agency\/(home|content|requests|calendar|plans|maps|businesses\/verify)(\/|$)/.test(path),'Área de trabajo no encontrada.',404);
         agencyWork=true;path=path.slice('/agency'.length);
       }
-      actor={...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('company'))&&!agencyWork};
+      const businessState=scopedCompany?operationState(db,scopedCompany):null;
+      actor={...actor,agencyWork,businessState,businessBlocked:Boolean(businessState&&businessState!=='ACTIVE'),
+        readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('company'))&&(!agencyWork||businessState!=='ACTIVE')};
       if(actor.kind!=='AGENCY') {
         const scope=routeService(path);
         if(scope&&path!=='/wallet/benefits'&&serviceState(db,actor.company_id,scope)!=='ACTIVE') {
@@ -348,7 +352,9 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         data = await readForm(req);
         actor = getSession(db,cookie);
         requireThat(actor,'Tu sesión terminó. Vuelve a iniciar sesión.',401);
-        actor={...actor,agencyWork,readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('company'))&&!agencyWork};
+        const businessState=scopedCompany?operationState(db,scopedCompany):null;
+        actor={...actor,agencyWork,businessState,businessBlocked:Boolean(businessState&&businessState!=='ACTIVE'),
+          readOnlyCompany:actor.kind==='AGENCY'&&Boolean(target.searchParams.get('company'))&&(!agencyWork||businessState!=='ACTIVE')};
         requireThat(equal(actor.csrf,data._csrf),'El formulario venció. Abre la página y reintenta.',403);
         if(!serviceAllowed())requireOperating(db,actor.kind==='AGENCY'?target.searchParams.get('company'):actor.company_id);
       }
@@ -516,17 +522,21 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const q=text(target.searchParams.get('q')||'','búsqueda',0,100);
         const state=target.searchParams.get('state')||'',channel=target.searchParams.get('channel')||'';
         requireThat(!channel||Object.hasOwn(channels,channel),'Canal inválido.');
-        const rows=()=>db.all(`SELECT r.*,c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id
-          WHERE (?='' OR instr(lower(r.title||' '||c.name),lower(?))>0) AND (?='' OR r.status=?) AND (?='' OR r.channel=?)
+        const scope=path==='/production'?(target.searchParams.get('scope')||'operating'):'operating';
+        requireThat(['operating','blocked'].includes(scope),'Vista de producción no disponible.');
+        const scopeSql=scope==='blocked'?`NOT ${operatingSql()}`:operatingSql();
+        const rows=()=>db.all(`SELECT r.*,${requestBusinessSql},c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id
+          WHERE ${scopeSql} AND (?='' OR instr(lower(r.title||' '||c.name),lower(?))>0) AND (?='' OR r.status=?) AND (?='' OR r.channel=?)
           ORDER BY r.created_at DESC,r.id LIMIT 100`,q,q,state,state,channel,channel);
         const visits=db.all(`SELECT v.*,r.title,c.name AS company_name FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id
-          JOIN companies c ON c.id=v.company_id WHERE v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=? ORDER BY v.starts_at,v.id LIMIT 100`,now());
-        if(path==='/production')return render({title:'Producción',description:'Todos los clientes y servicios, con cada trabajo en su etapa.',body:agencyProduction(rows(),{q,state,channel})});
+          JOIN companies c ON c.id=v.company_id WHERE ${operatingSql()} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=? ORDER BY v.starts_at,v.id LIMIT 100`,now());
+        if(path==='/production')return render({title:'Producción',description:'Todos los clientes y servicios, con cada trabajo en su etapa.',body:agencyProduction(rows(),{q,state,channel,scope})});
         if(path==='/agency-calendar')return render({title:'Agenda',body:workdayAgenda({actor,data:agendaData(db,actor,null,target.searchParams),url:pathFor(actor,null),global:true})});
-        const counts=db.get(`SELECT (SELECT count(*) FROM companies) AS companies,(SELECT count(*) FROM companies WHERE approved=0) AS pending,
-          (SELECT count(*) FROM requests WHERE status NOT IN ('CANCELLED','DELIVERED')) AS open,(SELECT count(*) FROM pieces WHERE status='DELIVERED') AS delivered,
-          (SELECT count(*) FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id WHERE v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?) AS visits`,now());
-        const pipeline=db.all('SELECT status,count(*) AS count FROM requests GROUP BY status');
+        const counts=db.get(`SELECT (SELECT count(*) FROM companies c WHERE ${operatingSql('c.id')}) AS companies,(SELECT count(*) FROM companies c WHERE approved=0 AND ${operatingSql('c.id')}) AS pending,
+          (SELECT count(*) FROM requests r WHERE ${operatingSql()} AND status NOT IN ('CANCELLED','DELIVERED')) AS open,(SELECT count(*) FROM pieces WHERE status='DELIVERED') AS delivered,
+          (SELECT count(*) FROM requests r WHERE NOT ${operatingSql()} AND status NOT IN ('CANCELLED','DELIVERED')) AS blocked,
+          (SELECT count(*) FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id WHERE ${operatingSql()} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?) AS visits`,now());
+        const pipeline=db.all(`SELECT status,count(*) AS count FROM requests r WHERE ${operatingSql()} GROUP BY status`);
         return render({title:'Vista general',description:'Todo lo que tu agencia tiene en marcha.',body:agencyOverview({counts,pipeline,visits:visits.slice(0,5),recent:rows().slice(0,6)})});
       }
       if(method==='GET' && path.startsWith('/channels/')) {
@@ -557,7 +567,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if(actor.kind!=='AGENCY'||target.searchParams.get('company'))company=companyFor(db,actor,target.searchParams.get('company'));
         if(channel==='SOCIAL') return redirect(res,pathFor(actor,company)('/content'));
         const policy=requestAccessSql(actor);
-        const rows=db.all(`SELECT r.*,c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id WHERE r.channel=? AND ${policy.sql}
+        const rows=db.all(`SELECT r.*,${requestBusinessSql},c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id WHERE ${company?'1=1':operatingSql()} AND r.channel=? AND ${policy.sql}
           AND (? IS NULL OR r.company_id=?)
           ORDER BY r.created_at DESC,r.id LIMIT 100`,channel,...policy.params,company?.id||null,company?.id||null);
         return render({title:areas[channel],description:channel==='SOCIAL'?'Solicitudes, producción y entregas en un solo lugar.':'Servicios, proyectos y seguimiento.',
@@ -630,6 +640,8 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       }
       if (path==='/home' && method==='GET') {
         if(!actor.welcome_done)return redirect(res,'/welcome');
+        if(actor.kind==='AGENCY'&&actor.businessBlocked)return render({title:'Historial del negocio',
+          body:card('Información conservada',`<p>Consulta las solicitudes y entregas anteriores de ${esc(company.name)}.</p><div class="actions">${localLink(url('/requests'),'Ver solicitudes','btn')}${localLink(url('/content',{view:'deliveries'}),'Ver entregas','btn secondary')}${localLink(url('/calendar',{view:'blocked'}),'Ver visitas detenidas','btn secondary')}</div>`) });
         const groups = requestCounts(db,actor,company.id);
         const policy=requestAccessSql(actor);
         const videos=db.all(`SELECT r.quantity,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered

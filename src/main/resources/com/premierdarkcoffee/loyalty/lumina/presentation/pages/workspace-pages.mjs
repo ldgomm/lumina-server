@@ -1,5 +1,5 @@
 import { areas, channels } from '../../shared/domain.mjs';
-import { badge, card, esc, hidden, select, button, localLink, number, table, timestamp } from './components.mjs';
+import { badge, workBadge, card, esc, hidden, select, button, localLink, number, table, timestamp } from './components.mjs';
 import { icon } from './icons.mjs';
 
 const stat=(name,value,note,mark)=>`<article class="metric-card"><div>${icon(mark)}<span>${esc(name)}</span></div><strong>${number(value)}</strong><p>${esc(note)}</p></article>`;
@@ -9,8 +9,8 @@ export function agencyOverview({counts,pipeline,visits,recent}) {
   return `<section class="agency-workbar"><div><h2>Tu jornada de trabajo</h2><p>Revisa solicitudes, coordina entregas y consulta a tus clientes.</p>
     <div class="actions">${localLink('/businesses','Gestionar clientes →','btn')}${localLink('/production','Ver producción','btn secondary')}${localLink('/teams','Equipos y roles','btn secondary')}</div></div>
     <a class="agency-wallet-link" href="/wallet">${icon('wallet')}<span>Centro de Wallet</span>${icon('arrow')}</a></section>
-    <section class="metric-grid" aria-label="Resumen de la agencia">${stat('Negocios',counts.companies,counts.pending+' pendientes de verificación','clients')}${stat('Solicitudes abiertas',counts.open,'Contenido, servicios y cotizaciones','content')}${stat('Piezas entregadas',counts.delivered,'Entregas registradas en el historial','check')}${stat('Visitas programadas',counts.visits,'Próximas grabaciones por realizar','calendar')}</section>
-    <div class="overview-columns"><section class="card"><div class="section-heading"><div><p class="eyebrow">PRODUCCIÓN</p><h2>Del pedido a la entrega</h2></div>${localLink('/production','Ver todas →')}</div>
+    <section class="metric-grid" aria-label="Resumen de la agencia">${stat('Negocios en operación',counts.companies,counts.pending+' pendientes de verificación','clients')}${stat('Solicitudes abiertas',counts.open,'Contenido, servicios y cotizaciones','content')}${stat('Piezas entregadas',counts.delivered,'Entregas registradas en el historial','check')}${stat('Visitas programadas',counts.visits,'Próximas grabaciones por realizar','calendar')}</section>
+    ${counts.blocked?`<p class="notice">${counts.blocked} solicitudes detenidas por el estado del negocio. ${localLink('/production?scope=blocked','Consultar registros →')}</p>`:''}<div class="overview-columns"><section class="card"><div class="section-heading"><div><p class="eyebrow">PRODUCCIÓN</p><h2>Del pedido a la entrega</h2></div>${localLink('/production','Ver todas →')}</div>
       <div class="pipeline">${Object.entries(statusName).filter(([key])=>!['CANCELLED','DELIVERED'].includes(key)).map(([key,name])=>{const n=pipeline.find(x=>x.status===key)?.count||0;return `<a class="pipeline-stage" href="/production?state=${key}"><div><span>${name}</span><strong>${number(n)}</strong></div><svg viewBox="0 0 240 5" preserveAspectRatio="none" aria-hidden="true"><rect width="240" height="5" rx="2" fill="#edf0f4"/><rect width="${total?Math.round(n/total*240):0}" height="5" rx="2" fill="#213f67"/></svg></a>`;}).join('')}</div>
     </section><section class="card"><div class="section-heading"><div><p class="eyebrow">AGENDA</p><h2>Próximas grabaciones</h2></div>${localLink('/agency-calendar','Ver agenda →')}</div>${visitList(visits)}</section></div>
     <section class="card"><div class="section-heading"><div><p class="eyebrow">ACTIVIDAD RECIENTE</p><h2>Últimas solicitudes</h2></div>${localLink('/production','Abrir producción →')}</div>${requestTable(recent)}</section>
@@ -19,14 +19,14 @@ export function agencyOverview({counts,pipeline,visits,recent}) {
 export function requestTable(rows) {
   return table(['Cliente / solicitud','Área','Estado','Cantidad','Registrada'],rows.map(r=>[
     `<strong class="cell-heading">${esc(r.company_name)}</strong>${localLink('/agency/requests/'+r.id+'?company='+r.company_id,r.title)}`,
-    esc(channels[r.channel]||r.channel),badge(r.status),number(r.quantity),esc(timestamp(r.created_at))]),'Las solicitudes aparecerán aquí cuando tus clientes las registren.');
+    esc(channels[r.channel]||r.channel),workBadge(r),number(r.quantity),esc(timestamp(r.created_at))]),'Las solicitudes aparecerán aquí cuando tus clientes las registren.');
 }
 function visitList(rows) {
   return rows.length?`<div class="appointment-list">${rows.map(r=>`<a href="/agency/requests/${r.request_id}?company=${r.company_id}"><div class="appointment-icon">${icon('calendar')}</div><div><strong>${esc(r.company_name)}</strong><span>${esc(r.title)}</span><small>${esc(timestamp(r.starts_at))} · ${esc(r.place)}</small></div>${icon('arrow')}</a>`).join('')}</div>`:
     '<div class="empty-state"><span>Tu agenda está al día</span><p>Las visitas programadas aparecerán aquí con su fecha, lugar y negocio.</p></div>';
 }
-export function agencyProduction(rows,{q='',state='',channel=''}={}) {
-  return card('Producción de la agencia',`<form class="filter workspace-filter" method="get"><label>Buscar<input type="search" name="q" value="${esc(q)}" maxlength="100" placeholder="Cliente o solicitud"></label><label>Estado<select name="state"><option value="">Todos</option>${Object.entries(statusName).map(([v,n])=>`<option value="${v}"${v===state?' selected':''}>${n}</option>`).join('')}</select></label><label>Área<select name="channel"><option value="">Todos</option>${Object.entries(areas).map(([v,n])=>`<option value="${v}"${v===channel?' selected':''}>${n}</option>`).join('')}</select></label><button>Filtrar</button></form>${requestTable(rows)}<p class="muted">Hasta 100 solicitudes, ordenadas de la más reciente a la más antigua. Los filtros se aplican a todos los registros.</p>`);
+export function agencyProduction(rows,{q='',state='',channel='',scope='operating'}={}) {
+  return `<nav class="workday-tabs" aria-label="Estado del negocio">${[['operating','En operación'],['blocked','Negocios detenidos']].map(([key,name])=>`<a href="/production?${esc(new URLSearchParams({scope:key,q,state,channel}))}"${scope===key?' aria-current="page"':''}>${name}</a>`).join('')}</nav>`+card(scope==='blocked'?'Historial de negocios detenidos':'Producción de la agencia',`${scope==='blocked'?'<p>Consulta los registros conservados. Los cambios se habilitan al reactivar el negocio.</p>':''}<form class="filter workspace-filter" method="get">${hidden('scope',scope)}<label>Buscar<input type="search" name="q" value="${esc(q)}" maxlength="100" placeholder="Cliente o solicitud"></label><label>Estado<select name="state"><option value="">Todos</option>${Object.entries(statusName).map(([v,n])=>`<option value="${v}"${v===state?' selected':''}>${n}</option>`).join('')}</select></label><label>Área<select name="channel"><option value="">Todos</option>${Object.entries(areas).map(([v,n])=>`<option value="${v}"${v===channel?' selected':''}>${n}</option>`).join('')}</select></label><button>Filtrar</button></form>${requestTable(rows)}<p class="muted">Hasta 100 solicitudes, ordenadas de la más reciente a la más antigua. Los filtros se aplican a todos los registros.</p>`);
 }
 export function agencyAgenda(rows) {
   return card('Agenda de grabaciones',visitList(rows), 'Próximas 100 visitas programadas. Abre cada solicitud para consultar indicaciones y registrar la grabación.');
@@ -38,7 +38,7 @@ const descriptions={
  BRAND:'Logo, identidad visual y manual de marca. Trabajos individuales con propuesta, revisión, entrega y cierre.',
 };
 export function channelWorkspace(channel,rows,url,canCreate,actor) {
-  const open=rows.filter(r=>!['DELIVERED','CANCELLED'].includes(r.status)).length;
+  const open=rows.filter(r=>(!r.business_state||r.business_state==='ACTIVE')&&!['DELIVERED','CANCELLED'].includes(r.status)).length;
   const social=channel==='SOCIAL';
   return `<section class="service-intro"><span class="eyebrow">${channel==='BRAND'?'PROYECTOS / CONTRATACIÓN INDIVIDUAL':'SERVICIOS DE LÚMINA'}</span><h2>${social?'Una pieza. Todas tus redes.':esc(areas[channel])}</h2><p>${esc(descriptions[channel]||'')}</p>
     <div class="actions">${canCreate?localLink(url('/requests/new',{area:channel}),channel==='BRAND'?'Solicitar un proyecto':'Nueva solicitud','btn'):''}
@@ -46,5 +46,5 @@ export function channelWorkspace(channel,rows,url,canCreate,actor) {
     ${social?localLink(url('/reports'),'Ver métricas por plataforma','btn secondary'):''}</div></section>
     <div class="metric-grid compact"><div class="metric-card"><span>Solicitudes en esta vista</span><strong>${number(rows.length)}</strong></div><div class="metric-card"><span>Trabajos abiertos</span><strong>${number(open)}</strong></div></div>
     ${card(social?'Contenido y entregables':'Proyectos y servicios',table(['Trabajo','Negocio','Estado','Cantidad','Registro'],rows.map(r=>[
-      localLink(actor?.kind==='AGENCY'&&!actor.readOnlyCompany?'/agency/requests/'+r.id+'?company='+r.company_id:url('/requests/'+r.id),r.title),esc(r.company_name),badge(r.status),number(r.quantity),esc(timestamp(r.created_at))])), 'Abre un trabajo para consultar su avance y sus entregas.')}`;
+      localLink(actor?.kind==='AGENCY'&&!actor.readOnlyCompany?'/agency/requests/'+r.id+'?company='+r.company_id:url('/requests/'+r.id),r.title),esc(r.company_name),workBadge(r),number(r.quantity),esc(timestamp(r.created_at))])), 'Abre un trabajo para consultar su avance y sus entregas.')}`;
 }

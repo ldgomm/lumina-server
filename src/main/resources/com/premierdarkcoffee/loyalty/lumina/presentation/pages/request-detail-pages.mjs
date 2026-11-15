@@ -1,3 +1,4 @@
+import { workHold } from '../../businesses/operation-state.mjs';
 import { deliveryFiles } from './delivery-files.mjs';
 import { can } from '../../access/accounts.mjs';
 import { canRequest } from '../../access/content-policy.mjs';
@@ -7,7 +8,7 @@ import { localDay, socialChannels } from '../../shared/domain.mjs';
 import { contactLine } from './contact.mjs';
 import { icon } from './icons.mjs';
 import { formState, operationForm, operationPanel, revisionField } from './request-feedback.mjs';
-import { badge, button, displayAmount, esc, external, hidden, input, label, localLink, localValue,
+import { badge, workBadge, button, displayAmount, esc, external, hidden, input, label, localLink, localValue,
   message, number, select, table, textarea, timestamp } from './components.mjs';
 
 const by = keys => keys.map(key=>[key,label(key)]);
@@ -34,7 +35,7 @@ function visitsPanel({actor,base,visits,request,company,feedback}) {
   if(!visits.length&&!request.requested_at&&!editable)return '';
   const rows=visits.map(visit=>{
     const close=formState(feedback,'/visits/close',{visit:visit.id});
-    return `<article class="detail-visit"><div class="split"><h3>${esc(timestamp(visit.starts_at))}</h3>${badge(visit.status)}</div>
+    return `<article class="detail-visit"><div class="split"><h3>${esc(timestamp(visit.starts_at))}</h3>${workHold(request)?`<span class="work-last-state">Último estado: ${esc(label(visit.status))}</span>`:badge(visit.status)}</div>
       <p>${icon('maps')}${esc(visit.place)}</p>${visit.recorded_at?`<p class="muted">Realizada: ${esc(timestamp(visit.recorded_at))}</p>`:''}${visit.notes?`<p class="prewrap">${esc(visit.notes)}</p>`:''}
       ${editable&&visit.status==='SCHEDULED'?operationPanel('Registrar resultado',operationForm(actor,base('/visits/close'),hidden('visit',visit.id)+revisionField(close,visit.revision)+
         select('status','¿Se realizó la visita?', [['DONE','Sí, realizada'],['CANCELLED','No, cancelada']],close.value('status','DONE'))+
@@ -74,7 +75,7 @@ function pieceView({actor,base,request,piece,feedback}) {
       input('url','Enlace de la publicación','url','required maxlength="1500"',publish.value('url'))+dateField('published','Fecha y hora de publicación',publish)+button('Guardar publicación'),publish,currentUrl),publish,'publish-'+piece.id):''}
     ${publicationBody}</div></details>`:'';
   return `<article class="delivery-card${review?' delivery-review':''}" id="piece-${piece.id}" aria-labelledby="title-${piece.id}">
-    <div class="split"><h3 id="title-${piece.id}">${esc(piece.title)}</h3>${badge(piece.status)}</div>
+    <div class="split"><h3 id="title-${piece.id}">${esc(piece.title)}</h3>${workHold(request)?`<span class="work-last-state">Última etapa: ${esc(label(piece.status))}</span>`:badge(piece.status)}</div>
     ${piece.recorded_at?`<p class="muted">Grabado: ${esc(timestamp(piece.recorded_at))}</p>`:''}${piece.observations?`<p class="prewrap">${esc(piece.observations)}</p>`:''}${files}${deliveryFiles({actor,request,piece,route,base,editable,feedback})}
     ${review?`<section class="delivery-decision" aria-label="Revisar entregable"><h4>¿Está listo para entregar?</h4>
       ${operationForm(actor,route('/review'),hidden('status','APPROVED')+revisionField(approve,piece.revision)+button('Aprobar entrega'),approve,currentUrl,'approve-delivery')}
@@ -128,17 +129,19 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
     .map(i=>[c.id+':'+i.service,c.name+' · '+label(i.service)+' · '+(i.quantity-i.used-i.reserved)+' disponibles']));
   const context={actor,company,url,base,request,quote,pieces,visits,feedback,addPiece};
   let [heading,explanation,anchor,caption]=nextStep(context);
+  const hold=workHold(request);
+  if(hold)[heading,explanation,anchor,caption]=['Registro de un negocio '+hold.label.toLowerCase(),hold.detail,'#history','Ver movimientos'];
   if(!work&&anchor==='#deliverables'){anchor=request.type==='VISIT'?'#visits':'#details';caption=request.type==='VISIT'?'Ver visita':'Ver solicitud';}
   const step=({NEW:0,REVIEW:1,QUOTED:1,APPROVED:1,SCHEDULED:1,PRODUCTION:2,DELIVERED:3})[request.status];
-  const timeline=step===undefined||!work?'':`<ol class="request-timeline" aria-label="Avance de la solicitud">${['Recibida','Coordinación','Producción','Entrega'].map((name,i)=>`<li${i===step?' aria-current="step"':''}><span>${i<step?'✓':i+1}</span>${name}</li>`).join('')}</ol>`;
+  const timeline=hold||step===undefined||!work?'':`<ol class="request-timeline" aria-label="Avance de la solicitud">${['Recibida','Coordinación','Producción','Entrega'].map((name,i)=>`<li${i===step?' aria-current="step"':''}><span>${i<step?'✓':i+1}</span>${name}</li>`).join('')}</ol>`;
   const rank=actor.kind==='AGENCY'?{APPROVED:0,PRODUCTION:1,REVIEW:2,DELIVERED:3,CANCELLED:4}:{REVIEW:0,DELIVERED:1,APPROVED:2,PRODUCTION:3,CANCELLED:4};
   const allPieces=[...pieces].sort((a,b)=>rank[a.status]-rank[b.status]).map(piece=>pieceView({...context,piece})).join('');
-  const deliverables=work?part('deliverables','Entregables',`<p class="detail-count">${pieces.filter(p=>p.status==='DELIVERED').length} de ${request.quantity} entregados${pieces.some(p=>p.status==='REVIEW')?' · '+pieces.filter(p=>p.status==='REVIEW').length+' en revisión':''}</p>${allPieces||message('El trabajo aún no tiene archivos para entregar.')}
+  const deliverables=work?part('deliverables','Entregables',`<p class="detail-count">${hold?'Registro conservado · ':''}${pieces.filter(p=>p.status==='DELIVERED').length} de ${request.quantity} entregados${!hold&&pieces.some(p=>p.status==='REVIEW')?' · '+pieces.filter(p=>p.status==='REVIEW').length+' en revisión':''}</p>${allPieces||message('El trabajo aún no tiene archivos para entregar.')}
     ${addPiece?operationPanel('Crear entregable',operationForm(actor,base('/pieces'),revisionField(create,request.revision)+
       input('title','Nombre del entregable','text','required minlength="2" maxlength="150"',create.value('title',request.title))+
       (request.type!=='COURTESY'&&quota.length?select('allocation','Usar un cupo de tu acuerdo',[['','Sin asignar a un cupo'],...quota],create.value('allocation')):'')+
       button('Crear entregable'),create,base('')+'#deliverables'),create,'create-deliverable',!pieces.length):''}`):'';
-  const info=part('details','Tu solicitud',`<div class="tags">${badge(request.type)}${badge(request.channel)}${badge(request.status)}</div><dl class="detail-facts"><div><dt>Servicio</dt><dd>${esc(request.channel==='SOCIAL'&&actor.kind!=='AGENCY'?contentName(request.service):label(request.service))}</dd></div>${work?`<div><dt>Cantidad</dt><dd>${request.quantity}</dd></div>`:''}<div><dt>Recibida</dt><dd>${esc(timestamp(request.created_at))}</dd></div></dl>
+  const info=part('details','Tu solicitud',`<div class="tags">${badge(request.type)}${badge(request.channel)}${workBadge(request)}</div><dl class="detail-facts"><div><dt>Servicio</dt><dd>${esc(request.channel==='SOCIAL'&&actor.kind!=='AGENCY'?contentName(request.service):label(request.service))}</dd></div>${work?`<div><dt>Cantidad</dt><dd>${request.quantity}</dd></div>`:''}<div><dt>Recibida</dt><dd>${esc(timestamp(request.created_at))}</dd></div></dl>
     ${request.brief?`<h3>Lo que solicitaste</h3><p class="prewrap">${esc(request.brief)}</p>`:''}${contactLine(request.contact_phone,company.phone)}
     ${admin&&options.length?operationPanel('Cambiar estado',operationForm(actor,base('/state'),revisionField(change,request.revision)+select('status','Estado',by(options),change.value('status'))+
       field(change,'notes','Motivo u observaciones','maxlength="1000" rows="3"')+button('Guardar estado'),change,base('')+'#details'),change,'request-state'):''}
@@ -149,6 +152,6 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
   const panels=quoteBody+deliverables+visitBody+info+history;
   return `<div class="request-detail" data-request-detail><p class="detail-back">${localLink(url(request.channel==='SOCIAL'?'/content':'/requests',request.channel==='SOCIAL'?{view:'requests'}:{}),'← Todas las solicitudes')}</p>
     ${feedback&&!panels.includes(' data-detail-error>')?recovery(feedback,base('')):''}
-    <section class="delivery-next"><div><span class="eyebrow">SIGUIENTE PASO</span><h2>${esc(heading)}</h2><p>${esc(explanation)}</p></div>${localLink(anchor,caption,'btn')}</section>${timeline}
+    <section class="delivery-next"><div><span class="eyebrow">${hold?'CONSULTA DEL HISTORIAL':'SIGUIENTE PASO'}</span><h2>${esc(heading)}</h2><p>${esc(explanation)}</p></div>${localLink(anchor,caption,'btn')}</section>${timeline}
     <nav class="detail-jumps" aria-label="Secciones de la solicitud">${tabs.map(([id,name])=>localLink('#'+id,name)).join('')}</nav>${panels}</div>`;
 }

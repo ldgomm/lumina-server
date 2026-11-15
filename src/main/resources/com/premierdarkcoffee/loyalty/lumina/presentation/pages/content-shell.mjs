@@ -1,7 +1,7 @@
 import { brandSocial } from './brand-social.mjs';
 import { contentViews } from '../../content/workspace.mjs';
 import { can } from '../../access/accounts.mjs';
-import { esc, label, localLink, pathFor, navigationSearch } from './components.mjs';
+import { businessNotice, esc, label, localLink, pathFor, navigationSearch } from './components.mjs';
 import { icon } from './icons.mjs';
 
 const marks={overview:'home',requests:'content',production:'social',reviews:'check',deliveries:'plans',publications:'web',metrics:'metrics',calendar:'calendar'};
@@ -9,7 +9,7 @@ export function contentShell({actor,company,title,description='',body,contentVie
   const url=pathFor(actor,company);
   const back=actor.kind==='AGENCY'?(company?'/home?company='+company.id:'/dashboard'):'/home';
   const context=company?.name||(actor.kind==='AGENCY'?'Producción de Lúmina':'Mi negocio');
-  const mode=actor.readOnlyCompany?'Consulta del negocio · Solo lectura':actor.kind==='AGENCY'?'Producción de la agencia':label(actor.kind);
+  const mode=actor.businessBlocked?'Historial del negocio · Solo lectura':actor.readOnlyCompany?'Consulta del negocio · Solo lectura':actor.kind==='AGENCY'?'Producción de la agencia':label(actor.kind);
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1f3a"><meta name="lumina-csrf" content="${esc(actor.csrf)}">
     <title>${esc(title)} · Contenido · Lúmina Digital</title><link rel="stylesheet" href="/assets/lumina.css"><link rel="stylesheet" href="/assets/modules.css"><link rel="stylesheet" href="/assets/content.css"><link rel="stylesheet" href="/assets/experience.css"><script defer src="/assets/lumina.js"></script><script defer src="/assets/requests.js"></script><link rel="stylesheet" href="/assets/central.css"><link rel="stylesheet" href="/assets/practical.css"><link rel="stylesheet" href="/assets/deliveries.css"><script defer src="/assets/deliveries.js"></script><link rel="icon" href="/assets/lumina-symbol.png"></head>
     <body class="content-app"><a class="skip" href="#content">Saltar al contenido</a>
@@ -21,6 +21,6 @@ export function contentShell({actor,company,title,description='',body,contentVie
     <button class="navigation-backdrop" type="button" aria-label="Cerrar navegación" hidden></button><main id="content"><div class="content-breadcrumb">${esc(context)}<span>/</span>Contenido<span>/</span>${esc(title)}</div>
       <header class="content-title"><div><p class="eyebrow">${esc(mode)}</p><h1>${esc(title)}</h1>${description?`<p>${esc(description)}</p>`:''}</div>
         ${can(actor,'SOCIAL','REQUEST')&&contentView!=='requests'?localLink(url('/requests/new',{area:'SOCIAL'}),'Solicitar contenido','btn'):''}</header>
-      ${actor.readOnlyCompany?`<aside class="consultation-notice" role="note"><strong>Estás consultando como agencia.</strong><p>Las solicitudes y aprobaciones pertenecen al negocio. Desde aquí solo puedes consultar su información.</p>${localLink('/agency/content?company='+company.id,'Ir al trabajo de Lúmina →')}</aside>`:actor.kind==='AGENCY'?'<aside class="consultation-notice" role="note"><strong>Trabajo de Lúmina</strong><p>Registra producción, entregas y resultados a nombre de la agencia. El negocio realiza sus propias solicitudes y aprobaciones.</p></aside>':''}
+      ${actor.businessBlocked?businessNotice(actor,company):actor.readOnlyCompany?`<aside class="consultation-notice" role="note"><strong>Estás consultando como agencia.</strong><p>Las solicitudes y aprobaciones pertenecen al negocio. Desde aquí solo puedes consultar su información.</p>${localLink('/agency/content?company='+company.id,'Ir al trabajo de Lúmina →')}</aside>`:actor.kind==='AGENCY'?'<aside class="consultation-notice" role="note"><strong>Trabajo de Lúmina</strong><p>Registra producción, entregas y resultados a nombre de la agencia. El negocio realiza sus propias solicitudes y aprobaciones.</p></aside>':''}
       ${notice?`<p class="notice" role="status">${esc(notice)}</p>`:''}${body}</main><footer class="content-footer">Contenido · Lúmina Digital${brandSocial()}<span>Ecuador continental · UTC−5</span></footer></body></html>`;
 }

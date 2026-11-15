@@ -1,7 +1,7 @@
 import { can } from '../../access/accounts.mjs';
 import { agendaViews } from '../../production/agenda.mjs';
 import { notificationKinds as attentionKinds } from '../../production/notifications.mjs';
-import { badge, button, card, displayAmount, esc, form, hidden, input, localLink, timestamp } from './components.mjs';
+import { badge, workBadge, button, card, displayAmount, esc, form, hidden, input, localLink, timestamp } from './components.mjs';
 import { icon } from './icons.mjs';
 import { visitTime } from './visit-time.mjs';
 
@@ -31,17 +31,17 @@ export function attentionPage({actor,data,url}) {
 }
 export function workdayAgenda({actor,data,url,global=false}) {
   const {view,q,rows,counts,page,total}=data,path=global?'/agency-calendar':'/calendar';
-  const note=view==='pending'?'La fecha ya pasó y aún falta registrar el resultado de la visita.':view==='history'?'Grabaciones realizadas y visitas canceladas.':'Fechas confirmadas · Hora de Ecuador continental';
+  const note=view==='blocked'?'Visitas detenidas por el estado del negocio.':view==='pending'?'La fecha ya pasó y aún falta registrar el resultado de la visita.':view==='history'?'Grabaciones realizadas y visitas canceladas.':'Fechas confirmadas · Hora de Ecuador continental';
   const days=new Map();
   const current=new Date();
   for(const row of rows){const time=visitTime(row.starts_at,current);if(!days.has(time.day))days.set(time.day,{...time,rows:[]});days.get(time.day).rows.push({...row,time});}
   return `<div class="workday-heading"><p>${note}</p>${actor.kind!=='AGENCY'&&can(actor,'SOCIAL','REQUEST')?localLink('/content/recording','Solicitar grabación','btn'):''}</div>`+
-    tabs(url,path,agendaViews,view,counts,{q})+card('Agenda de grabaciones',search(url,path,q,view,global?'Buscar negocio, solicitud o lugar':'Buscar solicitud o lugar')+
+    tabs(url,path,Object.fromEntries(Object.entries(agendaViews).filter(([key])=>key!=='blocked'||counts.blocked||view==='blocked')),view,counts,{q})+card('Agenda de grabaciones',search(url,path,q,view,global?'Buscar negocio, solicitud o lugar':'Buscar solicitud o lugar')+
     (rows.length?`<div class="agenda-days">${[...days.values()].map(day=>`<section class="agenda-day" aria-labelledby="day-${day.day}"><h3 class="agenda-day-heading" id="day-${day.day}">${day.relative?`<strong>${day.relative}</strong>`:''}<time datetime="${day.day}">${esc(day.date)}</time></h3><div class="visit-cards">${day.rows.map(row=>{
       const target=global?'/agency/requests/'+row.request_id+'?company='+row.company_id:url('/requests/'+row.request_id);
       const status=row.request_status==='CANCELLED'?'CANCELLED':row.status;
       const download=global?'/agency/calendar/visits/'+row.id+'.ics?company='+row.company_id:url('/calendar/visits/'+row.id+'.ics');
-      return `<article class="visit-card"><div class="visit-date"><time datetime="${esc(row.starts_at)}" aria-label="${esc(timestamp(row.starts_at))}">${row.time.time}</time><span>Ecuador</span></div><div class="visit-content">${global?`<p class="eyebrow">${esc(row.company_name)}</p>`:''}<h4>${esc(row.title)}</h4><p>${icon('maps')}${esc(row.place)||'Lugar por confirmar'}</p>${row.recorded_at?`<small>Realizada: ${esc(timestamp(row.recorded_at))}</small>`:''}<div class="actions">${localLink(target+'#visits',actor.kind==='AGENCY'&&actor.agencyWork?'Gestionar visita →':'Ver grabación →','agenda-detail')}${view==='upcoming'&&status==='SCHEDULED'?`<a class="calendar-download" href="${esc(download)}" download="recording-${esc(row.id)}.ics">${icon('calendar')}Guardar en calendario</a>`:''}</div></div><div class="visit-actions">${badge(status)}</div></article>`;
-    }).join('')}</div></section>`).join('')}</div>${view==='upcoming'?'<p class="calendar-copy-note">La copia no se actualiza sola. Consulta Lúmina si cambia la visita.</p>':''}`:`<div class="workday-empty">${icon('calendar')}<h3>${q?'Sin coincidencias':view==='upcoming'?'Sin grabaciones próximas':view==='pending'?'Agenda al día':'Todavía no hay historial'}</h3><p>${q?'Prueba con otro nombre o lugar.':'Las visitas aparecen cuando Lúmina confirma la fecha.'}</p></div>`)+
+      return `<article class="visit-card"><div class="visit-date"><time datetime="${esc(row.starts_at)}" aria-label="${esc(timestamp(row.starts_at))}">${row.time.time}</time><span>Ecuador</span></div><div class="visit-content">${global?`<p class="eyebrow">${esc(row.company_name)}</p>`:''}<h4>${esc(row.title)}</h4><p>${icon('maps')}${esc(row.place)||'Lugar por confirmar'}</p>${row.recorded_at?`<small>Realizada: ${esc(timestamp(row.recorded_at))}</small>`:''}<div class="actions">${localLink(target+'#visits',actor.kind==='AGENCY'&&actor.agencyWork&&!actor.businessBlocked&&row.business_state==='ACTIVE'?'Gestionar visita →':'Ver grabación →','agenda-detail')}${view==='upcoming'&&status==='SCHEDULED'?`<a class="calendar-download" href="${esc(download)}" download="recording-${esc(row.id)}.ics">${icon('calendar')}Guardar en calendario</a>`:''}</div></div><div class="visit-actions">${workBadge({...row,status})}</div></article>`;
+    }).join('')}</div></section>`).join('')}</div>${view==='upcoming'?'<p class="calendar-copy-note">La copia no se actualiza sola. Consulta Lúmina si cambia la visita.</p>':''}`:`<div class="workday-empty">${icon('calendar')}<h3>${q?'Sin coincidencias':view==='upcoming'?'Sin grabaciones próximas':view==='pending'?'Agenda al día':view==='blocked'?'Sin visitas detenidas':'Todavía no hay historial'}</h3><p>${q?'Prueba con otro nombre o lugar.':view==='blocked'?'Aquí aparecen las visitas pendientes de negocios que no están en operación.':'Las visitas aparecen cuando Lúmina confirma la fecha.'}</p></div>`)+
     paging({url,path,params:{view:view,q},page,total}));
 }
