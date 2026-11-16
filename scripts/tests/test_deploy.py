@@ -59,12 +59,42 @@ class DeploymentTests(unittest.TestCase):
  def test_staging_cleanup_never_stops_another_checkout(self):
   responses=['container1',json.dumps([{'Config':{'Labels':{'com.docker.compose.project.working_dir':'/another/project'}}}])]
   with patch.object(r,'run',side_effect=responses) as run:
-   with self.assertRaises(r.Blocked):r.stop_own_staging()
+   with self.assertRaises(r.Blocked):r.stop_own_staging('a'*24)
    self.assertEqual(run.call_count,2)
  def test_staging_cleanup_only_stops_verified_worktree_containers(self):
-  responses=['container1',json.dumps([{'Config':{'Labels':{'com.docker.compose.project.working_dir':str(r.WORK)}}}]),'']
+  project=r.staging_module().project_name(r.WORK,'a'*24)
+  responses=['container1',json.dumps([{'Config':{'Labels':{'com.docker.compose.project':project,'com.docker.compose.project.working_dir':str(r.WORK)}}}]),'']
   with patch.object(r,'run',side_effect=responses) as run:
-   r.stop_own_staging();self.assertEqual(run.call_args.args[0],['docker','stop','container1'])
+   r.stop_own_staging('a'*24);self.assertEqual(run.call_args.args[0],['docker','stop','container1'])
+   self.assertIn('label=com.docker.compose.project='+project,run.call_args_list[0].args[0])
+
+ def test_cleanup_verifies_all_owners_before_stopping_any_container(self):
+  project=r.staging_module().project_name(r.WORK,'b'*24)
+  def details(directory):return json.dumps([{'Config':{'Labels':{'com.docker.compose.project':project,'com.docker.compose.project.working_dir':directory}}}])
+  with patch.object(r,'run',side_effect=['one two',details(str(r.WORK)),details('/foreign')]) as run:
+   with self.assertRaisesRegex(r.Blocked,'STAGING_OWNER_CONFLICT'):r.stop_own_staging('b'*24)
+  self.assertFalse(any(call.args[0][:2]==['docker','stop'] for call in run.call_args_list))
+
+ def test_staging_run_is_private_idempotent_and_never_reassigned_to_another_revision(self):
+  with patch.object(r,'EVIDENCE',self.root),patch.object(r,'WORK',self.root/'source'):
+   run_id=r.prepare_staging('a'*40)
+   self.assertEqual(run_id,r.prepare_staging('a'*40))
+   self.assertEqual(len(run_id),24)
+   path=self.root/'staging-run.json';raw=path.read_bytes()
+   self.assertEqual(path.stat().st_mode&0o777,0o600)
+   with self.assertRaisesRegex(r.Blocked,'STAGING_RUN_CONFLICT'):r.prepare_staging('b'*40)
+   self.assertEqual(path.read_bytes(),raw)
+   value=json.loads(raw);value['source']='/other/source';path.write_text(json.dumps(value))
+   with self.assertRaisesRegex(r.Blocked,'STAGING_RUN_CONFLICT'):r.prepare_staging('a'*40)
+
+ def test_staging_context_refuses_symlinks_and_cleanup_without_a_run_id(self):
+  target=self.root/'original';target.write_text('private')
+  (self.root/'staging-run.json').symlink_to(target)
+  with patch.object(r,'EVIDENCE',self.root),patch.object(r,'run') as run:
+   with self.assertRaisesRegex(r.Blocked,'SYMLINK'):r.prepare_staging('a'*40)
+   with self.assertRaisesRegex(r.Blocked,'STAGING_RUN_REQUIRED'):r.stop_own_staging('')
+   run.assert_not_called()
+  self.assertEqual(target.read_text(),'private')
 
  def test_inactive_slot_can_be_reused_without_stopping_the_active_slot(self):
   old={'slot':'blue','sha':'old'};(self.root/'active.json').write_text(json.dumps(old))
@@ -102,14 +132,25 @@ class DeploymentTests(unittest.TestCase):
   self.assertIn('CAUSE=ValueError',console.getvalue())
   self.assertEqual(len(console.getvalue().splitlines()),1)
   self.assertIn('private test value',(self.root/('a'*40)/'deploy.log').read_text())
+  self.assertNotIn('BUILD_LOG=',(self.root/('a'*40)/'deploy.log').read_text())
+
+ def test_package_log_is_advertised_only_for_an_actual_packaging_failure(self):
+  (self.root/'package-build.log').write_text('actual failed build')
+  for stage in ('FULL_CHECKPOINT','IMMUTABLE_CANDIDATE'):
+   evidence=self.root/stage;evidence.mkdir()
+   with patch.object(r,'STATE',self.root),patch.object(r,'STEP',stage),patch.object(r,'EVIDENCE',evidence),patch.object(r.os,'geteuid',return_value=0),patch.object(sys,'argv',['deploy.py','--commit','a'*40]),patch.object(r,'main',side_effect=r.Blocked('FAILED')),contextlib.redirect_stdout(io.StringIO()):
+    self.assertEqual(r.cli(),1)
+   log=(evidence/('a'*40)/'deploy.log').read_text()
+   self.assertEqual('BUILD_LOG=' in log,stage=='IMMUTABLE_CANDIDATE')
 
  def test_checkpoint_executes_existing_revision_mode_in_project_directory(self):
   scripts=self.root/'scripts';scripts.mkdir()
   (scripts/'checkpoint.py').write_text('import os,sys,json\nprint(json.dumps({"cwd":os.getcwd(),"args":sys.argv[1:]}))\n')
   with patch.object(r,'WORK',self.root),patch.object(r,'EVIDENCE',self.root):
-   self.assertEqual(r.execute_checkpoint(os.environ.copy(),self.root/'evidence',timeout=10),0)
+   self.assertEqual(r.execute_checkpoint(os.environ.copy(),self.root/'evidence',timeout=10,staging_run='c'*24),0)
   value=json.loads((self.root/'checkpoint.log').read_text())
   self.assertEqual(value['cwd'],str(self.root));self.assertIn('--verify-only',value['args'])
+  self.assertEqual(value['args'][-2:],['--staging-run','c'*24])
 
  def test_checkpoint_deadline_stops_the_process_and_preserves_its_output(self):
   scripts=self.root/'scripts';scripts.mkdir()
@@ -123,12 +164,19 @@ class DeploymentTests(unittest.TestCase):
   evidence=self.root/'evidence';evidence.mkdir()
   (state/'active.json').write_text(json.dumps({'slot':'blue','sha':'old','release':'/opt/lumina/releases/old'}))
   production=Mock();production.release_manifest.return_value={'sha':'old','commit':'b'*40}
+  spec=importlib.util.spec_from_file_location('checkpoint',Path(r.__file__).with_name('checkpoint.py'))
+  checkpoint=importlib.util.module_from_spec(spec);spec.loader.exec_module(checkpoint)
   original_safe=r.safe
   def safe(path):
    return self.root/'cache' if str(path)=='/var/cache/lumina-gradle-v074' else original_safe(path)
-  def failed_checkpoint(env,output):
-   folder=output/'failed';folder.mkdir();(folder/'RESULTADO.json').write_text(json.dumps({'status':'BUILD_OR_UNIT_FAILED_NO_COMMIT'}));return 1
+  def failed_checkpoint(env,output,staging_run):
+   self.assertNotIn('LUMINA_STAGING_RUN',env)
+   self.assertEqual(len(staging_run),24)
+   folder=output/'failed';folder.mkdir();(folder/'logs').mkdir()
+   (folder/'logs/attempt_1_local_staging.log').write_text('precise failure')
+   (folder/'RESULTADO.json').write_text(json.dumps({'status':'STAGING_FAILED_NO_COMMIT','staging_error':'Exact staging cause','checks':{'attempt_1_local_staging':{'exit_code':1}}}));return 1
   with contextlib.ExitStack() as stack:
+   stack.enter_context(patch.dict(sys.modules,{'checkpoint':checkpoint}))
    for name,value in {'SOURCE':source,'WORK':source,'STATE':state,'EVIDENCE':evidence,'safe':safe}.items():stack.enter_context(patch.object(r,name,value))
    stack.enter_context(patch.object(r.os,'geteuid',return_value=0));stack.enter_context(patch.object(r.sys,'platform','linux'))
    stack.enter_context(patch.object(r,'git',side_effect=lambda *args,**kw:'a'*40 if args[0]=='rev-parse' else ''))
@@ -137,9 +185,12 @@ class DeploymentTests(unittest.TestCase):
    stack.enter_context(patch.object(r.shutil,'which',return_value='/fixture'))
    stack.enter_context(patch.object(r.shutil,'disk_usage',return_value=Mock(free=8*1024**3)))
    stack.enter_context(patch.object(r,'execute_checkpoint',side_effect=failed_checkpoint))
-   stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
-   with self.assertRaisesRegex(r.Blocked,'FULL_CHECKPOINT_FAILED_BUILD_OR_UNIT_FAILED'):r.main('a'*40)
+   output=io.StringIO();stack.enter_context(contextlib.redirect_stdout(output))
+   with self.assertRaisesRegex(r.Blocked,'FULL_CHECKPOINT_FAILED_STAGING_FAILED'):r.main('a'*40)
+   self.assertIn('STAGING_ERROR=Exact staging cause',output.getvalue())
+   self.assertIn('FAILED_CHECK_LOG='+str(evidence/'tests/failed/logs/attempt_1_local_staging.log'),output.getvalue())
   production.backup.assert_not_called();production.package.assert_not_called();production.switch.assert_not_called()
   self.assertFalse(any(call.args[0][0]=='systemctl' for call in command.call_args_list))
+  self.assertFalse(any('label=com.docker.compose.project=loyalty-staging' in call.args[0] for call in command.call_args_list))
 
 if __name__=='__main__':unittest.main()

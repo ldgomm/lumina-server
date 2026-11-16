@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,6 +11,25 @@ spec=importlib.util.spec_from_file_location('wallet_gateway_refresh',SCRIPTS/'wa
 w=importlib.util.module_from_spec(spec);spec.loader.exec_module(w)
 
 class GatewayRefreshTests(unittest.TestCase):
+    def test_deployment_gateway_does_not_read_or_reconfigure_pilot_wallet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);pilot,state=self.configured(root)
+            private={p:p.read_bytes() for p in [root/'.env',root/'.env.wallet',pilot.state_path]}
+            commands=[]
+            with patch.dict(os.environ,{'LUMINA_STAGING_RUN':'a'*24}):
+                w.staging.init_config(root);local=w.LocalWallet(root)
+                with patch.object(w,'read_wallet',side_effect=AssertionError('Pilot secrets must not be read')),patch.object(local.runner,'run',side_effect=lambda label,command,*a,**k:commands.append(command) or (0,'')),patch.object(local,'check_probe') as probe,patch.object(w,'verify_gateway',return_value=97):
+                    self.assertEqual(local.gateway_check()['status'],'LOCAL_GATEWAY_PASS')
+                self.assertIn(w.staging.project_name(root),commands[0])
+                self.assertNotEqual(local.folder,pilot.folder)
+                self.assertNotIn(':8098',probe.call_args.args[1])
+                overlay=json.loads(local.overlay.read_text())
+                self.assertEqual(set(overlay['services']),{w.GATEWAY,w.MATERIAL})
+                self.assertEqual(overlay['services'][w.MATERIAL]['image'],w.staging.server_image(root))
+                self.assertNotIn('wallet.example.org',local.overlay.read_text())
+                self.assertNotIn(w.TUNNEL,commands[0])
+            self.assertEqual(private,{p:p.read_bytes() for p in private})
+
     def configured(self,root):
         w.staging.init_config(root)
         w.initialize(root)

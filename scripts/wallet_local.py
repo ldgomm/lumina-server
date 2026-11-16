@@ -63,7 +63,7 @@ def public_origin(value):
 
 
 def private_directory(root):
-    target = root / PRIVATE
+    target = staging.config_root(root) / PRIVATE
     if target.is_symlink():
         raise RuntimeError('La carpeta privada de Wallet no puede ser un enlace simbólico.')
     target.mkdir(exist_ok=True, mode=0o700)
@@ -210,7 +210,7 @@ def escaped(value):
 
 
 def compose_document(root, values, wallet, origin=None, mode='quick'):
-    folder = root / PRIVATE
+    folder = staging.config_root(root) / PRIVATE
     port = int(wallet.get('WALLET_GATEWAY_PORT', '8098'))
     if not 1024 <= port <= 65535 or port == int(values['LOYALTY_HTTP_PORT']):
         raise RuntimeError('WALLET_GATEWAY_PORT debe ser un puerto libre distinto al del servidor.')
@@ -221,7 +221,7 @@ def compose_document(root, values, wallet, origin=None, mode='quick'):
                       entrypoint=['nginx'], command=['-c', '/etc/nginx/loyalty.conf', '-g', 'daemon off;'],
                       ports=['127.0.0.1:' + str(port) + ':8080'], tmpfs=['/tmp:rw,nosuid,nodev,size=32m,mode=1777'],
                       volumes=[{'type': 'bind', 'source': str(folder / 'gateway.conf'), 'target': '/etc/nginx/loyalty.conf', 'read_only': True}]),
-        MATERIAL: {'image': 'loyalty-server:local-staging', 'user': '0:0', 'network_mode': 'none', 'read_only': True,
+        MATERIAL: {'image': staging.server_image(root), 'user': '0:0', 'network_mode': 'none', 'read_only': True,
                    'entrypoint': ['/bin/sh', '-ec'], 'command': ['umask 077; mkdir -p /output; for f in /input/*; do [ -f "$f" ] || continue; name=${f##*/}; cp "$f" "/output/$name.new"; chown 10001:10001 "/output/$name.new"; chmod 400 "/output/$name.new"; mv "/output/$name.new" "/output/$name"; done; chown 10001:10001 /output; chmod 500 /output'],
                    'volumes': [{'type': 'bind', 'source': str(folder / 'material'), 'target': '/input', 'read_only': True}, 'loyalty-wallet-material:/output']},
     }
@@ -493,10 +493,13 @@ class LocalWallet:
         return json.loads(output.strip())
 
     def gateway_check(self):
-        wallet = read_wallet(self.root / '.env.wallet')
+        isolated = bool(staging.checkpoint_run())
+        # Deployment checks use only local test routes, never the pilot's
+        # certificates, data key, public origin, tunnel or gateway port.
+        wallet = {'WALLET_TUNNEL_MODE': 'external', 'WALLET_GATEWAY_PORT': str(staging.available_port())} if isolated else read_wallet(self.root / '.env.wallet')
         # Recreate this service: replacing a bind-mounted file does not update nginx workers.
         # Keep the existing tunnel and database; verify the effective routes afterwards.
-        self.write_overlay(wallet, self.state.get('origin'))
+        self.write_overlay(wallet, None if isolated else self.state.get('origin'))
         self.run('gateway_start', 'up', '-d', '--no-deps', '--force-recreate', GATEWAY, timeout=300)
         base = 'http://127.0.0.1:' + wallet.get('WALLET_GATEWAY_PORT', '8098')
         self.check_probe('local_gateway', base, 40)
@@ -598,7 +601,7 @@ class LocalWallet:
     def capture(self, label, command, timeout=15):
         """Bounded read-only diagnostics; never inspect container environment or private files."""
         try:
-            result = subprocess.run(command, cwd=self.root, env=staging.environment(self.values),
+            result = subprocess.run(command, cwd=self.root, env=staging.environment(self.values,root=self.root),
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout)
             code, output = result.returncode, result.stdout
         except (OSError, subprocess.TimeoutExpired) as error:
@@ -753,6 +756,8 @@ def main(argv=None):
     owned = False
     runner = None
     try:
+        if staging.checkpoint_run() and (args.action != 'gateway-check' or args.configure or args.configure_stable_https or args.renew_test_url):
+            raise RuntimeError('Las pruebas aisladas no configuran Wallet externo ni credenciales de producción.')
         lock.mkdir(); owned = True
         runner = LocalWallet(root, args.report)
         if (args.configure or args.configure_stable_https) and args.action != 'start':

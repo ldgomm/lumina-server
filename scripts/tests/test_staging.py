@@ -81,3 +81,80 @@ class StagingTests(unittest.TestCase):
         with patch.object(r,'api',return_value={'instance':'another','profile':'local-staging','sourceSha':'f'*64}) as api:
             with self.assertRaises(RuntimeError):r.verify('f'*64)
             api.assert_called_once_with('/api/staging/info')
+
+    def test_old_staging_volume_without_env_blocks_pilot_but_not_isolated_deployment(self):
+        commands=[]
+        def docker(command,**kwargs):
+            commands.append((command,kwargs.get('env',{})))
+            output=''
+            if 'label=com.docker.compose.project=loyalty-staging' in command:
+                output='loyalty-staging_loyalty-staging-data\n'
+            elif '--services' in command:
+                output='loyalty-db\nloyalty-server\n'
+            elif 'images' in command:
+                output='sha256:test\n'
+            return subprocess.CompletedProcess(command,0,output.encode())
+        report=self.root/'report.json'
+        def verify(runner,source):
+            self.assertEqual(runner.values,s.read_config(self.root))
+            runner.report.update(status='LOCAL_STAGING_PASS',source_sha=source,http_checks='PASS')
+        args=['start','--project',str(self.root),'--no-browser','--report',str(report)]
+        with patch.object(s.shutil,'which',return_value='/fixture/docker'),patch.object(s.subprocess,'run',side_effect=docker),patch.object(s,'source_fingerprint',return_value='f'*64),patch.object(s.Runner,'verify',verify),contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(s.main(args),1)
+            self.assertFalse((self.root/'.env').exists())
+            self.assertIn('sin .env',json.loads(report.read_text())['error'])
+            commands.clear()
+            with patch.dict(os.environ,{s.RUN_VARIABLE:'a'*24}):
+                self.assertEqual(s.main(args),0)
+                name=s.project_name(self.root);config=s.config_root(self.root)/'.env'
+                raw=config.read_bytes();values=s.read_config(self.root)
+                self.assertNotEqual(values['LOYALTY_HTTP_PORT'],'8097')
+                self.assertEqual(config.stat().st_mode&0o777,0o600)
+                self.assertEqual(s.main(args),0)
+                self.assertEqual(raw,config.read_bytes())
+                self.assertFalse((self.root/'.env').exists())
+                self.assertFalse(c.allowed(str(config.relative_to(self.root))))
+                for command,env in commands:
+                    self.assertNotIn('label=com.docker.compose.project=loyalty-staging',command)
+                    self.assertNotIn('rm',command);self.assertNotIn('down',command)
+                    if command[:2]==['docker','compose'] and '--project-name' in command:
+                        self.assertIn(name,command);self.assertIn(str(config),command)
+                        self.assertEqual(env['LOYALTY_STAGING_IMAGE'],s.server_image(self.root))
+
+    def test_isolated_data_without_its_own_env_still_refuses_new_secrets(self):
+        with patch.dict(os.environ,{s.RUN_VARIABLE:'a'*24}):
+            runner=s.Runner(self.root)
+            with patch.object(runner,'run',return_value=(0,'existing-private-volume')):
+                with self.assertRaisesRegex(RuntimeError,'sin .env'):
+                    s.init_config(self.root,existing_resources=s.resources_exist(runner))
+            self.assertFalse((s.config_root(self.root)/'.env').exists())
+
+    def test_isolation_preserves_local_config_and_separates_source_trees_runs_and_images(self):
+        original=self.config();raw=(self.root/'.env').read_bytes()
+        names=set();images=set()
+        for run_id in ('a'*24,'b'*24):
+            with patch.dict(os.environ,{s.RUN_VARIABLE:run_id,'LOYALTY_STAGING_IMAGE':'foreign-image'}):
+                values=s.init_config(self.root)[0]
+                self.assertNotEqual(values['STAGING_IDENTITY_PEPPER'],original['STAGING_IDENTITY_PEPPER'])
+                names.add(s.project_name(self.root));images.add(s.environment(values,root=self.root)['LOYALTY_STAGING_IMAGE'])
+                self.assertNotEqual(s.project_name(self.root),s.project_name(self.root/'other'))
+        self.assertEqual(len(names),2);self.assertEqual(len(images),2)
+        self.assertEqual((self.root/'.env').read_bytes(),raw)
+        self.assertEqual(s.project_name(self.root),'loyalty-staging')
+
+    def test_isolation_rejects_path_injection_and_symlinked_private_parent(self):
+        for invalid in ('../escape','loyalty-staging','A'*24,'a'*23):
+            with patch.dict(os.environ,{s.RUN_VARIABLE:invalid}):
+                with self.assertRaises(RuntimeError):s.init_config(self.root)
+        external=self.root/'external';external.mkdir();(self.root/'.local-staging').symlink_to(external)
+        with patch.dict(os.environ,{s.RUN_VARIABLE:'a'*24}):
+            with self.assertRaisesRegex(RuntimeError,'enlace'):s.init_config(self.root)
+        self.assertEqual(list(external.iterdir()),[])
+
+    def test_checkpoint_keeps_original_staging_error_and_failed_report(self):
+        result={'status':'LOCAL_STAGING_FAILED','error':'Existing private configuration is missing','checks':{'existing_0':{'exit_code':0}}}
+        def failed(*args):
+            (self.root/'attempt_staging.json').write_text(json.dumps(result));return 1
+        with self.assertRaisesRegex(c.StagingFailure,'Existing private configuration is missing') as error:
+            c.check_staging(self.root,self.root,failed,'attempt_',{})
+        self.assertEqual(error.exception.result,result)

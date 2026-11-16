@@ -447,11 +447,14 @@ def main(arguments=None, updates=None, origin=None):
     parser.add_argument('--output-dir', default=str(Path.home()/'Downloads'))
     parser.add_argument('--check-only', action='store_true')
     parser.add_argument('--verify-only', action='store_true', help='Ejecutar todas las pruebas sobre un commit limpio sin crear otro commit.')
+    parser.add_argument('--staging-run', help='Identificador privado de Docker para validar un despliegue sin reutilizar el piloto local.')
     parser.add_argument('--https', action='store_true', help='Preparar el túnel y cargar Wallet después del checkpoint completo.')
     parser.add_argument('--renew-test-url', action='store_true', help='Permitir recuperar la URL de pruebas; las tarjetas con la dirección anterior deben volver a guardarse conservando su identidad.')
     args = parser.parse_args(arguments)
     if args.verify_only and (updates or args.https or args.renew_test_url):
         parser.error('--verify-only valida el commit existente y no admite actualizaciones ni configuración HTTPS.')
+    if args.staging_run and (not args.verify_only or not re.fullmatch('[a-f0-9]{24}', args.staging_run)):
+        parser.error('--staging-run requiere --verify-only y un identificador hexadecimal de 24 caracteres.')
     if args.renew_test_url:
         args.https = True
     os.umask(0o077)
@@ -572,7 +575,7 @@ def main(arguments=None, updates=None, origin=None):
         for attempt in (1, 2):
             before = snapshot(project)
             prefix = 'attempt_'+str(attempt)+'_'
-            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=213, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
+            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=223, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
             if workflow:
                 report['status'] = 'WORKFLOW_TESTS_FAILED_NO_COMMIT'
                 break
@@ -600,14 +603,19 @@ def main(arguments=None, updates=None, origin=None):
                 report['status'] = 'POSTGRES_FAILED_NO_COMMIT'
                 break
             try:
-                report['staging'] = check_staging(project, folder, run, prefix, env)
+                staging_env = dict(env)
+                if args.staging_run:
+                    staging_env['LUMINA_STAGING_RUN'] = args.staging_run
+                report['staging'] = check_staging(project, folder, run, prefix, staging_env)
                 gateway_path = folder/(prefix+'gateway.json')
-                gateway_code = run(prefix+'gateway', [sys.executable,str(project/'scripts/wallet_local.py'),'gateway-check','--report',str(gateway_path)],600,env)
+                gateway_code = run(prefix+'gateway', [sys.executable,str(project/'scripts/wallet_local.py'),'gateway-check','--report',str(gateway_path)],600,staging_env)
                 gateway = json.loads(gateway_path.read_text()) if gateway_path.exists() else {}
                 report['gateway'] = gateway
                 if gateway_code or gateway.get('status') != 'LOCAL_GATEWAY_PASS' or gateway.get('checks',0) < 97:
                     raise RuntimeError('El gateway público no pasó sus comprobaciones de rutas y autenticación.')
             except Exception as error:
+                if isinstance(error, StagingFailure):
+                    report['staging'] = error.result
                 if attempt == 1 and not same_snapshot(before, snapshot(project)):
                     report['source_revalidated_after_build'] = True
                     continue
@@ -832,15 +840,22 @@ def merge_python_module(actual, baseline, desired):
 
 
 
+class StagingFailure(RuntimeError):
+    def __init__(self, result, destination):
+        self.result = result
+        detail = str(result.get('error') or 'Construcción, arranque o verificación de roles incompletos.')[:1000]
+        super().__init__('Docker local: '+detail+' Informe: '+str(destination))
+
+
 def check_staging(project, folder, run, prefix, env):
     destination = folder/(prefix+'staging.json')
     code = run(prefix+'local_staging', [sys.executable,str(project/'scripts/staging.py'),'start','--no-browser','--report',str(destination)], 2100, env)
     try:
         result = json.loads(destination.read_text())
     except (OSError,ValueError):
-        raise RuntimeError('No se recibió el informe de Docker local; no se crea un commit.')
+        raise RuntimeError('No se recibió el informe de Docker local. Log: '+str(folder/'logs'/(prefix+'local_staging.log')))
     if code or result.get('status') != 'LOCAL_STAGING_PASS' or result.get('http_checks') != 'PASS' or not re.fullmatch('[a-f0-9]{64}', result.get('source_sha','')):
-        raise RuntimeError('Docker local no completó construcción, arranque y verificación de roles; no se crea un commit.')
+        raise StagingFailure(result, destination)
     return result
 
 

@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import secrets
 import shutil
 import signal
 import ssl
@@ -97,12 +98,35 @@ def public_checks(production, config, sha):
 def own_tree(root, account):
     for path in (root,*root.rglob('*')):
         safe(path);os.chown(path,account.pw_uid,account.pw_gid)
-def stop_own_staging():
+def staging_module():
+    spec=importlib.util.spec_from_file_location('lumina_deploy_staging',Path(__file__).with_name('staging.py'))
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    return module
+
+def prepare_staging(expected_commit):
+    # Reuse only this revision's private test identity on retries. Never adopt
+    # the global loyalty-staging project, its volumes or its missing .env.
+    path=safe(EVIDENCE/'staging-run.json')
+    if path.exists():
+        value=json.loads(path.read_text())
+        need(value.get('source')==str(WORK) and value.get('commit')==expected_commit and
+            re.fullmatch('[a-f0-9]{24}',value.get('run_id','')),'STAGING_RUN_CONFLICT')
+        return value['run_id']
+    value={'source':str(WORK),'commit':expected_commit,'run_id':secrets.token_hex(12)}
+    write_json(path,value)
+    return value['run_id']
+
+def stop_own_staging(run_id):
     # Never stop another checkout's containers or any production database.
-    ids=run(['docker','ps','-q','--filter','label=com.docker.compose.project=loyalty-staging']).split()
+    need(re.fullmatch('[a-f0-9]{24}',run_id),'STAGING_RUN_REQUIRED')
+    project=staging_module().project_name(WORK,run_id)
+    ids=run(['docker','ps','-q','--filter','label=com.docker.compose.project='+project]).split()
     for container in ids:
         details=json.loads(run(['docker','inspect',container]))[0]
-        need(details['Config']['Labels'].get('com.docker.compose.project.working_dir')==str(WORK),'STAGING_OWNER_CONFLICT')
+        labels=details['Config']['Labels']
+        need(labels.get('com.docker.compose.project')==project and labels.get('com.docker.compose.project.working_dir')==str(WORK),'STAGING_OWNER_CONFLICT')
+    # Validate every owner before stopping even the first container.
+    for container in ids:
         run(['docker','stop',container],timeout=90)
 def slot_change(production,config,old,candidate,slot,backup,switch=None,start_candidate=None):
     """Drain the old portal before sending writes to the candidate. Never restore data."""
@@ -132,12 +156,15 @@ def stage(name):
     STEP=name
     print('STEP='+name,flush=True)
 
-def execute_checkpoint(environment, evidence, timeout=5400):
+def execute_checkpoint(environment, evidence, timeout=5400, staging_run=None):
     log_path=safe(EVIDENCE/'checkpoint.log')
     with log_path.open('w') as log:
         os.chmod(log_path,0o600)
-        process=subprocess.Popen([sys.executable,str(WORK/'scripts/checkpoint.py'),
-            '--project',str(WORK),'--output-dir',str(evidence),'--verify-only'],
+        command=[sys.executable,str(WORK/'scripts/checkpoint.py'),
+            '--project',str(WORK),'--output-dir',str(evidence),'--verify-only']
+        if staging_run:
+            command.extend(['--staging-run',staging_run])
+        process=subprocess.Popen(command,
             cwd=WORK,env=environment,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
         try:
             return process.wait(timeout=timeout)
@@ -201,7 +228,6 @@ def deploy_locked(expected_commit):
         need(shutil.which(executable),executable.upper()+'_MISSING')
     run(['docker','info','--format','{{.ServerVersion}}'])
     need(shutil.disk_usage('/opt/lumina').free>=7*1024**3,'BUILD_DISK_SPACE_REQUIRED')
-    need(not run(['docker','ps','-q','--filter','label=com.docker.compose.project=loyalty-staging']) or (WORK/'.env').is_file(),'OTHER_STAGING_IS_RUNNING')
     # The checkpoint uses disposable databases and its own source tree. No
     # production configuration or secret is passed as an environment variable.
     environment={k:v for k,v in os.environ.items() if k in ('PATH','LANG','LC_ALL','JAVA_HOME','TZ')}
@@ -213,6 +239,7 @@ def deploy_locked(expected_commit):
         properties.write_text('org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=768m -XX:ActiveProcessorCount=1 -Dfile.encoding=UTF-8\norg.gradle.workers.max=1\norg.gradle.parallel=false\norg.gradle.daemon=false\norg.gradle.vfs.watch=false\nkotlin.compiler.execution.strategy=in-process\n')
     sys.path.insert(0,str(WORK/'scripts'));import checkpoint
     evidence=EVIDENCE/'tests';evidence.mkdir(mode=0o700,exist_ok=True)
+    staging_run=prepare_staging(expected_commit)
     receipt=None
     for path in sorted(evidence.glob('*/RESULTADO.json'),reverse=True):
         report=json.loads(path.read_text())
@@ -220,19 +247,35 @@ def deploy_locked(expected_commit):
             receipt=path;break
     if receipt is None:
         stage('FULL_CHECKPOINT')
+        checkpoint_error=None
         try:
-            result=execute_checkpoint(environment,evidence)
+            result=execute_checkpoint(environment,evidence,staging_run=staging_run)
+        except BaseException as error:
+            checkpoint_error=error
+            raise
         finally:
-            stop_own_staging()
+            try:
+                stop_own_staging(staging_run)
+            except BaseException:
+                if checkpoint_error is None:
+                    raise
+                traceback.print_exc()
         reports=sorted(evidence.glob('*/RESULTADO.json'),reverse=True)
         need(reports,'CHECKPOINT_REPORT_MISSING')
         receipt=reports[0];report=json.loads(receipt.read_text())
         print('CHECKPOINT_REPORT='+str(receipt),flush=True)
+        print('CHECKPOINT_LOG='+str(EVIDENCE/'checkpoint.log'),flush=True)
+        if report.get('staging_error'):
+            print('STAGING_ERROR='+str(report['staging_error']),flush=True)
+        for label,check in report.get('checks',{}).items():
+            if check.get('exit_code') and re.fullmatch('[a-zA-Z0-9_-]+',label):
+                failed_log=receipt.parent/'logs'/(label+'.log')
+                if failed_log.is_file():print('FAILED_CHECK_LOG='+str(failed_log),flush=True)
         status=report.get('status','')
         cause=status if isinstance(status,str) and re.fullmatch('[A-Z][A-Z0-9_]{1,95}',status) else 'UNSPECIFIED'
         need(result==0 and report.get('core_status')=='CORE_TESTS_PASS' and report.get('auto_commit',{}).get('status')=='VERIFIED','FULL_CHECKPOINT_FAILED_'+cause)
     # Stop only the disposable staging containers belonging to this worktree.
-    stop_own_staging()
+    stop_own_staging(staging_run)
     need(json.loads((STATE/'active.json').read_text())==old,'ACTIVE_RELEASE_CHANGED')
     prod.check(config)
     stage('VERIFIED_BACKUP')
@@ -306,7 +349,9 @@ def cli():
                 result=main(args.commit)
         except BaseException as error:
             traceback.print_exc(file=log)
-            log.write('BUILD_LOG='+str(STATE/'package-build.log')+'\n')
+            build_log=STATE/'package-build.log'
+            if STEP=='IMMUTABLE_CANDIDATE' and build_log.is_file():
+                log.write('BUILD_LOG='+str(build_log)+'\n')
             cause=str(error) if isinstance(error,Blocked) or type(error).__name__=='Blocked' else type(error).__name__
             cause=re.sub('[^A-Za-z0-9_=.-]','_',cause)[:150]
             print('RESULTADO=PRODUCTION_DEPLOY_BLOCKED STEP='+STEP+' CAUSE='+cause+' LOG='+str(log_path))

@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -23,6 +24,47 @@ import webbrowser
 PROJECT_NAME = 'loyalty-staging'
 COMPOSE_FILE = 'docker-compose.staging.yml'
 SECRET_NAMES = ('STAGING_DATABASE_PASSWORD','STAGING_IDENTITY_PEPPER','STAGING_ADMIN_TOKEN','STAGING_OWNER_TOKEN','STAGING_CASHIER_TOKEN','STAGING_ALICE_PASSWORD','STAGING_BOB_PASSWORD')
+RUN_VARIABLE = 'LUMINA_STAGING_RUN'
+
+
+def checkpoint_run(run_id=None):
+    value = os.environ.get(RUN_VARIABLE, '') if run_id is None else run_id
+    expect(not value or re.fullmatch('[a-f0-9]{24}', value), 'Identificador de pruebas aisladas inválido.')
+    return value
+
+
+def config_root(root):
+    """Keep deployment test credentials separate from the persistent local pilot."""
+    run_id = checkpoint_run()
+    if not run_id:
+        return root
+    folder = root
+    for name in ('.local-staging', 'checkpoints', run_id):
+        folder = folder / name
+        expect(not folder.is_symlink(), 'La carpeta de pruebas aisladas no puede ser un enlace.')
+        folder.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(folder, 0o700)
+    return folder
+
+
+def project_name(root, run_id=None):
+    value = checkpoint_run(run_id)
+    if not value:
+        return PROJECT_NAME
+    identity = hashlib.sha256((str(root.resolve())+'\0'+value).encode()).hexdigest()[:24]
+    return 'lumina-check-'+identity
+
+
+def server_image(root):
+    return 'loyalty-server:'+(project_name(root) if checkpoint_run() else 'local-staging')
+
+
+def available_port():
+    # Docker performs the final bind. A competing bind fails the gate; it never
+    # causes an existing listener to be stopped or reconfigured.
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        return listener.getsockname()[1]
 
 
 def expect(condition, message):
@@ -49,7 +91,7 @@ def private_write(path, text, exclusive=False):
 
 
 def read_config(root):
-    path=root/'.env'
+    path=config_root(root)/'.env'
     if path.is_symlink():
         raise RuntimeError('.env no puede ser un enlace simbólico.')
     if not path.is_file():
@@ -75,11 +117,13 @@ def read_config(root):
 
 
 def init_config(root, port=8097, existing_resources=False):
-    path=root/'.env'
+    path=config_root(root)/'.env'
     if path.exists() or path.is_symlink():
         return read_config(root),False
     if existing_resources:
         raise RuntimeError('Existe un entorno Docker de Loyalty sin .env. Restaura ese archivo privado; no se regenerarán las claves ni se borrará la base.')
+    if checkpoint_run():
+        port=available_port()
     if not 1024<=port<=65535:
         raise RuntimeError('El puerto local debe estar entre 1024 y 65535.')
     values={'LOYALTY_HTTP_PORT':str(port),'STAGING_INSTANCE_ID':str(uuid.uuid4())}
@@ -103,17 +147,18 @@ def clean(text, values):
     return re.sub(r'(?i)((?:password|token|secret|pepper)\s*[=:]\s*)[^\s,;]+',r'\1[REDACTED]',text)
 
 
-def environment(values, source=None):
+def environment(values, source=None, root=None):
     env={k:v for k,v in os.environ.items() if not k.startswith(('STAGING_','COMPOSE_','LOYALTY_','COMEBACK_'))}
     env.update(values)
     if source:
         env['LOYALTY_SOURCE_SHA']=source
+    env['LOYALTY_STAGING_IMAGE']=server_image(root or Path(__file__).resolve().parents[1])
     env['COMPOSE_ANSI']='never';env['BUILDKIT_PROGRESS']='plain'
     return env
 
 
 def compose(root, *args):
-    return ['docker','compose','--project-name',PROJECT_NAME,'--env-file',str(root/'.env'),'-f',str(root/COMPOSE_FILE),*args]
+    return ['docker','compose','--project-name',project_name(root),'--env-file',str(config_root(root)/'.env'),'-f',str(root/COMPOSE_FILE),*args]
 
 
 def urls(values):
@@ -126,7 +171,7 @@ def write_access(root, values):
     expect(port.isdigit() and 1024<=int(port)<=65535,'Puerto de Lúmina inválido.')
     link='http://127.0.0.1:'+port+'/'
     page='<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lúmina Digital</title><style>body{font:18px system-ui;background:#f3f6fa;color:#0b1f3a;max-width:720px;margin:12vh auto;padding:24px}a{display:inline-block;padding:16px 24px;background:#0b1f3a;color:white;border-radius:12px;text-decoration:none}</style><h1>Tu negocio, en Lúmina Digital.</h1><p>Accede con tu cuenta para gestionar contenido, fidelización y equipo. Wallet se prepara al registrar tu negocio.</p><a href="'+html.escape(link,quote=True)+'">Abrir Lúmina Digital</a></html>'
-    destination=root/'.local-staging/access.html';private_write(destination,page)
+    destination=config_root(root)/'.local-staging/access.html';private_write(destination,page)
     return destination
 
 
@@ -134,9 +179,9 @@ def write_access(root, values):
 class Runner:
     def __init__(self,root,values=None,report=None):
         self.root=root;self.values=values or {};self.secrets=[self.values[k] for k in SECRET_NAMES if k in self.values]
-        self.logs=(report.parent/'staging-logs') if report else root/'.local-staging/logs'
+        self.logs=(report.parent/'staging-logs') if report else config_root(root)/'.local-staging/logs'
         self.logs.mkdir(parents=True,exist_ok=True,mode=0o700)
-        self.report={'status':'STARTED','checks':{},'wallet_device_test':'PENDING'}
+        self.report={'status':'STARTED','checks':{},'wallet_device_test':'PENDING','compose_project':project_name(root),'config_path':str(config_root(root)/'.env')}
         self.opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
     def run(self,label,command,timeout=60,check=True,env=None):
         stop=threading.Event()
@@ -146,7 +191,7 @@ class Runner:
                 print(label+': trabajando ('+str(int(time.monotonic()-start))+' s)...',flush=True)
         thread=threading.Thread(target=heartbeat,daemon=True);thread.start()
         try:
-            result=subprocess.run(command,cwd=self.root,env=env or environment(self.values),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=timeout)
+            result=subprocess.run(command,cwd=self.root,env=env or environment(self.values,root=self.root),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=timeout)
             output=clean(result.stdout.decode('utf-8','replace'),self.secrets)
             private_write(self.logs/(label+'.log'),output)
             self.report['checks'][label]={'exit_code':result.returncode}
@@ -237,7 +282,8 @@ def require_docker(runner):
 
 
 def resources_exist(runner):
-    commands=[['docker','volume','ls','--filter','label=com.docker.compose.project='+PROJECT_NAME,'-q'],['docker','ps','-aq','--filter','label=com.docker.compose.project='+PROJECT_NAME]]
+    name=project_name(runner.root)
+    commands=[['docker','volume','ls','--filter','label=com.docker.compose.project='+name,'-q'],['docker','ps','-aq','--filter','label=com.docker.compose.project='+name]]
     return any(bool(runner.run('existing_'+str(i),command,20)[1].strip()) for i,command in enumerate(commands))
 
 
@@ -261,7 +307,7 @@ def main(argv=None):
     try:
         lock.mkdir();owned=True;require_docker(runner)
         if args.action in ('init','start'):
-            values,created=init_config(root,args.port,False if (root/'.env').exists() else resources_exist(runner))
+            values,created=init_config(root,args.port,False if (config_root(root)/'.env').exists() else resources_exist(runner))
             print('.env creado con claves privadas.' if created else '.env existente conservado.')
         else:
             values=read_config(root)
@@ -277,7 +323,7 @@ def main(argv=None):
             _,services=runner.run('compose_services',compose(root,'config','--services'),30)
             if set(services.split())!={'loyalty-server','loyalty-db'}:
                 raise RuntimeError('El Compose no contiene los servicios locales esperados.')
-            runner.run('docker_build_start',compose(root,'up','-d','--build','--wait','--wait-timeout','180'),1800,env=environment(values,source))
+            runner.run('docker_build_start',compose(root,'up','-d','--build','--wait','--wait-timeout','180'),1800,env=environment(values,source,root))
             runner.run('demo_seed',compose(root,'exec','-T','loyalty-server','java','-Djava.awt.headless=true','-cp','/app/lib/*','com.premierdarkcoffee.loyalty.LocalStagingKt'),90)
         _,image_id=runner.run('running_image',compose(root,'images','-q','loyalty-server'),30)
         runner.report['image_id']=image_id.strip()

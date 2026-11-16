@@ -39,3 +39,15 @@ Packaging now executes Gradle with the source checkout as its working directory.
 An inactive slot can be reused while preserving its previous environment file privately. The candidate native server must be healthy first. The former portal is drained before the candidate portal starts, including its background lifecycle retries. Readiness must then pass before the gateway switches. This can cause a brief portal interruption; native public Wallet remains available during the portal drain. A failed candidate startup resumes the previous portal process without restoring data. No database rollback, resealing or deletion is performed. Re-running an already promoted exact commit verifies public HTTPS rather than creating another release.
 
 Deployment success is reported only after public TLS, release identity and private-route checks pass. It continues to report physical Wallet device verification as pending.
+
+## Isolated Docker checkpoint repair
+
+The server checkpoint discovered a volume labelled `loyalty-staging` from an earlier checkout, while `/opt/lumina/source/.env` was absent. The guard correctly refused to invent replacement secrets. The deployment error was using the persistent developer project for validation across different source checkouts.
+
+Deployment now records a private run ID in `/root/lumina-deploy/<full-sha>/staging-run.json`. `checkpoint.py --verify-only --staging-run <id>` passes this context only to its Docker and gateway subprocesses. Their Compose project, image, network, volumes and credentials are separate from the developer pilot. Credentials and gateway configuration live under `.local-staging/checkpoints/<id>/` and are excluded from Git, Docker build context and source evidence. Ports are chosen on loopback; an occupied port fails validation without stopping the occupying process. Retries reuse the saved credentials; losing that run's `.env` while its resources exist still blocks regeneration.
+
+The gateway test uses only local routing, never `.env.wallet`, public provider credentials, the pilot's saved origin or a Cloudflare tunnel. Cleanup checks every container's exact Compose project and working directory before stopping any of them. It preserves volumes and configuration for retries and never queries or stops the global `loyalty-staging` project. Existing production data, identities and services are unchanged.
+
+Staging failures retain their original report and reason in `RESULTADO.json` and the deployment log. Failed test log paths are shown when available. `package-build.log` is advertised only after a packaging failure when that file actually exists.
+
+Validation: 223 Python checks passed, including reproducing the old-volume/missing-env failure, isolated retries, private key preservation, gateway isolation, foreign-container rejection and failed-checkpoint promotion guards. Docker execution is not available in the editing environment; the complete unchanged native/PostgreSQL/Docker/gateway gate must pass on the server before deployment. No portal, SQL or native Wallet source was changed by this repair.

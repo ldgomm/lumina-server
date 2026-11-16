@@ -21,7 +21,7 @@ services:
         max-file: "3"
 
   loyalty-server:
-    image: loyalty-server:local-staging
+    image: ${LOYALTY_STAGING_IMAGE:-loyalty-server:local-staging}
     build:
       context: .
       dockerfile: Dockerfile
