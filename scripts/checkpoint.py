@@ -24,7 +24,7 @@ import traceback
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = 'v074'
+VERSION = 'v075'
 DEFAULT_PROJECT = '/Users/ldgomm/Developer/pdc/sales/loyalty'
 IGNORED_DIRS = {'.git', '.gradle', '.idea', '.kotlin', 'build', 'out', '__pycache__', '.venv', 'node_modules', '.loyalty-v001.lock', '.loyalty-checkpoint.lock', '.loyalty-staging.lock', '.production', '.lumina-digital', '.local-staging', '.local-wallet', '.loyalty-wallet.lock'}
 ROOT_FILES = {'README.md', 'AGENTS.md', '.gitignore', '.gitattributes', '.editorconfig', '.env.example', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat', 'compose.yaml', 'Dockerfile', '.dockerignore', 'docker-compose.staging.yml'}
@@ -313,7 +313,7 @@ def verify_suites(project, task):
     return valid, found
 
 
-def require_git_ready(project):
+def require_git_ready(project, allow_detached=False):
     if not shutil.which('git'):
         raise RuntimeError('Git no está disponible. El PASS no se anunciará como guardado sin commit.')
     probe = git(project, 'rev-parse', '--show-toplevel', check=False)
@@ -329,11 +329,23 @@ def require_git_ready(project):
         if p.exists():
             raise RuntimeError('Git tiene una operación en curso: ' + state + '. Se conserva intacta.')
     branch = git(project, 'symbolic-ref', '--quiet', 'HEAD', check=False)
-    if branch.returncode:
+    if branch.returncode and not allow_detached:
         raise RuntimeError('HEAD está separado de una rama; no se cambia de rama automáticamente.')
     if git(project, 'ls-files', '-u').stdout:
         raise RuntimeError('Hay conflictos Git pendientes.')
     return root, branch.stdout.decode().strip()
+
+
+def verify_existing_commit(project, tested, expected):
+    # Verify an existing published revision; never initialise a repository.
+    git(project,'rev-parse','--verify','HEAD')
+    require_git_ready(project, allow_detached=True)
+    commit=git(project,'rev-parse','HEAD').stdout.decode().strip()
+    if commit!=expected or git(project,'status','--porcelain',env={**os.environ,'GIT_OPTIONAL_LOCKS':'0'}).stdout:
+        raise RuntimeError('COMMITTED_SOURCE_CHANGED: el despliegue exige el commit exacto y limpio.')
+    if not same_snapshot(tested,snapshot(project)):
+        raise RuntimeError('TESTED_SOURCE_CHANGED: las fuentes cambiaron después de validarse.')
+    return {'status':'VERIFIED','hash':commit,'pushed':None}
 
 
 def create_checkpoint(project, tested, evidence, run_id, validation):
@@ -434,9 +446,12 @@ def main(arguments=None, updates=None, origin=None):
     parser.add_argument('--project', default=str(Path(__file__).resolve().parents[1]) if '__file__' in globals() else DEFAULT_PROJECT)
     parser.add_argument('--output-dir', default=str(Path.home()/'Downloads'))
     parser.add_argument('--check-only', action='store_true')
+    parser.add_argument('--verify-only', action='store_true', help='Ejecutar todas las pruebas sobre un commit limpio sin crear otro commit.')
     parser.add_argument('--https', action='store_true', help='Preparar el túnel y cargar Wallet después del checkpoint completo.')
     parser.add_argument('--renew-test-url', action='store_true', help='Permitir recuperar la URL de pruebas; las tarjetas con la dirección anterior deben volver a guardarse conservando su identidad.')
     args = parser.parse_args(arguments)
+    if args.verify_only and (updates or args.https or args.renew_test_url):
+        parser.error('--verify-only valida el commit existente y no admite actualizaciones ni configuración HTTPS.')
     if args.renew_test_url:
         args.https = True
     os.umask(0o077)
@@ -520,7 +535,12 @@ def main(arguments=None, updates=None, origin=None):
         if args.check_only:
             report['status'] = 'PREFLIGHT_PASS_NO_COMMIT'
             return 0
-        require_git_ready(project)
+        verified_head=None
+        if args.verify_only:
+            verified_head=git(project,'rev-parse','HEAD').stdout.decode().strip()
+            verify_existing_commit(project,snapshot(project),verified_head)
+        else:
+            require_git_ready(project)
         env = os.environ.copy()
         if sys.platform == 'darwin' and Path('/usr/libexec/java_home').exists():
             result = subprocess.run(['/usr/libexec/java_home', '-v', '21'], capture_output=True, text=True)
@@ -552,11 +572,11 @@ def main(arguments=None, updates=None, origin=None):
         for attempt in (1, 2):
             before = snapshot(project)
             prefix = 'attempt_'+str(attempt)+'_'
-            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=185, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
+            workflow = run(prefix+'workflow_tests', [sys.executable,'-c',"import unittest,sys; s=unittest.defaultTestLoader.discover('scripts/tests',pattern='test_*.py'); assert s.countTestCases()>=213, 'Faltan pruebas del flujo'; r=unittest.TextTestRunner(verbosity=2).run(s); sys.exit(0 if r.wasSuccessful() and not r.skipped else 1)"], 120, env)
             if workflow:
                 report['status'] = 'WORKFLOW_TESTS_FAILED_NO_COMMIT'
                 break
-            if run(prefix+'lumina_http', [sys.executable,'scripts/test_lumina.py'],120,env):
+            if run(prefix+'lumina_http', [sys.executable,'scripts/test_lumina.py'],960,env):
                 report['status'] = 'LUMINA_TESTS_FAILED_NO_COMMIT'
                 break
             command = ['bash','gradlew','--no-daemon','--console=plain','clean','test','installDist']
@@ -603,8 +623,12 @@ def main(arguments=None, updates=None, origin=None):
                 break
             report['core_status'] = 'CORE_TESTS_PASS'
             report['tested_manifest'] = manifest(after)
-            report['auto_commit'] = create_checkpoint(project, after, folder, run_id, {'status':'CORE_TESTS_PASS','tests':TOTAL_TESTS,'staging':report['staging']['status']})
-            report['status'] = 'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING'
+            if args.verify_only:
+                report['auto_commit']=verify_existing_commit(project,after,verified_head)
+                report['status']='CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_VERIFIED_WALLET_DEVICE_TEST_PENDING'
+            else:
+                report['auto_commit'] = create_checkpoint(project, after, folder, run_id, {'status':'CORE_TESTS_PASS','tests':TOTAL_TESTS,'staging':report['staging']['status']})
+                report['status'] = 'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING'
             if args.https:
                 https_path = folder/'wallet_https.json'
                 https_command = [sys.executable,str(project/'scripts/wallet_local.py'),'start','--report',str(https_path)]
@@ -627,7 +651,7 @@ def main(arguments=None, updates=None, origin=None):
     except KeyboardInterrupt:
         report['status'] = 'INTERRUPTED_NO_COMMIT' if report['auto_commit']['status'] != 'CREATED' else 'INTERRUPTED_AFTER_COMMIT'
     except BaseException as error:
-        report['status'] = 'PASS_COMMIT_FAILED' if report.get('core_status') == 'CORE_TESTS_PASS' else 'UPDATE_OR_CHECK_FAILED_NO_COMMIT'
+        report['status'] = ('COMMITTED_SOURCE_VERIFICATION_FAILED' if args.verify_only else 'PASS_COMMIT_FAILED') if report.get('core_status') == 'CORE_TESTS_PASS' else 'UPDATE_OR_CHECK_FAILED_NO_COMMIT'
         report['error'] = clean(str(error))
         (folder/'error.txt').write_text(clean(traceback.format_exc()))
     finally:
@@ -677,7 +701,7 @@ def main(arguments=None, updates=None, origin=None):
                     webbrowser.open((project/'.local-wallet/guide.html').as_uri())
             except Exception:
                 pass
-    return 0 if report['status'] in {'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING','PREFLIGHT_PASS_NO_COMMIT','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_CONNECTION_REFRESH_PENDING','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_CREDENTIALS_PENDING','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING'} else 1
+    return 0 if report['status'] in {'CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_VERIFIED_WALLET_DEVICE_TEST_PENDING','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING','PREFLIGHT_PASS_NO_COMMIT','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_CONNECTION_REFRESH_PENDING','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_CREDENTIALS_PENDING','CORE_TESTS_PASS_LOCAL_DOCKER_PASS_HTTPS_PASS_COMMIT_CREATED_WALLET_DEVICE_TEST_PENDING'} else 1
 
 
 

@@ -119,6 +119,38 @@ class CheckpointTests(unittest.TestCase):
         self.assertEqual(changed,c.replace_kotlin_fragment(changed,'Security.hash(sql)','SqlFingerprint.checksum(sql)'))
         self.assertEqual('first(); newer()',c.replace_kotlin_fragment('first()\nsecond()','first(); second()','first(); newer()'))
 
+    def test_verification_preserves_the_published_commit_and_index(self):
+        head=self.checkpoint()['hash'];tested=c.snapshot(self.project)
+        index=(self.project/'.git/index').read_bytes()
+        result=c.verify_existing_commit(self.project,tested,head)
+        self.assertEqual(result,{'status':'VERIFIED','hash':head,'pushed':None})
+        self.assertEqual(head,self.g('rev-parse','HEAD').stdout.decode().strip())
+        self.assertEqual(index,(self.project/'.git/index').read_bytes())
+
+    def test_verification_accepts_a_clean_detached_revision(self):
+        head=self.checkpoint()['hash'];self.g('checkout','--detach',head)
+        self.assertEqual(c.verify_existing_commit(self.project,c.snapshot(self.project),head)['hash'],head)
+        self.assertNotEqual(self.g('symbolic-ref','--quiet','HEAD',check=False).returncode,0)
+
+    def test_verification_rejects_wrong_revision_and_untracked_changes(self):
+        head=self.checkpoint()['hash'];tested=c.snapshot(self.project)
+        with self.assertRaises(RuntimeError):c.verify_existing_commit(self.project,tested,'0'*40)
+        self.write('untracked.txt','concurrent change')
+        with self.assertRaises(RuntimeError):c.verify_existing_commit(self.project,tested,head)
+        self.assertEqual(head,self.g('rev-parse','HEAD').stdout.decode().strip())
+
+    def test_verification_rejects_edits_after_the_tested_snapshot(self):
+        self.checkpoint();tested=c.snapshot(self.project)
+        self.write('src/main/kotlin/App.kt','fun changed() = Unit\n')
+        with self.assertRaises(RuntimeError):c.verify_existing_commit(self.project,tested,self.g('rev-parse','HEAD').stdout.decode().strip())
+        changed=self.checkpoint()['hash']
+        with self.assertRaisesRegex(RuntimeError,'TESTED_SOURCE_CHANGED'):c.verify_existing_commit(self.project,tested,changed)
+
+    def test_verification_never_initialises_a_missing_repository(self):
+        empty=self.root/'empty';empty.mkdir()
+        with self.assertRaises(RuntimeError):c.verify_existing_commit(empty,{},'0'*40)
+        self.assertFalse((empty/'.git').exists())
+
     def test_patch_repetition_does_not_duplicate_a_nested_original_fragment(self):
         before='db.migrate();val f=fixture();earn(f)'
         after='db.migrate(); updateLegacy(); db.migrate();val f=fixture();earn(f)'

@@ -54,7 +54,7 @@ test('reactivation restores only services previously activated without creating 
  w.offline(false);assert.equal((await w.admin.post(w.base+'/retry',{confirm:'yes'})).status,303);
  assert.equal((await w.client.get('/content')).status,200);
  assert.equal((await w.client.get('/services/brand')).status,409);
- assert.equal((await w.client.get('/wallet')).status,409);
+ assert.equal((await w.client.get('/wallet')).location,'/plans/wallet');
  assert.deepEqual(w.services(),before);assert.deepEqual({...w.db.get('SELECT * FROM companies WHERE id=?',w.id)},company);
 });
 test('pending provider change is explicit and repeated reads never retry or activate Wallet',async t=>{

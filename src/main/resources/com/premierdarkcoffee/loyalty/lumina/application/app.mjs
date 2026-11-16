@@ -22,8 +22,10 @@ import { paymentInput, chargeInput, emptyAccount } from '../billing/payment-inpu
 import { walletComparison } from '../presentation/pages/wallet-benefits.mjs';
 import { campaignPage, campaignBanner } from '../presentation/pages/campaign-pages.mjs';
 import { campaignBases, createCampaignOffer } from '../campaigns/offers.mjs';
-import { legalProfile, saveLegalProfile, subscriptionOfferInput } from '../billing/subscription.mjs';
-import { subscriptionPage, legalProfilePage, walletPriceCard } from '../presentation/pages/subscription-pages.mjs';
+import { legalProfile, saveLegalProfile } from '../billing/subscription.mjs';
+import { subscriptionPage, legalProfilePage } from '../presentation/pages/subscription-pages.mjs';
+import { walletCheckoutPage } from '../presentation/pages/wallet-checkout-pages.mjs';
+import { includesWallet, walletCheckout, validateWalletCheckout, confirmWalletCheckout } from '../memberships/wallet-checkout.mjs';
 import { canReadFidelityReport, centralPaths, managementSections, managementTitles } from '../wallet/management-policy.mjs';
 import { managementPage, managementFramePage, managementDocument } from '../presentation/pages/management-pages.mjs';
 import { offerEditor } from '../presentation/pages/offer-editor.mjs';
@@ -245,6 +247,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if(actor.kind!=='AGENCY') {
         const scope=routeService(path);
         if(scope&&path!=='/wallet/benefits'&&serviceState(db,actor.company_id,scope)!=='ACTIVE') {
+          if(path==='/wallet'&&method==='GET'&&actor.kind==='OWNER')return redirect(res,'/plans/wallet');
           if(method==='GET'&&!api){company=companyFor(db,actor);return render({title:serviceCatalog[scope].name,body:inactiveServicePage(actor,scope)},409);}
           requireService(db,actor.company_id,scope);
         }
@@ -471,30 +474,54 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Revisa los datos',body:legalProfilePage(actor,data,issue.message)},issue.status);}
       }
       if(path.startsWith('/plans/wallet')) {
-        requireOwner(actor);
-        if(serviceState(db,actor.company_id,'WALLET')==='INACTIVE')return redirect(res,'/services');
-        if(method==='POST') {
-          const action=path==='/plans/wallet/accept'?'accept':path==='/plans/wallet/cancel'?'cancel':null;
-          requireThat(action,'Acción no encontrada.',404);
+        requireOwner(actor);company=companyFor(db,actor);
+        const currentContracts=()=>contractsFor(db,company.id).filter(c=>!c.cancelled_at&&c.starts_on<=localDay()&&c.ends_before>localDay()&&c.items.some(i=>i.service==='WALLET'));
+        if(path==='/plans/wallet/resume'&&method==='POST') {
+          await commercialTurn(company.id,async()=>{
+            requireThat(data.confirm==='yes','Confirma la activación.');
+            const hasAgreement=async()=>{
+              if(currentContracts().length)return true;
+              if(!company.loyalty_tenant)return false;
+              const status=await wallets.subscription(actor);
+              return (status.accepted||status.legacy)&&(!status.endsOn||status.endsOn>localDay());
+            };
+            requireThat(await hasAgreement(),'No hay un acuerdo Wallet vigente. Elige una oferta publicada.',409);
+            await wallets.prepareActivation(actor);
+            actor=getSession(db,cookie);requireThat(actor&&equal(actor.csrf,data._csrf),'Tu sesión cambió.',403);
+            requireThat(await hasAgreement(),'El acuerdo cambió. Revisa tus servicios.',409);
+            beginService(db,actor,'WALLET');completeWalletActivation(db,actor);
+          });
+          return redirect(res,'/wallet');
+        }
+        // Historical signed subscriptions remain readable/cancellable. No new fixed
+        // price subscription is offered alongside the agency's published catalogue.
+        if(path==='/plans/wallet/accept')throw new Problem('La contratación de Wallet ahora usa las ofertas publicadas en Paquetes y servicios. Revisa y confirma tu selección allí.',409);
+        if(path==='/plans/wallet/cancel'&&method==='POST') {
           requireThat(/^[0-9a-f-]{36}$/i.test(data.requestKey||''),'Recarga el formulario antes de continuar.');
-          const payload=action==='accept'?{offer:subscriptionOfferInput(db,actor,data.cycle||"MONTHLY"),expectedHash:data.hash||'',accepted:data.accept==='yes'}:{expectedVersion:Number(data.version),confirmed:data.confirm==='yes'};
-          try { await commercialTurn(actor.company_id,async()=>{if(action==='accept')payload.offer=subscriptionOfferInput(db,actor,data.cycle||'MONTHLY');const result=await wallets.subscription(actor,action,payload,data.requestKey);if(action==='accept')completeWalletActivation(db,actor);return result;});return redirect(res,action==='accept'?'/wallet':'/plans/wallet'); }
-          catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Revisa tu suscripción',body:`<section class="card"><h2>No pudimos confirmar el cambio</h2><p role="alert">${esc(issue.message)}</p><a class="btn" href="/plans/wallet">Revisar condiciones actuales</a></section>`},issue.status);}
+          await commercialTurn(company.id,()=>wallets.subscription(actor,'cancel',{expectedVersion:Number(data.version),confirmed:data.confirm==='yes'},data.requestKey));
+          return redirect(res,'/plans/wallet/legacy');
         }
-        if(serviceState(db,actor.company_id,'WALLET')==='SETUP'&&db.get(`SELECT c.id FROM contracts c JOIN plan_items i ON i.plan_id=c.plan_id AND i.service='WALLET' WHERE c.company_id=? AND c.cancelled_at IS NULL AND c.starts_on<=? AND c.ends_before>? LIMIT 1`,actor.company_id,localDay(),localDay())){completeWalletActivation(db,actor);return redirect(res,'/wallet');}
-        const status=await wallets.subscription(actor);
-        if(status.accepted&&status.recurring&&serviceState(db,actor.company_id,'WALLET')==='SETUP')completeWalletActivation(db,actor);
-        if(path==='/plans/wallet/state')return json(res,200,{accepted:status.accepted,recurring:status.recurring,trialUntil:status.trialUntil,endsOn:status.endsOn,nextChargeOn:status.nextChargeOn,monthlyMinor:status.monthlyMinor,periodMinor:status.periodMinor,cycle:status.cycle,unitMinor:status.unitMinor});
-        let offer=null,error='';
-        if(!status.legacy&&(!status.recurring||target.searchParams.has('cycle')&&target.searchParams.get('cycle')!==(status.cycle||'MONTHLY')))try{offer=await wallets.subscription(actor,'offer',subscriptionOfferInput(db,actor,target.searchParams.get('cycle')||'MONTHLY'));}catch(issue){if(!(issue instanceof Problem))throw issue;error=issue.message;}
-        if(path==='/plans/wallet/terms') {
-          const expected=target.searchParams.get('offer');
-          requireThat(expected?offer&&expected===offer.hash:status.agreement,'Las condiciones cambiaron. Vuelve al resumen para descargar la versión vigente.',409);
-          res.setHeader('Content-Disposition','attachment; filename="condiciones-wallet-lumina.txt"');
-          return send(res,200,expected?offer.terms:status.agreement.terms,'text/plain; charset=utf-8');
+        requireThat(method==='GET','Acción no encontrada.',404);
+        if(['/plans/wallet/legacy','/plans/wallet/terms'].includes(path)) {
+          requireThat(company.loyalty_tenant,'No hay un acuerdo anterior de Wallet.',404);
+          const status=await wallets.subscription(actor);
+          requireThat(status.accepted||status.legacy,'No hay un acuerdo anterior de Wallet. Elige una oferta publicada.',404);
+          if(path==='/plans/wallet/terms') {
+            requireThat(status.agreement&&!target.searchParams.has('offer'),'No hay condiciones aceptadas para descargar.',409);
+            res.setHeader('Content-Disposition','attachment; filename="condiciones-wallet-lumina.txt"');
+            return send(res,200,status.agreement.terms,'text/plain; charset=utf-8');
+          }
+          return render({title:'Tu acuerdo Wallet',body:subscriptionPage(actor,status,null,'',serviceState(db,company.id,'WALLET')==='ACTIVE')});
         }
-        requireThat(path==='/plans/wallet','Página no encontrada.',404);
-        return render({title:'Mi suscripción Wallet',body:subscriptionPage(actor,status,offer,error)});
+        requireThat(['/plans/wallet','/plans/wallet/state'].includes(path),'Página no encontrada.',404);
+        const contracts=currentContracts(),active=serviceState(db,company.id,'WALLET')==='ACTIVE';
+        let legacy=false,error='';
+        if(company.loyalty_tenant&&!contracts.length)try { const plan=(await wallets.account(actor)).membership?.plan;legacy=Boolean(plan&&(plan.recurring||!plan.walletEndsOn||plan.walletEndsOn>localDay())); }
+          catch(issue){if(!(issue instanceof Problem))throw issue;error='No pudimos consultar tu acuerdo anterior. Tus datos se conservan; vuelve a intentar antes de contratar.';}
+        if(path==='/plans/wallet/state')return json(res,200,{active,kind:contracts.length?'CATALOG':legacy?'LEGACY':'NONE',description:contracts.length?'Wallet incluida en '+contracts.map(c=>c.name).join(', '):active?'Wallet activa':legacy?'Tu acuerdo anterior se conserva.':'Elige una oferta publicada para activar Wallet.'});
+        const orders=ordersFor(db,actor,company);
+        orders.rows=orders.rows.map(o=>{const full=getOrder(db,actor,company,o.id);return {...o,wallet:includesWallet(full),names:full.lines.map(l=>l.name).join(' + ')};});
+        return render({title:'Wallet de tu negocio',body:walletCheckoutPage({actor,company,plans:listPlans(db),contracts,orders,active,legacy,error})});
       }
       if (['/wallet/connect','/wallet/disconnect','/team/loyalty/link','/wallet/link'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
       if(path==='/wallet/access'&&method==='GET') {
@@ -755,7 +782,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           requireThat(['catalog','agreements','orders'].includes(view),'Vista no encontrada.',404);
           const orders=ordersFor(db,actor,company,integer(target.searchParams.get('page')||'0','página',{min:0,max:100000}));
           return render({title:'Paquetes y servicios',description:'Combina servicios mensuales y trabajos puntuales, con cada precio y cupo claro.',
-            body:walletPriceCard(actor)+packagesPage({actor,company,url,plans,contracts,orders,view})});
+            body:packagesPage({actor,company,url,plans,contracts,orders,view})});
         }
         if(method==='POST'&&path==='/plans/request') {
           try{
@@ -771,13 +798,24 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           const [,id,action]=orderMatch;
           const order=getOrder(db,actor,company,id);
           if(method==='GET'&&!action)return render({title:'Tu combinación de servicios',description:company.name,
-            body:orderPage({actor,company,url,order,audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})});
+            body:orderPage({actor,company,url,order:walletCheckout(db,order)||order,audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})});
           if(method==='POST'&&action) {
             try {
               await commercialTurn(company.id,async()=>{
                 actor=getSession(db,cookie);requireThat(actor&&equal(actor.csrf,data._csrf),'Tu sesión cambió. Recarga para continuar.',403);
                 requireOperating(db,company.id);
                 const latest=getOrder(db,actor,company,id);
+                if(action==='accept'&&includesWallet(latest)) {
+                  validateWalletCheckout(db,actor,company,id,data);
+                  if(latest.status!=='ACTIVE') {
+                    const account=await wallets.prepareActivation(actor);
+                    const previous=account.membership?.plan;
+                    requireThat(!previous||!previous.recurring&&previous.walletEndsOn&&previous.walletEndsOn<=localDay(),'Ya existe un acuerdo anterior de Wallet. Revísalo antes de contratar otro para evitar cargos duplicados.',409);
+                  }
+                  actor=getSession(db,cookie);requireThat(actor&&equal(actor.csrf,data._csrf),'Tu sesión cambió. Recarga para continuar.',403);
+                  confirmWalletCheckout(db,actor,company,id,data);
+                  return;
+                }
                 if(company.loyalty_tenant&&['accept','activate'].includes(action)&&latest.lines.some(line=>line.wallet!=='NONE'||line.items?.some(item=>item.service==='WALLET'))) {
                   const account=actor.kind==='AGENCY'?await wallets.administration(actor,company.id,'account'):await wallets.account(actor);
                   const plan=account.membership?.plan;
@@ -786,10 +824,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
                 }
                 ({quote:offerOrder,accept:acceptOrder,activate:activateOrder,cancel:cancelOrder})[action](db,actor,company,id,data);
               });
-              return redirect(res,url('/plans/orders/'+id));
+              return redirect(res,action==='accept'&&actor.kind==='OWNER'&&includesWallet(order)?'/wallet':url('/plans/orders/'+id));
             } catch(issue) {
-              if (!(issue instanceof Problem) || ![400,409].includes(issue.status)) throw issue;
-              return render({title:'Revisa tu propuesta',body:orderPage({actor,company,url,order,
+              if (!(issue instanceof Problem) || ![400,409,503].includes(issue.status)) throw issue;
+              const refreshed=getOrder(db,actor,company,id);
+              return render({title:'Revisa tu propuesta',body:orderPage({actor,company,url,order:walletCheckout(db,refreshed)||refreshed,
                 values:action==='quote'?data:{revision:data.revision},error:issue.message,
                 audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})},issue.status);
             }

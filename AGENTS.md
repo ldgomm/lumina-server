@@ -1,5 +1,28 @@
 # Loyalty
 
+## Lúmina v075 — Git-based production deployment
+
+- The current user-authorized workflow is local source changes, validation, GitHub push, server fast-forward and deployment of that exact commit. It supersedes historical installer-only delivery and no-push rules. Never inject source patches or create a different commit on the production host.
+- `scripts/checkpoint.py --verify-only` runs the full existing gate on a clean committed tree without changing HEAD or staging files. Require the exact revision and source manifest again after tests. Source publication may precede server-only validation; do not describe that as a complete production PASS.
+- `scripts/deploy.py --commit <full-sha>` requires an existing configured production installation and a clean source checkout. Preserve the continuity seal, private data, domains, provider identities, and already accepted agreements. Full native, PostgreSQL, Docker/gateway, backup restoration and candidate readiness gates remain mandatory before promotion.
+- Packaging runs Gradle from the project directory with a restricted build environment. Store stdout/stderr in a private log and preserve the original failure stage. Reuse only inactive slots, drain the old portal before candidate background work, and never restore old database data over live transactions.
+- Current local gate: 213 Python checks, 42 portal files / 510 tests and 31 DOM suites. Native gates remain 312 unit/HTTP and 347 PostgreSQL tests. Device continuity requires separate real Apple/Google evidence. Terminal output remains RESULTADO and the public URL only after verified HTTPS.
+
+## Lúmina / Loyalty v075r1 — bounded production test execution
+
+- The portal runner executes all 42 suites / 510 tests with Node file concurrency of 1 and a 900-second deadline. The outer checkpoint allows 960 seconds. Preserve partial TAP output on timeout; terminate the runner's entire Node process group, including when the outer checkpoint interrupts it. Never bypass counts, failed, cancelled, skipped or todo gates.
+- The updater may resume exact v075 payload files after the failed checkpoint, using explicitly recorded predecessor hashes. Unknown changes remain conflicts and all files are checked before writing. Keep the same worktree, production baseline and identity seal. The active release is not switched before the full checkpoint and backup verification.
+- Gates: 189 Python contracts, 42 portal suites / 510 tests, 312 native unit/HTTP and 347 PostgreSQL; Docker/gateway before local commit. This retry changes the runner and deployment diagnostics, not Wallet contracts or customer data.
+
+## Lúmina / Loyalty v075 — owner-confirmed Wallet catalogue activation
+
+- This revision replaces the automatic fixed-price Wallet offer for new purchases with agency-published catalogue offers. Preserve previously accepted agreements, prices, cancellations and payments. Never migrate a signed agreement silently or add a second Wallet tariff.
+- The owner explicitly accepts the reviewed price, dates and terms. Priced monthly Wallet selections, including monthly service combinations, activate without agency approval or business verification. Unpriced or undated one-off work still needs a quotation. Catalogue renewals remain explicit; no bank-card charge is implied.
+- `/wallet` opens the active workspace or directs the owner to `/plans/wallet`. The catalogue, orders and `/services` share this activation flow. GET requests never accept terms or activate services. Existing selections and interrupted activation are recoverable.
+- Revalidate account, role, revision, CSRF, lifecycle, offer hash, availability and overlapping contracts after provider calls. Commit consent, contracts and service activation atomically. Preserve durable native business identity on retries. Agency and collaborator accounts cannot accept for the owner.
+- No Kotlin, SQL, tenant/pass identity, key, certificate, domain or balance changes. SQLite12, PostgreSQLV017 and representation34 remain unchanged. Production updates use an isolated worktree and immutable release with a verified backup; never reseal identities or restore old data over new operations.
+- Gates: 42 portal suites / 510 tests, 185 Python contracts, 312 native unit/HTTP and 347 PostgreSQL, Docker/gateway before local commit; no push. 31 DOM suites and the browser fixture are separate from real Apple/Google device verification. See `docs/wallet-activation-v075.md`.
+
 ## Lúmina v035 / Loyalty v074 — business workspace
 
 - Baseline: installed v034/v073, commit 388357b383aeae22b299cfca22ed74b0a8146c26. This section supersedes release and gate counts; preserve existing lifecycle, identity, continuity and authority rules.

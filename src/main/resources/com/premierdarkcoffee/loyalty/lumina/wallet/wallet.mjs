@@ -218,6 +218,18 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);
     return result;
   }
+  async function prepareActivation(actor) {
+    requireOwner(actor);
+    const before=current(actor);requireOperating(db,before.company_id);
+    // Durable companyId provisioning, including retries after a lost response.
+    await ensureBillingAccount(before.company_id);
+    const fresh=current(actor);requireOperating(db,fresh.company_id);
+    requireThat(fresh.revision===before.revision,message,403);
+    const result=await account(actor);
+    requireOperating(db,fresh.company_id);
+    requireThat(current(actor).revision===before.revision,message,403);
+    return result;
+  }
   async function controlRemote(tenant,action,options={}) {
     requireThat(isId(tenant)&&['access','account','payments','receipt','charges','reverse','void'].includes(action),'Acción inválida.');
     const suffix=action==='receipt'?'/payments/'+options.id:action==='reverse'?'/payments/'+options.id+'/reverse':action==='void'?'/charges/'+options.id+'/void':'/'+action;
@@ -256,6 +268,6 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
   }
   async function account(actor,offset=0){requireOwner(actor);const {item,fresh}=await validated(actor);const result=await remote('/api/staff/account?offset='+offset,{token:item.token});const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);return result;}
   async function receipt(actor,id){requireOwner(actor);requireThat(isId(id),'Pago no encontrado.',404);const {item,fresh}=await validated(actor);const result=await remote('/api/staff/payments/'+id,{token:item.token});const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);return result;}
-  return {controlRemote,administration,teamAdministration,account,receipt,subscription,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
+  return {controlRemote,administration,teamAdministration,account,receipt,subscription,prepareActivation,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
     forget:()=>{},ownerCredential:async actor=>{requireOwner(actor);const {item}=await validated(actor);return item.token;}};
 }

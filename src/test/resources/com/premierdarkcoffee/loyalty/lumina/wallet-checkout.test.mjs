@@ -1,0 +1,127 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {portal,agency,password,documentFor,colleague} from './helpers.mjs';
+import {fakeLoyalty} from './loyalty-fixture.mjs';
+import {localDay} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
+
+async function world(t,configuration={}) {
+ const native=await fakeLoyalty(t,null,configuration),w=await portal(t,native.origin,{platformToken:native.platformToken}),admin=await agency(w),client=w.session(),document=documentFor('checkout');
+ const r=await client.post('/register',{company:'Comercio sin verificar',name:'Dueña',document,ruc:document+'001',phone:'0991234567',password,consent:'yes',category:'CAFE'});assert.equal(r.status,303);
+ await client.get('/welcome');await client.post('/welcome',{service:'LATER'});await client.get('/services');
+ const id=w.db.get('SELECT id FROM companies').id;
+ return {...w,admin,client,id,native};
+}
+async function plan(w,extra={}) {
+ const r=await w.admin.post('/plans',{catalog_version:'SIMPLE',name:'Mi oferta publicada',term:'MONTHLY',price_type:'FIXED',price:'13.75',WALLET:'1',confirm_offer:'yes',description:'Mi programa de fidelización, configuración y soporte.',...extra});assert.equal(r.status,303,r.body);
+ return w.db.get('SELECT id FROM plans ORDER BY rowid DESC').id;
+}
+async function selection(w,plans,extra={}) {
+ const r=await w.client.post('/plans/request',{key:randomUUID(),...Object.fromEntries(plans.map(id=>['qty_'+id,'1'])),...extra});assert.equal(r.status,303,r.body);
+ const page=await w.client.get(r.location);assert.equal(page.status,200,page.body);
+ return {path:r.location,body:page.body,data:{revision:page.body.match(/name="revision" value="([^"]+)"/)[1],offerHash:page.body.match(/name="offerHash" value="([^"]+)"/)?.[1],confirm:'yes'}};
+}
+const state=w=>w.db.get("SELECT status FROM company_services WHERE company_id=? AND service='WALLET'",w.id)?.status||'INACTIVE';
+const count=(w,table)=>w.db.get('SELECT count(*) n FROM '+table).n;
+
+test('four reported routes lead to published Wallet offers without redirect loops, provisioning or fixed tariff',async t=>{
+ const w=await world(t);await plan(w);
+ for(const route of ['/plans','/plans/wallet','/wallet','/services']) {
+  let r=await w.client.get(route),steps=0;
+  while(r.status===303){assert.ok(++steps<3,route);r=await w.client.get(r.location);}
+  assert.equal(r.status,200,route);assert.doesNotMatch(r.body,/\$4,99|\$50,00|31 de diciembre de 2026|identificación del proveedor/);
+ }
+ assert.equal(w.native.registrations.size,0);assert.equal(state(w),'INACTIVE');assert.equal(count(w,'contracts'),0);
+});
+test('published price review needs explicit owner consent and never admin approval or configured legal provider',async t=>{
+ const w=await world(t),p=await plan(w),o=await selection(w,[p]);
+ assert.ok(o.data.offerHash);assert.match(o.body,/13,75/);assert.match(o.body,/Aceptar y activar Wallet/);assert.doesNotMatch(o.body,/Lúmina revisará tu selección/);
+ const checkbox=o.body.match(/<input[^>]*name="confirm"[^>]*>/)[0];assert.match(checkbox,/required/);assert.doesNotMatch(checkbox,/checked/);
+ assert.equal((await w.client.post(o.path+'/accept',{...o.data,confirm:''})).status,400);assert.equal(w.native.registrations.size,0);
+ const r=await w.client.post(o.path+'/accept',{...o.data,amount:'0',price:'0',companyId:randomUUID()});assert.equal(r.status,303,r.body);assert.equal(r.location,'/wallet');
+ assert.equal(state(w),'ACTIVE');assert.equal(w.db.get('SELECT approved FROM companies').approved,0);assert.equal(count(w,'agency_legal'),0);
+ assert.equal(w.db.get('SELECT agreed_minor FROM contracts').agreed_minor,1375);assert.equal(w.db.get('SELECT status FROM package_orders').status,'ACTIVE');
+ assert.equal(w.native.registrations.size,1);assert.equal((await w.client.get('/wallet')).status,200);
+ const status=JSON.parse((await w.client.get('/plans/wallet/state')).body);assert.equal(status.kind,'CATALOG');assert.equal(status.active,true);assert.match(status.description,/Mi oferta publicada/);
+ assert.ok(!w.native.calls.some(c=>c.path.includes('lumina-subscription')));
+});
+test('duplicate clicks and response retry create one agreement and one native business',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);
+ const results=await Promise.all([1,2,3].map(()=>w.client.post(o.path+'/accept',o.data)));assert.ok(results.every(r=>r.status===303),results.map(r=>r.status));
+ assert.equal(count(w,'contracts'),1);assert.equal(w.native.registrations.size,1);assert.equal(w.db.get("SELECT count(*) n FROM audit WHERE action='PROPUESTA_ACEPTADA'").n,1);
+});
+test('a lost native registration response retains the order and recovers the same tenant',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);w.native.loseRegistrationResponse();
+ const failed=await w.client.post(o.path+'/accept',o.data);assert.equal(failed.status,503);assert.match(failed.body,/Aceptar y activar Wallet/);assert.equal(count(w,'contracts'),0);assert.equal(state(w),'INACTIVE');
+ const tenant=w.native.registrations.get(w.id).id;
+ const retry=await w.client.post(o.path+'/accept',o.data);assert.equal(retry.status,303,retry.body);assert.equal(w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant,tenant);assert.notEqual(tenant,w.native.business.id);assert.equal(w.native.registrations.size,1);
+});
+test('provider unavailable cannot create accepted agreements or active services',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);w.native.registrationUnavailable(true);
+ assert.equal((await w.client.post(o.path+'/accept',o.data)).status,503);assert.equal(count(w,'contracts'),0);assert.equal(state(w),'INACTIVE');assert.equal(w.db.get('SELECT status FROM package_orders').status,'REQUESTED');
+ w.native.registrationUnavailable(false);assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);
+});
+test('withdrawn offers, altered review hashes and stale revisions cannot activate',async t=>{
+ const w=await world(t),p=await plan(w),o=await selection(w,[p]);
+ for(const data of [{...o.data,offerHash:'tampered'},{...o.data,revision:'0'}])assert.equal((await w.client.post(o.path+'/accept',data)).status,409);
+ await w.admin.post('/plans/withdraw',{plan:p});assert.equal((await w.client.post(o.path+'/accept',o.data)).status,409);assert.equal(w.native.registrations.size,0);assert.equal(count(w,'contracts'),0);
+});
+test('agency, collaborator, another owner and invalid CSRF cannot accept for the owner',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]),member=await colleague(w,w.client,{name:'Cajera',document:documentFor('cashier'),'WALLET.VIEW':'yes'});
+ assert.equal((await w.admin.post('/agency'+o.path+'/accept?company='+w.id,o.data)).status,403);
+ assert.equal((await member.session.post(o.path+'/accept',o.data)).status,403);
+ assert.equal((await w.client.post(o.path+'/accept',{...o.data,_csrf:'wrong'})).status,403);
+ const other=w.session(),document=documentFor('another');await other.post('/register',{company:'Otro',name:'Otra',document,ruc:document+'001',phone:'0991112233',password,consent:'yes',category:'CAFE'});await other.get('/welcome');await other.post('/welcome',{service:'LATER'});
+ assert.equal((await other.post(o.path+'/accept',{...o.data,company:w.id})).status,404);assert.equal(count(w,'contracts'),0);
+});
+test('business suspension during native preparation prevents agreement acceptance and service access',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);
+ w.native.beforeRequest(async({path})=>{if(path==='/api/staff/account')w.db.run("INSERT INTO business_controls(company_id,state,reason,revision,updated_at) VALUES(?,'SUSPENDED','Test pause',1,'2026-11-15') ON CONFLICT(company_id) DO UPDATE SET state='SUSPENDED'",w.id);});
+ const r=await w.client.post(o.path+'/accept',o.data);assert.equal(r.status,423,r.body);assert.equal(count(w,'contracts'),0);assert.notEqual(state(w),'ACTIVE');
+});
+test('owner revision revoked during preparation never signs an agreement',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);
+ w.native.beforeRequest(async({path})=>{if(path==='/api/staff/account')w.db.run('UPDATE accounts SET revision=revision+1 WHERE company_id=?',w.id);});
+ const r=await w.client.post(o.path+'/accept',o.data);assert.ok([401,403].includes(r.status),String(r.status));assert.equal(count(w,'contracts'),0);assert.notEqual(state(w),'ACTIVE');
+});
+test('a monthly package with Wallet activates included services at its published total',async t=>{
+ const w=await world(t),p=await plan(w,{VIDEO:'2',WEBSITE:'1',name:'Contenido con Wallet',price:'120',wallet_gift:'yes'}),o=await selection(w,[p]);
+ const r=await w.client.post(o.path+'/accept',o.data);assert.equal(r.status,303,r.body);assert.equal(w.db.get('SELECT agreed_minor FROM contracts').agreed_minor,12000);
+ for(const code of ['WALLET','SOCIAL','WEB'])assert.equal(w.db.get('SELECT status FROM company_services WHERE service=?',code)?.status,'ACTIVE',code);
+ const page=await w.client.get('/plans/wallet');assert.match(page.body,/Contenido con Wallet/);assert.match(page.body,/120,00/);assert.doesNotMatch(page.body,/4,99/);
+});
+test('two overlapping Wallet selections cannot create duplicate commercial agreements',async t=>{
+ const w=await world(t),p=await plan(w),a=await selection(w,[p]),b=await selection(w,[p]);
+ assert.equal((await w.client.post(a.path+'/accept',a.data)).status,303);assert.equal((await w.client.post(b.path+'/accept',b.data)).status,409);assert.equal(count(w,'contracts'),1);
+});
+test('unpriced and custom one-off work does not fabricate a final price or duration',async t=>{
+ const w=await world(t),p=await plan(w,{price_type:'QUOTE',price:''}),o=await selection(w,[p]);assert.equal(o.data.offerHash,undefined);assert.match(o.body,/Por cotizar/);
+ assert.equal((await w.client.post(o.path+'/accept',o.data)).status,409);assert.equal(count(w,'contracts'),0);assert.equal(w.native.registrations.size,0);
+});
+test('previously quoted Wallet orders activate on owner acceptance without a second admin action',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]),line=w.db.get('SELECT id FROM package_order_lines');
+ const quote=await w.admin.post('/agency'+o.path+'/quote?company='+w.id,{revision:'1',['price_'+line.id]:'11.25',['start_'+line.id]:localDay(),terms:'Precio final acordado para este período.'});assert.equal(quote.status,303,quote.body);
+ const r=await w.client.post(o.path+'/accept',{revision:'2',confirm:'yes'});assert.equal(r.status,303,r.body);assert.equal(state(w),'ACTIVE');assert.equal(w.db.get('SELECT agreed_minor FROM contracts').agreed_minor,1125);
+});
+test('old active contracts repair pending service through explicit POST, never by reading',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);
+ const tenant=w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant;w.db.run("UPDATE company_services SET status='SETUP' WHERE service='WALLET'");
+ const p=await w.client.get('/plans/wallet');assert.equal(p.status,200);assert.match(p.body,/Activar mi Wallet/);assert.equal(state(w),'SETUP');
+ assert.equal((await w.client.post('/plans/wallet/resume',{confirm:'yes'})).status,303);assert.equal(state(w),'ACTIVE');assert.equal(count(w,'contracts'),1);assert.equal(w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant,tenant);
+});
+test('a mid-transaction failure rolls back consent, contract and all service changes',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]),run=w.db.run;
+ w.db.run=(sql,...args)=>{if(sql.startsWith('INSERT INTO company_services'))throw new Error('Test transaction failure');return run(sql,...args);};
+ const r=await w.client.post(o.path+'/accept',o.data);assert.equal(r.status,500);w.db.run=run;
+ assert.equal(w.db.get('SELECT status FROM package_orders').status,'REQUESTED');assert.equal(count(w,'contracts'),0);assert.equal(state(w),'INACTIVE');
+ assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);assert.equal(w.native.registrations.size,1);
+});
+
+test('an explicit next-period renewal preserves the cut-off and does not duplicate the current Wallet period',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);
+ const first=w.db.get('SELECT * FROM contracts');
+ const next=await selection(w,[],{renewal:first.id});assert.ok(next.data.offerHash);assert.match(next.body,new RegExp(first.ends_before));
+ const r=await w.client.post(next.path+'/accept',next.data);assert.equal(r.status,303,r.body);assert.equal(count(w,'contracts'),2);
+ const renewal=w.db.get('SELECT * FROM contracts WHERE renewal_of=?',first.id);assert.equal(renewal.starts_on,first.ends_before);assert.equal(renewal.agreed_minor,first.agreed_minor);assert.equal(renewal.renewal_anchor,first.renewal_anchor);
+ assert.equal(w.native.registrations.size,1);assert.equal(state(w),'ACTIVE');
+});

@@ -97,9 +97,16 @@ def load_config(path):
     need(not folder.is_relative_to(ROOT),'DATA_INSIDE_SOURCE')
     c['_path']=str(p);return c
 
-def run(argv,env=None,timeout=60,input=None):
-    result=subprocess.run(argv,input=input,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,timeout=timeout)
-    need(result.returncode==0,'COMMAND_FAILED:'+Path(argv[0]).name)
+def run(argv,env=None,timeout=60,input=None,cwd=None,log_path=None):
+    try:
+        result=subprocess.run(argv,input=input,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,timeout=timeout,cwd=cwd)
+    except subprocess.TimeoutExpired as error:
+        if log_path:
+            write_private(log_path, (error.stdout or b'')+b'\n'+(error.stderr or b'')+b'\nCOMMAND_TIMEOUT\n')
+        raise Blocked('COMMAND_TIMEOUT:'+Path(argv[0]).name) from None
+    if log_path:
+        write_private(log_path,result.stdout+b'\n'+result.stderr)
+    need(result.returncode==0,'COMMAND_FAILED:'+Path(argv[0]).name+':EXIT='+str(result.returncode))
     return result.stdout
 
 def pg_env(c):
@@ -165,13 +172,19 @@ def release_manifest(release):
 def package(c,receipt):
     import checkpoint
     report=json.loads(Path(receipt).read_text())
-    need(report.get('core_status')=='CORE_TESTS_PASS' and report.get('auto_commit',{}).get('status')=='CREATED','FULL_CHECKPOINT_REQUIRED')
+    need(report.get('core_status')=='CORE_TESTS_PASS' and report.get('auto_commit',{}).get('status') in ('CREATED','VERIFIED'),'FULL_CHECKPOINT_REQUIRED')
     tested=report.get('tested_manifest',{});need(tested and tested==checkpoint.manifest(checkpoint.snapshot(ROOT)),'CHECKPOINT_SOURCE_CHANGED')
     commit=run(['git','-C',str(ROOT),'rev-parse','HEAD']).decode().strip()
     need(commit==report['auto_commit']['hash'],'CHECKPOINT_COMMIT_CHANGED')
     private(c['release_root'],True)
     # Build only the already-validated revision; never mutate the active release.
-    run([str(ROOT/'gradlew'),'installDist','--no-daemon'],timeout=900)
+    # The wrapper locates its own JAR but Gradle resolves the project from cwd.
+    # Deployment may be invoked from /root or any other working directory.
+    build_env=safe_environment({})
+    if os.environ.get('GRADLE_USER_HOME'):
+        build_env['GRADLE_USER_HOME']=os.environ['GRADLE_USER_HOME']
+    run([str(ROOT/'gradlew'),'installDist','--no-daemon','--console=plain'],env=build_env,
+        timeout=900,cwd=ROOT,log_path=Path(c['runtime_dir'])/'package-build.log')
     need(tested==checkpoint.manifest(checkpoint.snapshot(ROOT)),'SOURCE_CHANGED_DURING_PACKAGE')
     target=Path(c['release_root'])/(commit+'-'+uuid.uuid4().hex[:8]);target.mkdir(mode=0o700)
     try:

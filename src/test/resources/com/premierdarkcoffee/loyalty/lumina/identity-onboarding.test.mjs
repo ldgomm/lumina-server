@@ -57,7 +57,8 @@ test('choosing Content activates only Content and presents the courtesy without 
 });
 test('disabled services reject direct operations and enabled services retain normal permissions',async t=>{
  const w=await world(t),o=await signup(w);await o.client.post('/welcome',{service:'LATER'});
- for(const path of ['/wallet','/content','/services/maps','/services/web','/services/brand','/wallet-api/api/staff/dashboard'])assert.equal((await o.client.get(path)).status,409,path);
+ assert.equal((await o.client.get('/wallet')).location,'/plans/wallet');
+ for(const path of ['/content','/services/maps','/services/web','/services/brand','/wallet-api/api/staff/dashboard'])assert.equal((await o.client.get(path)).status,409,path);
  assert.ok([403,409].includes((await o.client.post('/requests',{type:'CONTENT',channel:'SOCIAL',service:'VIDEO',quantity:'1',title:'Pedido',brief:'Quiero un video',phone:'0991234567'})).status));assert.equal(w.db.get('SELECT count(*) n FROM requests').n,0);
 });
 test('service activation is explicit POST CSRF owner-only and replay-safe',async t=>{
@@ -93,20 +94,18 @@ test('collaborator sees one welcome with assigned active services and cannot act
  assert.equal((await member.post('/services/activate',{service:'WEB'})).status,403);assert.equal((await member.post('/welcome',{service:'WEB'})).status,403);assert.equal((await member.post('/welcome',{})).location,'/home');assert.equal((await member.get('/content')).status,200);assert.equal((await member.get('/services/web')).status,409);
  const login=w.session();assert.equal((await login.post('/login',{document:data.document,password})).location,'/home');
 });
-test('Wallet selection stays pending until owner consent and never grants an operational session first',async t=>{
- let active=false;const calls=[];const w=await world(t,{subscription:async call=>{calls.push(call);if(call.path.endsWith('/offer'))return {body:{hash:'offer',paidFrom:'2027-01-01',trialUntil:'2026-12-31',cycle:'MONTHLY',unitMinor:499,totalMinor:499,branches:[{name:'Principal'}],terms:'Terms'}};if(call.path.endsWith('/accept')){if(!call.payload.accepted)return {status:400,body:{message:'Accept required'}};active=true;return {body:{accepted:true}};}return {body:{accepted:active,recurring:active,legacy:false,version:0,monthlyMinor:499,branches:[]}};}}),o=await signup(w);
- await w.admin.post('/account/provider',legal);const chosen=await o.client.post('/welcome',{service:'WALLET'});assert.equal(chosen.location,'/plans/wallet');assert.equal(serviceState(w.db,o.id,'WALLET'),'SETUP');assert.equal(w.native.registrations.size,0);
- const offer=await o.client.get('/plans/wallet');assert.equal(offer.status,200,offer.body);assert.equal(w.native.registrations.size,1);assert.equal((await o.client.get('/wallet')).status,409);assert.equal(calls.filter(c=>c.path.endsWith('/accept')).length,0);
- assert.equal((await o.client.post('/plans/wallet/accept',{requestKey:randomUUID(),hash:'offer'})).status,400);assert.equal(serviceState(w.db,o.id,'WALLET'),'SETUP');
- assert.equal((await o.client.post('/plans/wallet/accept',{requestKey:randomUUID(),hash:'offer',accept:'yes'})).location,'/wallet');assert.equal(serviceState(w.db,o.id,'WALLET'),'ACTIVE');assert.equal((await o.client.get('/wallet')).status,200);
- const payload=calls.find(c=>c.path.endsWith('/accept')&&c.payload.accepted).payload;assert.equal(payload.offer.ownerDocument,o.data.document);assert.equal(payload.offer.ownerEmail,'');
+test('Wallet selection stays pending and read-only until a published offer is accepted',async t=>{
+ const w=await world(t),o=await signup(w);const chosen=await o.client.post('/welcome',{service:'WALLET'});assert.equal(chosen.location,'/plans/wallet');assert.equal(serviceState(w.db,o.id,'WALLET'),'SETUP');
+ for(const path of ['/plans/wallet','/services','/plans'])assert.equal((await o.client.get(path)).status,200);
+ assert.equal(w.native.registrations.size,0);assert.equal((await o.client.get('/wallet')).location,'/plans/wallet');assert.equal(serviceState(w.db,o.id,'WALLET'),'SETUP');
 });
-test('missing provider information never changes pending Wallet into an active service',async t=>{
- const w=await world(t),o=await signup(w);await o.client.post('/services/activate',{service:'WALLET'});const r=await o.client.get('/plans/wallet');assert.equal(serviceState(w.db,o.id,'WALLET'),'SETUP');assert.doesNotMatch(r.body,/action="\/plans\/wallet\/accept"/);assert.equal((await o.client.get('/wallet')).status,409);
+test('missing provider information never blocks the published catalogue or enables Wallet by reading',async t=>{
+ const w=await world(t),o=await signup(w);await o.client.post('/services/activate',{service:'WALLET'});const r=await o.client.get('/plans/wallet');assert.equal(serviceState(w.db,o.id,'WALLET'),'SETUP');assert.doesNotMatch(r.body,/action="\/plans\/wallet\/accept"|identificación del proveedor/);assert.equal((await o.client.get('/wallet')).location,'/plans/wallet');
 });
-test('Wallet outage and repeated activation preserve the same company and never select the demo',async t=>{
- const w=await world(t),o=await signup(w);await o.client.post('/services/activate',{service:'WALLET'});w.native.loseRegistrationResponse();assert.equal((await o.client.get('/plans/wallet')).status,503);const tenant=w.native.registrations.get(o.id).id;
- await o.client.post('/services/activate',{service:'WALLET'});await o.client.get('/plans/wallet');assert.equal(w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant,tenant);assert.equal(w.native.registrations.size,1);assert.notEqual(tenant,w.native.business.id);assert.equal(serviceState(w.db,o.id,'WALLET'),'SETUP');
+test('repeated service selection prepares no native business or demo before commercial acceptance',async t=>{
+ const w=await world(t),o=await signup(w);w.native.registrationUnavailable(true);
+ for(let i=0;i<3;i++){await o.client.post('/services/activate',{service:'WALLET'});assert.equal((await o.client.get('/plans/wallet')).status,200);}
+ assert.equal(w.native.registrations.size,0);assert.equal(w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant,null);assert.equal(serviceState(w.db,o.id,'WALLET'),'SETUP');
 });
 test('administration can pause and resume a content-only business without preparing any Wallet',async t=>{
  const w=await world(t),o=await signup(w);await o.client.post('/welcome',{service:'SOCIAL'});const base='/admin/businesses/'+o.id;
@@ -135,10 +134,10 @@ test('version 8 migration preserves sessions credentials links and grants withou
 test('accepting content packages works without a Wallet and does not silently enable one',async t=>{
  const w=await world(t),o=await signup(w);await o.client.post('/welcome',{service:'SOCIAL'});await w.admin.post('/agency/businesses/verify?company='+o.id);await w.admin.post('/plans',{name:'Video simple',term:'MONTHLY',price:'20',VIDEO:'1',wallet:'NONE'});const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,o.client,o.id,plan);assert.equal(w.native.registrations.size,0);assert.equal(serviceState(w.db,o.id,'WALLET'),'INACTIVE');
 });
-test('a contracted Wallet activates explicitly without accepting another subscription',async t=>{
- const w=await world(t),o=await signup(w);await o.client.post('/welcome',{service:'SOCIAL'});await w.admin.post('/agency/businesses/verify?company='+o.id);await w.admin.post('/plans',{name:'Video con Wallet',term:'MONTHLY',price:'50',VIDEO:'1',wallet:'GIFT'});const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,o.client,o.id,plan);assert.equal(serviceState(w.db,o.id,'WALLET'),'INACTIVE');await o.client.post('/services/activate',{service:'WALLET'});const r=await o.client.get('/plans/wallet');assert.equal(r.location,'/wallet',r.body);assert.equal(serviceState(w.db,o.id,'WALLET'),'ACTIVE');
+test('accepting a quoted package activates its Wallet without another subscription or admin confirmation',async t=>{
+ const w=await world(t),o=await signup(w);await o.client.post('/welcome',{service:'SOCIAL'});await w.admin.post('/agency/businesses/verify?company='+o.id);await w.admin.post('/plans',{name:'Video con Wallet',term:'MONTHLY',price:'50',VIDEO:'1',wallet:'GIFT'});const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,o.client,o.id,plan);assert.equal(serviceState(w.db,o.id,'WALLET'),'ACTIVE');assert.equal((await o.client.get('/wallet')).status,200);assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,1);
 });
 test('a confirmed manual service charge may prepare billing infrastructure but never enables Wallet',async t=>{
  const w=await world(t,{administration:async call=>({body:call.method==='POST'?{id:randomUUID()}:{today:'2026-11-14',business:{id:call.path.split('/')[4],name:'Prueba'},membership:null,summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0}})}),o=await signup(w);const base='/admin/businesses/'+o.id;
- assert.equal((await w.admin.get(base+'?view=charges')).status,200);assert.equal(w.native.registrations.size,0);assert.equal((await w.admin.post(base+'/charge',{requestKey:randomUUID(),description:'Video acordado con el negocio',amount:'20',dueOn:'2026-12-01',confirm:'yes'})).status,303);assert.equal(w.native.registrations.size,1);assert.equal(serviceState(w.db,o.id,'WALLET'),'INACTIVE');assert.equal((await o.client.get('/wallet')).status,409);
+ assert.equal((await w.admin.get(base+'?view=charges')).status,200);assert.equal(w.native.registrations.size,0);assert.equal((await w.admin.post(base+'/charge',{requestKey:randomUUID(),description:'Video acordado con el negocio',amount:'20',dueOn:'2026-12-01',confirm:'yes'})).status,303);assert.equal(w.native.registrations.size,1);assert.equal(serviceState(w.db,o.id,'WALLET'),'INACTIVE');assert.equal((await o.client.get('/wallet')).location,'/plans/wallet');
 });

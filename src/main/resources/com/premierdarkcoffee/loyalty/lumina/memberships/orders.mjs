@@ -128,6 +128,15 @@ export function acceptOrder(db,actor,company,id,data) {
 export function activateOrder(db,actor,company,id,data) {
   requireAgency(actor);
   requireThat(company.approved,'Verifica el negocio antes de activar los servicios.',409);
+  return activateAccepted(db,actor,company,id,data);
+}
+export function activateWalletOrder(db,actor,company,id,data) {
+  requireOwner(actor);
+  const order=getOrder(db,actor,company,id);
+  requireThat(order.lines.some(line=>line.wallet!=='NONE'||line.items.some(item=>item.service==='WALLET')),'Esta contratación no incluye Wallet.',409);
+  return activateAccepted(db,actor,company,id,data);
+}
+function activateAccepted(db,actor,company,id,data) {
   return db.transaction(()=>{
     const order=getOrder(db,actor,company,id);checkVersion(order,data);
     if(order.status==='ACTIVE')return;

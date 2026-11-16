@@ -4,7 +4,7 @@ import { serviceCatalog, serviceState } from './services.mjs';
 import { businessControl } from './control.mjs';
 
 export const serviceStatusLabels = Object.freeze({
-  ACTIVE:'Disponible', SETUP:'Por confirmar', INACTIVE:'Sin activar',
+  ACTIVE:'Disponible', SETUP:'Activación pendiente', INACTIVE:'Sin activar',
   PAUSED:'En pausa', SUSPENDED:'Suspendido', CLOSED:'Cerrado', ARCHIVED:'Eliminado', PENDING:'Bloqueado · cambio pendiente',
 });
 

@@ -172,12 +172,24 @@ class ProductionTests(unittest.TestCase):
         (source/'.env').write_text('PRIVATE_TEST_MARKER=not-for-release\n')
         commit='a'*40;manifest={'source':'checked'}
         receipt=self.root/'complete.json'
-        p.save_json(receipt,{'core_status':'CORE_TESTS_PASS','auto_commit':{'status':'CREATED','hash':commit},'tested_manifest':manifest})
+        p.save_json(receipt,{'core_status':'CORE_TESTS_PASS','auto_commit':{'status':'VERIFIED','hash':commit},'tested_manifest':manifest})
+        # Real child process, with the caller in an unrelated directory.
+        wrapper=source/'gradlew'
+        wrapper.write_text('#!'+sys.executable+'\nimport os\nfrom pathlib import Path\n'
+            'assert Path.cwd()==Path(__file__).parent, "WRONG_BUILD_DIRECTORY"\n'
+            'assert "DATABASE_PASSWORD" not in os.environ, "PRODUCTION_ENV_LEAK"\n'
+            'print("BUILD_DIRECTORY_PASS")\n')
+        wrapper.chmod(0o700)
+        real_run=p.run
         def run(argv,**kwargs):
             if argv[0]=='git':return commit.encode()
-            self.assertEqual(argv[0],str(source/'gradlew'));return b''
-        with patch.object(p,'ROOT',source),patch.object(p,'SQL_ROOT',sql),patch.object(p,'run',run),patch.object(checkpoint,'snapshot',return_value={}),patch.object(checkpoint,'manifest',return_value=manifest):
+            self.assertEqual(argv[0],str(source/'gradlew'));return real_run(argv,**kwargs)
+        with patch.dict(os.environ,{'DATABASE_PASSWORD':'fictional-secret'}),patch.object(p,'ROOT',source),patch.object(p,'SQL_ROOT',sql),patch.object(p,'run',run),patch.object(checkpoint,'snapshot',return_value={}),patch.object(checkpoint,'manifest',return_value=manifest):
             result=p.package(self.c,receipt)
+        log=Path(self.c['runtime_dir'])/'package-build.log'
+        self.assertIn('BUILD_DIRECTORY_PASS',log.read_text())
+        self.assertEqual(log.stat().st_mode&0o777,0o600)
+        self.assertNotIn('fictional-secret',log.read_text())
         release=Path(result['release'])
         shutil.rmtree(source)
         checked=p.release_manifest(release)
@@ -200,5 +212,20 @@ class ProductionTests(unittest.TestCase):
             str(release/'scripts')], cwd=self.root, env=environment, capture_output=True, text=True, timeout=15)
         self.assertEqual(gateway.returncode, 0, gateway.stderr)
         self.assertIn('listen 127.0.0.1:8101;', gateway.stdout)
+
+    def test_failed_build_keeps_stderr_in_a_private_log(self):
+        log=self.root/'failed-build.log'
+        with self.assertRaisesRegex(p.Blocked,'COMMAND_FAILED:.*:EXIT=7'):
+            p.run([sys.executable,'-c','import sys;print("BUILD_BEGAN");print("EXACT_COMPILER_ERROR",file=sys.stderr);sys.exit(7)'],cwd=self.root,log_path=log)
+        self.assertIn('EXACT_COMPILER_ERROR',log.read_text())
+        self.assertIn('BUILD_BEGAN',log.read_text())
+        self.assertEqual(log.stat().st_mode&0o777,0o600)
+
+    def test_timed_out_build_keeps_partial_output(self):
+        log=self.root/'timed-out-build.log'
+        with self.assertRaisesRegex(p.Blocked,'COMMAND_TIMEOUT'):
+            p.run([sys.executable,'-u','-c','import time;print("STARTED");time.sleep(10)'],timeout=.2,log_path=log)
+        self.assertIn('STARTED',log.read_text())
+        self.assertIn('COMMAND_TIMEOUT',log.read_text())
 
 if __name__=='__main__':unittest.main()
