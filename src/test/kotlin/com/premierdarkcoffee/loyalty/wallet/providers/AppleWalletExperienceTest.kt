@@ -62,11 +62,11 @@ class AppleWalletExperienceTest {
         assertEquals("12 / 13", p.front("primaryFields").text())
         assertEquals("35% en accesorios", p.front("auxiliaryFields").text())
     }
-    @Test fun `featured promotion keeps its own goal despite a ready reward elsewhere`() {
+    @Test fun `ready reward leads with its own balance and keeps the featured alternative in details`() {
         val p = pass(listOf(balance("a", amount = 7), balance("b", amount = 2)),
             listOf(reward(), reward("rb", "b", goal = 9)), WalletDesign(featuredProgramId = "b"))
-        assertEquals("2 / 9", p.front("primaryFields").text())
-        assertEquals("7 sellos", p.detail("card_state_detail").text())
+        assertEquals("7 sellos", p.front("primaryFields").text())
+        assertEquals("Disponible", p.detail("card_state_detail").text())
         assertTrue(p.detail("reward_r").text().contains("Saldo: 7 sellos"))
     }
     @Test fun `deleted and paused promotion rewards cannot leak through orphan progress`() {

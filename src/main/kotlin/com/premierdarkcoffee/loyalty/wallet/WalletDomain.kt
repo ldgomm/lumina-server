@@ -10,7 +10,7 @@ import com.premierdarkcoffee.loyalty.shared.json
 import com.premierdarkcoffee.loyalty.shared.obj
 import com.premierdarkcoffee.loyalty.wallet.artwork.googleArtwork
 import com.premierdarkcoffee.loyalty.wallet.presentation.appleStoreFields
-import com.premierdarkcoffee.loyalty.wallet.presentation.presentationBalances
+import com.premierdarkcoffee.loyalty.wallet.presentation.rewardFocus
 import com.premierdarkcoffee.loyalty.wallet.providers.applePosterFields
 import com.premierdarkcoffee.loyalty.wallet.providers.googleExperienceFields
 
@@ -57,11 +57,14 @@ fun walletHttps(value: String): String {
 fun walletBalance(balance: JsonObject, currency: String): String {
     val available = balance.getValue("available").jsonPrimitive.long
     return if (balance.getValue("kind").jsonPrimitive.content == "CASHBACK") BigDecimal.valueOf(available, 2).toPlainString() + " " + currency
-    else available.toString() + if (balance.getValue("kind").jsonPrimitive.content == "STAMPS") " sellos" else " puntos"
+    else {
+        val unit = if (balance.getValue("kind").jsonPrimitive.content == "STAMPS") "sello" else "punto"
+        "$available $unit" + if (available == 1L) "" else "s"
+    }
 }
 
 fun WalletPass.summary(): String {
-    val balances = presentationBalances()
+    val balances = rewardFocus().balances
     return if (balances.isEmpty()) "Tu próxima compra empieza aquí" else balances.take(20).joinToString("\n") {
         val b = it.jsonObject; b.getValue("name").jsonPrimitive.content + ": " + walletBalance(b, snapshot.getValue("currency").jsonPrimitive.content)
     }

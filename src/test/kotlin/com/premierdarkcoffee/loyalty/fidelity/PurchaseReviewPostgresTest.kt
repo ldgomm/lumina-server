@@ -27,7 +27,7 @@ import com.premierdarkcoffee.loyalty.wallet.WalletCipher
 import com.premierdarkcoffee.loyalty.wallet.WalletEnrollment
 import com.premierdarkcoffee.loyalty.wallet.WalletService
 import com.premierdarkcoffee.loyalty.wallet.enrollWithoutPassword
-import com.premierdarkcoffee.loyalty.wallet.presentation.prioritizedBalances
+import com.premierdarkcoffee.loyalty.wallet.presentation.rewardFocus
 import com.premierdarkcoffee.loyalty.wallet.providers.appleExperienceFields
 import com.premierdarkcoffee.loyalty.wallet.providers.googleExperienceFields
 
@@ -152,7 +152,7 @@ class PurchaseReviewPostgresTest {
         service.saveDesign(f.owner,WalletDesignChange(0,WalletDesign(automaticPriority="PROGRESS")))
         val after=wallet.materialize(f.member)
         assertEquals(before.serial,after.serial);assertEquals(before.token,after.token);assertEquals(before.googleId,after.googleId)
-        assertEquals(other,after.prioritizedBalances().first()["programId"]!!.jsonPrimitive.content)
+        assertEquals(other,after.rewardFocus().balances.first()["programId"]!!.jsonPrimitive.content)
         assertContains(after.appleExperienceFields().toString(),"Premio cercano");assertContains(after.googleExperienceFields().toString(),"Premio cercano")
         assertEquals(1,count(f,"purchases"));assertEquals(1,count(f,"ledger"))
     }

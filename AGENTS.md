@@ -4,12 +4,18 @@
 
 For releases prepared on behalf of José Ruiz, use the repository maintainer identity already associated with GitHub account ldgomm for both Git author and committer. Verify both fields before creating a release bundle or pushing a branch. Keep other contributors' commits and the published history intact unless the maintainer explicitly authorizes a history correction.
 
+## Lúmina 2.4 · Precios y premios
+
+Los precios de venta con terminación .99 suben un centavo antes de calcular cantidades, cortes o prorrateos. El plan estándar cuesta USD 5 al mes o USD 50 al año por sucursal después de la prueba. Los acuerdos aceptados, los comprobantes y los saldos de clientes conservan sus importes.
+
+La tarjeta destaca los premios canjeables y después el mayor porcentaje de avance. La preferencia del negocio resuelve empates. La representación 35 actualiza las tarjetas instaladas con sus identidades existentes.
+
 ## Lúmina deployment — isolated checkpoint Docker
 
 - Deployment checkpoints use a persisted random run ID, scoped Compose project and image, private configuration under `.local-staging/checkpoints/`, and available loopback ports. Both Docker and gateway checks receive the same explicit context. Never adopt, delete or recreate another checkout's resources or its missing `.env`.
 - The persistent developer pilot keeps its existing `loyalty-staging` name and credentials. An isolated run with existing data but a missing private configuration must also fail closed. Checkpoint gateways never read pilot Wallet secrets or start external tunnels.
 - Stop only containers whose Compose project and source directory match the deployment context; validate all owners before stopping any. Preserve test volumes/configuration for retries. Production services and data remain unchanged on a failed checkpoint.
-- Current Python gate: 223 checks. Preserve all 522 portal tests, 312 native unit/HTTP tests, 352 PostgreSQL tests and Docker/gateway gates. Store the original failed staging report and advertise only logs that exist at the failed stage. Local Python success is not a full production PASS.
+- Current Python gate: 224 checks. Preserve all 525 portal tests, 313 native unit/HTTP tests, 353 PostgreSQL tests and Docker/gateway gates. Store the original failed staging report and advertise only logs that exist at the failed stage. Local Python success is not a full production PASS.
 
 ## Lúmina v075 — Git-based production deployment
 

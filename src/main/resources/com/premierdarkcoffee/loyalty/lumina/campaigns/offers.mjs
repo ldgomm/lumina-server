@@ -1,7 +1,7 @@
 import { requireAgency } from '../access/accounts.mjs';
 import { getPlan, listPlans } from '../memberships/billing.mjs';
 import { serviceArea } from '../memberships/catalog.mjs';
-import { choice, dateOnly, event, integer, isId, localDay, money, now, requireThat, text, uuid } from '../shared/domain.mjs';
+import { choice, dateOnly, event, integer, isId, localDay, salePrice, priceFromInput, now, requireThat, text, uuid } from '../shared/domain.mjs';
 import { campaignDates, campaignThemes } from './season.mjs';
 
 export const eligibleCampaignBase=plan=>Boolean(plan.published&&!plan.campaign&&plan.price_minor>0&&plan.items.length&&plan.items.every(i=>['SOCIAL','WEB','BRAND'].includes(serviceArea(i.service))));
@@ -20,7 +20,7 @@ export function createCampaignOffer(db,actor,data) {
     const start=dateOnly(data.starts_on,'inicio de la promoción');
     requireThat(start>=dates.first&&start<dates.until,'El inicio debe estar dentro de noviembre del año elegido.');
     const mode=choice(data.discount_mode,['PERCENT','PRICE'],'forma de descuento');
-    const price=mode==='PERCENT'?Math.floor(base.price_minor*(100-integer(data.discount,'descuento',{min:1,max:100}))/100):money(data.price);
+    const price=mode==='PERCENT'?salePrice(Math.floor(base.price_minor*(100-integer(data.discount,'descuento',{min:1,max:100}))/100)):priceFromInput(data.price);
     requireThat(price>=0&&price<base.price_minor,'El precio promocional debe ser menor al precio habitual.');
     const name=text(data.name,'nombre de la promoción',2,100);
     const description=text(data.description||base.description,'alcance',0,1200);

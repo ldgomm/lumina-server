@@ -53,12 +53,12 @@ class GoogleWalletExperienceTest {
         assertEquals("12/13", p.front().value())
         assertTrue(p.detail("featured").contains("35% en accesorios"))
     }
-    @Test fun `featured promotion cannot inherit a ready prize from another program`() {
+    @Test fun `ready reward leads with its matching balance and an incomplete featured reward stays in details`() {
         val p = pass(listOf(balance("a", amount = 7), balance("b", amount = 2)),
             listOf(reward(), reward("rb", "b", goal = 9)), WalletDesign(featuredProgramId = "b"))
-        assertEquals("2/9", p.front().value())
-        assertEquals("7 sellos", p.front("secondaryLoyaltyPoints").value())
-        assertTrue(p.detail("rewards_0").contains("Saldo: 7 sellos"))
+        assertEquals("7", p.front().value())
+        assertEquals("1 canje", p.front("secondaryLoyaltyPoints").value())
+        assertTrue(p.detail("rewards_0").contains("Saldo: 2 sellos"))
     }
     @Test fun `same program chooses lowest cost deterministically and lists other rewards`() {
         val p = pass(rewards = listOf(reward("r3", goal = 15), reward("r1", goal = 4, name = "Descuento A"), reward("r2", goal = 9)))

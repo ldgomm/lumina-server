@@ -6,7 +6,7 @@ export const walletLine=line=>['INCLUDED','GIFT'].includes(line.wallet)||line.it
 export const walletOnly=line=>walletLine(line)&&line.items.every(i=>i.service==='WALLET');
 export const trialMessage='Wallet es gratis hasta el 31 de diciembre de 2026. Desde el 1 de enero podrás elegir un plan mensual o anual.';
 export const standardIds=['b32a3473-4d70-45ee-9937-9d702510a001','b32a3473-4d70-45ee-9937-9d702510a012'];
-export const standards=standardIds.map((id,i)=>({id,name:i?'Wallet anual':'Wallet mensual',term:'MONTHLY',months:i?12:1,price_minor:i?5000:499,
+export const standards=standardIds.map((id,i)=>({id,name:i?'Wallet anual':'Wallet mensual',term:'MONTHLY',months:i?12:1,price_minor:i?5000:500,
   wallet:'INCLUDED',description:'Tarjetas, puntos y premios para tus clientes.',published:1,items:[{service:'WALLET',quantity:1}],other_minor:null}));
 export function standardFor(plan){
   if(plan.term!=='MONTHLY' || plan.campaign || !walletOnly(plan))return null;

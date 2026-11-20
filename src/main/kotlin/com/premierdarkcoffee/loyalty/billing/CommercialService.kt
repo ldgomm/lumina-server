@@ -183,7 +183,9 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
             retainEarnedPeriod(c,tenant,current,date)
         }
         val version = (current?.second ?: 0) + 1
-        savePlan(c, tenant, input.plan, version); sync(c, tenant, date); audit(c, tenant, "BILLING_PLAN", version.toString())
+        val fee = input.plan.feeMinor
+        val nextPlan = if (fee % 100 == 99L && fee != current?.first?.feeMinor) input.plan.copy(feeMinor=fee+1) else input.plan
+        savePlan(c, tenant, nextPlan, version); sync(c, tenant, date); audit(c, tenant, "BILLING_PLAN", version.toString())
         obj("version" to version)
     }
     fun accessState(tenant:String):JsonObject = db.tx { c -> effective(c,tenant,lock(c,tenant,false),today(c,tenant)) }

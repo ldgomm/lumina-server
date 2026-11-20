@@ -17,8 +17,8 @@ import java.sql.Connection
 import java.sql.Timestamp
 import java.time.*
 
-const val WALLET_TERMS_VERSION = "wallet-2026-11-20-v4"
-const val WALLET_BRANCH_PRICE = 499L
+const val WALLET_TERMS_VERSION = "wallet-2026-11-20-v5"
+const val WALLET_BRANCH_PRICE = 500L
 const val WALLET_ANNUAL_PRICE = 5000L
 fun walletUnitPrice(cycle:String):Long {
     need(cycle in setOf("MONTHLY","ANNUAL"),"INVALID_CYCLE","Elige mensual o anual.")
@@ -43,7 +43,7 @@ fun walletPaidFrom(activation:LocalDate):LocalDate = maxOf(activation,WALLET_PRO
 
 fun walletTerms(provider:WalletProviderLegal,business:String,activation:LocalDate,paidFrom:LocalDate,branchCount:Int,cycle:String="MONTHLY"):String {
     val unit=walletUnitPrice(cycle);val annual=cycle=="ANNUAL"
-    val price=if(annual)"50,00" else "4,99";val period=if(annual)"año" else "mes"
+    val price=java.math.BigDecimal.valueOf(unit,2).toPlainString().replace('.',',');val period=if(annual)"año" else "mes"
     return """
 LÚMINA DIGITAL · CONDICIONES DE WALLET
 Versión $WALLET_TERMS_VERSION
@@ -114,7 +114,7 @@ fun LoyaltyService.acceptWalletSubscription(s:Staff,input:WalletAcceptInput,key:
             val agreement=WalletAgreement(WALLET_TERMS_VERSION,quote.getValue("terms").jsonPrimitive.content,input.expectedHash,commercial.clock.instant().toString(),input.offer.ownerId,input.offer.ownerName,input.offer.ownerEmail,
                 input.offer.companyId,date.toString(),paid.toString(),quote.getValue("branches").jsonArray.map{it.jsonObject.getValue("id").jsonPrimitive.content},input.offer.provider,input.offer.ownerDocument)
             val annual=input.offer.cycle=="ANNUAL"
-            val plan=MembershipPlan(if(annual)"Wallet · USD 50,00 al año por sucursal" else "Wallet · USD 4,99 al mes por sucursal",walletUnitPrice(input.offer.cycle),date.toString(),(if(paid.dayOfMonth==1)paid else nextCalendarCut(paid)).toString(),intervalMonths=if(annual)12 else 1,anchorDay=1,walletAgreement=agreement)
+            val plan=MembershipPlan(if(annual)"Wallet · USD 50,00 al año por sucursal" else "Wallet · USD 5,00 al mes por sucursal",walletUnitPrice(input.offer.cycle),date.toString(),(if(paid.dayOfMonth==1)paid else nextCalendarCut(paid)).toString(),intervalMonths=if(annual)12 else 1,anchorDay=1,walletAgreement=agreement)
             val access=commercial.lock(c,s.tenant)
             need(access.getValue("state").jsonPrimitive.content=="ACTIVE","BUSINESS_SUSPENDED","El negocio debe estar activo antes de contratar.",409)
             val version=(saved?.second?:0)+1

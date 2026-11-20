@@ -200,12 +200,12 @@ class WalletSubscriptionPostgresTest {
             time.value=Instant.parse("2027-01-01T15:00:00Z");val f=fixture();accept(f)
             time.value=Instant.parse("2027-02-01T15:00:00Z");service.commercial.sweep()
             val old=invoices(f).single().jsonObject
-            if(alreadyPaid)service.commercial.pay(f.tenant,RecordPayment(old.str("id"),499,id(),"CASH","2027-02-01"),id())
+            if(alreadyPaid)service.commercial.pay(f.tenant,RecordPayment(old.str("id"),500,id(),"CASH","2027-02-01"),id())
             val combo=CatalogSchedule(id(),"Wallet y redes","2027-01-01",null,2000,"2027-02-01",consentOn="2027-01-01")
             service.commercial.updateCalendar(f.tenant,CatalogCalendar(f.registration.companyId,1,listOf(combo)))
             val active=invoices(f).map{it.jsonObject}.filter{it.str("status")!="VOID"}
             assertEquals(1,active.size)
-            assertEquals(if(alreadyPaid)499L else 2000L,active.first().getValue("amountMinor").jsonPrimitive.long)
+            assertEquals(if(alreadyPaid)500L else 2000L,active.first().getValue("amountMinor").jsonPrimitive.long)
         }
     }
     @Test fun `HTTP subscription requires owner and explicit versioned consent`() = testApplication {
@@ -238,7 +238,7 @@ class WalletSubscriptionPostgresTest {
         assertEquals("INACTIVE",service.commercial.accessState(f.tenant).str("walletSubscriptionState"));accept(f)
         time.value=Instant.parse("2027-02-01T04:59:59Z");assertEquals(0L,balance(f));assertTrue(invoices(f).isEmpty())
         assertEquals("2027-02-01",status(f).str("nextChargeOn"))
-        time.value=Instant.parse("2027-02-01T05:00:00Z");assertEquals(499L,balance(f));assertEquals(1,invoices(f).size)
+        time.value=Instant.parse("2027-02-01T05:00:00Z");assertEquals(500L,balance(f));assertEquals(1,invoices(f).size)
         assertEquals("2027-03-01",status(f).str("nextChargeOn"))
     }
     @Test fun `no agreement means no invented acceptance or charges`() {
@@ -274,15 +274,15 @@ class WalletSubscriptionPostgresTest {
         val f=fixture();seedBranch(f);accept(f)
         time.value=Instant.parse("2027-01-15T12:00:00Z");branch(f)
         time.value=Instant.parse("2027-03-01T12:00:00Z");service.commercial.sweep();service.commercial.sweep()
-        assertEquals(2,invoices(f).size);assertEquals(2495L,balance(f)) // January had two branches and February had three.
-        assertEquals(setOf(998L,1497L),invoices(f).map{it.jsonObject.getValue("amountMinor").jsonPrimitive.long}.toSet())
+        assertEquals(2,invoices(f).size);assertEquals(2500L,balance(f)) // January had two branches and February had three.
+        assertEquals(setOf(1000L,1500L),invoices(f).map{it.jsonObject.getValue("amountMinor").jsonPrimitive.long}.toSet())
     }
     @Test fun `midmonth signup bills only its days and counts a new branch at the first cut`() {
         time.value=Instant.parse("2027-03-19T12:00:00Z");val f=fixture();accept(f);assertEquals(0L,balance(f))
         branch(f);assertEquals(0L,balance(f));time.value=Instant.parse("2027-04-01T05:00:00Z")
-        assertEquals(209L,balance(f)) // 13 of 31 March days.
+        assertEquals(210L,balance(f)) // 13 of 31 March days.
         assertEquals(1,invoices(f).size);assertTrue(invoices(f).all { it.jsonObject.str("dueOn")=="2027-04-15" })
-        time.value=Instant.parse("2027-05-01T05:00:00Z");assertEquals(1207L,balance(f))
+        time.value=Instant.parse("2027-05-01T05:00:00Z");assertEquals(1210L,balance(f))
     }
     @Test fun `cancel trial preserves card identities and issues no January charge`() {
         time.value=Instant.parse("2026-12-10T15:00:00Z")
@@ -332,16 +332,16 @@ class WalletSubscriptionPostgresTest {
     @Test fun `monthly to annual change begins after the paid calendar month`() {
         time.value=Instant.parse("2027-03-19T12:00:00Z");val f=fixture();accept(f);assertEquals(0L,balance(f))
         time.value=Instant.parse("2027-04-02T12:00:00Z");accept(f.copy(offer=f.offer.copy(cycle="ANNUAL")))
-        assertEquals(209L,balance(f));assertEquals("2027-05-01",status(f).str("nextChargeOn"))
-        time.value=Instant.parse("2027-05-01T12:00:00Z");assertEquals(708L,balance(f))
-        time.value=Instant.parse("2027-06-01T12:00:00Z");assertEquals(5708L,balance(f));assertEquals("2028-06-01",status(f).str("nextChargeOn"))
+        assertEquals(210L,balance(f));assertEquals("2027-05-01",status(f).str("nextChargeOn"))
+        time.value=Instant.parse("2027-05-01T12:00:00Z");assertEquals(710L,balance(f))
+        time.value=Instant.parse("2027-06-01T12:00:00Z");assertEquals(5710L,balance(f));assertEquals("2028-06-01",status(f).str("nextChargeOn"))
     }
     @Test fun `leap-day annual opening is prorated and changing to monthly preserves the paid year`() {
         time.value=Instant.parse("2028-02-29T12:00:00Z");val f=fixture().let{it.copy(offer=it.offer.copy(cycle="ANNUAL"))};accept(f)
         assertEquals(0L,balance(f));time.value=Instant.parse("2028-03-03T12:00:00Z");accept(f.copy(offer=f.offer.copy(cycle="MONTHLY")))
         assertEquals(14L,balance(f));assertEquals("2028-04-01",status(f).str("nextChargeOn"))
         time.value=Instant.parse("2029-03-01T12:00:00Z");assertEquals(5014L,balance(f))
-        time.value=Instant.parse("2029-04-01T12:00:00Z");assertEquals(5513L,balance(f));assertEquals("2029-05-01",status(f).str("nextChargeOn"))
+        time.value=Instant.parse("2029-04-01T12:00:00Z");assertEquals(5514L,balance(f));assertEquals("2029-05-01",status(f).str("nextChargeOn"))
     }
     @Test fun `annual cancellation after the first cut retains the full covered year`() {
         time.value=Instant.parse("2027-01-31T12:00:00Z");val f=fixture().let{it.copy(offer=it.offer.copy(cycle="ANNUAL"))};accept(f)
@@ -360,7 +360,7 @@ class WalletSubscriptionPostgresTest {
         assertTrue(service.commercial.changeAccess(f.tenant,suspend).getValue("replayed").jsonPrimitive.boolean)
         assertFailsWith<Problem>{service.commercial.changeAccess(f.tenant,suspend.copy(state="ACTIVE"))}
         service.commercial.changeAccess(f.tenant,AccessChange("CLOSED","Terminación del servicio",initial+1,id()))
-        time.value=Instant.parse("2027-02-01T12:00:00Z");assertEquals(499L,balance(f));assertFalse(status(f).getValue("recurring").jsonPrimitive.boolean)
+        time.value=Instant.parse("2027-02-01T12:00:00Z");assertEquals(500L,balance(f));assertFalse(status(f).getValue("recurring").jsonPrimitive.boolean)
         service.commercial.changeAccess(f.tenant,AccessChange("ACTIVE","Reabrir el negocio",initial+2,id()))
         assertFalse(status(f).getValue("recurring").jsonPrimitive.boolean)
         assertEquals(f.tenant,service.staff(f.token).tenant)

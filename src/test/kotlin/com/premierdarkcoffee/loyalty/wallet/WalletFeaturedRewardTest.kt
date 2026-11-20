@@ -56,12 +56,12 @@ class WalletFeaturedRewardTest {
         assertEquals(10,pass(selected=null).journey()!!.goal);assertFront(pass(selected=null),"Premio pequeño")
     }
     @Test fun `chosen reward controls name goal remaining and illustration for both providers`() {
-        for((kind,amount,goal) in listOf(Triple("POINTS",150L,200L),Triple("STAMPS",7L,12L),Triple("CASHBACK",750L,1025L))) {
+        for((kind,amount,goal) in listOf(Triple("POINTS",250L,200L),Triple("STAMPS",12L,12L),Triple("CASHBACK",1050L,1025L))) {
             val p=pass(kind,amount,goal);val j=p.journey()!!
-            assertEquals(goal,j.goal);assertEquals(goal-amount,j.remaining);assertFront(p,"Premio destacado")
+            assertEquals(goal,j.goal);assertEquals(0,j.remaining);assertFront(p,"Premio destacado")
             for(fields in listOf(p.appleExperienceFields(),p.applePosterFields(),p.googleExperienceFields())) assertContains(fields.toString(),j.summary)
             assertEquals(if(kind=="STAMPS")12 else 100,p.artwork().total)
-            assertEquals(if(kind=="STAMPS")7 else j.percent,p.artwork().filled)
+            assertEquals(if(kind=="STAMPS")12 else j.percent,p.artwork().filled)
         }
     }
     @Test fun `unavailable selection falls back inside the same program and never uses a different balance`() {
@@ -72,7 +72,7 @@ class WalletFeaturedRewardTest {
         assertFront(wrong,"Premio pequeño")
     }
     @Test fun `no active target or paused account never invents progress or redemption capacity`() {
-        val p=pass();val none=p.withRewards(p.rewards().filter{it["programId"]==JsonPrimitive("other")})
+        val p=pass();val none=p.withRewards(emptyList())
         for(value in listOf(none,p.copy(snapshot=JsonObject(p.snapshot+obj("canOperate" to false))))) {
             assertNull(value.journey());assertEquals(0,value.artwork().total)
             val apple=value.appleExperienceFields();val google=value.googleExperienceFields()
@@ -99,7 +99,7 @@ class WalletFeaturedRewardTest {
     }
     @Test fun `every composition and focus carries the same explicit prize`() {
         for(c in walletCompositions) for(f in listOf("AUTO","PROGRESS","REWARD")) {
-            val p=pass(composition=c,focus=f);assertFront(p,"Premio destacado");assertEquals(200,p.journey()!!.goal)
+            val p=pass(amount=250,composition=c,focus=f);assertFront(p,"Premio destacado");assertEquals(200,p.journey()!!.goal)
             assertEquals(googleWalletTemplate(c,f),p.googleBrand("https://example.test")["classTemplateInfo"])
         }
     }

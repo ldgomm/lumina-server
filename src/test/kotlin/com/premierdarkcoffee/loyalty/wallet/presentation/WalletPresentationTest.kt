@@ -47,7 +47,8 @@ class WalletPresentationTest {
         assertTrue(f.getValue("auxiliaryFields").jsonArray.isEmpty())
         val summary = f.getValue("backFields").jsonArray.map { it.jsonObject }.single { it["key"]==JsonPrimitive("balances") }.getValue("value").jsonPrimitive.content
         assertTrue(summary.contains("Saldo A: 1.25 USD"))
-        for (i in 1..8) assertTrue(summary.contains("Programa $i: $i puntos"))
+        assertContains(summary, "Programa 1: 1 punto\n")
+        for (i in 2..8) assertContains(summary, "Programa $i: $i puntos")
         val keys = f.values.flatMap { group -> group.jsonArray.map { it.jsonObject.getValue("key").jsonPrimitive.content } }
         assertEquals(keys.size, keys.toSet().size)
     }

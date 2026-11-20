@@ -1,5 +1,7 @@
 package com.premierdarkcoffee.loyalty.analytics
 
+import com.premierdarkcoffee.loyalty.marketing.rewardProgressOrder
+import com.premierdarkcoffee.loyalty.marketing.walletDesign
 import com.premierdarkcoffee.loyalty.access.Staff
 import com.premierdarkcoffee.loyalty.businesses.normalizedSearch
 import com.premierdarkcoffee.loyalty.infrastructure.persistence.exec
@@ -143,15 +145,18 @@ fun LoyaltyService.customerActivity(s: Staff, query: CustomerActivityQuery = Cus
     }
 }
 
-fun customerRewardProgress(c: Connection, tenant: String, member: String): List<JsonObject> = c.rows("""
-    SELECT r.id,r.name,r.cost,p.kind,b.available,v.config->>'name' AS program_name
-    FROM balances b JOIN customer_programs p ON p.tenant_id=b.tenant_id AND p.id=b.program_id
-    JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version
-    JOIN rewards r ON r.tenant_id=p.tenant_id AND r.program_id=p.id AND r.active
-    WHERE b.tenant_id=? AND b.member_id=? AND b.available>0
-    ORDER BY (b.available>=r.cost) DESC,(p.kind='STAMPS' AND r.cost-b.available=1) DESC,r.name,r.id LIMIT 100
-""".trimIndent(), tenant, member) { r ->
-    obj("id" to r.getString("id"),"name" to r.getString("name"),"program" to r.getString("program_name"),
-        "kind" to r.getString("kind"),"available" to r.getLong("available"),"goal" to r.getLong("cost"),
-        "remaining" to maxOf(0,r.getLong("cost")-r.getLong("available")))
+fun customerRewardProgress(c: Connection, tenant: String, member: String): List<JsonObject> {
+    val design = walletDesign(c, tenant)
+    return c.rows("""
+        SELECT r.id,r.name,r.cost,p.kind,b.available,v.config->>'name' AS program_name
+        FROM balances b JOIN customer_programs p ON p.tenant_id=b.tenant_id AND p.id=b.program_id
+        JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version
+        JOIN rewards r ON r.tenant_id=p.tenant_id AND r.program_id=p.id AND r.active
+        WHERE b.tenant_id=? AND b.member_id=? AND b.available>0
+        ORDER BY $rewardProgressOrder LIMIT 100
+    """.trimIndent(), tenant, member, design.featuredRewardId, design.featuredProgramId, design.featuredProgramId) { r ->
+        obj("id" to r.getString("id"),"name" to r.getString("name"),"program" to r.getString("program_name"),
+            "kind" to r.getString("kind"),"available" to r.getLong("available"),"goal" to r.getLong("cost"),
+            "remaining" to maxOf(0,r.getLong("cost")-r.getLong("available")))
+    }
 }

@@ -1,7 +1,7 @@
 import { offerAvailable, requireCampaignOpen } from '../campaigns/season.mjs';
 import { requestPhone } from '../shared/contact.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
-import { dateOnly, event, integer, isId, localDay, money, now, requireThat, text, uuid } from '../shared/domain.mjs';
+import { dateOnly, event, integer, isId, localDay, salePrice, priceFromInput, now, requireThat, text, uuid } from '../shared/domain.mjs';
 import { addSchedule, applyDueServices, coveredThrough, periodEnd, queueServices, selectionStart, walletLine } from './calendar.mjs';
 import { checkSelection } from './coverage.mjs';
 import { dirtyCalendar, inTrial, standardFor, standardIds, trialMessage } from './trial.mjs';
@@ -25,7 +25,7 @@ export function orderTotals(lines,branches=1) {
     if(line.unit_minor===null)totals[line.months===12?'ANNUAL':line.term].pending++;
     else totals[line.months===12?'ANNUAL':line.term].amount+=line.unit_minor*quantity;
   }
-  requireThat(Object.values(totals).every(t=>Number.isSafeInteger(t.amount)&&t.amount<=9999999999),'La combinación excede el importe permitido.');
+  requireThat(Object.values(totals).every(t=>Number.isSafeInteger(t.amount)&&t.amount<=10_000_000_000),'La combinación excede el importe permitido.');
   return totals;
 }
 export function getOrder(db,actor,company,id) {
@@ -33,7 +33,7 @@ export function getOrder(db,actor,company,id) {
   const order=db.get('SELECT * FROM package_orders WHERE company_id=? AND id=?',company.id,id||'');
   requireThat(order,'Contratación no encontrada.',404);
   const lines=db.all('SELECT * FROM package_order_lines WHERE company_id=? AND order_id=? ORDER BY term,name,id',company.id,id)
-    .map(line=>{const plan=getPlan(db,line.plan_id);return {...line,items:JSON.parse(line.items_json),months:plan.months,other_minor:plan.other_minor,campaign:plan.campaign,campaign_available:offerAvailable(plan)};});
+    .map(line=>{const plan=getPlan(db,line.plan_id);return {...line,items:JSON.parse(line.items_json),months:plan.months,other_minor:line.quoted_other_minor,campaign:plan.campaign,campaign_available:offerAvailable(plan)};});
   return {...order,lines,totals:orderTotals(lines,order.initial_branches)};
 }
 export function ordersFor(db,actor,company,page=0,archive=false) {
@@ -94,10 +94,10 @@ export function submitOrder(db,actor,company,data,walletNotBefore=null) {
       VALUES(?,?,?,?,'REQUESTED',?,?,?,?,?)`,id,company.id,actor.id,data.key,notes,now(),phone,startWhen,walletNotBefore);
     for(const {plan:source,units,previous,regularRenewal} of selections) {
       const plan=purchasePlan(db,source);
-      const price=previous&&!regularRenewal&&source.id===plan.id?previous.agreed_minor/previous.units:plan.price_minor;
+      const price=previous&&!regularRenewal&&source.id===plan.id?salePrice(previous.agreed_minor/previous.units):plan.price_minor;
       requireThat(price===null||Number.isSafeInteger(price),'Revisa el precio unitario del acuerdo.');
-      db.run(`INSERT INTO package_order_lines(id,company_id,order_id,plan_id,name,term,wallet,units,items_json,catalog_minor,unit_minor,renewal_of)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,uuid(),company.id,id,plan.id,plan.name,plan.term,plan.wallet,units,JSON.stringify(plan.items),price,price,previous?.id||null);
+      db.run(`INSERT INTO package_order_lines(id,company_id,order_id,plan_id,name,term,wallet,units,items_json,catalog_minor,unit_minor,renewal_of,quoted_other_minor)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,uuid(),company.id,id,plan.id,plan.name,plan.term,plan.wallet,units,JSON.stringify(plan.items),price,price,previous?.id||null,plan.other_minor??null);
     }
     const saved=getOrder(db,actor,company,id);
     checkSelection(db,saved,saved.lines);
@@ -126,7 +126,7 @@ export function offerOrder(db,actor,company,id,data) {
       const end=line.term==='MONTHLY'?(walletLine(line)?periodEnd(starts,line.months):monthlyEnd(starts,previous?.renewal_anchor||previous?.starts_on||starts,line.months)):
         afterDay(dateOnly(data['end_'+line.id],'último día del trabajo puntual'));
       requireThat(end>starts,'El último día debe ser igual o posterior al inicio.');
-      const amount=money(data['price_'+line.id]);
+      const amount=priceFromInput(data['price_'+line.id]);
       requireThat(!standardIds.includes(line.plan_id)||amount===line.catalog_minor,'La tarifa de Wallet por sucursal es fija.',409);
       requireThat(!line.other_minor || line.other_minor<=amount,'El importe total debe cubrir los otros servicios incluidos.');
       requireThat(!line.campaign||amount===line.catalog_minor,'Conserva el precio promocional seleccionado. Para otro alcance prepara una oferta nueva.',409);

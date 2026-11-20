@@ -20,8 +20,8 @@ const staff={role:'OWNER',business:{id:'fiction',name:'Café de ejemplo',currenc
  const options=()=>Array.from(q('#featuredRewardId').options,o=>o.value);
  w.eval('state.token="fiction";state.tab="design"');w.eval('state').data=JSON.parse(JSON.stringify(staff));await w.eval('renderMerchant()');await settle(()=>q('#featuredRewardId'));
  click('[data-studio-step="2"]');assert.deepEqual(options(),['','a','b']);assert.ok(q('#saveDesign').disabled);assert.equal(q('#studioRewardMode').textContent,'Automático');both('4 de 5 sellos');
- input('featuredRewardId','b');assert.equal(q('#featuredProgramId').value,'s');assert.equal(q('#studioRewardMode').textContent,'Elegido por ti');both('11 de 12 sellos');assert.match(q('#studioFeaturedRule').textContent,/12 sellos/);assert.equal(q('#studioFeaturedName').textContent,'Café para dos');
- assert.match(q('#studioChangeList').textContent,/Premio al frente/);assert.match(q('#studioChangeList').textContent,/Café para dos/);
+ input('featuredRewardId','b');assert.equal(q('#featuredProgramId').value,'s');assert.equal(q('#studioRewardMode').textContent,'Preferido en empates');both('11 de 12 sellos');assert.match(q('#studioFeaturedRule').textContent,/12 sellos/);assert.equal(q('#studioFeaturedName').textContent,'Café para dos');
+ assert.match(q('#studioChangeList').textContent,/Premio preferido/);assert.match(q('#studioChangeList').textContent,/Café para dos/);
  click('[data-wallet-example=surplus]');click('#simulateWalletRedemption');both('18 sellos disponibles');
  click('[data-front-focus=REWARD]');click('[data-preview-provider=both]');click('[data-composition=PRECISION]');both('18 sellos disponibles');assert.equal(q('#featuredRewardId').value,'b');
  click('#useAutomaticReward');assert.equal(q('#featuredRewardId').value,'');both('4 de 5 sellos');assert.ok(q('#restoreWalletSimulation').hidden);assert.equal(w.document.activeElement.id,'featuredRewardId');

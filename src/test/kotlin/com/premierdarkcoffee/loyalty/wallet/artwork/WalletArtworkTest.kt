@@ -54,11 +54,11 @@ class WalletArtworkTest {
         assertEquals("Progreso actualizado: %@",balance.getValue("changeMessage").jsonPrimitive.content)
         assertEquals("11",p.googleExperienceFields().getValue("loyaltyPoints").jsonObject.getValue("balance").jsonObject.getValue("string").jsonPrimitive.content)
     }
-    @Test fun `featured promotion determines the picture even when another prize is ready`() {
+    @Test fun `artwork represents the closest reward when a featured promotion is farther away`() {
         val p=pass(design=WalletDesign(featuredProgramId="b"))
         val s=JsonObject(p.snapshot + obj("balances" to (p.snapshot.getValue("balances").jsonArray + obj("programId" to "b","kind" to "STAMPS","available" to 2,"name" to "Otra")),
             "rewardProgress" to (p.snapshot.getValue("rewardProgress").jsonArray + obj("id" to "b","programId" to "b","kind" to "STAMPS","goal" to 9,"name" to "Otro premio"))))
-        assertEquals(2,p.copy(snapshot=s).artwork().filled);assertEquals(9,p.copy(snapshot=s).artwork().total)
+        assertEquals(4,p.copy(snapshot=s).artwork().filled);assertEquals(5,p.copy(snapshot=s).artwork().total)
     }
     @Test fun `paused removed and orphan promotions have no graphic progress`() {
         assertEquals(0,pass(active=false).artwork().total)

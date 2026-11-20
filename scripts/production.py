@@ -127,8 +127,10 @@ PG_CALENDAR = 'infrastructure/persistence/extensions/membership-calendar.sql'
 PORTAL_CALENDAR = 'lumina/infrastructure/extensions/membership-calendar.sql'
 
 MEMBERSHIP_EXTENSIONS = ('membership-calendar', 'subscription-periods', 'wallet-consent')
-MEMBERSHIP_SQL = tuple(path.replace('membership-calendar', name)
-                       for name in MEMBERSHIP_EXTENSIONS for path in (PG_CALENDAR, PORTAL_CALENDAR))
+PORTAL_EXTENSIONS = (*MEMBERSHIP_EXTENSIONS, 'commercial-prices')
+MEMBERSHIP_SQL = tuple(PG_CALENDAR.replace('membership-calendar', name) for name in MEMBERSHIP_EXTENSIONS) + tuple(
+    PORTAL_CALENDAR.replace('membership-calendar', name) for name in PORTAL_EXTENSIONS
+)
 
 def pg_calendar_script():
     operations = ["BEGIN; SELECT pg_advisory_xact_lock(6432001001);",
@@ -147,7 +149,7 @@ def apply_portal_calendar(path):
         db.execute('PRAGMA foreign_keys=ON')
         db.execute('BEGIN IMMEDIATE')
         db.execute('CREATE TABLE IF NOT EXISTS lumina_extensions(name TEXT PRIMARY KEY,checksum TEXT NOT NULL) STRICT')
-        for name in MEMBERSHIP_EXTENSIONS:
+        for name in PORTAL_EXTENSIONS:
             body = (SQL_ROOT/PORTAL_CALENDAR.replace('membership-calendar', name)).read_text()
             sha = digest(body.encode())
             row = db.execute("SELECT checksum FROM lumina_extensions WHERE name=?", (name,)).fetchone()

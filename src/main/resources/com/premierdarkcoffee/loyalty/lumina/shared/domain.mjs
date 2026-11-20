@@ -73,6 +73,16 @@ export function money(value, optional = false) {
   const [whole, cents = ''] = value.replace(',', '.').split('.');
   return Number(whole) * 100 + Number(cents.padEnd(2, '0'));
 }
+// Apply to a sale price in cents, before multiplying quantities or calculating proration.
+export function salePrice(minor) {
+  if (minor == null || minor % 100 !== 99) return minor;
+  return minor + 1;
+}
+export function priceFromInput(value, optional = false) {
+  // The highest eight-digit input, once rounded, must also be valid when a quote is reopened.
+  if (typeof value === 'string' && /^100000000(?:[.,]0{1,2})?$/.test(value)) return 10_000_000_000;
+  return salePrice(money(value, optional));
+}
 export function dateOnly(value, label = 'fecha') {
   requireThat(typeof value === 'string' && /^20\d\d-\d\d-\d\d$/.test(value), `Revisa ${label}.`);
   const date = new Date(value + 'T00:00:00Z');

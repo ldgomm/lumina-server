@@ -8,12 +8,11 @@ import com.premierdarkcoffee.loyalty.shared.json
 import com.premierdarkcoffee.loyalty.shared.obj
 import com.premierdarkcoffee.loyalty.shared.text
 import com.premierdarkcoffee.loyalty.wallet.WalletPass
-import com.premierdarkcoffee.loyalty.wallet.artwork.artwork
 import com.premierdarkcoffee.loyalty.wallet.presentation.appleActivityFields
 import com.premierdarkcoffee.loyalty.wallet.presentation.earningRule
 import com.premierdarkcoffee.loyalty.wallet.presentation.journey
-import com.premierdarkcoffee.loyalty.wallet.presentation.prioritizedBalances
-import com.premierdarkcoffee.loyalty.wallet.presentation.rewardPriority
+import com.premierdarkcoffee.loyalty.wallet.presentation.rewardFocus
+import com.premierdarkcoffee.loyalty.wallet.presentation.WalletReward
 import com.premierdarkcoffee.loyalty.wallet.presentation.walletRewardGuidance
 import com.premierdarkcoffee.loyalty.wallet.summary
 
@@ -22,16 +21,6 @@ import java.math.BigDecimal
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-
-/** Presentation only. Never computes an award or authorizes a redemption. */
-private data class AppleReward(val source: JsonObject, val balance: JsonObject) {
-    val id = source.getValue("id").jsonPrimitive.content
-    val name = source.getValue("name").jsonPrimitive.content
-    val goal = source.getValue("goal").jsonPrimitive.long
-    val available = balance.getValue("available").jsonPrimitive.long
-    val remaining = maxOf(0L, goal - available)
-    val kind = balance.getValue("kind").jsonPrimitive.content
-}
 
 private fun appleShort(value: String, limit: Int): String {
     val compact = value.trim().replace(Regex("\\s+"), " ")
@@ -45,21 +34,7 @@ private fun appleAmount(amount: Long, kind: String, currency: String): String = 
     else -> "$amount " + if (amount == 1L) "punto" else "puntos"
 }
 
-private fun WalletPass.appleRewards(balances: List<JsonObject>): List<AppleReward> {
-    val programs = balances.mapNotNull { balance ->
-        balance["programId"]?.jsonPrimitive?.contentOrNull?.let { it to balance }
-    }.toMap()
-    return snapshot["rewardProgress"]?.jsonArray.orEmpty().mapNotNull { item ->
-        val reward = item.jsonObject
-        val balance = programs[reward["programId"]?.jsonPrimitive?.contentOrNull] ?: return@mapNotNull null
-        if ((reward["goal"]?.jsonPrimitive?.longOrNull ?: 0) <= 0) return@mapNotNull null
-        if (reward["kind"] != balance["kind"]) return@mapNotNull null
-        AppleReward(reward, balance)
-    }.sortedWith(compareBy<AppleReward> { balances.indexOf(it.balance) }
-        .thenBy { design().rewardPriority(it.source["programId"]?.jsonPrimitive?.contentOrNull, it.id) }.thenBy { it.goal }.thenBy { it.id })
-}
-
-private fun AppleReward.detail(currency: String, symbol: String, paused: Boolean): String {
+private fun WalletReward.detail(currency: String, symbol: String, paused: Boolean): String {
     val status = walletRewardGuidance(available, goal, kind, currency, paused)
     val stamps = if (kind == "STAMPS" && goal <= 20) {
         "\n" + (1..goal.toInt()).chunked(10).joinToString("\n") { row ->
@@ -75,12 +50,12 @@ fun WalletPass.appleExperienceFields(): JsonObject {
     val design = design()
     val currency = snapshot.getValue("currency").jsonPrimitive.content
     val paused = !snapshot.getValue("canOperate").jsonPrimitive.boolean
-    val balances = prioritizedBalances()
+    val focus = rewardFocus()
+    val balances = focus.balances
+    val rewards = focus.rewards
+    val target = focus.target
     val first = balances.firstOrNull()
-    val rewards = appleRewards(balances)
-    // Costs and available units are comparable only within the same promotion.
-    val target = rewards.firstOrNull { it.balance == first }
-    val progress = journey()
+    val progress = if (paused) null else target?.journey(currency)
     val header = when {
         paused -> obj("key" to "card_state", "label" to "MEMBRESÍA", "value" to "Pausada")
         target == null -> obj("key" to "card_state", "label" to "MEMBRESÍA", "value" to "Activa")
@@ -98,9 +73,7 @@ fun WalletPass.appleExperienceFields(): JsonObject {
     val extras = mutableListOf<JsonObject>()
     if (target != null) extras += obj("key" to "featured_reward", "label" to when {
         paused -> "PREMIO PAUSADO"
-        // A stamp illustration occupies the strip. Keep the exact balance as native text above it.
-// v022 also represents points and cashback; native fields retain their own units.
-target.remaining == 0L -> "CANJEA EN CAJA"
+        target.remaining == 0L -> "CANJEA EN CAJA"
         else -> "PRÓXIMO PREMIO"
     }, "value" to appleShort(target.name, 28))
     val rewardDetails = rewards.map { reward -> obj("key" to "reward_${reward.id}",
@@ -109,10 +82,10 @@ target.remaining == 0L -> "CANJEA EN CAJA"
     val updated = updatedAt.atZone(zone).format(DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm", Locale.forLanguageTag("es-EC")))
     val fields = obj(
         // One header and two full-width-friendly fields avoid four competing columns.
-        "headerFields" to if (artwork().total > 0) listOf(JsonObject(primaryWithChange + obj("label" to when(first?.get("kind")?.jsonPrimitive?.content){"STAMPS"->"SELLOS";"POINTS"->"PUNTOS";else->"SALDO"}))) else listOf(header),
-        "primaryFields" to if (artwork().total > 0) emptyList<JsonObject>() else listOf(primaryWithChange),
+        "headerFields" to if (progress != null) listOf(JsonObject(primaryWithChange + obj("label" to when(first?.get("kind")?.jsonPrimitive?.content){"STAMPS"->"SELLOS";"POINTS"->"PUNTOS";else->"SALDO"}))) else listOf(header),
+        "primaryFields" to if (progress != null) emptyList<JsonObject>() else listOf(primaryWithChange),
         "secondaryFields" to (progress?.let { listOf(obj("key" to "journey", "label" to when {
-            it.remaining == 0L -> it.redemptionLabel
+            it.remaining == 0L -> it.readyLabel
             else -> "Falta${if(it.remaining==1L && it.kind!="CASHBACK") "" else "n"} ${appleAmount(it.remaining, it.kind, currency)}"
         }, "value" to it.summary)) } ?: listOf(obj("key" to "member", "label" to "Cliente", "value" to appleShort(snapshot.getValue("name").jsonPrimitive.content, 24)))),
         "auxiliaryFields" to extras,

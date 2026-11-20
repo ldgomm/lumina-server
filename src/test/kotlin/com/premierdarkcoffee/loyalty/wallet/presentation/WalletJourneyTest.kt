@@ -86,7 +86,7 @@ class WalletJourneyTest {
             "design" to json.parseToJsonElement(json.encodeToString(WalletDesign(featuredProgramId="q"))),
             "earningRules" to (p.snapshot.getValue("earningRules").jsonArray+obj("programId" to "q","programName" to "Otra promoción","kind" to "POINTS","text" to "Regla de q")),
             "rewardProgress" to (p.snapshot.getValue("rewardProgress").jsonArray+obj("id" to "qreward","programId" to "q","name" to "Otro premio","kind" to "POINTS","goal" to 50)))))
-        assertEquals("0 de 50 puntos",q.appleProgress());assertEquals(0,q.artwork().filled);assertEquals(100,q.artwork().total)
+        assertEquals(p.appleProgress(),q.appleProgress());assertEquals(p.artwork(),q.artwork())
         assertEquals(4,q.presentationBalances().single { it["programId"]==JsonPrimitive("p") }.getValue("available").jsonPrimitive.long)
         assertEquals(1,q.snapshot.getValue("balances").jsonArray.size)
     }

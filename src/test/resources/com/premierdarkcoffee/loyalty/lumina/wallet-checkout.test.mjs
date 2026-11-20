@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {portal,agency,password,documentFor,colleague} from './helpers.mjs';
 import {fakeLoyalty} from './loyalty-fixture.mjs';
-import {localDay} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
+import {DatabaseSync} from 'node:sqlite';
+import {mkdtempSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {openDatabase} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/infrastructure/database.mjs';
+import {getPlan} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/billing.mjs';
+import {localDay, priceFromInput} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 
 import {advanceCalendar,firstStatement,nextCut,expiryAlerts} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/calendar.mjs';
 
@@ -235,20 +241,20 @@ test('standard Wallet freezes the reviewed branch count and charges the displaye
  await w.client.post('/plans/wallet/choice',{choice:'start'});
  t.mock.timers.setTime(Date.parse('2027-01-01T05:01:00Z'));
  const rate=await plan(w,{price:'4.99',name:'Lealtad'}),o=await selection(w,[rate]);
- assert.match(o.body,/9,98/);assert.match(o.body,/2 sucursales/);
+ assert.match(o.body,/10,00/);assert.match(o.body,/2 sucursales/);
  assert.match(o.body,/Pagar hasta el<\/dt><dd>15 de febrero de 2027/);
  assert.match(o.body,/Se registra el<\/dt><dd>1 de febrero de 2027/);
- assert.match(o.body,/Precio mensual del negocio<\/dt><dd>[^<]*9,98/);
+ assert.match(o.body,/Precio mensual del negocio<\/dt><dd>[^<]*10,00/);
  branches=3;
  assert.equal((await w.client.post(o.path+'/accept',o.data)).status,409);
  const updated=await w.client.get(o.path);
- assert.match(updated.body,/14,97/);
+ assert.match(updated.body,/15,00/);
  const form={...o.data,offerHash:updated.body.match(/name="offerHash" value="([^"]+)"/)[1]};
  assert.equal((await w.client.post(o.path+'/accept',form)).status,303);
  assert.equal((await w.client.post(o.path+'/accept',form)).status,303);
  assert.equal(w.db.get('SELECT initial_branches FROM wallet_schedules').initial_branches,3);
  assert.equal(count(w,'contracts'),1);
- assert.match((await w.client.get(o.path)).body,/14,97/);
+ assert.match((await w.client.get(o.path)).body,/15,00/);
 });
 test('trial bundles quote only other services and cannot authorize Wallet for January',async t=>{
  const w=await world(t,{},'2026-12-15T16:00:00Z'),p=await plan(w,{name:'Wallet y contenido',price:'24.99',VIDEO:'1',other_price:'20'});
@@ -259,7 +265,7 @@ test('trial bundles quote only other services and cannot authorize Wallet for Ja
  assert.equal(w.db.get("SELECT status FROM company_services WHERE service='SOCIAL'").status,'ACTIVE');
  assert.equal(count(w,'wallet_schedules'),0);assert.equal((await w.client.get('/wallet')).location,'/plans/wallet');
  // Simulate an activated mixed order carried forward from the previous release.
- w.db.run("UPDATE package_order_lines SET plan_id=?,wallet='INCLUDED',unit_minor=2499,items_json=?",p,JSON.stringify([{service:'WALLET',quantity:1},{service:'VIDEO',quantity:1}]));
+ w.db.run("UPDATE package_order_lines SET plan_id=?,wallet='INCLUDED',unit_minor=2499,quoted_other_minor=2000,items_json=?",p,JSON.stringify([{service:'WALLET',quantity:1},{service:'VIDEO',quantity:1}]));
  const old=await w.client.get(o.path);assert.match(old.body,/Acuerdo durante la prueba/);assert.match(old.body,/20,00/);assert.doesNotMatch(old.body,/24,99|Tu primer cargo de Wallet/);
 });
 
@@ -312,4 +318,54 @@ test('a pending Wallet order stays visible after other business orders and can b
   assert.equal(cancel.location,'/plans/wallet');
   assert.ok(!(await w.client.get(cancel.location)).body.includes(wallet.path));
   assert.equal(count(w,'contracts'),0);
+});
+
+test('catalog prices round once per unit across services and preserve other cents and quotes',async t=>{
+ const w=await world(t);
+ assert.equal(priceFromInput('0,99'),100);assert.equal(priceFromInput('18.98'),1898);
+ assert.equal(priceFromInput('99999999.99'),priceFromInput('100000000.00'));assert.equal(priceFromInput('',true),null);
+ for(const [service,scope] of [['VIDEO','MONTHLY'],['WEBSITE','ONE_OFF'],['IDENTITY','ONE_OFF']]){
+   const id=await plan(w,{name:'Servicio '+service,WALLET:'0',[service]:'1',term:scope,price:'29.99'});
+   assert.equal(w.db.get('SELECT price_minor FROM plans WHERE id=?',id).price_minor,3000);
+   // Previously published immutable catalog records also use the new price for a new purchase.
+   w.db.run('UPDATE plans SET price_minor=2999 WHERE id=?',id);
+   assert.equal(getPlan(w.db,id).price_minor,3000);
+ }
+ const bundle=await plan(w,{name:'Paquete con contenido',price:'34,99',VIDEO:'1',other_price:'29.99'});
+ const o=await selection(w,[bundle]);assert.match(o.body,/35,00/);
+ const line=w.db.get('SELECT * FROM package_order_lines WHERE order_id=?',o.path.split('/').at(-1));
+ assert.equal(line.unit_minor,3500);assert.equal(line.quoted_other_minor,3000);
+});
+test('installing over earlier prices reissues unsigned quotes once and preserves accepted amounts',async t=>{
+ const w=await world(t), id=await plan(w,{name:'Paquete',price:'24.99',VIDEO:'1',other_price:'19.99'});
+ const o=await selection(w,[id]), order=o.path.split('/').at(-1);
+ const dir=mkdtempSync(join(tmpdir(),'lumina-prices-')),file=join(dir,'prior.sqlite');
+ t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ w.db.run('VACUUM INTO ?',file);
+ const prior=new DatabaseSync(file);
+ const open=prior.prepare('SELECT id,company_id,submitted_by FROM package_orders WHERE id=?').get(order);
+ prior.prepare("DELETE FROM lumina_extensions WHERE name='commercial-prices'").run();
+ prior.exec('ALTER TABLE package_order_lines DROP COLUMN quoted_other_minor');
+ prior.prepare('UPDATE plan_billing SET other_minor=1999 WHERE plan_id=?').run(id);
+ prior.prepare('UPDATE package_order_lines SET catalog_minor=2499,unit_minor=2499 WHERE order_id=?').run(order);
+ const closed=randomUUID(),now='2027-01-02T18:00:00.000Z';
+ prior.prepare("INSERT INTO package_orders(id,company_id,submitted_by,submission_key,status,notes,created_at,accepted_at) VALUES(?,?,?,?,'ACCEPTED','',?,?)").run(closed,open.company_id,open.submitted_by,randomUUID(),now,now);
+ prior.prepare('INSERT INTO package_order_lines(id,company_id,order_id,plan_id,name,term,wallet,units,items_json,catalog_minor,unit_minor) SELECT ?,company_id,?,plan_id,name,term,wallet,units,items_json,catalog_minor,unit_minor FROM package_order_lines WHERE order_id=?').run(randomUUID(),closed,order);
+ const request=randomUUID();
+ prior.prepare("INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,created_at) VALUES(?,?,?,'QUOTE','GENERAL','VIDEO',1,'Video','Trabajo solicitado','QUOTED',?)").run(request,w.id,open.submitted_by,now);
+ const quote=randomUUID();
+ prior.prepare("INSERT INTO quotes(id,company_id,request_id,revision,amount_minor,terms,status,created_at) VALUES(?,?,?,1,1499,'Alcance','OFFERED',?)").run(quote,w.id,request,now);
+ prior.close();
+ for(let run=0;run<2;run++){
+   const db=openDatabase(file);
+   try {
+     const line=db.get('SELECT catalog_minor,unit_minor,quoted_other_minor FROM package_order_lines WHERE order_id=?',order);
+     assert.deepEqual(Object.values(line),[2500,2500,2000]);
+     assert.equal(db.get('SELECT revision FROM package_orders WHERE id=?',order).revision,Number(o.data.revision)+1);
+     assert.deepEqual(Object.values(db.get('SELECT unit_minor,quoted_other_minor FROM package_order_lines WHERE order_id=?',closed)),[2499,1999]);
+     assert.deepEqual(Object.values(db.get('SELECT amount_minor,status FROM quotes WHERE id=?',quote)),[1499,'SUPERSEDED']);
+     const fresh=db.get("SELECT * FROM quotes WHERE request_id=? AND status='OFFERED'",request);
+     assert.notEqual(fresh.id,quote);assert.equal(fresh.amount_minor,1500);assert.equal(fresh.revision,2);
+   } finally { db.close(); }
+ }
 });

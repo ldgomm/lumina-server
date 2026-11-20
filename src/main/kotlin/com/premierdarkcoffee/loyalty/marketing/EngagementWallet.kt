@@ -14,6 +14,7 @@ import com.premierdarkcoffee.loyalty.shared.json
 import com.premierdarkcoffee.loyalty.shared.obj
 import com.premierdarkcoffee.loyalty.shared.text
 import com.premierdarkcoffee.loyalty.wallet.WalletPass
+import com.premierdarkcoffee.loyalty.wallet.presentation.WalletJourney
 import com.premierdarkcoffee.loyalty.wallet.presentation.googleWalletTemplate
 import com.premierdarkcoffee.loyalty.wallet.presentation.walletEarningRules
 import com.premierdarkcoffee.loyalty.wallet.providers.walletLogo
@@ -31,21 +32,30 @@ import javax.imageio.ImageIO
 
 fun walletDesign(c:Connection,tenant:String):WalletDesign=c.one("SELECT config::text FROM wallet_designs WHERE tenant_id=?",tenant){json.decodeFromString<WalletDesign>(it.getString(1))}?:WalletDesign()
 fun WalletPass.design():WalletDesign=snapshot["design"]?.let{json.decodeFromString<WalletDesign>(it.toString())}?:WalletDesign()
+// Fifty fractional digits distinguish progress even for two near-equal BIGINT ratios before LIMIT.
+internal const val rewardProgressOrder = """
+    least(coalesce(b.available,0),r.cost)::numeric(80,50)/r.cost DESC,
+    CASE WHEN r.id=? AND r.program_id=? THEN 0 ELSE 1 END,
+    CASE WHEN r.program_id=? THEN 0 ELSE 1 END, r.program_id,r.cost,r.id
+"""
 fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=true):JsonObject {
     val design=walletDesign(c,member.tenant)
-    val zone=c.one("SELECT timezone FROM tenants WHERE id=?",member.tenant){ZoneId.of(it.getString(1))}!!
+    val (zone, currency) = c.one("SELECT timezone,currency FROM tenants WHERE id=?",member.tenant) {
+        ZoneId.of(it.getString(1)) to it.getString(2)
+    }!!
     val preferences=c.one("SELECT birthday,marketing_consent FROM member_preferences WHERE tenant_id=? AND member_id=?",member.tenant,member.id){CustomerPreferences(it.getString(1),it.getBoolean(2))}?:CustomerPreferences()
     val progress=c.rows("""
         SELECT r.id,r.name,r.cost,r.program_id,r.benefit,p.kind,coalesce(b.available,0) AS available
         FROM rewards r JOIN programs p ON p.tenant_id=r.tenant_id AND p.id=r.program_id
         LEFT JOIN balances b ON b.tenant_id=r.tenant_id AND b.program_id=r.program_id AND b.member_id=?
         WHERE r.tenant_id=? AND r.active AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=p.tenant_id)
-        ORDER BY CASE WHEN r.id=? AND r.program_id=? THEN 0 ELSE 1 END,
-            CASE WHEN r.program_id=? THEN 0 ELSE 1 END,
-            CASE WHEN ? THEN least(1::numeric,coalesce(b.available,0)::numeric/r.cost) ELSE 0 END DESC,r.program_id,r.cost,r.id LIMIT 20
-    """.trimIndent(),member.id,member.tenant,design.featuredRewardId,design.featuredProgramId,design.featuredProgramId,design.automaticPriority=="PROGRESS"){val available=it.getLong("available");val cost=it.getLong("cost");val remaining=maxOf(0,cost-available)
-        val unit=when(it.getString("kind")){"STAMPS"->if(remaining==1L)"sello" else "sellos";"POINTS"->if(remaining==1L)"punto" else "puntos";else->"centavos de cashback"}
-        val message=if(remaining==0L)"Ya puedes canjear: ${it.getString("name")}" else "Te ${if(remaining==1L)"falta" else "faltan"} $remaining $unit para ${it.getString("name")}"
+        ORDER BY $rewardProgressOrder LIMIT 20
+    """.trimIndent(),member.id,member.tenant,design.featuredRewardId,design.featuredProgramId,design.featuredProgramId){val available=it.getLong("available");val cost=it.getLong("cost");val remaining=maxOf(0,cost-available)
+        val message = when {
+            !canOperate -> "Canjes pausados. Tu saldo se conserva."
+            remaining == 0L -> "Ya puedes canjear: ${it.getString("name")}"
+            else -> WalletJourney(available, cost, it.getString("kind"), currency).guidance
+        }
         obj("id" to it.getString("id"),"name" to it.getString("name"),"programId" to it.getString("program_id"),"goal" to cost,"available" to available,"remaining" to remaining,"kind" to it.getString("kind"),"message" to message,"benefitText" to rewardBenefitDescription(it.getString("benefit")))
     }
     val announcements=mutableListOf<JsonObject>()
@@ -55,7 +65,6 @@ fun walletEngagement(c:Connection,member:Member,at:Instant,canOperate:Boolean=tr
         announcements+=c.rows("SELECT id,title,body FROM customer_events WHERE tenant_id=? AND active AND starts_at<=? AND ends_at>? ORDER BY starts_at DESC,id LIMIT 4",member.tenant,Timestamp.from(at),Timestamp.from(at)){obj("id" to it.getString(1),"title" to it.getString(2),"body" to it.getString(3))}
     }
     val version=c.one("SELECT version FROM wallet_designs WHERE tenant_id=?",member.tenant){it.getInt(1)}?:0
-    val currency=c.one("SELECT currency FROM tenants WHERE id=?",member.tenant){it.getString(1)}!!
     val earningRules=if(!canOperate)emptyList() else c.rows("SELECT p.id,v.config::text FROM customer_programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? ORDER BY p.id",member.tenant){
         val program=json.decodeFromString<Program>(it.getString(2))
         obj("programId" to it.getString(1),"programName" to program.name,"kind" to program.kind.name,"text" to walletEarningRules(program,currency,zone))

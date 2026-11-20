@@ -1,5 +1,7 @@
 package com.premierdarkcoffee.loyalty.fidelity
 
+import com.premierdarkcoffee.loyalty.marketing.rewardProgressOrder
+import com.premierdarkcoffee.loyalty.marketing.walletDesign
 import com.premierdarkcoffee.loyalty.access.Member
 import com.premierdarkcoffee.loyalty.access.Security
 import com.premierdarkcoffee.loyalty.access.Staff
@@ -269,7 +271,16 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         } }
     }
     private fun programs(c: Connection, tenant: String, visibleOnly: Boolean = false) = c.rows("SELECT p.id,p.current_version,v.config::text FROM programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? AND p.deleted_at IS NULL AND (NOT ? OR p.id IN (SELECT id FROM customer_programs WHERE tenant_id=?)) ORDER BY p.id",tenant,visibleOnly,tenant) { obj("id" to it.getString(1),"version" to it.getInt(2),"config" to json.parseToJsonElement(it.getString(3))) }
-    private fun rewards(c: Connection, tenant: String, visibleOnly: Boolean = false) = c.rows("SELECT r.* FROM rewards r JOIN programs p ON p.tenant_id=r.tenant_id AND p.id=r.program_id WHERE r.tenant_id=? AND p.deleted_at IS NULL AND (NOT ? OR (r.active AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=?))) ORDER BY r.id",tenant,visibleOnly,tenant) { obj("id" to it.getString("id"),"programId" to it.getString("program_id"),"name" to it.getString("name"),"cost" to it.getLong("cost"),"active" to it.getBoolean("active"),"version" to it.getInt("version"),"benefit" to it.getString("benefit")?.let{v->json.parseToJsonElement(v)},"benefitText" to rewardBenefitDescription(it.getString("benefit"))) }
+    private fun rewards(c: Connection, tenant: String, visibleOnly: Boolean = false) = c.rows("SELECT r.* FROM rewards r JOIN programs p ON p.tenant_id=r.tenant_id AND p.id=r.program_id WHERE r.tenant_id=? AND p.deleted_at IS NULL AND (NOT ? OR (r.active AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=?))) ORDER BY r.id",tenant,visibleOnly,tenant, read=::rewardFields)
+    private fun rewardFields(row: java.sql.ResultSet) = obj("id" to row.getString("id"),"programId" to row.getString("program_id"),"name" to row.getString("name"),"cost" to row.getLong("cost"),"active" to row.getBoolean("active"),"version" to row.getInt("version"),"benefit" to row.getString("benefit")?.let{v->json.parseToJsonElement(v)},"benefitText" to rewardBenefitDescription(row.getString("benefit")))
+    private fun memberRewards(c: Connection, member: Member): List<JsonObject> {
+        val design = walletDesign(c, member.tenant)
+        return c.rows("""
+            SELECT r.* FROM rewards r JOIN customer_programs p ON p.tenant_id=r.tenant_id AND p.id=r.program_id
+            LEFT JOIN balances b ON b.tenant_id=r.tenant_id AND b.program_id=r.program_id AND b.member_id=?
+            WHERE r.tenant_id=? AND r.active ORDER BY $rewardProgressOrder
+        """.trimIndent(), member.id, member.tenant, design.featuredRewardId, design.featuredProgramId, design.featuredProgramId, read=::rewardFields)
+    }
     fun dashboard(s: Staff) = db.tx { c -> obj(
         "walletAccess" to commercial.walletAccess(c,s.tenant),
         "business" to c.one("SELECT * FROM tenants WHERE id=?",s.tenant) { obj("id" to s.tenant,"name" to it.getString("name"),"slug" to it.getString("slug"),"currency" to it.getString("currency"),"timezone" to it.getString("timezone")) },
@@ -296,7 +307,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     private fun memberView(c: Connection, member: Member): JsonObject = obj(
         "member" to c.one("SELECT id,name,card_code,revision FROM members WHERE tenant_id=? AND id=?",member.tenant,member.id) { obj("id" to it.getString(1),"name" to it.getString(2),"cardCode" to it.getString(3),"revision" to it.getLong(4)) },
         "balances" to c.rows("SELECT b.program_id,b.available,p.kind,v.config->>'name' AS name FROM balances b JOIN programs p ON p.tenant_id=b.tenant_id AND p.id=b.program_id JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE b.tenant_id=? AND b.member_id=? AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=p.tenant_id) ORDER BY b.program_id",member.tenant,member.id) { obj("programId" to it.getString(1),"available" to it.getLong(2),"kind" to it.getString(3),"name" to it.getString(4)) },
-        "rewards" to rewards(c,member.tenant,true),
+        "rewards" to memberRewards(c,member),
         "history" to c.rows("SELECT * FROM ledger WHERE tenant_id=? AND member_id=? ORDER BY created_at DESC,id DESC LIMIT 100",member.tenant,member.id) { obj("id" to it.getString("id"),"programId" to it.getString("program_id"),"delta" to it.getLong("delta"),"kind" to it.getString("kind"),"referenceId" to it.getString("reference_id"),"at" to it.instant("created_at")) },
         "redemptions" to c.rows("SELECT id,status,reward_name,expires_at FROM redemptions WHERE tenant_id=? AND member_id=? ORDER BY created_at DESC LIMIT 30",member.tenant,member.id) { obj("id" to it.getString(1),"status" to it.getString(2),"name" to it.getString(3),"expiresAt" to it.getTimestamp(4).toInstant()) }
     )

@@ -35,6 +35,7 @@ import kotlinx.serialization.json.*
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Test
 import java.sql.DriverManager
+import com.premierdarkcoffee.loyalty.marketing.customerDetail
 import java.sql.Timestamp
 import java.time.*
 import java.util.Base64
@@ -94,8 +95,8 @@ class WalletFeaturedRewardPostgresTest {
         val wake=wakes();assertEquals(1,choice(f,reward).num("version"))
         assertTrue(db.tx{c->c.one("SELECT next_scan_at<=? FROM wallet_passes WHERE serial=?",Timestamp.from(at),before.serial){it.getBoolean(1)}}!!)
         assertFalse(db.tx{c->c.one("SELECT next_scan_at<=? FROM wallet_passes WHERE serial=?",Timestamp.from(at),untouched.serial){it.getBoolean(1)}}!!)
-        val after=wallet.materialize(f.member);assertChoice(after,200,"Premio destacado")
-        assertEquals(50,after.journey()!!.remaining);assertEquals(before.serial,after.serial);assertEquals(before.token,after.token)
+        val after=wallet.materialize(f.member);assertChoice(after,100,"Premio")
+        assertEquals(0,after.journey()!!.remaining);assertEquals(before.serial,after.serial);assertEquals(before.token,after.token)
         assertEquals(bound.googleId,after.googleId);assertEquals(bound.googleClass,after.googleClass);assertEquals(bound.appleType,after.appleType)
         assertEquals(before.snapshot["cardCode"],after.snapshot["cardCode"]);assertTrue(after.tag>bound.tag)
         assertEquals(listOf("APPLE","GOOGLE"),wakes().map{it.first});assertTrue(wakes().zip(wake).all{(a,b)->a.second>b.second})
@@ -105,7 +106,7 @@ class WalletFeaturedRewardPostgresTest {
         // Choosing what the card shows does not alter which reward the customer can redeem.
         val revision=service.card(f.member).getValue("member").jsonObject.num("revision")
         service.redeemAtCounter(f.owner,CounterRedemption(f.member.id,f.branch,f.reward,revision,1,true,true),id())
-        assertEquals(50,balance(f));assertEquals(150,wallet.materialize(f.member).journey()!!.remaining)
+        assertEquals(50,balance(f));assertEquals(50,wallet.materialize(f.member).journey()!!.remaining)
         choice(f,null,1);assertEquals(100,wallet.materialize(f.member).journey()!!.goal)
     }
     @Test fun `choice validates tenant program permissions and requires a paired program`() {
@@ -119,7 +120,7 @@ class WalletFeaturedRewardPostgresTest {
         assertEquals(0,service.design(f.owner).num("version"));assertEquals(0,count(f,"wallet_designs"))
     }
     @Test fun `paused chosen reward disappears falls back and resumes with current name and goal`() {
-        val f=fixture();val reward=extra(f);earn(f,15000);choice(f,reward)
+        val f=fixture();val reward=extra(f);earn(f,35000);choice(f,reward)
         val before=wallet.materialize(f.member);assertChoice(before,200,"Premio destacado")
         service.saveReward(f.owner,f.input.copy(name="Premio destacado",cost=200,active=false),reward,1)
         val paused=wallet.materialize(f.member);assertEquals(100,paused.journey()!!.goal)
@@ -127,7 +128,7 @@ class WalletFeaturedRewardPostgresTest {
         // Retaining an inactive preference must not block edits to other design fields.
         choice(f,reward,1)
         service.saveReward(f.owner,f.input.copy(name="Premio renovado",cost=300),reward,2)
-        val active=wallet.materialize(f.member);assertChoice(active,300,"Premio renovado");assertEquals(before.serial,active.serial);assertEquals(150,balance(f))
+        val active=wallet.materialize(f.member);assertChoice(active,300,"Premio renovado");assertEquals(before.serial,active.serial);assertEquals(350,balance(f))
         service.editProgram(f.owner,f.program,ProgramChange(1,Program("Promoción",Kind.POINTS,active=false)))
         val hidden=wallet.materialize(f.member);assertNull(hidden.journey());assertTrue(hidden.snapshot.getValue("rewardProgress").jsonArray.isEmpty())
     }
@@ -138,6 +139,33 @@ class WalletFeaturedRewardPostgresTest {
         assertEquals(JsonPrimitive(reward),p.snapshot.getValue("rewardProgress").jsonArray.first().jsonObject["id"])
         service.saveReward(f.owner,f.input.copy(name="Premio destacado",cost=500,active=false),reward,1)
         assertEquals(1,wallet.materialize(f.member).journey()!!.goal)
+    }
+    @Test fun `an installed card prioritizes cashback before the snapshot limit and refreshes after a redemption`() {
+        val f=fixture()
+        earn(f,4400)
+        repeat(24){extra(f,200L+it)}
+        choice(f,f.reward)
+        val before=wallet.materialize(f.member)
+        val points=Program("Puntos",Kind.POINTS)
+        service.editProgram(f.owner,f.program,ProgramChange(1,points.copy(active=false)))
+        val cash=service.newProgram(f.owner,Program("Saldo por volver",Kind.CASHBACK,cashbackBps=500)).str("id")
+        val pay=service.saveReward(f.owner,Reward(cash,"Canje de saldo",500)).str("id")
+        earn(f,14500)
+        service.editProgram(f.owner,f.program,ProgramChange(2,points))
+        val card=wallet.materialize(f.member)
+        assertEquals(before.serial,card.serial);assertEquals(before.token,card.token);assertTrue(card.tag>before.tag)
+        assertEquals(20,card.snapshot.getValue("rewardProgress").jsonArray.size)
+        assertEquals(pay,card.snapshot.getValue("rewardProgress").jsonArray.first().jsonObject.str("id"))
+        val detail=service.customerDetail(f.owner,f.member.id).getValue("rewardProgress").jsonArray
+        assertEquals(pay,detail.first().jsonObject.str("id"))
+        assertEquals(pay,service.card(f.member).getValue("rewards").jsonArray.first().jsonObject.str("id"))
+        assertEquals(725,card.journey()!!.available);assertEquals(0,card.journey()!!.remaining)
+        val revision=service.card(f.member).getValue("member").jsonObject.num("revision")
+        service.redeemAtCounter(f.owner,CounterRedemption(f.member.id,f.branch,pay,revision,1,true,true),id())
+        val next=wallet.materialize(f.member)
+        assertEquals(225,next.journey()!!.available);assertEquals(275,next.journey()!!.remaining)
+        assertEquals("Te faltan 2.75 USD.",next.snapshot.getValue("rewardProgress").jsonArray.first().jsonObject.str("message"))
+        assertEquals(44,balance(f));assertEquals(card.serial,next.serial);assertTrue(next.tag>card.tag)
     }
     @Test fun `concurrent design choices keep exactly one winner and no transaction side effects`() {
         val f=fixture();val reward=extra(f);val executor=Executors.newFixedThreadPool(2);val barrier=CyclicBarrier(2)

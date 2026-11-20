@@ -1,4 +1,4 @@
-import { localDay, requireThat } from '../shared/domain.mjs';
+import { localDay, requireThat, salePrice } from '../shared/domain.mjs';
 
 export const campaignZone='America/Guayaquil';
 export const campaignThemes={GOLD:'Navy y oro',VIOLET:'Navy y violeta',ICE:'Navy y hielo'};
@@ -8,16 +8,20 @@ export function campaignDates(year) {
   last.setUTCDate(30-(last.getUTCDay()+2)%7);
   return {year,first:`${year}-11-01`,last:`${year}-11-30`,until:`${year}-12-01`,friday:last.toISOString().slice(0,10),deadline:`${year}-12-01T05:00:00.000Z`};
 }
+const noSaving = plan => plan.campaign && plan.price_minor != null && plan.price_minor >= plan.campaign.regular_minor;
 export function offerAvailable(plan,today=localDay()) {
-  return Boolean(plan.published&&(!plan.campaign||plan.campaign.starts_on<=today&&today<plan.campaign.ends_before));
+  return Boolean(plan.published&&!noSaving(plan)&&(!plan.campaign||plan.campaign.starts_on<=today&&today<plan.campaign.ends_before));
 }
 export function campaignState(plan,today=localDay()) {
   if(today>=plan.campaign.ends_before)return 'Finalizada';
   if(!plan.published)return 'Retirada';
+  if(noSaving(plan))return 'Sin descuento';
   return today<plan.campaign.starts_on?'Programada':'Disponible';
 }
 export function attachCampaign(db,plan) {
-  return {...plan,campaign:db.get('SELECT * FROM seasonal_offers WHERE plan_id=?',plan.id)||null};
+  const campaign=db.get('SELECT * FROM seasonal_offers WHERE plan_id=?',plan.id);
+  return {...plan,price_minor:salePrice(plan.price_minor),other_minor:salePrice(plan.other_minor),
+    campaign:campaign?{...campaign,regular_minor:salePrice(campaign.regular_minor)}:null};
 }
 export function requireCampaignOpen(plan) {
   requireThat(!plan.campaign||offerAvailable(plan),'La promoción de Viernes Negro ya no está disponible. Revisa las ofertas vigentes.',409);

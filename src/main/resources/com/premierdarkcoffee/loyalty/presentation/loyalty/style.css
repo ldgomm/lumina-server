@@ -586,3 +586,13 @@ input[data-money]{appearance:textfield;-moz-appearance:textfield}input[data-mone
 .registration-flow [aria-invalid=true]{border-color:#ac3434}.registration-flow .form-feedback{padding:14px;border-radius:12px;background:#fff1f1;color:#852e2e;margin-top:16px}
 .customer-contact form{margin-top:16px}.customer-contact a{font-size:1.05rem;font-variant-numeric:tabular-nums}.customer-contact input[type=tel]{font-size:16px}
 @media(max-width:480px){.registration-flow{padding:0 0 16px}.registration-progress{gap:12px;font-size:.8rem}.registration-panel{padding:20px}.registration-flow .card{padding:20px}}
+
+.counter-wallet-reward{margin:14px 0 12px;padding:14px 18px;border-left:4px solid #657694;background:#f4f6fa;border-radius:8px;color:#132542;overflow-wrap:anywhere}
+.counter-wallet-reward.is-ready{border-color:#16765a;background:#ebf7f1}
+.counter-wallet-reward>span{font-size:.84rem;font-weight:700;color:#425575}
+.counter-wallet-reward.is-ready>span{color:#185c45}
+.counter-wallet-reward h3{margin:4px 0;font-size:1.12rem}
+.counter-wallet-reward p{margin:4px 0}
+.counter-wallet-balances{margin:12px 0 20px}
+.counter-wallet-balances summary{cursor:pointer;color:#294767;font-weight:650}
+.counter-wallet-balances li{margin:6px 0}

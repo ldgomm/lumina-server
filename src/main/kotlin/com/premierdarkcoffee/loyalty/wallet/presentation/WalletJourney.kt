@@ -44,6 +44,7 @@ data class WalletJourney(val available: Long, val goal: Long, val kind: String, 
         else -> if (value == 1L) "punto" else "puntos"
     }
     val summary: String get() = if (remaining == 0L) "${number(available)} ${unit(available)} disponible${if (available == 1L && kind != "CASHBACK") "" else "s"}" else "${number(available)} de ${number(goal)} ${unit(goal)}"
+    val readyLabel: String get() = if (kind == "CASHBACK") "Canje de ${number(goal)} $currency" else redemptionLabel
     val label: String get() = if (remaining == 0L) redemptionLabel else "PROGRESO · $percent%"
     val guidance: String get() = if (remaining == 0L) "$redemptionLabel de este premio. Confirma el canje en caja." else
         "Te falta${if (remaining == 1L && kind != "CASHBACK") "" else "n"} ${number(remaining)} ${unit(remaining)}."
@@ -55,12 +56,5 @@ internal fun WalletDesign.rewardPriority(programId: String?, rewardId: String?):
 
 fun WalletPass.journey(): WalletJourney? {
     if (snapshot["canOperate"]?.jsonPrimitive?.booleanOrNull != true) return null
-    val first = prioritizedBalances().firstOrNull() ?: return null
-    val target = snapshot["rewardProgress"]?.jsonArray.orEmpty().map { it.jsonObject }.filter {
-        first["programId"] != null && it["programId"] == first["programId"] && it["kind"] == first["kind"] &&
-            (it["goal"]?.jsonPrimitive?.longOrNull ?: 0) > 0
-    }.sortedWith(compareBy<JsonObject> { design().rewardPriority(it["programId"]?.jsonPrimitive?.contentOrNull, it["id"]?.jsonPrimitive?.contentOrNull) }
-        .thenBy { it.getValue("goal").jsonPrimitive.long }.thenBy { it.getValue("id").jsonPrimitive.content }).firstOrNull() ?: return null
-    return WalletJourney(maxOf(0, first.getValue("available").jsonPrimitive.long), target.getValue("goal").jsonPrimitive.long,
-        first.getValue("kind").jsonPrimitive.content, snapshot.getValue("currency").jsonPrimitive.content)
+    return rewardFocus().target?.journey(snapshot.getValue("currency").jsonPrimitive.content)
 }

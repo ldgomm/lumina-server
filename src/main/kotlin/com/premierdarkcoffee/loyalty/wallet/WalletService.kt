@@ -99,7 +99,7 @@ class WalletService(
         }
         val canOperate = access.getValue("effectiveState").jsonPrimitive.content == "ACTIVE" && !m.getValue("removed").jsonPrimitive.boolean
         return JsonObject(m.filterKeys { it != "removed" } + business + walletEngagement(c, member, now(), canOperate) + mapOf(
-            "recentActivity" to JsonArray(walletActivity(c, member)), "presentationVersion" to JsonPrimitive(34),
+            "recentActivity" to JsonArray(walletActivity(c, member)), "presentationVersion" to JsonPrimitive(35),
             "lifecycleVersion" to JsonPrimitive(1), "balances" to JsonArray(balances), "canOperate" to JsonPrimitive(canOperate)))
     }
     /** Financial locks precede the pass lock; the transactional clock assigns commit-ordered tags. */

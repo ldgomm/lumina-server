@@ -131,3 +131,19 @@ test('Wallet permite publicar solamente al dueño y al editor autorizado, y revo
  await business.client.post('/team/'+editor.id+'/permissions',{revision:teamRevision(w,editor.id),'WALLET.VIEW':'yes','WALLET_PROGRAMS.VIEW':'yes'});
  assert.equal((await editor.session.post(endpoint,payload,opts)).status,403);assert.equal(l.calls.filter(c=>c.path==='/api/staff/promotion-setups').length,before);
 });
+
+test('precios de campaña redondean el centavo por oferta antes de aplicar cantidades',async t=>{
+ const w=await setup(t);
+ const basePlan=await base(w,{price:'20.40'});
+ const percent=data(basePlan,{discount:'2'});
+ assert.equal((await w.admin.post(path,percent)).status,303);
+ const discount=w.db.get('SELECT p.price_minor FROM plans p JOIN seasonal_offers s ON s.plan_id=p.id WHERE s.submission_key=?',percent.key);
+ assert.equal(discount.price_minor,2000); // 20.40 × 98% gives 19.99 after the percentage discount, then 20.00
+ const special=await campaign(w,{discount_mode:'PRICE',price:'14.99'},{price:'19.99'});
+ assert.equal(w.db.get('SELECT price_minor FROM plans WHERE id=?',special.id).price_minor,1500);
+ assert.equal(w.db.get('SELECT regular_minor FROM seasonal_offers WHERE plan_id=?',special.id).regular_minor,2000);
+ const invalid=await w.admin.post(path,data(special.original,{discount_mode:'PRICE',price:'19.99'}));
+ assert.notEqual(invalid.status,303);
+ w.db.run('UPDATE plans SET price_minor=1999 WHERE id=?',special.id);
+ assert.doesNotMatch((await w.client.get('/plans')).body,new RegExp(special.id));
+});

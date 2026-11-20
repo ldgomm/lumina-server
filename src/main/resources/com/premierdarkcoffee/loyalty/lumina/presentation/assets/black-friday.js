@@ -15,7 +15,8 @@
   f.starts_on.min=f.year.value+'-11-01';f.starts_on.max=f.year.value+'-11-30';
   const raw=percent?f.discount.value:f.price.value;
   const valid=raw.trim()!==''&&(percent?/^\d+$/.test(raw)&&Number(raw)>=1&&Number(raw)<=100:/^\d+(?:[.,]\d{1,2})?$/.test(raw));
-  const value=valid?(percent?Math.floor(base.price*(100-Number(raw))/100):Math.round(Number(raw.replace(',','.'))*100)):NaN;
+  const entered=valid?(percent?Math.floor(base.price*(100-Number(raw))/100):Math.round(Number(raw.replace(',','.'))*100)):NaN;
+  const value=entered%100===99?entered+1:entered;
   const good=Number.isSafeInteger(value)&&value>=0&&value<base.price;
   set('[data-bf-title]',f.name.value||'Tu promoción');set('[data-bf-regular]',money(base.price));set('[data-bf-amount]',good?money(value):'Define tu precio');
   set('[data-bf-saving]',good?'Ahorro de '+money(base.price-value):'');set('[data-bf-year]',f.year.value);

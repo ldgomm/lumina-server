@@ -10,8 +10,8 @@ import com.premierdarkcoffee.loyalty.shared.text
 import com.premierdarkcoffee.loyalty.wallet.WalletPass
 import com.premierdarkcoffee.loyalty.wallet.presentation.earningRule
 import com.premierdarkcoffee.loyalty.wallet.presentation.journey
-import com.premierdarkcoffee.loyalty.wallet.presentation.prioritizedBalances
-import com.premierdarkcoffee.loyalty.wallet.presentation.rewardPriority
+import com.premierdarkcoffee.loyalty.wallet.presentation.rewardFocus
+import com.premierdarkcoffee.loyalty.wallet.presentation.WalletReward
 import com.premierdarkcoffee.loyalty.wallet.presentation.walletRewardGuidance
 import com.premierdarkcoffee.loyalty.wallet.recentActivity
 import com.premierdarkcoffee.loyalty.wallet.summary
@@ -23,16 +23,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-
-/** Google-native presentation only. The ledger and cashier still authorize every award. */
-private data class GoogleReward(val source: JsonObject, val balance: JsonObject) {
-    val id = source.getValue("id").jsonPrimitive.content
-    val name = source.getValue("name").jsonPrimitive.content
-    val goal = source.getValue("goal").jsonPrimitive.long
-    val available = balance.getValue("available").jsonPrimitive.long
-    val remaining = maxOf(0L, goal - available)
-    val kind = balance.getValue("kind").jsonPrimitive.content
-}
 
 private fun googleShort(value: String, limit: Int): String {
     val text = value.trim().replace(Regex("\\s+"), " ")
@@ -46,7 +36,7 @@ private fun googleAmount(value: Long, kind: String, currency: String): String = 
     else -> "$value " + if (value == 1L) "punto" else "puntos"
 }
 
-private fun GoogleReward.detail(currency: String, symbol: String, paused: Boolean): String {
+private fun WalletReward.detail(currency: String, symbol: String, paused: Boolean): String {
     val status = walletRewardGuidance(available, goal, kind, currency, paused)
     val grid = if (kind == "STAMPS" && goal <= 20) "\n" + (1..goal.toInt()).chunked(10).joinToString("\n") { row ->
         row.joinToString(" ") { if (it.toLong() <= available) symbol else "○" }
@@ -86,18 +76,12 @@ fun WalletPass.googleExperienceFields(): JsonObject {
     val design = design()
     val currency = snapshot.getValue("currency").jsonPrimitive.content
     val paused = !snapshot.getValue("canOperate").jsonPrimitive.boolean
-    val balances = prioritizedBalances()
-    val byId = balances.mapNotNull { balance -> balance["programId"]?.jsonPrimitive?.contentOrNull?.let { it to balance } }.toMap()
-    val rewards = snapshot["rewardProgress"]?.jsonArray.orEmpty().mapNotNull { value ->
-        val reward = value.jsonObject
-        val balance = byId[reward["programId"]?.jsonPrimitive?.contentOrNull] ?: return@mapNotNull null
-        if ((reward["goal"]?.jsonPrimitive?.longOrNull ?: 0) <= 0 || reward["kind"] != balance["kind"]) return@mapNotNull null
-        GoogleReward(reward, balance)
-    }.sortedWith(compareBy<GoogleReward> { balances.indexOf(it.balance) }
-        .thenBy { design.rewardPriority(it.source["programId"]?.jsonPrimitive?.contentOrNull, it.id) }.thenBy { it.goal }.thenBy { it.id })
+    val focus = rewardFocus()
+    val balances = focus.balances
+    val rewards = focus.rewards
+    val target = focus.target
     val first = balances.firstOrNull()
-    val target = rewards.firstOrNull { it.balance == first }
-    val progress = journey()
+    val progress = if (paused) null else target?.journey(currency)
     val kind = first?.getValue("kind")?.jsonPrimitive?.content
     val mainLabel = when (kind) { "STAMPS" -> "Sellos"; "POINTS" -> "Puntos"; "CASHBACK" -> currency; else -> "Tarjeta" }
     val mainValue = when {
@@ -129,7 +113,7 @@ fun WalletPass.googleExperienceFields(): JsonObject {
     val headline=obj("id" to "headline", "header" to when {paused->"Estado";target==null->"Tu promoción";target.remaining==0L->"Premio en caja";else->"Próximo premio"},
         "body" to googleShort(if(paused)"Operaciones pausadas" else target?.name ?: first?.getValue("name")?.jsonPrimitive?.content ?: design.welcome,44))
     val earning=if(paused) null else earningRule(first?.get("programId")?.jsonPrimitive?.contentOrNull)
-    val journeyModule = obj("id" to "journey", "header" to (if(progress?.remaining == 0L) progress.redemptionLabel else if(progress != null) "Tu avance" else "Tu tarjeta"),
+    val journeyModule = obj("id" to "journey", "header" to (if(progress?.remaining == 0L) progress.readyLabel else if(progress != null) "Tu avance" else "Tu tarjeta"),
         "body" to (progress?.summary ?: if (paused) "Operaciones pausadas" else "Acumula en tus promociones activas"))
     val modules = listOf(headline,journeyModule,obj("id" to "featured", "header" to when { paused -> "Operaciones pausadas"; target == null -> "Tu promoción"; target.remaining == 0L -> "Tu premio disponible"; else -> "Tu próximo premio" }, "body" to featured)) +
         googleModules("balances", "Saldos por promoción", balances.map { "${it.getValue("name").jsonPrimitive.content}\n${walletBalance(it, currency)}" }, if(earning==null) 2 else 1) +

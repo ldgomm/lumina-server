@@ -5,7 +5,7 @@ import { dirtyCalendar, inTrial, paidFrom, standardFor, standardIds, standards, 
 import { stopSchedule } from './calendar.mjs';
 import { normalizeOffer } from './offers.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
-import { choice, dateOnly, event, integer, localDay, money, nextMonth, now, requireThat, services, text, uuid } from '../shared/domain.mjs';
+import { choice, dateOnly, event, integer, localDay, priceFromInput, nextMonth, now, requireThat, services, text, uuid } from '../shared/domain.mjs';
 
 export function listPlans(db, includeHidden = false) {
   const plans=db.all('SELECT p.*,coalesce(b.months,1) months,b.other_minor FROM plans p LEFT JOIN plan_billing b ON b.plan_id=p.id WHERE (published=1 OR ?=1) AND NOT EXISTS(SELECT 1 FROM wallet_trial_variants v WHERE v.plan_id=p.id) ORDER BY term,name,created_at DESC', Number(includeHidden))
@@ -59,7 +59,7 @@ export function createPlan(db, actor, data) {
   const months=data.term==='ANNUAL'?12:1;
   const term = months===12?'MONTHLY':choice(data.term, ['MONTHLY','ONE_OFF'], 'tipo de plan');
   const wallet = choice(data.wallet, ['NONE','INCLUDED','GIFT'], 'inclusión de Wallet');
-  const price = money(data.price,true);
+  const price = priceFromInput(data.price,true);
   const description = text(data.description || '', 'descripción', 0, 1200);
   const items = Object.keys(services).filter(key => key !== 'WALLET')
     .map(key => [key, integer(data[key] || '0',services[key],{ max:100 })]).filter(([,n]) => n > 0);
@@ -70,7 +70,7 @@ export function createPlan(db, actor, data) {
     const id = uuid();
     db.run('INSERT INTO plans(id,name,term,price_minor,wallet,description,created_at) VALUES(?,?,?,?,?,?,?)',
       id,name,term,price,wallet,description,now());
-    const other=wallet==='INCLUDED' && items.length>1 && term==='MONTHLY' ? money(data.other_price||'',true) : null;
+    const other=wallet==='INCLUDED' && items.length>1 && term==='MONTHLY' ? priceFromInput(data.other_price||'',true) : null;
     requireThat(other===null || price!==null && other<=price,'El importe de los otros servicios debe estar dentro del precio total.');
     if(months===12 || other!==null)db.run('INSERT INTO plan_billing VALUES(?,?,?)',id,months,other);
     for (const [service, quantity] of items) db.run('INSERT INTO plan_items VALUES(?,?,?)',id,service,quantity);
@@ -113,7 +113,7 @@ export function activateContract(db, actor, company, data) {
   requireThat(endsBefore > startsOn,'La fecha de fin debe ser posterior al inicio.');
   const origin = data.requestId || null;
   return db.transaction(() => {
-    let amount = plan.price_minor ?? money(data.agreed,true);
+    let amount = plan.price_minor ?? priceFromInput(data.agreed,true);
     if (origin) {
       const request = db.get("SELECT * FROM requests WHERE id=? AND company_id=? AND type='PLAN'",origin,company.id);
       requireThat(request?.plan_id === plan.id && request.status === 'APPROVED',
@@ -170,7 +170,7 @@ export function offerQuote(db, actor, company, request, input) {
   requireAgency(actor);
   checkRevision(request,input);
   requireThat(request.type !== 'COURTESY','El video de bienvenida es de cortesía.',409);
-  const amount = money(input.amount);
+  const amount = priceFromInput(input.amount);
   const terms = text(input.terms,'condiciones de la cotización',5,4000);
   db.transaction(() => {
     requireThat(['NEW','REVIEW','QUOTED'].includes(request.status), 'La solicitud ya tiene otro estado.',409);

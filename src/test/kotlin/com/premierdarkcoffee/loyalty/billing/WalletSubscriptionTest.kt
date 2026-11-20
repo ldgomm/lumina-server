@@ -18,7 +18,7 @@ class WalletSubscriptionTest {
     }
     @Test fun `terms disclose final price monthly account charge cancellation and actual provider`() {
         val terms=walletTerms(provider,"Restaurante Ejemplo",LocalDate.parse("2026-11-19"),LocalDate.parse("2027-01-01"),3)
-        for(value in listOf("14.97","4,99","2026","2027-02-01","impuestos","no autoriza débitos","sin penalidad","no equivale a aceptar","sin cargos retroactivos",provider.legalName,provider.privacyUrl))assertTrue(terms.contains(value),value)
+        for(value in listOf("15.00","5,00","2026","2027-02-01","impuestos","no autoriza débitos","sin penalidad","no equivale a aceptar","sin cargos retroactivos",provider.legalName,provider.privacyUrl))assertTrue(terms.contains(value),value)
     }
     @Test fun `contract requires real identification fields and secure privacy reference`() {
         provider.validate()
@@ -43,7 +43,7 @@ class WalletSubscriptionTest {
     @Test fun `annual terms disclose one fifty dollar charge and twelve months`() {
         val terms=walletTerms(provider,"Ejemplo",LocalDate.parse("2026-12-03"),LocalDate.parse("2027-01-01"),3,"ANNUAL")
         for(value in listOf("150.00","50,00","renovación anual","un solo cargo","doce meses","sin penalidad"))assertTrue(terms.contains(value),value)
-        assertEquals(5000L,walletUnitPrice("ANNUAL"));assertEquals(499L,walletUnitPrice("MONTHLY"))
+        assertEquals(5000L,walletUnitPrice("ANNUAL"));assertEquals(500L,walletUnitPrice("MONTHLY"))
     }
     @Test fun `unknown or injected billing interval is rejected`() {
         for(cycle in listOf("YEAR","FREE","MONTHLY ",""))assertFailsWith<Problem>{walletUnitPrice(cycle)}

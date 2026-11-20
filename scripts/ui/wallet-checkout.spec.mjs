@@ -52,7 +52,7 @@ try {
   for(const width of [390,1440]){
    await page.setViewportSize({width,height:1000});await page.goto(w.origin+'/plans/wallet');await fit();
    assert.equal(await page.getByRole('button',{name:'Activar prueba gratuita'}).count(),1);
-   assert.doesNotMatch(await page.locator('main').innerText(),/4,99|50,00|Elegir este plan/);
+   assert.doesNotMatch(await page.locator('main').innerText(),/5,00|50,00|Elegir este plan/);
    if(output&&javaScriptEnabled)await page.screenshot({path:resolve(output,'trial-'+width+'.png'),fullPage:true});
   }
   await page.getByRole('button',{name:'Activar prueba gratuita'}).click();await page.waitForURL(w.origin+'/wallet');
