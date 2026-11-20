@@ -2,8 +2,10 @@ import { offerAvailable, requireCampaignOpen } from '../campaigns/season.mjs';
 import { requestPhone } from '../shared/contact.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { dateOnly, event, integer, isId, localDay, money, now, requireThat, text, uuid } from '../shared/domain.mjs';
+import { addSchedule, applyDueServices, nextCut, queueServices, selectionStart, walletLine } from './calendar.mjs';
 import { getPlan } from './billing.mjs';
 
+export const walletCalendarTerms='Wallet se renueva el día 1. Si empiezas a mitad de mes, el primer corte incluye los días usados y el mes que empieza. Puedes pagar hasta el día 15. Desde el 16, si queda saldo de Wallet, se pausan Wallet y sus tarjetas hasta registrar el pago. El pago se registra en Lúmina.';
 const commercial = (actor,company) => {
   requireThat(actor.kind==='AGENCY'||actor.kind==='OWNER'&&actor.company_id===company.id,'Tu acceso no incluye contrataciones.',403);
 };
@@ -42,12 +44,15 @@ function renewable(db,company,id) {
     WHERE c.id=? AND c.company_id=?`,id||'',company.id);
   requireThat(contract&&!contract.cancelled_at&&contract.term==='MONTHLY','Este acuerdo no admite renovación.',409);
   requireThat(contract.ends_before>=localDay(),'Este período ya terminó. Selecciona una nueva contratación con fechas actuales.',409);
+  requireThat(!contract.schedule_id,'Esta suscripción se renueva automáticamente. Puedes cambiar de plan desde Mi suscripción.',409);
   requireThat(!db.get('SELECT id FROM contracts WHERE renewal_of=?',id),'Ya existe el siguiente período.',409);
   return contract;
 }
-export function submitOrder(db,actor,company,data) {
+export function submitOrder(db,actor,company,data,walletNotBefore=null) {
   requireOwner(actor);commercial(actor,company);
   requireThat(isId(data.key),'Vuelve a abrir el catálogo antes de enviar.',400);
+  const startWhen=data.start_when||'TODAY';
+  requireThat(['TODAY','NEXT_MONTH'].includes(startWhen),'Elige cuándo deben empezar los servicios.');
   const notes=text(data.notes||'','indicaciones',0,2000);
   return db.transaction(()=>{
     const replay=db.get('SELECT id FROM package_orders WHERE company_id=? AND submission_key=?',company.id,data.key);
@@ -73,8 +78,8 @@ export function submitOrder(db,actor,company,data) {
     }
     requireThat(selections.length>0&&selections.length<=30,'Selecciona entre 1 y 30 ofertas. Puedes combinarlas libremente.');
     const id=uuid();
-    db.run(`INSERT INTO package_orders(id,company_id,submitted_by,submission_key,status,notes,created_at,contact_phone)
-      VALUES(?,?,?,?,'REQUESTED',?,?,?)`,id,company.id,actor.id,data.key,notes,now(),phone);
+    db.run(`INSERT INTO package_orders(id,company_id,submitted_by,submission_key,status,notes,created_at,contact_phone,start_when,wallet_not_before)
+      VALUES(?,?,?,?,'REQUESTED',?,?,?,?,?)`,id,company.id,actor.id,data.key,notes,now(),phone,startWhen,walletNotBefore);
     for(const {plan,units,previous,regularRenewal} of selections) {
       const price=previous&&!regularRenewal?previous.agreed_minor/previous.units:plan.price_minor;
       requireThat(price===null||Number.isSafeInteger(price),'Revisa el precio unitario del acuerdo.');
@@ -93,13 +98,14 @@ export function offerOrder(db,actor,company,id,data) {
   return db.transaction(()=>{
     const order=getOrder(db,actor,company,id);checkVersion(order,data);
     requireThat(['REQUESTED','QUOTED'].includes(order.status),'La propuesta ya fue aceptada o cerrada.',409);
-    const terms=text(data.terms,'alcance y condiciones',5,4000);
+    const quotedTerms=text(data.terms,'alcance y condiciones',5,4000);
+    const terms=order.lines.some(l=>walletLine(l)&&l.term==='MONTHLY')?quotedTerms+'\n'+walletCalendarTerms:quotedTerms;
     const lines=order.lines.map(line=>{
       requireCampaignOpen(getPlan(db,line.plan_id));
       const previous=line.renewal_of?renewable(db,company,line.renewal_of):null;
       const starts=previous?.ends_before||dateOnly(data['start_'+line.id],'fecha de inicio');
-      requireThat(starts>=localDay(),'El inicio no puede ser anterior a hoy.');
-      const end=line.term==='MONTHLY'?monthlyEnd(starts,previous?.renewal_anchor||previous?.starts_on||starts):
+      requireThat(starts>=localDay() && (order.start_when!=='NEXT_MONTH'||starts>=selectionStart(db,order,line)),'Revisa la fecha de inicio solicitada por el negocio.');
+      const end=line.term==='MONTHLY'?(walletLine(line)?nextCut(starts):monthlyEnd(starts,previous?.renewal_anchor||previous?.starts_on||starts)):
         afterDay(dateOnly(data['end_'+line.id],'último día del trabajo puntual'));
       requireThat(end>starts,'El último día debe ser igual o posterior al inicio.');
       const amount=money(data['price_'+line.id]);
@@ -130,10 +136,10 @@ export function activateOrder(db,actor,company,id,data) {
   requireThat(company.approved,'Verifica el negocio antes de activar los servicios.',409);
   return activateAccepted(db,actor,company,id,data);
 }
-export function activateWalletOrder(db,actor,company,id,data) {
+export function activateCatalogOrder(db,actor,company,id,data) {
   requireOwner(actor);
   const order=getOrder(db,actor,company,id);
-  requireThat(order.lines.some(line=>line.wallet!=='NONE'||line.items.some(item=>item.service==='WALLET')),'Esta contratación no incluye Wallet.',409);
+  requireThat(order.lines.some(walletLine)||order.start_when==='NEXT_MONTH'&&order.lines.every(l=>l.term==='MONTHLY'&&l.unit_minor!==null),'Revisa las condiciones de contratación.',409);
   return activateAccepted(db,actor,company,id,data);
 }
 function activateAccepted(db,actor,company,id,data) {
@@ -148,8 +154,11 @@ function activateAccepted(db,actor,company,id,data) {
       db.run(`INSERT INTO contracts(id,company_id,plan_id,agreed_minor,starts_on,ends_before,created_at,units,order_line_id,renewal_of,renewal_anchor)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,contract,company.id,line.plan_id,line.unit_minor*line.units,line.starts_on,line.ends_before,now(),line.units,line.id,line.renewal_of,
         line.term==='MONTHLY'?(previous?.renewal_anchor||previous?.starts_on||line.starts_on):null);
+      queueServices(db,contract,line.starts_on);
+      if(walletLine(line) && line.term==='MONTHLY')addSchedule(db,actor,company,contract,line,order);
       event(db,actor,company.id,'CONTRACT',contract,'PAQUETE_ACTIVADO',line.name+' · '+line.units+' unidad(es)');
     }
+    applyDueServices(db);
     db.run("UPDATE package_orders SET status='ACTIVE',activated_at=? WHERE id=?",now(),id);
     event(db,actor,company.id,'ORDER',id,'COMBINACIÓN_ACTIVADA','Versión '+order.revision);
   });

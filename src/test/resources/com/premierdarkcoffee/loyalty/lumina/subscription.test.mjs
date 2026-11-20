@@ -34,7 +34,7 @@ test('operator identification is agency only and requires confirmed valid inform
  assert.equal((await w.admin.post('/account/provider',legal)).status,409);
 });
 test('unconfigured legal provider does not offer a hidden fixed subscription or invent consent',async t=>{
- const w=await world(t),p=await w.client.get('/plans/wallet');assert.equal(p.status,200);assert.match(p.body,/Elige tu oferta/);assert.doesNotMatch(p.body,/4,99|50,00|identificación del proveedor|name="accept"/);assert.equal(w.calls.length,0);
+ const w=await world(t),p=await w.client.get('/plans/wallet');assert.equal(p.status,200);assert.match(p.body,/Elige tu plan de Wallet/);assert.doesNotMatch(p.body,/4,99|50,00|identificación del proveedor|name="accept"/);assert.equal(w.calls.length,0);
 });
 
 test('historical accepted terms remain downloadable exactly and cannot be replaced with a fresh offer',async t=>{
@@ -70,7 +70,7 @@ test('an existing included Wallet agreement blocks a second automatic subscripti
  const offer={catalog_version:'SIMPLE',name:'Contenido con Wallet',term:'MONTHLY',price_type:'FIXED',price:'100',VIDEO:'2',WALLET:'1',wallet_gift:'yes',confirm_offer:'yes',description:'Dos videos y fidelización incluida.'};
  assert.equal((await w.admin.post('/plans',offer)).status,303);
  const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,w.client,w.id,plan);
- const page=await w.client.get('/plans/wallet');assert.equal(page.status,200,page.body);assert.match(page.body,/No se añade otra tarifa/);assert.doesNotMatch(page.body,/action="\/plans\/wallet\/accept"/);
+ const page=await w.client.get('/plans/wallet');assert.equal(page.status,200,page.body);assert.match(page.body,/Wallet está incluida en tu plan/);assert.doesNotMatch(page.body,/action="\/plans\/wallet\/accept"/);
 });
 
 test('old cycle query does not manufacture annual or monthly offers in an empty catalogue',async t=>{

@@ -310,6 +310,7 @@ export function createLoyaltyBridge({ db, key, origin, administration }) {
     const grant = activeGrant(actor);
     const token = unseal(key,context(grant),grant.sealed_token);
     const dashboard = await request(dashboardRoute,{token});
+    requireThat(!dashboard.walletAccess||dashboard.walletAccess.effectiveState==='ACTIVE','Wallet está suspendida. Comunícate con el dueño del negocio.',423);
     requireThat(dashboard.role === 'CASHIER' && dashboard.business?.id === grant.loyalty_tenant &&
       dashboard.branchId === grant.branch_id,'La asignación cambió en Loyalty. Solicita al dueño que la revise.',403);
     const current = activeGrant(actor);

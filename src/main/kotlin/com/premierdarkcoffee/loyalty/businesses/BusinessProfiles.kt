@@ -116,7 +116,7 @@ internal fun normalizedSearch(query: String): String {
 }
 fun LoyaltyService.memberSuggestions(s: Staff, query: String): JsonObject {
     val q=normalizedSearch(query); if(q.length<2)return obj("items" to emptyList<JsonObject>())
-    return db.tx { c -> obj("items" to c.rows("SELECT name,card_code FROM members WHERE tenant_id=? AND position(? in translate(lower(name),'áéíóúüñ','aeiouun'))>0 ORDER BY lower(name),id LIMIT 8",s.tenant,q) {
+    return db.tx { c -> obj("items" to c.rows("SELECT name,card_code FROM members WHERE removed_at IS NULL AND tenant_id=? AND position(? in translate(lower(name),'áéíóúüñ','aeiouun'))>0 ORDER BY lower(name),id LIMIT 8",s.tenant,q) {
         obj("name" to it.getString(1),"cardCode" to it.getString(2))
     }) }
 }

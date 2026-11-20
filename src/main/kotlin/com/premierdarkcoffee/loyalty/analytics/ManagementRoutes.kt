@@ -63,6 +63,16 @@ fun Route.managementRoutes(service: LoyaltyService, platformToken: String) {
         get("/operations") { val s=io { service.staff(call.bearer()) };val q=call.operationsQuery();call.respond(io { service.operationsReport(s,q) }) }
         get("/activity.csv") { val s=io { service.staff(call.bearer()) };call.activityCsv(service,s) }
         get("/team") { val s=io { service.staff(call.bearer()) };call.respond(io { service.team(s) }) }
+        put("/customer-workspace/{id}/profile") {
+            val staff = io { service.staff(call.bearer()) }
+            val input = call.body<CustomerProfileEdit>()
+            call.respond(io { service.editCustomer(staff, call.parameters["id"]!!, input, call.key()) })
+        }
+        delete("/customer-workspace/{id}") {
+            val staff = io { service.staff(call.bearer()) }
+            val input = call.body<CustomerRemoval>()
+            call.respond(io { service.removeCustomer(staff, call.parameters["id"]!!, input, call.key()) })
+        }
         put("/customer-workspace/{id}/contact") {
             val staff=io { service.staff(call.bearer()) }
             val input=call.body<CustomerContactChange>()

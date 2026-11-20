@@ -1,27 +1,28 @@
 import { createHash } from 'node:crypto';
 import { requireOwner } from '../access/accounts.mjs';
 import { requireOperating } from '../businesses/control.mjs';
-import { event, localDay, now, requireThat } from '../shared/domain.mjs';
+import { event, localDay, requireThat } from '../shared/domain.mjs';
 import { offerAvailable } from '../campaigns/season.mjs';
 import { getPlan } from './billing.mjs';
-import { serviceArea } from './catalog.mjs';
-import { acceptOrder, activateWalletOrder, getOrder, monthlyEnd } from './orders.mjs';
+import { firstStatement, nextCut, selectionStart, walletLine } from './calendar.mjs';
+import { acceptOrder, activateCatalogOrder, getOrder, monthlyEnd, walletCalendarTerms } from './orders.mjs';
 
 export const includesWallet = order => order.lines.some(line => line.wallet !== 'NONE' || line.items.some(item => item.service === 'WALLET'));
 
 // A read-only preview. No GET grants access, signs an agreement or changes a price.
 // Work with unspecified prices/delivery dates still needs a real quotation.
 export function walletCheckout(db, order) {
-  if (order.status !== 'REQUESTED' || !includesWallet(order) || !order.lines.every(line => line.term === 'MONTHLY' && line.unit_minor !== null)) return null;
+  if (order.status !== 'REQUESTED' || (!includesWallet(order) && order.start_when!=='NEXT_MONTH') || !order.lines.every(line => line.term === 'MONTHLY' && line.unit_minor !== null)) return null;
   const lines = order.lines.map(line => {
     const plan = getPlan(db, line.plan_id);
     const previous = line.renewal_of ? db.get('SELECT * FROM contracts WHERE id=? AND company_id=? AND cancelled_at IS NULL', line.renewal_of, order.company_id) : null;
-    const start = previous?.ends_before || localDay();
-    return {...line, starts_on:start, ends_before:monthlyEnd(start, previous?.renewal_anchor || previous?.starts_on || start),
+    const start = selectionStart(db,order,line);
+    return {...line, starts_on:start, ends_before:walletLine(line)?nextCut(start):monthlyEnd(start, previous?.renewal_anchor || previous?.starts_on || start),
+      statement:walletLine(line)?firstStatement(start,line.unit_minor*line.units):null,
       available:offerAvailable(plan) && (!line.renewal_of || Boolean(previous)), description:plan.description};
   });
-  const terms = 'Precio final del catálogo por el período indicado. Wallet queda disponible al confirmar, sin aprobación adicional de Lúmina. '
-    + 'La contratación no debita una tarjeta bancaria. El siguiente período requiere una nueva confirmación; no se añade otra tarifa de Wallet. '
+  const terms = (includesWallet(order)?'Precio final del catálogo. ':'Precio final por el período indicado. ')
+    + (includesWallet(order)?walletCalendarTerms+' Wallet se incluye una sola vez. ':'La renovación de estos servicios se confirma al finalizar el período. ')+'Las promociones terminan en la fecha indicada. '
     + 'Los cupos no utilizados no se acumulan. ' + lines.map(line => `${line.name}: ${line.description}`).join('\n');
   const hash = createHash('sha256').update(JSON.stringify({id:order.id, revision:order.revision, lines, terms})).digest('hex');
   return {...order, lines, terms, checkoutHash:hash};
@@ -32,7 +33,7 @@ export function validateWalletCheckout(db, actor, company, id, data) {
   requireThat(actor.company_id === company.id && db.get("SELECT id FROM accounts WHERE id=? AND company_id=? AND kind='OWNER' AND active=1 AND revision=?", actor.id, company.id, actor.revision), 'Tu cuenta cambió. Ingresa nuevamente.', 403);
   requireOperating(db, company.id);
   const order = getOrder(db, actor, company, id);
-  requireThat(includesWallet(order), 'Esta contratación no incluye Wallet.', 409);
+  requireThat(includesWallet(order)||order.start_when==='NEXT_MONTH'&&order.lines.every(l=>l.term==='MONTHLY'&&l.unit_minor!==null), 'Esta contratación necesita una propuesta.',409);
   requireThat(data.confirm === 'yes', 'Confirma el precio, el período y las condiciones.');
   requireThat(String(order.revision) === String(data.revision), 'La propuesta cambió. Revisa la versión actual.', 409);
   if (order.status === 'ACTIVE') return order;
@@ -43,11 +44,14 @@ export function validateWalletCheckout(db, actor, company, id, data) {
   } else requireThat(['QUOTED','ACCEPTED'].includes(order.status), 'Esta contratación está cerrada.', 409);
   const proposed = preview || order;
   const walletLines = proposed.lines.filter(line => line.wallet !== 'NONE' || line.items.some(item => item.service === 'WALLET'));
-  requireThat(walletLines.length === 1 && walletLines[0].units === 1, 'Elige una sola oferta con Wallet para tu negocio. Puedes combinarla con otros servicios.', 409);
+  requireThat(walletLines.length===0 || walletLines.length === 1 && walletLines[0].units === 1, 'Elige una sola oferta con Wallet para tu negocio. Puedes combinarla con otros servicios.', 409);
   for (const line of walletLines) {
+    const scheduled=db.all('SELECT id,starts_on,plan_id FROM wallet_schedules WHERE company_id=? AND (ends_before IS NULL OR starts_on<ends_before AND ends_before>?)',company.id,line.starts_on);
+    requireThat(!scheduled.length || (order.start_when==='NEXT_MONTH' && scheduled.length===1 && scheduled[0].starts_on<line.starts_on && scheduled[0].plan_id!==line.plan_id),
+      'Wallet ya está incluida. Puedes agregar otro servicio o elegir un paquete distinto desde el próximo mes.',409);
     const previous=line.renewal_of?db.get('SELECT * FROM contracts WHERE id=? AND company_id=? AND cancelled_at IS NULL',line.renewal_of,company.id):null;
     const continuing=previous&&previous.starts_on<=localDay()&&previous.ends_before>=localDay()&&previous.ends_before===line.starts_on;
-    requireThat((line.starts_on <= localDay() || continuing) && line.ends_before > localDay(), 'Este período de Wallet todavía no comienza o ya terminó. Revisa sus fechas.', 409);
+    requireThat((line.starts_on <= localDay() || continuing || order.start_when==='NEXT_MONTH' && line.starts_on>=nextCut(localDay())) && line.ends_before > localDay(), 'Este período de Wallet todavía no comienza o ya terminó. Revisa sus fechas.', 409);
     requireThat(!db.get(`SELECT c.id FROM contracts c JOIN plan_items i ON i.plan_id=c.plan_id AND i.service='WALLET'
       WHERE c.company_id=? AND c.cancelled_at IS NULL AND c.starts_on<? AND c.ends_before>?
       AND (c.order_line_id IS NULL OR c.order_line_id NOT IN (SELECT id FROM package_order_lines WHERE order_id=?)) LIMIT 1`, company.id, line.ends_before, line.starts_on, id),
@@ -69,11 +73,7 @@ export function confirmWalletCheckout(db, actor, company, id, data) {
     }
     const tx = {...db, transaction:work => work()};
     acceptOrder(tx, actor, company, id, data);
-    activateWalletOrder(tx, actor, company, id, data);
-    const areas = new Set(offer.lines.flatMap(line => line.items.map(item => serviceArea(item.service))).filter(Boolean));
-    for (const service of areas) {
-      db.run(`INSERT INTO company_services VALUES(?,?,'ACTIVE',?,?) ON CONFLICT(company_id,service) DO UPDATE SET status='ACTIVE'`, company.id, service, actor.id, now());
-      event(db, actor, company.id, 'SERVICE', service, 'SERVICIO_ACTIVADO', 'Contratación aceptada: '+id, service);
-    }
+    activateCatalogOrder(tx, actor, company, id, data);
+
   });
 }

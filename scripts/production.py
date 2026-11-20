@@ -123,6 +123,53 @@ def pg_env(c):
 
 def pg(c,sql):return run(['psql','-X','-qAt','-v','ON_ERROR_STOP=1','-c',sql],pg_env(c)).decode().strip()
 
+PG_CALENDAR = 'infrastructure/persistence/extensions/membership-calendar.sql'
+PORTAL_CALENDAR = 'lumina/infrastructure/extensions/membership-calendar.sql'
+
+def pg_calendar_script():
+    body=(SQL_ROOT/PG_CALENDAR).read_text()
+    sha=digest(body.encode())
+    return ("BEGIN; SELECT pg_advisory_xact_lock(6432001001); "
+            "CREATE TABLE IF NOT EXISTS lumina_extensions(name TEXT PRIMARY KEY,checksum TEXT NOT NULL); "
+            "DO $calendar$ BEGIN IF NOT EXISTS(SELECT 1 FROM lumina_extensions WHERE name='membership-calendar') THEN "
+            +body+" INSERT INTO lumina_extensions VALUES('membership-calendar','"+sha+"'); "
+            "ELSIF NOT EXISTS(SELECT 1 FROM lumina_extensions WHERE name='membership-calendar' AND checksum='"+sha+"') THEN "
+            "RAISE EXCEPTION 'MEMBERSHIP_SCHEMA_MISMATCH'; END IF; END $calendar$; COMMIT;")
+
+def apply_portal_calendar(path):
+    body=(SQL_ROOT/PORTAL_CALENDAR).read_text()
+    sha=digest(body.encode())
+    with sqlite3.connect(path,timeout=15) as db:
+        db.execute('PRAGMA foreign_keys=ON')
+        db.execute('BEGIN IMMEDIATE')
+        db.execute('CREATE TABLE IF NOT EXISTS lumina_extensions(name TEXT PRIMARY KEY,checksum TEXT NOT NULL) STRICT')
+        row=db.execute("SELECT checksum FROM lumina_extensions WHERE name='membership-calendar'").fetchone()
+        if row:
+            need(row[0]==sha,'MEMBERSHIP_SCHEMA_MISMATCH')
+            return
+        statement=''
+        for line in body.splitlines(keepends=True):
+            statement+=line
+            if sqlite3.complete_statement(statement):
+                db.execute(statement);statement=''
+        need(not statement.strip(),'MEMBERSHIP_SQL_INCOMPLETE')
+        db.execute("INSERT INTO lumina_extensions VALUES('membership-calendar',?)",(sha,))
+        need(not db.execute('PRAGMA foreign_key_check').fetchall(),'PORTAL_FOREIGN_KEYS_FAILED')
+
+def migrate_calendar(c,folder):
+    sealed=check(c)
+    folder=private(folder,True)
+    verified=json.loads(private(folder/'verified.json').read_text())
+    expected={name:file_digest(SQL_ROOT/name) for name in (PG_CALENDAR,PORTAL_CALENDAR)}
+    need(verified.get('status')=='RESTORE_PASS' and verified.get('membership_schema')==expected
+         and verified['seal_sha']==digest(json.dumps(sealed,sort_keys=True))
+         and verified['backup_manifest']==file_digest(private(folder/'backup.json'))
+         and 0<=time.time()-verified['checked']<=86400,'REHEARSED_MEMBERSHIP_MIGRATION_REQUIRED')
+    # Both transactions are repeatable after an interruption between the stores.
+    pg(c,pg_calendar_script())
+    apply_portal_calendar(private(Path(c['portal']['LUMINA_DATA_DIR'])/'agency.sqlite'))
+    return {'status':'MEMBERSHIP_SCHEMA_READY'}
+
 def sql_hashes(root=SQL_ROOT):
     return {p.relative_to(root).as_posix():digest(p.read_bytes()) for p in sorted(root.rglob('*.sql'))}
 
@@ -146,6 +193,11 @@ def observe(c):
 
 def check(c):
     sealed=json.loads(private(c['identity_file']).read_text());current=observe(c)
+    for name in (PG_CALENDAR,PORTAL_CALENDAR):
+        if name not in sealed.get('sql',{}):
+            # The initial identity seal predates these independently verified additive extensions.
+            supplied=current['sql'].pop(name,None)
+            need(supplied==file_digest(SQL_ROOT/name),'MEMBERSHIP_SOURCE_CHANGED')
     need(sealed==current,'CONTINUITY_CHANGED_NO_DEPLOY')
     return sealed
 
@@ -281,7 +333,12 @@ def verify_backup(c,folder):
             companies=dict(db.execute('SELECT id,loyalty_tenant FROM companies'))
         need(all(company in companies and (companies[company] is None or companies[company]==tenant) for company,tenant in links.items()),'CROSS_STORE_RECONCILIATION_REQUIRED')
         need(all(not tenant or links.get(company)==tenant for company,tenant in companies.items()),'CROSS_STORE_RECONCILIATION_REQUIRED')
-        result={'format':1,'status':'RESTORE_PASS','checked':time.time(),'backup_manifest':digest((folder/'backup.json').read_bytes()),'seal_sha':m['seal_sha']}
+        run(['docker','exec','-i',container,'psql','-X','-q','-U','postgres','-v','ON_ERROR_STOP=1'],input=pg_calendar_script().encode(),timeout=120)
+        with tempfile.TemporaryDirectory() as temporary:
+            copy=Path(temporary)/'agency.sqlite'
+            shutil.copyfile(folder/'agency.sqlite',copy)
+            apply_portal_calendar(copy)
+        result={'format':1,'status':'RESTORE_PASS','checked':time.time(),'membership_schema':{n:file_digest(SQL_ROOT/n) for n in (PG_CALENDAR,PORTAL_CALENDAR)},'backup_manifest':digest((folder/'backup.json').read_bytes()),'seal_sha':m['seal_sha']}
         save_json(folder/'verified.json',result);return result
     finally:run(['docker','rm','-f',container],timeout=30)
 
@@ -351,12 +408,13 @@ def switch(c,release,slot,backup_folder):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['check','seal','backup','verify-backup','package','serve','ready','prepare-gateway','switch'])
+    parser.add_argument('action',choices=['check','seal','backup','verify-backup','migrate-calendar','package','serve','ready','prepare-gateway','switch'])
     parser.add_argument('--config',required=True);parser.add_argument('--receipt');parser.add_argument('--release');parser.add_argument('--slot',choices=list(SLOTS));parser.add_argument('--component',choices=['wallet','portal']);parser.add_argument('--backup')
     args=parser.parse_args();os.umask(0o077)
     try:
         c=load_config(args.config)
         if args.action=='check':check(c);result={'status':'CONTINUITY_PASS'}
+        elif args.action=='migrate-calendar':result=migrate_calendar(c,Path(args.backup))
         elif args.action=='seal':seal(c);result={'status':'IDENTITY_SEALED'}
         elif args.action=='backup':result=backup(c)
         elif args.action=='verify-backup':need(args.backup,'BACKUP_REQUIRED');result=verify_backup(c,args.backup)

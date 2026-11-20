@@ -436,7 +436,8 @@ async function customerCard() {
         else URL.revokeObjectURL(url);
     } catch (e) { notice(e.message); }
 }
-state.slug?customerStart():welcome();
+if (state.slug) customerStart();
+else if (!document.querySelector('meta[name="lumina-csrf"]')) welcome();
 
 function phoneCheck(ok,message){if(!ok)throw new Error(message);}
 function contactPhone(value) {

@@ -59,6 +59,7 @@ object ProductionGuard {
             val expected = SqlFingerprint.checksum(sql)
             check(if (version == 1) SqlFingerprint.acceptsV001(migrations[version], expected) else migrations[version] == expected) { "PRODUCTION_MIGRATION_MISMATCH" }
         }
+        com.premierdarkcoffee.loyalty.infrastructure.persistence.MembershipSchema.verify(c)
         val identity = seal.getValue("database").jsonObject
         check(c.one("SELECT current_database()") { it.getString(1) } == identity.getValue("name").jsonPrimitive.content) { "PRODUCTION_DATABASE_CHANGED" }
         check(c.one("SELECT floor(extract(epoch FROM applied_at)*1000)::bigint FROM comeback_migrations WHERE version=1") { it.getLong(1).toString() } == identity.getValue("created").jsonPrimitive.content) { "PRODUCTION_DATABASE_CHANGED" }

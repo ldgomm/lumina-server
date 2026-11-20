@@ -7,7 +7,7 @@ export function paymentInput(data) {
  requireThat(Number.isSafeInteger(amountMinor)&&amountMinor>0&&amountMinor<=1_000_000_000,'Revisa el importe.');
  requireThat(['TRANSFER','CASH','CARD','OTHER'].includes(data.method),'Selecciona el medio de pago.');
  requireThat(/^\d{4}-\d{2}-\d{2}$/.test(data.paidOn||''),'Selecciona la fecha del pago.');
- return {invoiceId:data.invoiceId,amountMinor,reference:text(data.reference,'referencia',1,100),method:data.method,paidOn:data.paidOn};
+ return {invoiceId:data.invoiceId,amountMinor,...(data.walletCut==='yes'?{walletCut:true}:{}),reference:text(data.reference,'referencia',1,100),method:data.method,paidOn:data.paidOn};
 }
 
 export function chargeInput(data) {

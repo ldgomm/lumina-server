@@ -200,11 +200,11 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
         }
         val verified = Security.verify(input.password,row?.third ?: dummyPassword)
                 need(row != null && row.third != null && verified,"UNAUTHORIZED","Documento o contraseña incorrectos.",401)
-        return db.tx { c -> session(c,Member(row!!.first,row.second)) }
+        return db.tx { c -> lockMember(c,row!!.first,row.second); session(c,Member(row.first,row.second)) }
     }
         internal fun lockMember(c: Connection, tenant: String, memberId: String) {
         uuid(memberId)
-        need(c.one("SELECT id FROM members WHERE tenant_id=? AND id=? FOR UPDATE",tenant,memberId) { it.getString(1) } != null,"NOT_FOUND","Cliente no encontrado.",404)
+        need(c.one("SELECT id FROM members WHERE tenant_id=? AND id=? AND removed_at IS NULL FOR UPDATE",tenant,memberId) { it.getString(1) } != null,"NOT_FOUND","Cliente no encontrado.",404)
     }
         internal fun changed(c: Connection, tenant: String, memberId: String) {
         val revision = c.one("UPDATE members SET revision=revision+1 WHERE tenant_id=? AND id=? RETURNING revision",tenant,memberId) { it.getLong(1) }!!
@@ -271,6 +271,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     private fun programs(c: Connection, tenant: String, visibleOnly: Boolean = false) = c.rows("SELECT p.id,p.current_version,v.config::text FROM programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? AND p.deleted_at IS NULL AND (NOT ? OR p.id IN (SELECT id FROM customer_programs WHERE tenant_id=?)) ORDER BY p.id",tenant,visibleOnly,tenant) { obj("id" to it.getString(1),"version" to it.getInt(2),"config" to json.parseToJsonElement(it.getString(3))) }
     private fun rewards(c: Connection, tenant: String, visibleOnly: Boolean = false) = c.rows("SELECT r.* FROM rewards r JOIN programs p ON p.tenant_id=r.tenant_id AND p.id=r.program_id WHERE r.tenant_id=? AND p.deleted_at IS NULL AND (NOT ? OR (r.active AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=?))) ORDER BY r.id",tenant,visibleOnly,tenant) { obj("id" to it.getString("id"),"programId" to it.getString("program_id"),"name" to it.getString("name"),"cost" to it.getLong("cost"),"active" to it.getBoolean("active"),"version" to it.getInt("version"),"benefit" to it.getString("benefit")?.let{v->json.parseToJsonElement(v)},"benefitText" to rewardBenefitDescription(it.getString("benefit"))) }
     fun dashboard(s: Staff) = db.tx { c -> obj(
+        "walletAccess" to commercial.walletAccess(c,s.tenant),
         "business" to c.one("SELECT * FROM tenants WHERE id=?",s.tenant) { obj("id" to s.tenant,"name" to it.getString("name"),"slug" to it.getString("slug"),"currency" to it.getString("currency"),"timezone" to it.getString("timezone")) },
         "role" to s.role, "branchId" to s.branch, "permissions" to json.parseToJsonElement(json.encodeToString(s.permissions)),
         "branches" to c.rows("SELECT * FROM branches WHERE tenant_id=? AND (?::text IS NULL OR id=?) ORDER BY name",s.tenant,s.branch,s.branch) { obj("id" to it.getString("id"),"name" to it.getString("name"),"code" to it.getString("code")) },

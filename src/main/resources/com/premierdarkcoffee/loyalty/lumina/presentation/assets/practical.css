@@ -109,3 +109,27 @@
 .business-operation-notice h2{font-size:1.3rem;margin:.3rem 0 .6rem}.business-operation-notice p{margin:0;max-width:65ch}.business-operation-notice .eyebrow{color:#795b36}.business-operation-notice .btn{flex-shrink:0}
 .work-last-state{display:block;margin-top:.4rem;color:#596779;font-size:.78rem}.request-record-state .badge.warning{white-space:normal;text-align:right}
 @media(max-width:700px){.business-operation-notice{align-items:flex-start;flex-direction:column;padding:1.25rem}.business-operation-notice .btn{width:100%;text-align:center}}
+
+.member-plans{max-width:1080px;margin:0 auto;color:#12263e}
+.member-summary,.member-add,.member-bill{border:1px solid #d4deea;border-radius:18px;background:#fff;padding:clamp(18px,3vw,34px)}
+.member-summary,.member-add{display:flex;justify-content:space-between;align-items:center;gap:24px}
+.member-summary{background:#102846;color:#fff}
+.member-summary a.btn.secondary{background:#fff;color:#142e4a}
+.member-summary h2,.member-summary p,.member-summary dt,.member-summary dd{color:inherit}
+.member-summary dl,.member-bill dl{margin:0;display:grid;gap:12px}
+.member-summary dt,.member-bill dt{font-size:.875rem}.member-summary dd,.member-bill dd{margin:2px 0 0;font-size:1.15rem;font-weight:700}
+.member-heading{text-align:center;max-width:42rem;margin:2rem auto 1rem}.member-heading h2{margin-bottom:.5rem}
+.member-switch{display:flex;flex-wrap:wrap;justify-content:center;box-sizing:border-box;width:fit-content;max-width:100%;margin:1rem auto 1.7rem;padding:4px;border-radius:24px;background:#e9eff5}
+.member-switch a{white-space:normal;min-width:0;padding:.55rem .85rem;border-radius:22px;color:#234362;text-decoration:none;font-weight:600;text-align:center}
+.member-plans .member-switch a[aria-current="page"]{color:#163856;background:#fff;box-shadow:0 1px 5px #16375524}
+.member-grid{display:grid;justify-content:center;grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),min(100%,360px)));gap:18px}
+.member-offer{display:flex;flex-direction:column;gap:12px;background:#fff;border:1px solid #cfdae6;border-radius:18px;padding:24px;min-width:0}
+.member-offer h3,.member-offer p{margin:0}.member-offer h3{font-size:1.25rem}.member-price{font-size:2rem;letter-spacing:-.035em;font-weight:700;color:#112c50}
+.member-price small{font-size:.9rem;letter-spacing:0;color:#4c6278}.member-offer ul{padding-left:20px;margin:0 0 12px;flex:1}
+.member-offer li{padding:.2rem 0}.member-offer li::marker{color:#286f93}
+.member-offer form,.member-offer .btn{margin:0}.member-offer button{width:100%}
+.member-current{border:2px solid #34769b;background:#f3f8fc}.member-selected{font-weight:700;color:#205776}
+.member-add,.member-pending,.member-manage,.member-bill{margin-top:1.4rem}.member-add h3,.member-add p{margin:.2rem 0}
+.member-bill dl{max-width:32rem}.member-bill dl>div{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+.member-manage summary,.customer-removal summary{cursor:pointer}.member-manage form{padding:1rem 0}
+@media(max-width:620px){.member-summary,.member-add{flex-direction:column;align-items:stretch}.member-switch a{font-size:.88rem;padding:.55rem .7rem}.member-heading{text-align:left}}

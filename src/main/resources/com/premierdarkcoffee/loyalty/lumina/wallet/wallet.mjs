@@ -11,8 +11,8 @@ const id = '[0-9a-fA-F-]{36}';
 const ownerReads = new RegExp(`^/api/staff/(dashboard|access|administration|branch-directory|team|activity(?:\\.csv)?|operations|wallet-health|wallet-design|business-profile|metrics|return-radar|customer-activity|customer-suggestions|customer-events|customer-insights(?:/${id})?|customer-workspace/${id}|birthday-settings|account|member-suggestions|programs/${id}/deletion-preview)$`);
 const ownerWrites = {
   POST:new RegExp(`^/api/staff/(branches|branch-directory|credentials|programs|promotion-templates|promotion-setups|rewards|members/lookup|wallet/restore|purchases(?:/quote)?|counter-redemptions|redemptions/confirm|customer-events|business-profile/requests|team/${id}/actions|wallet-health/${id}/(?:APPLE|GOOGLE)/retry|notices/${id}/read)$`),
-  PUT:new RegExp(`^/api/staff/(wallet-design|business-profile|birthday-settings|programs/${id}|rewards/${id}|team/${id}|branch-directory/${id}|customer-insights/${id}/preferences|customer-workspace/${id}/contact)$`),
-  DELETE:new RegExp(`^/api/staff/(programs/${id}|credentials/${id}|customer-events/${id})$`),
+  PUT:new RegExp(`^/api/staff/(wallet-design|business-profile|birthday-settings|programs/${id}|rewards/${id}|team/${id}|branch-directory/${id}|customer-insights/${id}/preferences|customer-workspace/${id}/(?:contact|profile))$`),
+  DELETE:new RegExp(`^/api/staff/(programs/${id}|credentials/${id}|customer-events/${id}|customer-workspace/${id})$`),
 };
 const adminReads = new RegExp(`^/api/platform/(wallet/status|tenants/${id}/(?:profile|branches|wallet-health|metrics))$`);
 const message = 'No tienes permiso para realizar esta operación de Wallet.';
@@ -152,7 +152,9 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     requireThat(walletRouteAllowed('OWNER',method,path)&&allowed(fresh),message,403);
     requireThat(!/^\/api\/staff\/(team(?:\/|$)|credentials(?:\/|$))/.test(path),'Administra las personas y sus permisos desde Equipos y roles de Lúmina.',403);
     if(method!=='GET')requireOperating(db,fresh.company_id);
-    const {item}=await validated(actor);
+    const {item,data:dashboard}=await validated(actor);
+    if(surface==='wallet')requireThat(!dashboard.walletAccess || dashboard.walletAccess.effectiveState==='ACTIVE',
+      'Wallet está suspendida. El dueño puede revisar el saldo en Mi cuenta y pagos.',423);
     fresh=current(actor);
     if(method!=='GET')requireOperating(db,fresh.company_id);
     requireThat(allowed(fresh),message,403);
@@ -231,7 +233,7 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     return result;
   }
   async function controlRemote(tenant,action,options={}) {
-    requireThat(isId(tenant)&&['access','account','payments','receipt','charges','reverse','void'].includes(action),'Acción inválida.');
+    requireThat(isId(tenant)&&['access','account','payments','receipt','charges','reverse','void','wallet-calendar'].includes(action),'Acción inválida.');
     const suffix=action==='receipt'?'/payments/'+options.id:action==='reverse'?'/payments/'+options.id+'/reverse':action==='void'?'/charges/'+options.id+'/void':'/'+action;
     if(['receipt','reverse','void'].includes(action))requireThat(isId(options.id),'Registro inválido.');
     const offset=options.offset??0;requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000,'Página inválida.');
@@ -268,6 +270,10 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
   }
   async function account(actor,offset=0){requireOwner(actor);const {item,fresh}=await validated(actor);const result=await remote('/api/staff/account?offset='+offset,{token:item.token});const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);return result;}
   async function receipt(actor,id){requireOwner(actor);requireThat(isId(id),'Pago no encontrado.',404);const {item,fresh}=await validated(actor);const result=await remote('/api/staff/payments/'+id,{token:item.token});const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);return result;}
-  return {controlRemote,administration,teamAdministration,account,receipt,subscription,prepareActivation,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>(await validated(actor)).data,
+  return {controlRemote,administration,teamAdministration,account,receipt,subscription,prepareActivation,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>{
+    const {data}=await validated(actor);
+    requireThat(!data.walletAccess||data.walletAccess.effectiveState==='ACTIVE','Wallet está suspendida. Revisa Mi cuenta y pagos para reactivarla.',423);
+    return data;
+  },
     forget:()=>{},ownerCredential:async actor=>{requireOwner(actor);const {item}=await validated(actor);return item.token;}};
 }

@@ -5,6 +5,8 @@ import {portal,agency,password,documentFor,colleague} from './helpers.mjs';
 import {fakeLoyalty} from './loyalty-fixture.mjs';
 import {localDay} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 
+import {advanceCalendar,firstStatement,nextCut,expiryAlerts} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/calendar.mjs';
+
 async function world(t,configuration={}) {
  const native=await fakeLoyalty(t,null,configuration),w=await portal(t,native.origin,{platformToken:native.platformToken}),admin=await agency(w),client=w.session(),document=documentFor('checkout');
  const r=await client.post('/register',{company:'Comercio sin verificar',name:'Dueña',document,ruc:document+'001',phone:'0991234567',password,consent:'yes',category:'CAFE'});assert.equal(r.status,303);
@@ -117,11 +119,47 @@ test('a mid-transaction failure rolls back consent, contract and all service cha
  assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);assert.equal(w.native.registrations.size,1);
 });
 
-test('an explicit next-period renewal preserves the cut-off and does not duplicate the current Wallet period',async t=>{
- const w=await world(t),o=await selection(w,[await plan(w)]);assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);
+test('automatic renewal keeps the published price and produces one agreement per first of month',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);
+ assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);
  const first=w.db.get('SELECT * FROM contracts');
- const next=await selection(w,[],{renewal:first.id});assert.ok(next.data.offerHash);assert.match(next.body,new RegExp(first.ends_before));
- const r=await w.client.post(next.path+'/accept',next.data);assert.equal(r.status,303,r.body);assert.equal(count(w,'contracts'),2);
- const renewal=w.db.get('SELECT * FROM contracts WHERE renewal_of=?',first.id);assert.equal(renewal.starts_on,first.ends_before);assert.equal(renewal.agreed_minor,first.agreed_minor);assert.equal(renewal.renewal_anchor,first.renewal_anchor);
+ assert.equal((await w.client.post('/plans/request',{key:randomUUID(),renewal:first.id})).status,409);
+ advanceCalendar(w.db,first.ends_before);advanceCalendar(w.db,first.ends_before);
+ const periods=w.db.all('SELECT * FROM contracts ORDER BY starts_on');
+ assert.equal(periods.length,2);assert.equal(periods[1].starts_on,first.ends_before);
+ assert.equal(periods[1].agreed_minor,first.agreed_minor);assert.equal(periods[1].schedule_id,first.schedule_id);
  assert.equal(w.native.registrations.size,1);assert.equal(state(w),'ACTIVE');
+});
+test('Wallet owners can add Content next month and replace Wallet with one combined plan at the cut',async t=>{
+ const w=await world(t),single=await plan(w),first=await selection(w,[single]);
+ assert.equal((await w.client.post(first.path+'/accept',first.data)).status,303);
+ const tenant=w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant;
+ const add=await selection(w,[await plan(w,{name:'Contenido mensual',WALLET:'0',VIDEO:'1',price:'20'})],{start_when:'NEXT_MONTH'});
+ assert.ok(add.data.offerHash);assert.equal((await w.client.post(add.path+'/accept',add.data)).status,303);
+ const combo=await plan(w,{name:'Wallet y página web',WEBSITE:'1',price:'30',wallet_gift:'yes'});
+ const change=await selection(w,[combo],{start_when:'NEXT_MONTH'});
+ assert.equal((await w.client.post(change.path+'/accept',change.data)).status,303);
+ assert.notEqual(w.db.get("SELECT status FROM company_services WHERE service='SOCIAL'")?.status,'ACTIVE');
+ assert.notEqual(w.db.get("SELECT status FROM company_services WHERE service='WEB'")?.status,'ACTIVE');
+ const cut=nextCut(localDay());advanceCalendar(w.db,cut);advanceCalendar(w.db,cut);
+ assert.equal(w.db.get("SELECT count(*) n FROM contracts c JOIN plan_items p ON p.plan_id=c.plan_id AND p.service='WALLET' WHERE c.starts_on<=? AND c.ends_before>?",cut,cut).n,1);
+ for(const service of ['SOCIAL','WEB','WALLET'])assert.equal(w.db.get('SELECT status FROM company_services WHERE service=?',service)?.status,'ACTIVE');
+ assert.equal(w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant,tenant);
+ const week=new Date(Date.parse(nextCut(cut))-4*86400000).toISOString().slice(0,10);
+ assert.deepEqual(expiryAlerts(w.db,w.id,week).map(n=>n.name),['Contenido mensual']);
+});
+test('cancelling a scheduled replacement keeps the original plan and fee',async t=>{
+ const w=await world(t),o=await selection(w,[await plan(w)]);await w.client.post(o.path+'/accept',o.data);
+ const next=await selection(w,[await plan(w,{name:'Otros servicios',VIDEO:'1'})],{start_when:'NEXT_MONTH'});
+ assert.equal((await w.client.post(next.path+'/accept',next.data)).status,303);
+ const current=w.db.get('SELECT * FROM wallet_schedules ORDER BY starts_on LIMIT 1'),future=w.db.get('SELECT * FROM wallet_schedules ORDER BY starts_on DESC LIMIT 1');
+ assert.equal((await w.client.post('/plans/wallet/stop',{schedule:future.id,confirm:'yes'})).status,303);
+ assert.equal(w.db.get('SELECT ends_before FROM wallet_schedules WHERE id=?',current.id).ends_before,null);
+ advanceCalendar(w.db,future.starts_on);
+ assert.equal(w.db.get('SELECT count(*) n FROM contracts WHERE starts_on=? AND cancelled_at IS NULL AND plan_id=?',future.starts_on,current.plan_id).n,1);
+});
+test('first statement counts the enrollment date and actual calendar days',()=>{
+ assert.deepEqual(firstStatement('2027-04-22',499),{cut:'2027-05-01',due:'2027-05-15',days:9,monthDays:30,amount:150});
+ assert.equal(firstStatement('2028-02-29',499).amount,17);
+ assert.equal(firstStatement('2027-02-01',499).amount,499);
 });

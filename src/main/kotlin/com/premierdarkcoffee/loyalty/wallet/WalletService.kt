@@ -91,13 +91,16 @@ class WalletService(
     }
     private fun view(c: Connection, member: Member): JsonObject {
         val access = loyalty.commercial.walletAccess(c, member.tenant)
-        val m = c.one("SELECT name,card_code,revision FROM members WHERE tenant_id=? AND id=? FOR UPDATE", member.tenant, member.id) { obj("name" to it.getString(1), "cardCode" to it.getString(2), "revision" to it.getLong(3)) }
+        val m = c.one("SELECT name,card_code,revision,removed_at FROM members WHERE tenant_id=? AND id=? FOR UPDATE", member.tenant, member.id) { obj("name" to it.getString(1), "cardCode" to it.getString(2), "revision" to it.getLong(3), "removed" to (it.getTimestamp(4) != null)) }
             ?: throw Problem(404, "NOT_FOUND", "Tarjeta no encontrada.")
                 val business = c.one("SELECT name,slug,currency,timezone FROM tenants WHERE id=?", member.tenant) { obj("businessName" to it.getString(1), "slug" to it.getString(2), "currency" to it.getString(3), "timezone" to it.getString(4)) }!!
         val balances = c.rows("SELECT b.program_id,b.available,p.kind,v.config->>'name' AS name FROM balances b JOIN programs p ON p.tenant_id=b.tenant_id AND p.id=b.program_id JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE b.tenant_id=? AND b.member_id=? AND p.id IN (SELECT id FROM customer_programs WHERE tenant_id=p.tenant_id) ORDER BY b.program_id", member.tenant, member.id) {
             obj("programId" to it.getString(1), "available" to it.getLong(2), "kind" to it.getString(3), "name" to it.getString(4))
         }
-                return JsonObject(m + business + walletEngagement(c,member,now(),access.getValue("effectiveState").jsonPrimitive.content == "ACTIVE") + mapOf("recentActivity" to JsonArray(walletActivity(c, member)), "presentationVersion" to JsonPrimitive(34), "lifecycleVersion" to JsonPrimitive(1), "balances" to JsonArray(balances), "canOperate" to JsonPrimitive(access.getValue("effectiveState").jsonPrimitive.content == "ACTIVE")))
+        val canOperate = access.getValue("effectiveState").jsonPrimitive.content == "ACTIVE" && !m.getValue("removed").jsonPrimitive.boolean
+        return JsonObject(m.filterKeys { it != "removed" } + business + walletEngagement(c, member, now(), canOperate) + mapOf(
+            "recentActivity" to JsonArray(walletActivity(c, member)), "presentationVersion" to JsonPrimitive(34),
+            "lifecycleVersion" to JsonPrimitive(1), "balances" to JsonArray(balances), "canOperate" to JsonPrimitive(canOperate)))
     }
     /** Financial locks precede the pass lock; the transactional clock assigns commit-ordered tags. */
     fun materialize(member: Member, provider: String? = null): WalletPass = db.tx { c ->

@@ -92,7 +92,7 @@ fun LoyaltyService.customerActivity(s: Staff, query: CustomerActivityQuery = Cus
                        coalesce(c.period_claims,0) AS period_claims,
                        coalesce(r.ready,0) AS ready,coalesce(r.near,0) AS near,
                        coalesce(s.last_at<scope.inactive_before,false) AS inactive
-                FROM members m JOIN scope ON m.tenant_id=scope.tenant
+                FROM members m JOIN scope ON m.tenant_id=scope.tenant AND m.removed_at IS NULL
                 LEFT JOIN sales s ON s.member_id=m.id LEFT JOIN claims c ON c.member_id=m.id
                 LEFT JOIN rewards_now r ON r.member_id=m.id
             ), filtered AS (

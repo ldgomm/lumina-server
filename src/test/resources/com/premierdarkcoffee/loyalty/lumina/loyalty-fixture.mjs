@@ -73,6 +73,13 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
         if(dropRegistration){dropRegistration=false;return res.destroy();}
         return json(res,201,{companyId:data.companyId,business:entry,replayed});
       }
+      const calendar=path.match(/^\/api\/platform\/tenants\/([^/]+)\/wallet-calendar$/);
+      if(calendar && req.method==='PUT'){
+        let raw=''; for await (const chunk of req)raw+=chunk;
+        const data=JSON.parse(raw);
+        if(registrations.get(data.companyId)?.id!==calendar[1])return fail(res,403,'BUSINESS_MISMATCH');
+        return json(res,200,{revision:data.revision});
+      }
       if(path==='/api/platform/wallet/status')return json(res,200,{configuration:{apple:'CONFIGURED_DEVICE_TEST_REQUIRED',google:'CONFIGURED_DEVICE_TEST_REQUIRED'},passes:1});
       if(path==='/api/platform/overview')return json(res,200,{businesses:[{...business,clients:1,branches:2,state:'ACTIVE'}],summary:{businesses:1}});
       if(path==='/api/platform/tenants')return json(res,200,{items:[business,other]});

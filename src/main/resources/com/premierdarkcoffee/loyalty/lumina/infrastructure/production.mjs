@@ -31,6 +31,9 @@ export function productionGuard(env=process.env) {
   const current={'lumina/infrastructure/schema.sql':hash(readFileSync(new URL('schema.sql',folder)))};
   for(const file of readdirSync(new URL('migrations/',folder)).filter(f=>f.endsWith('.sql')))current['lumina/infrastructure/migrations/'+file]=hash(readFileSync(new URL('migrations/'+file,folder)));
   const expected=Object.fromEntries(Object.entries(seal.sql||{}).filter(([k])=>k.startsWith('lumina/infrastructure/')));
+  const extensionPath='lumina/infrastructure/extensions/membership-calendar.sql';
+  const calendarHash=hash(readFileSync(new URL('extensions/membership-calendar.sql',folder)));
+  if(expected[extensionPath])current[extensionPath]=calendarHash;
   if(Object.keys(current).length!==Object.keys(expected).length||Object.entries(current).some(([k,v])=>expected[k]!==v))throw new Error('PRODUCTION_SCHEMA_SOURCE_CHANGED');
   const key=privateFile(join(env.LUMINA_DATA_DIR,'agency.key'));
   if(key.length!==32||hash(key)!==seal.portal.agency_key)throw new Error('PRODUCTION_AGENCY_KEY_CHANGED');
@@ -39,6 +42,9 @@ export function productionGuard(env=process.env) {
   const db=new DatabaseSync(dbPath,{readOnly:true});
   try {
     if(db.prepare('PRAGMA user_version').get().user_version!==12)throw new Error('PRODUCTION_SCHEMA_CHANGE_REQUIRES_PLANNED_MIGRATION');
+    if(!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lumina_extensions'").get() ||
+      db.prepare("SELECT checksum FROM lumina_extensions WHERE name='membership-calendar'").get()?.checksum!==calendarHash)
+      throw new Error('MEMBERSHIP_SCHEMA_MISMATCH');
     const agency=db.prepare("SELECT id FROM accounts WHERE kind='AGENCY' ORDER BY id LIMIT 1").get();
     if(!agency||hash(agency.id)!==seal.portal.agency_id)throw new Error('PRODUCTION_DATABASE_CHANGED');
   }finally{db.close();}

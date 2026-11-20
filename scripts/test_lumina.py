@@ -11,7 +11,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 SUITE_PATH = Path('src/test/resources/com/premierdarkcoffee/loyalty/lumina')
 EXPECTED_SUITES = 42
-EXPECTED_TESTS = 510
+EXPECTED_TESTS = 513
 TEST_TIMEOUT_SECONDS = 900
 CLEANUP_TIMEOUT_SECONDS = 10
 

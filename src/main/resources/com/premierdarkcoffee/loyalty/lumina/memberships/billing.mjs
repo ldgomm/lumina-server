@@ -1,5 +1,6 @@
 import { checkRevision } from '../shared/revision.mjs';
 import { attachCampaign, offerAvailable } from '../campaigns/season.mjs';
+import { stopSchedule } from './calendar.mjs';
 import { normalizeOffer } from './offers.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { choice, dateOnly, event, integer, localDay, money, nextMonth, now, requireThat, services, text, uuid } from '../shared/domain.mjs';
@@ -49,7 +50,7 @@ export function hidePlan(db, actor, id) {
   });
 }
 export function contractsFor(db, companyId) {
-  return db.all(`SELECT c.*,p.name,p.term,p.wallet,s.year AS campaign_year,s.base_plan_id FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN seasonal_offers s ON s.plan_id=p.id
+  return db.all(`SELECT c.*,ws.ends_before AS stop_on,ws.amount_minor AS monthly_minor,p.name,p.term,p.wallet,s.year AS campaign_year,s.base_plan_id FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN wallet_schedules ws ON ws.id=c.schedule_id AND ws.company_id=c.company_id LEFT JOIN seasonal_offers s ON s.plan_id=p.id
     WHERE c.company_id=? ORDER BY starts_on DESC,created_at DESC`,companyId).map(contract => ({
     ...contract,
     items: db.all(`SELECT i.service,i.quantity * ? AS quantity,
@@ -96,6 +97,12 @@ export function cancelContract(db, actor, company, id, reason) {
   requireAgency(actor);
   const note = text(reason,'motivo',5,500);
   db.transaction(() => {
+    const current=db.get('SELECT schedule_id FROM contracts WHERE id=? AND company_id=?',id,company.id);
+    if(current?.schedule_id){
+      stopSchedule(db,company.id,current.schedule_id,localDay());
+      event(db,actor,company.id,'CONTRACT',id,'RENOVACIÓN_DETENIDA',note);
+      return;
+    }
     requireThat(db.run('UPDATE contracts SET cancelled_at=? WHERE id=? AND company_id=? AND cancelled_at IS NULL',
       now(),id,company.id).changes === 1,'El período ya no está activo.',409);
     event(db,actor,company.id,'CONTRACT',id,'PLAN_CANCELADO',note);

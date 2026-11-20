@@ -159,6 +159,6 @@
     const enter = merchant;
     merchant = async function () { await enter(); app.classList.remove('welcome-view'); };
     const brand = document.querySelector('.brand');
-    if (brand) brand.innerHTML = '<span class="loyalty-mark" aria-hidden="true">L</span> Loyalty';
-    if (!state.slug && location.pathname !== '/platform' && !state.token) welcome();
+    if (brand && !document.querySelector('meta[name="lumina-csrf"]')) brand.innerHTML = '<span class="loyalty-mark" aria-hidden="true">L</span> Loyalty';
+    if (!state.slug && location.pathname !== '/platform' && !state.token && !document.querySelector('meta[name="lumina-csrf"]')) welcome();
 })();

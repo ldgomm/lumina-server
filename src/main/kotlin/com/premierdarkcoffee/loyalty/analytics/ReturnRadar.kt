@@ -84,7 +84,7 @@ fun LoyaltyService.returnRadar(tenant: String, query: ReturnRadarQuery = ReturnR
                     coalesce(r.sample_days>=4 AND r.span>=7 AND
                         s.today-(a.last_at AT TIME ZONE s.zone)::date>=greatest(7,ceil(r.median_days*1.5)),false) AS late,
                     coalesce(w.ready,0) AS ready,coalesce(w.near,0) AS near
-                FROM members m JOIN scope s ON m.tenant_id=s.tenant
+                FROM members m JOIN scope s ON m.tenant_id=s.tenant AND m.removed_at IS NULL
                 LEFT JOIN sales a ON a.member_id=m.id LEFT JOIN rhythm r ON r.member_id=m.id
                 LEFT JOIN rewards_now w ON w.member_id=m.id
             ), filtered AS (SELECT * FROM population WHERE ($predicate)

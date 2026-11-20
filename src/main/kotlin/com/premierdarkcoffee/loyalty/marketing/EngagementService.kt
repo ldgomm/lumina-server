@@ -162,7 +162,7 @@ fun LoyaltyService.cancelCustomerEvent(s:Staff,eventId:String)=db.tx{c->s.owner(
 
 fun LoyaltyService.customerInsights(s:Staff,offset:Int=0):JsonObject {s.owner();need(offset in 0..1000000,"INVALID_PAGE","Página inválida.");return db.tx{c->obj("offset" to offset,"customers" to c.rows("""
     SELECT m.id,m.name,m.created_at,p.visits,p.spent,p.last_at,p.first_at,r.claims
-    FROM members m LEFT JOIN LATERAL (SELECT count(*) AS visits,coalesce(sum(amount_minor),0) AS spent,max(created_at) AS last_at,min(created_at) AS first_at FROM purchases WHERE tenant_id=m.tenant_id AND member_id=m.id) p ON true
+    FROM (SELECT * FROM members WHERE removed_at IS NULL) m LEFT JOIN LATERAL (SELECT count(*) AS visits,coalesce(sum(amount_minor),0) AS spent,max(created_at) AS last_at,min(created_at) AS first_at FROM purchases WHERE tenant_id=m.tenant_id AND member_id=m.id) p ON true
     LEFT JOIN LATERAL (SELECT count(*) AS claims FROM redemptions WHERE tenant_id=m.tenant_id AND member_id=m.id AND status='CONSUMED') r ON true
     WHERE m.tenant_id=? ORDER BY p.last_at DESC NULLS LAST,m.id LIMIT 50 OFFSET ?
     """.trimIndent(),s.tenant,offset){val visits=it.getLong("visits");val last=it.getTimestamp("last_at")?.toInstant();val first=it.getTimestamp("first_at")?.toInstant()

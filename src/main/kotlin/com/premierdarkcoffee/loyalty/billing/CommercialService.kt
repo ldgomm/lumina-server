@@ -48,13 +48,39 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
     private fun audit(c: Connection, tenant: String, action: String, target: String) {
         c.exec("INSERT INTO audit_events(id,tenant_id,actor_id,action,target_id,created_at) VALUES(?,?,'platform',?,?,?)", id(), tenant, action, target, stamp())
     }
+    private fun calendarPlan(c:Connection,tenant:String,plan:MembershipPlan):Boolean =
+        plan.walletAgreement!=null || plan.intervalMonths in setOf(1,12) && c.one(
+            "SELECT EXISTS(SELECT 1 FROM lumina_business_registrations WHERE tenant_id=?)",tenant){it.getBoolean(1)}==true
+
+    private fun catalogTakesOver(c:Connection,tenant:String):LocalDate? = c.one(
+        "SELECT min(starts_on) FROM wallet_catalog_schedules WHERE tenant_id=? AND replaces_legacy AND (ends_before IS NULL OR starts_on<ends_before)",
+        tenant){it.getDate(1)?.toLocalDate()}
+
     private fun effective(c: Connection, tenant: String, access: JsonObject, date: LocalDate): JsonObject {
         val p = plan(c, tenant)
-        val late = p != null && p.first.autoSuspend && (
+        val unpaidWallet = c.one("""SELECT EXISTS(SELECT 1 FROM billing_invoices WHERE tenant_id=? AND wallet_due
+            AND voided_at IS NULL AND paid_minor<amount_minor AND due_on<?)""",tenant,Date.valueOf(date)) { it.getBoolean(1) }!!
+        val pastCut = date.withDayOfMonth(1).minusMonths(if (date.dayOfMonth>15) 0 else 1)
+        val unbilled = c.one("""SELECT EXISTS(SELECT 1 FROM wallet_catalog_schedules WHERE tenant_id=? AND next_start<=?
+            AND (ends_before IS NULL OR next_start<ends_before) AND
+            round(fee_minor::numeric * (least(coalesce(ends_before,'infinity'::date),(date_trunc('month',next_start)+interval '1 month')::date)-next_start)
+            / extract(day from date_trunc('month',next_start)+interval '1 month - 1 day'))>0)""",
+            tenant,Date.valueOf(pastCut)) { it.getBoolean(1) }!!
+        val calendar=p!=null && calendarPlan(c,tenant,p.first)
+        val transfer=if(calendar)catalogTakesOver(c,tenant) else null
+        val calendarLate = p != null && calendar && (transfer==null || p.third<transfer) && p.first.recurring && p.first.feeMinor>0 &&
+            invoiceDate(p.third).withDayOfMonth(15)<date
+        val late = unpaidWallet || unbilled || calendarLate || p != null && !calendar && p.first.autoSuspend && (
             c.one("SELECT count(*) FROM billing_invoices WHERE tenant_id=? AND voided_at IS NULL AND paid_minor<amount_minor AND due_on<?", tenant, Date.valueOf(date.minusDays(p.first.graceDays.toLong()))) { it.getInt(1) }!! > 0 ||
             (p.first.recurring && p.first.feeMinor > 0 && p.third.plusDays((p.first.dueDays + p.first.graceDays).toLong()) < date)
         )
-        val ended=p?.first?.walletEndsOn?.let { date>=billingDate(it) } ?: false
+        val catalog = c.one("""SELECT count(*) FILTER(WHERE starts_on<=? AND (ends_before IS NULL OR ends_before>?)),
+            count(*)
+            FROM wallet_catalog_schedules WHERE tenant_id=?""",Date.valueOf(date),Date.valueOf(date),tenant) {
+            it.getInt(1) to it.getInt(2)
+        }!!
+        val nativeEnded = p?.first?.walletEndsOn?.let { date>=billingDate(it) } ?: false
+        val ended = catalog.first==0 && (nativeEnded || catalog.second>0 && p?.first?.recurring!=true)
         val manual = access.getValue("state").jsonPrimitive.content
         return JsonObject(access + mapOf("effectiveState" to JsonPrimitive(if (manual == "ACTIVE" && (late || ended)) "SUSPENDED" else manual),
             "overdueSuspension" to JsonPrimitive(manual == "ACTIVE" && late)))
@@ -70,26 +96,48 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         obj("state" to state.getValue("effectiveState"), "canOperate" to (state.getValue("effectiveState").jsonPrimitive.content == "ACTIVE"))
     }
     internal fun sync(c: Connection, tenant: String, date: LocalDate) {
+        syncCatalog(c,tenant,date)
+        syncOpeningPeriods(c,tenant,date)
         val p = plan(c, tenant) ?: return
         if (!p.first.recurring) return
         var next = p.third
         val currency = c.one("SELECT currency FROM tenants WHERE id=?", tenant) { it.getString(1) }!!
         var cycles = 0
-        while (next <= date) {
+        val calendar=calendarPlan(c,tenant,p.first)
+        val transfer=if(calendar)catalogTakesOver(c,tenant) else null
+        while ((if(calendar) invoiceDate(next) else next) <= date && (transfer==null || next<transfer)) {
             need(++cycles <= 1200, "BILLING_BACKLOG", "Revisa las fechas de membresía antes de continuar.", 409)
-            val end = nextBillingDate(next, p.first.intervalMonths, p.first.anchorDay)
+            val stub=calendar && next.dayOfMonth!=1
+            val end = when {
+                stub -> nextCalendarCut(next)
+                calendar -> next.plusMonths(p.first.intervalMonths.toLong())
+                else -> nextBillingDate(next,p.first.intervalMonths,p.first.anchorDay)
+            }
             val count=p.first.walletAgreement?.let { walletPeriodBranches(c,tenant,it,next) }
-            val amount=if(count==null)p.first.feeMinor else Math.multiplyExact(count.toLong(),p.first.feeMinor)
+            val full=if(count==null)p.first.feeMinor else Math.multiplyExact(count.toLong(),p.first.feeMinor)
+            val amount=if(stub) {
+                val divisor=next.lengthOfMonth().toLong()*p.first.intervalMonths
+                (full*ChronoUnit.DAYS.between(next,end)+divisor/2)/divisor
+            } else full
+            val due=if(calendar)invoiceDate(next).withDayOfMonth(15) else next.plusDays(p.first.dueDays.toLong())
             val description=if(count==null)p.first.name else "Wallet · $count sucursal(es) × USD ${java.math.BigDecimal.valueOf(p.first.feeMinor,2).toPlainString()} · $next a ${end.minusDays(1)}"
-            c.exec("INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,period_start,period_end,plan_version,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,period_start) DO NOTHING",
-                tenant, id(), description, amount, currency, Date.valueOf(next.plusDays(p.first.dueDays.toLong())), Date.valueOf(next), Date.valueOf(end), p.second, stamp())
+            c.exec("INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,period_start,period_end,plan_version,created_at,wallet_due) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,period_start) DO NOTHING",
+                tenant, id(), description, amount, currency, Date.valueOf(due), Date.valueOf(next), Date.valueOf(end), p.second, stamp(),calendar)
             next = end
         }
-        if (next != p.third) c.exec("UPDATE billing_memberships SET next_on=? WHERE tenant_id=?", Date.valueOf(next), tenant)
+        if (transfer!=null && transfer<=date && next>=transfer) {
+            savePlan(c,tenant,p.first.copy(recurring=false,nextChargeOn=transfer.toString(),walletEndsOn=transfer.toString()),p.second+1)
+        } else if (next != p.third) c.exec("UPDATE billing_memberships SET next_on=? WHERE tenant_id=?", Date.valueOf(next), tenant)
     }
     fun sweep(): Int {
         // Tenant-local dates are evaluated inside sync; one failure cannot starve another business.
-        val tenants = db.tx { c -> c.rows("SELECT tenant_id FROM billing_memberships WHERE (config->>'recurring')::boolean AND next_on <= ? ORDER BY next_on,tenant_id LIMIT 200", Date.valueOf(LocalDate.now(clock).plusDays(1))) { it.getString(1) } }
+        val tenants = db.tx { c ->
+            val tomorrow=Date.valueOf(LocalDate.now(clock).plusDays(1))
+            c.rows("""SELECT tenant_id FROM billing_memberships WHERE (config->>'recurring')::boolean AND next_on<=?
+                UNION SELECT tenant_id FROM wallet_opening_periods WHERE NOT billed AND starts_on<date_trunc('month',?::date)::date
+                UNION SELECT tenant_id FROM wallet_catalog_schedules WHERE next_start<bill_before AND next_start<=date_trunc('month',?::date)::date
+                AND (ends_before IS NULL OR next_start<ends_before)""",tomorrow,tomorrow,tomorrow) { it.getString(1) }
+        }
         var failures = 0
         tenants.forEach { tenant -> try { db.tx { c -> lock(c, tenant); sync(c, tenant, today(c, tenant)) } } catch (_: Exception) { failures++ } }
         return failures
@@ -103,6 +151,9 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
     fun configure(tenant: String, input: MembershipChange): JsonObject = db.tx { c ->
         val access = lock(c, tenant); val date = today(c, tenant)
         need(input.plan.walletAgreement==null && plan(c,tenant)?.first?.walletAgreement==null,"WALLET_ACCEPTANCE_REQUIRED","La suscripción Wallet se acepta y cancela desde la cuenta del negocio en Lúmina.",403)
+        need(!input.plan.recurring || c.one("""SELECT count(*) FROM wallet_catalog_schedules WHERE tenant_id=? AND replaces_legacy
+            AND (ends_before IS NULL OR ends_before>? AND starts_on<ends_before)""",tenant,Date.valueOf(date)){it.getInt(1)}==0,
+            "CATALOG_ACTIVE","Gestiona esta suscripción desde el catálogo de Lúmina.",409)
         input.plan.validate(date); sync(c, tenant, date)
         val current = plan(c, tenant)
         need(input.expectedVersion == (current?.second ?: 0), "VERSION_CONFLICT", "La membresía cambió. Recarga antes de editar.", 409)
@@ -162,14 +213,27 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         val date = billingDate(input.paidOn); val today = today(c, tenant)
         need(date <= today && date >= today.minusYears(10), "INVALID_DATE", "El pago no puede tener una fecha futura.")
         val normalized = input.copy(reference = input.reference.trim().uppercase(Locale.ROOT))
-        once(c, tenant, "payment", key, json.encodeToString(normalized)) {
+        val payload=json.encodeToJsonElement(normalized).jsonObject
+        val fingerprint=if(input.walletCut)payload.toString() else JsonObject(payload-"walletCut").toString()
+        once(c, tenant, "payment", key, fingerprint) {
             val invoice = c.one("SELECT amount_minor-paid_minor AS remaining,voided_at FROM billing_invoices WHERE tenant_id=? AND id=? FOR UPDATE", tenant, input.invoiceId) { it.getLong(1) to (it.getTimestamp(2) != null) }
                 ?: throw Problem(404, "NOT_FOUND", "Cargo no encontrado.")
-            need(!invoice.second && input.amountMinor <= invoice.first, "PAYMENT_EXCEEDS_BALANCE", "El cargo está anulado o el pago supera su saldo pendiente.", 409)
+            val allocations=if(input.walletCut) c.rows("""SELECT i.id,i.amount_minor-i.paid_minor FROM billing_invoices i JOIN billing_invoices anchor
+                ON i.tenant_id=anchor.tenant_id AND i.due_on=anchor.due_on WHERE anchor.tenant_id=? AND anchor.id=? AND anchor.wallet_due
+                AND i.wallet_due AND i.voided_at IS NULL AND i.amount_minor>i.paid_minor ORDER BY i.id FOR UPDATE OF i""",tenant,input.invoiceId) {
+                it.getString(1) to it.getLong(2)
+            } else listOf(input.invoiceId to input.amountMinor)
+            need(!input.walletCut || allocations.sumOf{it.second}==input.amountMinor && allocations.any{it.first==input.invoiceId},
+                "CUT_CHANGED","El saldo de este corte cambió. Revisa el total antes de registrar el pago.",409)
+            need(!invoice.second && (input.walletCut || input.amountMinor <= invoice.first), "PAYMENT_EXCEEDS_BALANCE", "El cargo está anulado o el pago supera su saldo pendiente.", 409)
             need(c.one("SELECT id FROM billing_payments WHERE tenant_id=? AND reference=?", tenant, normalized.reference) { it.getString(1) } == null, "DUPLICATE_PAYMENT", "La referencia de pago ya está registrada; revisa el historial.", 409)
             val payment = id()
             c.exec("INSERT INTO billing_payments(tenant_id,id,invoice_id,amount_minor,reference,method,paid_on,created_at) VALUES(?,?,?,?,?,?,?,?)", tenant, payment, input.invoiceId, input.amountMinor, normalized.reference, input.method, Date.valueOf(date), stamp())
-            c.exec("UPDATE billing_invoices SET paid_minor=paid_minor+? WHERE tenant_id=? AND id=?", input.amountMinor, tenant, input.invoiceId)
+            for((invoiceId,amount) in allocations){
+                if(input.walletCut)c.exec("INSERT INTO wallet_payment_allocations VALUES(?,?,?,?)",tenant,payment,invoiceId,amount)
+                c.exec("UPDATE billing_invoices SET paid_minor=paid_minor+? WHERE tenant_id=? AND id=?",amount,tenant,invoiceId)
+            }
+            c.exec("UPDATE wallet_passes SET next_scan_at=least(next_scan_at,?) WHERE tenant_id=?",stamp(),tenant)
             audit(c, tenant, "BILLING_PAYMENT", payment); obj("id" to payment)
         }
     }
@@ -180,7 +244,11 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
                 ?: throw Problem(404, "NOT_FOUND", "Pago no encontrado.")
             need(c.one("SELECT payment_id FROM billing_reversals WHERE tenant_id=? AND payment_id=?", tenant, payment) { it.getString(1) } == null, "ALREADY_REVERSED", "Este pago ya fue revertido.", 409)
             c.exec("INSERT INTO billing_reversals(tenant_id,payment_id,reason,created_at) VALUES(?,?,?,?)", tenant, payment, input.reason.trim(), stamp())
-            c.exec("UPDATE billing_invoices SET paid_minor=paid_minor-? WHERE tenant_id=? AND id=?", p.second, tenant, p.first)
+            val allocations=c.rows("SELECT invoice_id,amount_minor FROM wallet_payment_allocations WHERE tenant_id=? AND payment_id=?",tenant,payment){
+                it.getString(1) to it.getLong(2)
+            }.ifEmpty{listOf(p)}
+            for((invoiceId,amount) in allocations)c.exec("UPDATE billing_invoices SET paid_minor=paid_minor-? WHERE tenant_id=? AND id=?",amount,tenant,invoiceId)
+            c.exec("UPDATE wallet_passes SET next_scan_at=least(next_scan_at,?) WHERE tenant_id=?",stamp(),tenant)
             audit(c, tenant, "BILLING_REVERSAL", payment); obj("id" to payment)
         }
     }
@@ -189,6 +257,7 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         once(c, tenant, "void:$invoice", key, json.encodeToString(input)) {
             val changed = c.exec("UPDATE billing_invoices SET voided_at=?,void_reason=? WHERE tenant_id=? AND id=? AND voided_at IS NULL AND paid_minor=0", stamp(), input.reason.trim(), tenant, invoice)
             need(changed == 1, "CANNOT_VOID", "El cargo no existe, ya fue anulado o tiene pagos activos.", 409)
+            c.exec("UPDATE wallet_passes SET next_scan_at=least(next_scan_at,?) WHERE tenant_id=?",stamp(),tenant)
             audit(c, tenant, "BILLING_VOID", invoice); obj("id" to invoice)
         }
     }
@@ -211,8 +280,8 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         val amount = r.getLong("amount_minor"); val paid = r.getLong("paid_minor"); val due = r.getDate("due_on").toLocalDate(); val voided = r.getTimestamp("voided_at") != null
         val status = when { voided -> "VOID"; amount == paid -> "PAID"; due < date -> "OVERDUE"; paid > 0 -> "PARTIAL"; else -> "OPEN" }
         return obj("id" to r.getString("id"), "description" to r.getString("description"), "amountMinor" to amount, "paidMinor" to paid,
-            "remainingMinor" to if (voided) 0 else amount - paid, "currency" to r.getString("currency"), "dueOn" to due.toString(), "status" to status,
-            "periodStart" to r.getDate("period_start")?.toString(), "periodEnd" to r.getDate("period_end")?.toString(), "planVersion" to r.getObject("plan_version"),
+            "walletDue" to r.getBoolean("wallet_due"), "remainingMinor" to if (voided) 0 else amount - paid, "currency" to r.getString("currency"), "dueOn" to due.toString(), "status" to status,
+            "periodStart" to (r.getDate("period_start") ?: r.getDate("calendar_start"))?.toString(), "periodEnd" to r.getDate("period_end")?.toString(), "planVersion" to r.getObject("plan_version"),
             "voidReason" to r.getString("void_reason"), "createdAt" to r.instant("created_at"))
     }
     internal fun administrationSnapshot(c: Connection, tenant: String, staffId: String?): JsonObject {
@@ -249,7 +318,11 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
                 "reversed" to (it.getTimestamp("reversed_at") != null), "reversalReason" to it.getString("reversal_reason"), "reversedAt" to it.getTimestamp("reversed_at")?.toInstant())
         } ?: throw Problem(404, "NOT_FOUND", "Pago no encontrado.")
         val bill = c.one("SELECT * FROM billing_invoices WHERE tenant_id=? AND id=?", tenant, record.getValue("invoiceId").jsonPrimitive.content) { invoice(it, date) }!!
-        obj("business" to business, "payment" to record, "invoice" to bill, "today" to date.toString())
+        val allocations=c.rows("""SELECT i.description,a.amount_minor FROM wallet_payment_allocations a JOIN billing_invoices i
+            ON i.tenant_id=a.tenant_id AND i.id=a.invoice_id WHERE a.tenant_id=? AND a.payment_id=? ORDER BY i.description""",tenant,payment){
+            obj("description" to it.getString(1),"amountMinor" to it.getLong(2))
+        }
+        obj("business" to business, "payment" to record, "invoice" to bill,"allocations" to allocations,"today" to date.toString())
     }
     fun ownerAccount(s: Staff, offset: Int = 0): JsonObject { s.owner(); return account(s.tenant, s.id, offset) }
     fun account(tenant: String, staffId: String? = null, offset: Int = 0): JsonObject = db.tx { c ->
@@ -264,8 +337,11 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
             obj("id" to it.getString("id"), "title" to it.getString("title"), "body" to it.getString("body"), "severity" to it.getString("severity"), "read" to (it.getTimestamp("read_at") != null), "createdAt" to it.instant("created_at"))
         }
         obj("business" to business, "today" to date.toString(), "access" to effective(c, tenant, access, date), "summary" to summary,
-            "membership" to p?.let { obj("version" to it.second, "plan" to json.encodeToJsonElement(it.first), "nextChargeOn" to it.third.toString(), "nextDueOn" to it.third.plusDays(it.first.dueDays.toLong()).toString(), "branchMonthlyMinor" to if(it.first.walletAgreement!=null)Math.multiplyExact(it.first.feeMinor,c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){r->r.getLong(1)}!!)else null) },
-            "invoices" to c.rows("SELECT * FROM billing_invoices WHERE tenant_id=? ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET ?", tenant, offset) { invoice(it, date) },
+            "membership" to p?.let { obj("version" to it.second, "plan" to json.encodeToJsonElement(it.first), "nextChargeOn" to (if(calendarPlan(c,tenant,it.first))invoiceDate(it.third) else it.third).toString(), "nextDueOn" to (if(calendarPlan(c,tenant,it.first))invoiceDate(it.third).withDayOfMonth(15) else it.third.plusDays(it.first.dueDays.toLong())).toString(), "branchMonthlyMinor" to if(it.first.walletAgreement!=null)Math.multiplyExact(it.first.feeMinor,c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){r->r.getLong(1)}!!)else null) },
+            "invoices" to c.rows("""SELECT i.*,sum(CASE WHEN wallet_due AND voided_at IS NULL THEN amount_minor-paid_minor ELSE 0 END)
+                OVER(PARTITION BY due_on) AS wallet_cut FROM billing_invoices i WHERE tenant_id=? ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET ?""",tenant,offset){
+                JsonObject(invoice(it,date)+("walletCutMinor" to JsonPrimitive(it.getLong("wallet_cut"))))
+            },
             "payments" to c.rows("SELECT p.*,i.description AS invoice_description,r.reason AS reversal_reason,r.created_at AS reversed_at FROM billing_payments p JOIN billing_invoices i ON i.tenant_id=p.tenant_id AND i.id=p.invoice_id LEFT JOIN billing_reversals r ON r.tenant_id=p.tenant_id AND r.payment_id=p.id WHERE p.tenant_id=? ORDER BY p.created_at DESC,p.id DESC LIMIT 100 OFFSET ?", tenant, offset) {
                 obj("id" to it.getString("id"), "invoiceId" to it.getString("invoice_id"), "invoiceDescription" to it.getString("invoice_description"), "amountMinor" to it.getLong("amount_minor"), "reference" to it.getString("reference"), "method" to it.getString("method"), "paidOn" to it.getDate("paid_on").toString(), "reversed" to (it.getTimestamp("reversed_at") != null), "reversalReason" to it.getString("reversal_reason")) },
             "paymentCount" to c.one("SELECT count(*) FROM billing_payments WHERE tenant_id=?", tenant) { it.getLong(1) }, "offset" to offset, "notices" to notices,

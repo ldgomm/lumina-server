@@ -40,7 +40,7 @@ data class CustomerTimelineQuery(val kind: String = "ALL", val branchId: String?
 fun LoyaltyService.customerSuggestions(s: Staff, query: String): JsonObject {
     s.owner();val q=normalizedSearch(query)
     if(q.length<2)return obj("items" to emptyList<JsonObject>())
-    return db.tx { c -> obj("items" to c.rows("SELECT id,name,right(card_code,6) AS suffix FROM members WHERE tenant_id=? AND position(? in translate(lower(name),'áéíóúüñ','aeiouun'))>0 ORDER BY lower(name),id LIMIT 8",s.tenant,q) {
+    return db.tx { c -> obj("items" to c.rows("SELECT id,name,right(card_code,6) AS suffix FROM members WHERE removed_at IS NULL AND tenant_id=? AND position(? in translate(lower(name),'áéíóúüñ','aeiouun'))>0 ORDER BY lower(name),id LIMIT 8",s.tenant,q) {
         obj("id" to it.getString("id"),"name" to it.getString("name"),"cardSuffix" to it.getString("suffix"))
     }) }
 }
@@ -50,7 +50,7 @@ fun LoyaltyService.customerWorkspace(s: Staff, memberId: String, query: Customer
     s.owner();uuid(memberId);query.validate();val at=Timestamp.from(clock.instant())
     return db.tx { c ->
         c.exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-        val member=c.one("SELECT id,name,card_code,created_at,contact_phone,contact_version FROM members WHERE tenant_id=? AND id=?",s.tenant,memberId) {
+        val member=c.one("SELECT id,name,card_code,created_at,contact_phone,contact_version FROM members WHERE removed_at IS NULL AND tenant_id=? AND id=?",s.tenant,memberId) {
             obj("id" to it.getString("id"),"name" to it.getString("name"),"cardCode" to it.getString("card_code"),"joinedAt" to it.instant("created_at"),"contactPhone" to it.getString("contact_phone"),"contactVersion" to it.getInt("contact_version"))
         }?:throw Problem(404,"NOT_FOUND","Cliente no encontrado en este negocio.")
         query.branchId?.let { branch ->

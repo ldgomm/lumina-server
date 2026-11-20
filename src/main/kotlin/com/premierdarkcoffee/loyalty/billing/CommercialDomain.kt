@@ -47,6 +47,6 @@ fun nextBillingDate(current: LocalDate, months: Int, anchor: Int): LocalDate {
 @Serializable data class MembershipChange(val expectedVersion: Int, val plan: MembershipPlan)
 @Serializable data class AccessChange(val state: String, val reason: String, val expectedVersion: Int, val commandId: String? = null)
 @Serializable data class NewCharge(val description: String, val amountMinor: Long, val dueOn: String)
-@Serializable data class RecordPayment(val invoiceId: String, val amountMinor: Long, val reference: String, val method: String, val paidOn: String)
+@Serializable data class RecordPayment(val invoiceId: String, val amountMinor: Long, val reference: String, val method: String, val paidOn: String, val walletCut: Boolean = false)
 @Serializable data class Correction(val reason: String)
 @Serializable data class BusinessNotice(val title: String, val body: String, val severity: String = "INFO", val expiresOn: String? = null)

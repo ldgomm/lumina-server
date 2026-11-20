@@ -300,6 +300,9 @@ def deploy_locked(expected_commit):
     slot_path=safe(Path('/etc/lumina/slots')/(slot+'.env'))
     slot_content='RELEASE='+candidate['release']+'\n'
     configure_slot(slot,slot_path,slot_content,account,old)
+    stage('MEMBERSHIP_SCHEMA')
+    run(['runuser','-u','lumina','--','/usr/bin/python3',str(Path(candidate['release'])/'scripts/production.py'),
+         'migrate-calendar','--config',str(CONFIG),'--backup',str(backup)],timeout=180)
     stage('CANDIDATE_READINESS')
     run(['systemctl','start','lumina-wallet@'+slot],timeout=90)
     def wallet_ready():

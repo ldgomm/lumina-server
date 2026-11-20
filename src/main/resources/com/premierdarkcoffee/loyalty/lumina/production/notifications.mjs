@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { requestAccessSql } from '../access/content-policy.mjs';
 import { requireBusinessActor } from '../access/accounts.mjs';
 import { businessOverview, attentionRows } from './overview.mjs';
+import { expiryAlerts } from '../memberships/calendar.mjs';
+import { inclusiveEnd } from '../memberships/orders.mjs';
 import { integer, now, requireThat, text } from '../shared/domain.mjs';
 
 export const notificationKinds={deliveries:'Entregas por revisar',quotes:'Cotizaciones',proposals:'Propuestas',visits:'Grabaciones próximas',payments:'Pagos pendientes'};
@@ -27,6 +29,11 @@ export function notificationRows(db,actor,companyId,account=null) {
   if(actor.kind==='OWNER'&&account?.summary?.balanceMinor>0)result.push({key:'payments:balance',kind:'payments',title:'Tienes un saldo pendiente',
     amount:account.summary.balanceMinor,created_at:account.summary.nextDueOn?account.summary.nextDueOn+'T12:00:00-05:00':start,path:'/billing?view=charges',
     fingerprint:fingerprint([account.summary,...(account.invoices||[]).map(i=>[i.id,i.status,i.remainingMinor])])});
+  if(actor.kind==='OWNER')for(const row of expiryAlerts(db,companyId))result.push({
+    key:'payments:renew:'+row.id,kind:'payments',title:row.name+' está por vencer',
+    detail:'Vigente hasta el '+inclusiveEnd(row.ends_before)+'. Por favor, realiza el pago para renovar.',
+    created_at:row.ends_before+'T00:00:00-05:00',path:'/plans?view=agreements',fingerprint:fingerprint([row.id,row.ends_before])
+  });
   const seen=new Map(db.all('SELECT notification_key,fingerprint FROM attention_seen WHERE account_id=?',actor.id).map(r=>[r.notification_key,r.fingerprint]));
   return result.map(row=>({...row,seen:seen.get(row.key)===row.fingerprint})).sort((a,b)=>Number(a.seen)-Number(b.seen)||a.created_at.localeCompare(b.created_at)||a.key.localeCompare(b.key));
 }

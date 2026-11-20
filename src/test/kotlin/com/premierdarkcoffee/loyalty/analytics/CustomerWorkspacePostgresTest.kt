@@ -29,6 +29,8 @@ import com.premierdarkcoffee.loyalty.shared.Reward
 import com.premierdarkcoffee.loyalty.shared.id
 import com.premierdarkcoffee.loyalty.shared.json
 import com.premierdarkcoffee.loyalty.shared.text
+import com.premierdarkcoffee.loyalty.wallet.appleJson
+import com.premierdarkcoffee.loyalty.wallet.googleJson
 import com.premierdarkcoffee.loyalty.wallet.WalletEnrollment
 import com.premierdarkcoffee.loyalty.wallet.enrollWithoutPassword
 import com.premierdarkcoffee.loyalty.wallet.summary
@@ -98,6 +100,37 @@ class CustomerWorkspacePostgresTest {
     private fun claim(f:F) {
         val revision=service.card(f.member).getValue("member").jsonObject.num("revision")
         service.purchase(f.owner,Purchase(f.member.id,f.b,"RECEIPT-REWARD",0,"USD",listOf(PurchaseItem("Pizza","pizza",1,100)),rewardId=f.reward,expectedRevision=revision,expectedRewardVersion=1,identityVerified=true,customerConfirmed=true),id())
+    }
+    @Test fun `owner edits identity and removes the same pass without losing sales or another customers access`() {
+        val f=fixture(); val other=fixture(); val otherMember=member(f,"Paula","DEMO20002")
+        buy(f)
+        val cipher=com.premierdarkcoffee.loyalty.wallet.WalletCipher(java.util.Base64.getEncoder().encodeToString(ByteArray(32){5}))
+        val wallets=com.premierdarkcoffee.loyalty.wallet.WalletService(service,"https://example.test",cipher)
+        val before=wallets.materialize(f.member)
+        val revision=workspace(f).getValue("member").jsonObject.num("contactVersion").toInt()
+        val edit=CustomerProfileEdit("María Ruiz","1710034065",revision,true)
+        val editKey=id()
+        val updated=service.editCustomer(f.owner,f.member.id,edit,editKey)
+        assertEquals(updated.num("version"),service.editCustomer(f.owner,f.member.id,edit,editKey).num("version"))
+        assertEquals("María Ruiz",workspace(f).getValue("member").jsonObject.str("name"))
+        assertEquals(before.serial,wallets.materialize(f.member).serial)
+        assertEquals(409,assertFailsWith<Problem>{service.editCustomer(f.owner,f.member.id,edit,id())}.status)
+        val otherVersion=service.customerWorkspace(f.owner,otherMember.id,CustomerTimelineQuery()).getValue("member").jsonObject.num("contactVersion").toInt()
+        assertEquals(409,assertFailsWith<Problem>{service.editCustomer(f.owner,otherMember.id,edit.copy(expectedVersion=otherVersion),id())}.status)
+        val remove=CustomerRemoval(revision+1,true)
+        assertFailsWith<Problem>{service.removeCustomer(other.owner,f.member.id,remove,id())}
+        val removeKey=id()
+        assertTrue(service.removeCustomer(f.owner,f.member.id,remove,removeKey).getValue("removed").jsonPrimitive.boolean)
+        assertTrue(service.removeCustomer(f.owner,f.member.id,remove,removeKey).getValue("replayed").jsonPrimitive.boolean)
+        assertFailsWith<Problem>{buy(f)}
+        assertFailsWith<Problem>{workspace(f)}
+        assertTrue(activity(f).rows().none{it.str("id")==f.member.id})
+        assertEquals(1,db.tx{c->c.rows("SELECT id FROM purchases WHERE tenant_id=? AND member_id=?",f.owner.tenant,f.member.id){it.getString(1)}.size})
+        val removed=wallets.materialize(f.member)
+        assertEquals(before.serial,removed.serial)
+        assertTrue(removed.appleJson("pass.example","TEAM","https://example.test").getValue("voided").jsonPrimitive.boolean)
+        assertEquals("INACTIVE",removed.googleJson("issuer.object","issuer.class","https://example.test").str("state"))
+        assertTrue(wallets.materialize(otherMember).snapshot.getValue("canOperate").jsonPrimitive.boolean)
     }
     @Test fun `history preserves receipt products net total and confirmed reward snapshot`() {
         val f=fixture();buy(f,5,at.minusSeconds(100));claim(f)
