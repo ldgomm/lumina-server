@@ -8,15 +8,16 @@
  function area(code){root.querySelectorAll('[data-offer-area]').forEach(e=>e.hidden=e.dataset.offerArea!==code);root.querySelectorAll('[data-offer-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.offerTab===code)));}
  function preview(){
   const chosen=selected(),brand=Number(by('IDENTITY').value)>0,wallet=Number(by('WALLET').value)>0;
-  const monthly=form.querySelector('[name=term][value=MONTHLY]');monthly.disabled=brand;if(brand&&monthly.checked)by('term').value='ONE_OFF';root.querySelector('[data-brand-frequency]').hidden=!brand;
+  for(const recurring of form.querySelectorAll('[name=term]:not([value=ONE_OFF])'))recurring.disabled=brand;if(brand)by('term').value='ONE_OFF';root.querySelector('[data-brand-frequency]').hidden=!brand;
   const gift=root.querySelector('[data-wallet-gift]');gift.hidden=!wallet||chosen.length<2;by('wallet_gift').disabled=gift.hidden;if(gift.hidden)by('wallet_gift').checked=false;
   const fixed=by('price_type').value==='FIXED';root.querySelector('[data-fixed-price]').hidden=!fixed;by('price').disabled=!fixed;by('price').required=fixed;
+  const split=root.querySelector('[data-other-price]');if(split){split.hidden=!(wallet&&chosen.length>1&&fixed&&!by('wallet_gift').checked&&by('term').value!=='ONE_OFF');by('other_price').disabled=split.hidden;}
   root.querySelectorAll('[data-area-count]').forEach(e=>{const count=[...root.querySelector(`[data-offer-area=${e.dataset.areaCount}]`).querySelectorAll('input')].reduce((sum,i)=>sum+(Number(i.value)||0),0);e.textContent=count?String(count):'';});
   const kind=chosen.length===1&&Number(chosen[0].value)===1?'Servicio individual':'Paquete';root.querySelector('[data-offer-kind]').textContent=chosen.length?kind:'Elige los servicios';
-  const summary=document.createDocumentFragment();if(chosen.length){const list=document.createElement('ul');chosen.forEach(e=>list.append(line('li',`${Number(e.value)} · ${e.dataset.name}`)));summary.append(list);summary.append(line('p',by('term').value==='MONTHLY'?'Estas cantidades cada mes':'Trabajo de una sola vez'));if(by('wallet_gift').checked)summary.append(line('p','Servicio de Wallet de cortesía, sin recargo.'));}
+  const summary=document.createDocumentFragment();if(chosen.length){const list=document.createElement('ul');chosen.forEach(e=>list.append(line('li',`${Number(e.value)} · ${e.dataset.name}`)));summary.append(list);summary.append(line('p',by('term').value==='ANNUAL'?'Estas cantidades cada año':by('term').value==='MONTHLY'?'Estas cantidades cada mes':'Trabajo de una sola vez'));if(by('wallet_gift').checked)summary.append(line('p','Servicio de Wallet de cortesía, sin recargo.'));}
   else summary.append(line('p','Aún no hay servicios seleccionados.'));
   const match=by('price').value.match(/^(\d{1,8})(?:[.,](\d{1,2}))?$/);const amount=match?Number(match[1])*100+Number((match[2]||'').padEnd(2,'0')):null;
-  summary.append(line('strong',!fixed?'Por cotizar':amount===null?'Precio pendiente':money(amount)+(by('term').value==='MONTHLY'?' / mes':' · pago único')));
+  summary.append(line('strong',!fixed?'Por cotizar':amount===null?'Precio pendiente':money(amount)+(by('term').value==='ANNUAL'?' / año':by('term').value==='MONTHLY'?' / mes':' · pago único')));
   const panel=root.querySelector('.offer-selection-summary [data-offer-summary]');panel.replaceChildren(summary);
   const copy=panel.cloneNode(true);copy.removeAttribute('data-offer-summary');copy.removeAttribute('aria-live');
   const review=root.querySelector('[data-offer-review]');review.replaceChildren(line('h3',by('name').value||'Nombre pendiente'),copy,line('p',by('description').value));

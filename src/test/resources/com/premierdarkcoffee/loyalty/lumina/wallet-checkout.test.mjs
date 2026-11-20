@@ -31,7 +31,7 @@ test('four reported routes lead to published Wallet offers without redirect loop
  for(const route of ['/plans','/plans/wallet','/wallet','/services']) {
   let r=await w.client.get(route),steps=0;
   while(r.status===303){assert.ok(++steps<3,route);r=await w.client.get(r.location);}
-  assert.equal(r.status,200,route);assert.doesNotMatch(r.body,/\$4,99|\$50,00|31 de diciembre de 2026|identificación del proveedor/);
+  assert.equal(r.status,200,route);assert.doesNotMatch(r.body,/\$4,99|\$50,00|identificación del proveedor/);
  }
  assert.equal(w.native.registrations.size,0);assert.equal(state(w),'INACTIVE');assert.equal(count(w,'contracts'),0);
 });
@@ -93,8 +93,25 @@ test('a monthly package with Wallet activates included services at its published
  const page=await w.client.get('/plans/wallet');assert.match(page.body,/Contenido con Wallet/);assert.match(page.body,/120,00/);assert.doesNotMatch(page.body,/4,99/);
 });
 test('two overlapping Wallet selections cannot create duplicate commercial agreements',async t=>{
- const w=await world(t),p=await plan(w),a=await selection(w,[p]),b=await selection(w,[p]);
- assert.equal((await w.client.post(a.path+'/accept',a.data)).status,303);assert.equal((await w.client.post(b.path+'/accept',b.data)).status,409);assert.equal(count(w,'contracts'),1);
+ const w=await world(t),p=await plan(w),key=randomUUID();
+ const submit=key=>w.client.post('/plans/request',{key,['qty_'+p]:'1'});
+ const responses=await Promise.all([submit(key),submit(randomUUID())]);
+ assert.deepEqual(responses.map(r=>r.status).sort(),[303,409]);
+ const path=responses.find(r=>r.status===303).location,body=(await w.client.get(path)).body;
+ const data={revision:'1',confirm:'yes',offerHash:body.match(/name="offerHash" value="([^"]+)"/)[1]};
+ assert.equal((await w.client.post(path+'/accept',data)).status,303);
+ assert.equal((await submit(randomUUID())).status,409);
+ const alias=await plan(w,{name:'Otra mensual'});
+ assert.equal((await w.client.post('/plans/request',{key:randomUUID(),start_when:'NEXT_MONTH',['qty_'+alias]:'1'})).status,409);
+ const annual=await plan(w,{name:'Wallet anual',term:'ANNUAL',price:'50'});
+ const offers=(await w.client.get('/plans/wallet')).body;
+ assert.match(offers,/Tu plan actual/);assert.match(offers,/Cambiar a anual/);
+ const change=await selection(w,[annual],{start_when:'NEXT_MONTH'});
+ assert.match(change.body,/Anual/);assert.equal((await w.client.post(change.path+'/accept',change.data)).status,303);
+ const periods=w.db.all('SELECT * FROM wallet_schedules ORDER BY starts_on');
+ assert.equal(periods.length,2);assert.equal(periods[0].ends_before,periods[1].starts_on);
+ assert.equal((await w.client.post('/plans/request',{key:randomUUID(),start_when:'NEXT_MONTH',['qty_'+annual]:'1'})).status,409);
+ assert.equal(count(w,'contracts'),2);
 });
 test('unpriced and custom one-off work does not fabricate a final price or duration',async t=>{
  const w=await world(t),p=await plan(w,{price_type:'QUOTE',price:''}),o=await selection(w,[p]);assert.equal(o.data.offerHash,undefined);assert.match(o.body,/Por cotizar/);
@@ -161,5 +178,9 @@ test('cancelling a scheduled replacement keeps the original plan and fee',async 
 test('first statement counts the enrollment date and actual calendar days',()=>{
  assert.deepEqual(firstStatement('2027-04-22',499),{cut:'2027-05-01',due:'2027-05-15',days:9,monthDays:30,amount:150});
  assert.equal(firstStatement('2028-02-29',499).amount,17);
- assert.equal(firstStatement('2027-02-01',499).amount,499);
+ assert.deepEqual(firstStatement('2026-11-22',499),{cut:'2027-02-01',due:'2027-02-15',days:31,monthDays:31,amount:499});
+ assert.equal(firstStatement('2026-12-31',499,'2027-01-01').amount,0);
+ assert.equal(firstStatement('2027-01-22',499).amount,161);
+ assert.equal(firstStatement('2027-02-01',499).cut,'2027-03-01');
+ assert.equal(firstStatement('2027-01-01',5000,null,12).amount,5000);
 });

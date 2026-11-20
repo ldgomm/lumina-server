@@ -13,11 +13,18 @@ import java.sql.Timestamp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-@Serializable data class CatalogSchedule(val id: String, val name: String, val startsOn: String, val endsBefore: String? = null, val feeMinor: Long, val billBefore: String? = null, val replacesLegacy: Boolean = true)
+@Serializable data class CatalogSchedule(val id: String, val name: String, val startsOn: String, val endsBefore: String? = null, val feeMinor: Long, val billBefore: String? = null, val replacesLegacy: Boolean = true, val months: Int = 1, val otherMinor: Long = 0)
 @Serializable data class CatalogCalendar(val companyId: String, val revision: Long, val entries: List<CatalogSchedule>)
 
 fun nextCalendarCut(day: LocalDate): LocalDate = day.withDayOfMonth(1).plusMonths(1)
-internal fun invoiceDate(start: LocalDate): LocalDate = if(start.dayOfMonth==1) start else nextCalendarCut(start)
+internal fun invoiceDate(start: LocalDate): LocalDate = nextCalendarCut(walletPaidFrom(start))
+internal fun walletPeriodEnd(start:LocalDate,months:Int):LocalDate =
+    if(start.dayOfMonth==1 && start>=WALLET_PROMOTION_END)start.plusMonths(months.toLong()) else nextCalendarCut(start)
+private fun periodFee(fee:Long, start:LocalDate, end:LocalDate, months:Int):Long {
+    if(end==start.plusMonths(months.toLong()) && start.dayOfMonth==1)return fee
+    val divisor=start.lengthOfMonth().toLong()*months
+    return (Math.multiplyExact(fee,ChronoUnit.DAYS.between(start,end))+divisor/2)/divisor
+}
 fun calendarFee(fee: Long, start: LocalDate, end: LocalDate): Long {
     require(start <= end && end <= nextCalendarCut(start))
     val days = ChronoUnit.DAYS.between(start,end)
@@ -48,19 +55,20 @@ fun CommercialService.updateCalendar(tenant: String, calendar: CatalogCalendar) 
         val billBefore=entry.billBefore?.let(::billingDate) ?: end ?: nextCalendarCut(start)
         need(billBefore>=start,"INVALID_CALENDAR","Revisa el período confirmado.")
         uuid(entry.id); text(entry.name,100)
-        need(entry.feeMinor in 0..1_000_000_000 && (end==null||end>=start),"INVALID_CALENDAR","Importe o fechas inválidos.")
+        need(entry.months in setOf(1,12) && entry.otherMinor in 0..entry.feeMinor && entry.feeMinor in 0..1_000_000_000 && (end==null||end>=start),"INVALID_CALENDAR","Importe o fechas inválidos.")
         if(end!=start) {
             need(!hasCoverage || previousEnd!=null && start>=previousEnd,"OVERLAPPING_PERIOD","Wallet ya está incluida en estas fechas.",409)
             previousEnd=end
             hasCoverage=true
         }
-        val saved = c.exec("""INSERT INTO wallet_catalog_schedules(tenant_id,id,name,starts_on,ends_before,next_start,fee_minor,bill_before,replaces_legacy)
-            VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET ends_before=excluded.ends_before,bill_before=excluded.bill_before
-            WHERE wallet_catalog_schedules.replaces_legacy=excluded.replaces_legacy AND wallet_catalog_schedules.bill_before<=excluded.bill_before
+        val saved = c.exec("""INSERT INTO wallet_catalog_schedules(tenant_id,id,name,starts_on,ends_before,next_start,fee_minor,bill_before,replaces_legacy,months,other_minor,split_confirmed)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,TRUE) ON CONFLICT(tenant_id,id) DO UPDATE SET ends_before=excluded.ends_before,bill_before=excluded.bill_before,months=excluded.months,other_minor=excluded.other_minor,split_confirmed=TRUE
+            WHERE (NOT wallet_catalog_schedules.split_confirmed OR (wallet_catalog_schedules.months=excluded.months AND wallet_catalog_schedules.other_minor=excluded.other_minor))
+            AND wallet_catalog_schedules.replaces_legacy=excluded.replaces_legacy AND wallet_catalog_schedules.bill_before<=excluded.bill_before
             AND wallet_catalog_schedules.starts_on=excluded.starts_on AND wallet_catalog_schedules.fee_minor=excluded.fee_minor
             AND (wallet_catalog_schedules.ends_before IS NULL OR wallet_catalog_schedules.ends_before=excluded.ends_before OR
                  excluded.ends_before<wallet_catalog_schedules.ends_before OR wallet_catalog_schedules.ends_before>?)""",
-            tenant,entry.id,entry.name,Date.valueOf(start),end?.let(Date::valueOf),Date.valueOf(start),entry.feeMinor,Date.valueOf(billBefore),entry.replacesLegacy,Date.valueOf(today(c,tenant)))
+            tenant,entry.id,entry.name,Date.valueOf(start),end?.let(Date::valueOf),Date.valueOf(start),entry.feeMinor,Date.valueOf(billBefore),entry.replacesLegacy,entry.months,entry.otherMinor,Date.valueOf(today(c,tenant)))
         need(saved==1,"AGREEMENT_CHANGED","Las fechas del acuerdo ya cambiaron.",409)
     }
     c.exec("UPDATE wallet_catalog_calendars SET revision=?,fingerprint=? WHERE tenant_id=?",calendar.revision,fingerprint,tenant)
@@ -86,24 +94,38 @@ private fun CommercialService.uncoveredStart(c:Connection,tenant:String,start:Lo
 }
 
 internal fun CommercialService.syncCatalog(c:Connection,tenant:String,today:LocalDate) {
-    val rows=c.rows("""SELECT id,name,next_start,ends_before,fee_minor,bill_before,replaces_legacy FROM wallet_catalog_schedules WHERE tenant_id=?
-        AND next_start<bill_before AND next_start<=? AND (ends_before IS NULL OR next_start<ends_before) ORDER BY next_start,id""", tenant,Date.valueOf(today.withDayOfMonth(1))) {
-        CatalogSchedule(it.getString(1),it.getString(2),it.getDate(3).toString(),it.getDate(4)?.toString(),it.getLong(5),it.getDate(6).toString(),it.getBoolean(7))
+    val rows=c.rows("""SELECT id,name,next_start,ends_before,fee_minor,bill_before,replaces_legacy,months,other_minor FROM wallet_catalog_schedules
+        WHERE tenant_id=? AND next_start<bill_before AND next_start<? AND (ends_before IS NULL OR next_start<ends_before) ORDER BY next_start,id""",
+        tenant,Date.valueOf(today.withDayOfMonth(1))) {
+        CatalogSchedule(it.getString(1),it.getString(2),it.getDate(3).toString(),it.getDate(4)?.toString(),it.getLong(5),it.getDate(6).toString(),it.getBoolean(7),it.getInt(8),it.getLong(9))
     }
     if(rows.isEmpty())return
     val currency=c.one("SELECT currency FROM tenants WHERE id=?",tenant){it.getString(1)}!!
     for(row in rows) {
         var start=billingDate(row.startsOn)
+        val limit=billingDate(requireNotNull(row.billBefore))
         val stop=row.endsBefore?.let(::billingDate)
-        while(invoiceDate(start)<=today && start<billingDate(requireNotNull(row.billBefore)) && (stop==null || start<stop)) {
-            val cut=nextCalendarCut(start)
-            val end=minOf(stop?:cut,cut)
-            val from=if(row.replacesLegacy)uncoveredStart(c,tenant,start,end) else start
-            val amount=if(from<end)calendarFee(row.feeMinor,from,end) else 0L
-            if(amount>0) c.exec("""INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,
+        while(nextCalendarCut(start)<=today && start<limit && (stop==null || start<stop)) {
+            val boundary=walletPeriodEnd(start,row.months)
+            val end=minOf(stop?:boundary,boundary)
+            if(end>limit)break // The portal has not committed the full coverage period yet.
+            val due=Date.valueOf(nextCalendarCut(start).withDayOfMonth(15))
+            val from=if(row.replacesLegacy && start>=WALLET_PROMOTION_END)uncoveredStart(c,tenant,start,end) else start
+            val fee=if(from<end && start>=WALLET_PROMOTION_END) {
+                val wallet=row.feeMinor-row.otherMinor
+                if(from==start)periodFee(wallet,start,end,row.months)
+                else (wallet*ChronoUnit.DAYS.between(from,end)+ChronoUnit.DAYS.between(start,boundary)/2)/ChronoUnit.DAYS.between(start,boundary)
+            } else 0L
+            if(fee>0) c.exec("""INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,
                 calendar_id,calendar_start,period_end,wallet_due,created_at) VALUES(?,?,?,?,?,?,?,?,?,TRUE,?)
                 ON CONFLICT(tenant_id,calendar_id,calendar_start) WHERE calendar_id IS NOT NULL DO NOTHING""",
-                tenant,id(),"${row.name} · $from a ${end.minusDays(1)}",amount,currency,Date.valueOf(invoiceDate(start).withDayOfMonth(15)),
+                tenant,id(),"${row.name} · Wallet · $from a ${end.minusDays(1)}",fee,currency,due,
+                row.id,Date.valueOf(start),Date.valueOf(end),Timestamp.from(clock.instant()))
+            val other=periodFee(row.otherMinor,start,end,row.months)
+            if(other>0)c.exec("""INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,
+                services_calendar_id,calendar_start,period_end,wallet_due,created_at) VALUES(?,?,?,?,?,?,?,?,?,FALSE,?)
+                ON CONFLICT(tenant_id,services_calendar_id,calendar_start) WHERE services_calendar_id IS NOT NULL DO NOTHING""",
+                tenant,id(),"${row.name} · Otros servicios · $start a ${end.minusDays(1)}",other,currency,due,
                 row.id,Date.valueOf(start),Date.valueOf(end),Timestamp.from(clock.instant()))
             start=end
         }
@@ -111,21 +133,34 @@ internal fun CommercialService.syncCatalog(c:Connection,tenant:String,today:Loca
     }
 }
 
+// A stopped or replaced agreement still owes its last earned period at its original rate.
+internal fun CommercialService.retainEarnedPeriod(c:Connection,tenant:String,p:Triple<MembershipPlan,Int,LocalDate>,date:LocalDate) {
+    if(p.first.recurring && p.third>=WALLET_PROMOTION_END && p.third<=date)
+        c.exec("INSERT INTO wallet_opening_periods(tenant_id,starts_on,version) VALUES(?,?,?) ON CONFLICT DO NOTHING",tenant,Date.valueOf(p.third),p.second)
+}
+internal fun coveredUntil(p:Triple<MembershipPlan,Int,LocalDate>,today:LocalDate):LocalDate {
+    if(!p.first.recurring)return p.first.walletEndsOn?.let(::billingDate)?:today
+    val start=walletPaidFrom(p.third)
+    return if(start>today)start else walletPeriodEnd(start,p.first.intervalMonths)
+}
+internal fun CommercialService.issueWalletPeriod(c:Connection,tenant:String,start:LocalDate,plan:MembershipPlan,version:Int) {
+    if(start<WALLET_PROMOTION_END)return
+    val end=walletPeriodEnd(start,plan.intervalMonths)
+    val branches=plan.walletAgreement?.let{walletPeriodBranches(c,tenant,it,start)}?:1
+    val fee=periodFee(Math.multiplyExact(branches.toLong(),plan.feeMinor),start,end,plan.intervalMonths)
+    if(fee>0)c.exec("""INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,period_start,period_end,plan_version,created_at,wallet_due)
+        SELECT ?,?,?,?,currency,?,?,?,?,?,TRUE FROM tenants WHERE id=? ON CONFLICT(tenant_id,period_start) DO NOTHING""",
+        tenant,id(),"${plan.name} · $branches sucursal(es) · $start a ${end.minusDays(1)}",fee,Date.valueOf(invoiceDate(start).withDayOfMonth(15)),
+        Date.valueOf(start),Date.valueOf(end),version,Timestamp.from(clock.instant()),tenant)
+}
 internal fun CommercialService.syncOpeningPeriods(c:Connection,tenant:String,today:LocalDate) {
     val rows=c.rows("""SELECT o.starts_on,o.version,v.config::text FROM wallet_opening_periods o
         JOIN billing_plan_versions v ON v.tenant_id=o.tenant_id AND v.version=o.version
         WHERE o.tenant_id=? AND NOT o.billed AND o.starts_on<? ORDER BY o.starts_on""",tenant,Date.valueOf(today.withDayOfMonth(1))) {
         Triple(it.getDate(1).toLocalDate(),it.getInt(2),json.decodeFromString<MembershipPlan>(it.getString(3)))
     }
-    for((start,version,plan) in rows){
-        val cut=nextCalendarCut(start)
-        val branches=walletPeriodBranches(c,tenant,requireNotNull(plan.walletAgreement),start)
-        val divisor=start.lengthOfMonth().toLong()*plan.intervalMonths
-        val fee=(branches*plan.feeMinor*ChronoUnit.DAYS.between(start,cut)+divisor/2)/divisor
-        if(fee>0)c.exec("""INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,period_start,period_end,plan_version,created_at,wallet_due)
-            SELECT ?,?,?,?,currency,?,?,?,?,?,TRUE FROM tenants WHERE id=? ON CONFLICT(tenant_id,period_start) DO NOTHING""",
-            tenant,id(),"Wallet · $branches sucursal(es) · $start a ${cut.minusDays(1)}",fee,Date.valueOf(cut.withDayOfMonth(15)),
-            Date.valueOf(start),Date.valueOf(cut),version,Timestamp.from(clock.instant()),tenant)
+    for((start,version,plan) in rows) {
+        issueWalletPeriod(c,tenant,start,plan,version)
         c.exec("UPDATE wallet_opening_periods SET billed=TRUE WHERE tenant_id=? AND starts_on=?",tenant,Date.valueOf(start))
     }
 }

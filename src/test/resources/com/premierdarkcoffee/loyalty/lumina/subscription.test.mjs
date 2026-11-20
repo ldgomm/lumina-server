@@ -87,12 +87,10 @@ test('a native Wallet agreement blocks an overlapping package and preserves the 
  const w=await world(t,true);await w.admin.post('/account/provider',legal);
  await w.admin.post('/plans',{name:'Video y Wallet',term:'MONTHLY',price:'100',VIDEO:'2',wallet:'GIFT'});
  const plan=w.db.get('SELECT id FROM plans').id;
- const requested=await w.client.post('/plans/request',{key:randomUUID(),['qty_'+plan]:'1'});assert.equal(requested.status,303);
- const order=w.db.get('SELECT * FROM package_orders'),line=w.db.get('SELECT * FROM package_order_lines');
- const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guayaquil',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- assert.equal((await w.admin.post('/agency'+requested.location+'/quote?company='+w.id,{revision:String(order.revision),['price_'+line.id]:'100',['start_'+line.id]:day,['end_'+line.id]:day,terms:'Dos videos y Wallet incluida.'})).status,303);
- const rejected=await w.client.post(requested.location+'/accept',{revision:String(order.revision+1),confirm:'yes'});assert.equal(rejected.status,409);assert.match(rejected.body,/evitar cargos duplicados/);
- assert.equal(w.db.get('SELECT status FROM package_orders').status,'QUOTED');assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
+ const requested=await w.client.post('/plans/request',{key:randomUUID(),['qty_'+plan]:'1'});
+ assert.equal(requested.status,409);assert.match(requested.body,/acuerdo anterior/);
+ assert.equal(w.db.get('SELECT count(*) n FROM package_orders').n,0);
+ assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
 });
 test('a previously accepted Wallet order has a visible continuation instead of another fixed agreement',async t=>{
  const w=await world(t);await w.admin.post('/account/provider',legal);await w.admin.post('/agency/businesses/verify?company='+w.id);

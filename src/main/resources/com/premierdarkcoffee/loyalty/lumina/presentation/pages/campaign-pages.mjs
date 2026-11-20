@@ -22,7 +22,7 @@ export function campaignPage({actor,company,url,plans,bases=[],values={},error='
   if(!admin)return packageNav(url,'campaigns',false)+hero+(live.length?`<div class="bf-toolbar"><h2>Elige tu promoción</h2><span>${live.length} ${live.length===1?'oferta disponible':'ofertas disponibles'}</span></div>`+catalog(actor,company,url,live):'<section class="card"><h2>Esta campaña no está disponible</h2><p>Las promociones se habilitan durante sus fechas de noviembre.</p>'+localLink(url('/plans'),'Ver servicios y precios','btn')+'</section>');
   const previous=plans.filter(p=>p.campaign).sort((a,b)=>b.campaign.year-a.campaign.year||b.created_at.localeCompare(a.created_at));
   const editor=bases.length?form(url('/plans/black-friday'),actor,hidden('key',values.key||uuid())+`<div class="bf-editor" data-bf-editor><div><p class="bf-kicker">1 / OFERTA</p><h2>Una promoción con tu estilo</h2>
-    ${select('base','Servicio o paquete habitual',bases.map(p=>[p.id,p.name+' · '+displayAmount(p.price_minor)+(p.term==='MONTHLY'?' / mes':'')]),values.base||chosen.id,'required')}
+    ${select('base','Servicio o paquete habitual',bases.map(p=>[p.id,p.name+' · '+displayAmount(p.price_minor)+(p.months===12?' / año':p.term==='MONTHLY'?' / mes':'')]),values.base||chosen.id,'required')}
     <p class="bf-help">Conserva las cantidades de la oferta habitual. Puedes combinar contenido, web y diseño publicando primero el paquete.</p>
     ${input('name','Nombre de la promoción','text','required minlength="2" maxlength="100"',values.name||'')}
     ${textarea('description','Qué incluye','maxlength="1200" rows="3"',values.description??chosen.description)}

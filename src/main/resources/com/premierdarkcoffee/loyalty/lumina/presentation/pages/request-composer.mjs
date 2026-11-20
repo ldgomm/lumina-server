@@ -15,7 +15,7 @@ export function priceGuide(actor,url,area,plans=[],contracts=[]) {
   const entries=requestCommercial(plans,contracts,area);
   return `<aside class="request-price-guide"><p class="eyebrow">PRECIOS Y CUPOS</p><h2>Antes de solicitar</h2>${entries.map(entry=>{
     const priced=entry.offers.filter(o=>o.price!==null);
-    const offers=priced.slice(0,4).map(o=>`<li><span>${esc(o.name)} · ${o.quantity} ${esc(serviceName(entry.service))}</span><strong>${esc(displayAmount(o.price))}<small>${o.term==='MONTHLY'?(o.campaign?' · primer período mensual':' / mes'):' · pago único'}</small>${o.campaign?'<small>Viernes Negro · hasta el 30 de noviembre de '+o.campaign.year+'. Después se desactiva.</small>':''}</strong></li>`).join('');
+    const offers=priced.slice(0,4).map(o=>`<li><span>${esc(o.name)} · ${o.quantity} ${esc(serviceName(entry.service))}</span><strong>${esc(displayAmount(o.price))}<small>${o.months===12?' / año':o.term==='MONTHLY'?(o.campaign?' · primer período mensual':' / mes'):' · pago único'}</small>${o.campaign?'<small>Viernes Negro · hasta el 30 de noviembre de '+o.campaign.year+'. Después se desactiva.</small>':''}</strong></li>`).join('');
     const quotas=entry.available.filter(i=>i.remaining>0);
     return `<section data-price-service="${esc(entry.service)}"><h3>${esc(serviceName(entry.service))}</h3>${offers?`<ul>${offers}</ul>`:'<p class="muted">Precio a cotizar según lo que necesites.</p>'}${quotas.length?`<p class="available-quota">${quotas.reduce((n,q)=>n+q.remaining,0)} cupo(s) disponibles en tus acuerdos.</p>`:''}</section>`;
   }).join('')}<p class="muted">Enviar una solicitud no reserva cupos ni realiza un cobro.</p>${localLink(url('/plans'),'Comparar precios y paquetes →')}</aside>`;

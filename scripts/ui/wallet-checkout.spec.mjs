@@ -14,6 +14,7 @@ try {
  const w=await portal(t,native.origin,{platformToken:native.platformToken}),admin=await agency(w);
  assert.equal((await admin.post('/plans',{catalog_version:'SIMPLE',name:'Wallet de mi negocio',description:'Fidelización y soporte.',term:'MONTHLY',price_type:'FIXED',price:'13.75',WALLET:'1',confirm_offer:'yes'})).status,303);
  assert.equal((await admin.post('/plans',{catalog_version:'SIMPLE',name:'Wallet con Contenido',description:'Tarjetas y videos para redes.',term:'MONTHLY',price_type:'FIXED',price:'30',VIDEO:'2',WALLET:'1',wallet_gift:'yes',confirm_offer:'yes'})).status,303);
+ assert.equal((await admin.post('/plans',{catalog_version:'SIMPLE',name:'Wallet anual',term:'ANNUAL',price_type:'FIXED',price:'50',WALLET:'1',confirm_offer:'yes'})).status,303);
  browser=await chromium.launch({headless:true,...(process.env.LOYALTY_UI_CHROMIUM?{executablePath:process.env.LOYALTY_UI_CHROMIUM,args:['--no-sandbox','--disable-dev-shm-usage']}:{})});
  if(output)await mkdir(output,{recursive:true});
  const errors=[];
@@ -77,6 +78,16 @@ try {
     await page.locator('body.staff-mode, #content').first().waitFor();
     assert.deepEqual(await page.evaluate(()=>window.welcomeFlashes),[]);
   }
+  await page.goto(w.origin+'/plans?view=catalog');
+  const existing=page.locator('[data-package]').filter({has:page.getByRole('heading',{name:'Wallet de mi negocio',exact:true})});
+  assert.equal(await existing.locator('[data-package-quantity]').count(),0);
+  await page.goto(w.origin+'/plans/wallet');
+  const annual=page.getByRole('article').filter({has:page.getByRole('heading',{name:'Wallet anual',exact:true})});
+  await annual.getByRole('button',{name:'Cambiar a anual'}).click();
+  await page.getByLabel('Revisé los servicios, precios, fechas y condiciones de esta propuesta.',{exact:true}).check();
+  await page.getByRole('button',{name:'Confirmar para el próximo período'}).click();
+  await page.waitForURL(w.origin+'/plans/wallet');
+  assert.match(await annual.innerText(),/Cambio programado/);
   await context.close();
  }
  assert.deepEqual(errors,[]);

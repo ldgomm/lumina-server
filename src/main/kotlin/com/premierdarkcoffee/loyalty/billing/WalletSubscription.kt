@@ -17,7 +17,7 @@ import java.sql.Connection
 import java.sql.Timestamp
 import java.time.*
 
-const val WALLET_TERMS_VERSION = "wallet-2026-11-20-v3"
+const val WALLET_TERMS_VERSION = "wallet-2026-11-20-v4"
 const val WALLET_BRANCH_PRICE = 499L
 const val WALLET_ANNUAL_PRICE = 5000L
 fun walletUnitPrice(cycle:String):Long {
@@ -57,7 +57,7 @@ Negocio contratante: $business. Inicio: $activation. Sucursales registradas: $br
 
 3. Tarifa y cargo automático. La tarifa final es USD $price por $period por sucursal registrada, con los impuestos aplicables incluidos. Con $branchCount sucursal(es), el total por período inicial es USD ${java.math.BigDecimal.valueOf(Math.multiplyExact(branchCount.toLong(),unit),2).toPlainString()}. Al aceptar, el representante autoriza la renovación ${if(annual)"anual" else "mensual"} y el registro automático del cargo en la cuenta del negocio mientras mantenga la suscripción. No hace falta una nueva orden cada $period. ${if(annual)"El año se paga en un solo cargo de USD 50,00 por sucursal, no en doce cuotas; son doce meses de servicio." else "Puedes elegir la modalidad anual antes de aceptar."} Esto no autoriza débitos en cuentas bancarias ni tarjetas de pago. Un registro de cuenta no sustituye la factura tributaria que corresponda emitir.
 
-4. Períodos y sucursales. Los períodos completos se cobran el día 1. Si el servicio de pago comienza con el mes en curso, el primer corte incluye la parte proporcional desde ese día hasta fin de mes y el período completo que comienza. Para el tramo inicial se divide la tarifa entre los meses de la modalidad y los días reales del mes. Se incluyen las sucursales registradas al inicio de cada período. Puedes pagar hasta el día 15 inclusive. Desde el 16, si queda saldo de Wallet, se suspenden las operaciones y las tarjetas hasta que Lúmina registre el pago completo. Servicios de contenido, web, diseño y trabajos adicionales solo se contratan por separado con su propio precio.
+4. Períodos y sucursales. El uso mensual se cobra el día 1 por el mes que acaba de terminar. Enero de 2027 se cobra el 1 de febrero de 2027. En la modalidad anual se registra un solo cargo al cierre del primer mes completo del año contratado. Si el servicio de pago comienza a mitad de mes, el primer corte cobra únicamente los días usados hasta fin de mes. Para el tramo inicial se divide la tarifa entre los meses de la modalidad y los días reales del mes. Se incluyen las sucursales registradas al inicio de cada período. Puedes pagar hasta el día 15 inclusive. Desde el 16, si queda saldo de Wallet, se suspenden las operaciones y las tarjetas hasta que Lúmina registre el pago completo. Servicios de contenido, web, diseño y trabajos adicionales solo se contratan por separado con su propio precio.
 
 5. Cancelación. El dueño puede desactivar la renovación desde Paquetes y servicios → Wallet, sin penalidad. La solicitud queda registrada inmediatamente y el servicio continúa hasta el final del período vigente; durante la promoción, hasta el 31 de diciembre de 2026. No se emiten períodos posteriores. Para terminación inmediata, devolución o corrección de un cargo, escribe al contacto del proveedor: se aplicarán los derechos y ajustes que correspondan por servicios efectivamente prestados. Esta opción no limita derechos de devolución, reclamación ni terminación reconocidos por la ley. Los saldos legítimamente pendientes no se borran al cancelar.
 
@@ -79,12 +79,14 @@ private fun LoyaltyService.offer(c:Connection,s:Staff,input:WalletOfferInput):Js
     need(if(input.ownerDocument.isNotEmpty()) consistentCedula(input.ownerDocument) else input.ownerEmail.matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")),"INVALID_OWNER_IDENTITY","Revisa la identificación del responsable.")
     need(c.one("SELECT tenant_id FROM lumina_business_registrations WHERE company_id=?",input.companyId){it.getString(1)}==s.tenant,"BUSINESS_MISMATCH","La suscripción corresponde a otro negocio.",403)
     val current=commercial.plan(c,s.tenant)
+    need(current==null || !current.first.recurring || current.first.walletAgreement==null ||
+        current.first.intervalMonths!=(if(input.cycle=="ANNUAL")12 else 1),"ALREADY_ACTIVE","Tu negocio ya tiene esta modalidad de Wallet. Puedes elegir otra para el siguiente período.",409)
     need(current==null || current.first.walletAgreement!=null,"EXISTING_AGREEMENT","Este negocio tiene una programación anterior. Lúmina debe revisarla antes de aceptar otra tarifa para evitar cargos duplicados.",409)
     val date=commercial.today(c,s.tenant)
     val branches=walletBranches(c,s.tenant)
     need(branches.isNotEmpty(),"BRANCH_REQUIRED","El negocio necesita una sucursal.",409)
     val name=c.one("SELECT name FROM tenants WHERE id=?",s.tenant){it.getString(1)}!!
-    val paid=maxOf(walletPaidFrom(date),if(current?.first?.recurring==true)current.third else current?.first?.walletEndsOn?.let(::billingDate)?:date)
+    val paid=maxOf(walletPaidFrom(date),current?.let{coveredUntil(it,date)}?:date)
     val unit=walletUnitPrice(input.cycle)
     val terms=walletTerms(input.provider,name,date,paid,branches.size,input.cycle)
     val summary=obj("version" to (current?.second?:0),"activationOn" to date,"paidFrom" to paid,"trialUntil" to if(date<WALLET_PROMOTION_END)"2026-12-31" else null,
@@ -98,21 +100,23 @@ fun LoyaltyService.acceptWalletSubscription(s:Staff,input:WalletAcceptInput,key:
     return db.tx {c->
         authorizeStaff(c,s,true)
         commercial.once(c,s.tenant,"wallet-subscribe:${s.id}",key,json.encodeToString(input)) {
+            commercial.sync(c,s.tenant,commercial.today(c,s.tenant))
             val quote=offer(c,s,input.offer)
             need(Security.equal(quote.getValue("hash").jsonPrimitive.content,input.expectedHash),"OFFER_CHANGED","Cambió la fecha, el número de sucursales o las condiciones. Revisa el resumen actualizado antes de aceptar.",409)
             val previous=commercial.plan(c,s.tenant)
             need(previous==null || !previous.first.recurring || previous.first.intervalMonths!=(if(input.offer.cycle=="ANNUAL")12 else 1),"ALREADY_ACTIVE","La suscripción ya está activa.",409)
             val date=commercial.today(c,s.tenant)
             // A cancelled period remains paid/available; resuming cannot charge it a second time.
-            val paid=maxOf(walletPaidFrom(date),if(previous?.first?.recurring==true)previous.third else previous?.first?.walletEndsOn?.let(::billingDate)?:date)
+            val paid=maxOf(walletPaidFrom(date),previous?.let{coveredUntil(it,date)}?:date)
             need(paid.toString()==quote.getValue("paidFrom").jsonPrimitive.content,"PERIOD_STILL_ACTIVE","El período actual sigue disponible. Puedes volver a activar la renovación al finalizarlo.",409)
             val agreement=WalletAgreement(WALLET_TERMS_VERSION,quote.getValue("terms").jsonPrimitive.content,input.expectedHash,commercial.clock.instant().toString(),input.offer.ownerId,input.offer.ownerName,input.offer.ownerEmail,
                 input.offer.companyId,date.toString(),paid.toString(),quote.getValue("branches").jsonArray.map{it.jsonObject.getValue("id").jsonPrimitive.content},input.offer.provider,input.offer.ownerDocument)
             val annual=input.offer.cycle=="ANNUAL"
-            val plan=MembershipPlan(if(annual)"Wallet · USD 50,00 al año por sucursal" else "Wallet · USD 4,99 al mes por sucursal",walletUnitPrice(input.offer.cycle),date.toString(),invoiceDate(paid).toString(),intervalMonths=if(annual)12 else 1,anchorDay=1,walletAgreement=agreement)
+            val plan=MembershipPlan(if(annual)"Wallet · USD 50,00 al año por sucursal" else "Wallet · USD 4,99 al mes por sucursal",walletUnitPrice(input.offer.cycle),date.toString(),(if(paid.dayOfMonth==1)paid else nextCalendarCut(paid)).toString(),intervalMonths=if(annual)12 else 1,anchorDay=1,walletAgreement=agreement)
             val access=commercial.lock(c,s.tenant)
             need(access.getValue("state").jsonPrimitive.content=="ACTIVE","BUSINESS_SUSPENDED","El negocio debe estar activo antes de contratar.",409)
             val version=(previous?.second?:0)+1
+            previous?.let{commercial.retainEarnedPeriod(c,s.tenant,it,date)}
             commercial.savePlan(c,s.tenant,plan,version)
             if(paid.dayOfMonth!=1)c.exec("INSERT INTO wallet_opening_periods(tenant_id,starts_on,version) VALUES(?,?,?) ON CONFLICT DO NOTHING",
                 s.tenant,java.sql.Date.valueOf(paid),version)
@@ -130,7 +134,9 @@ fun LoyaltyService.cancelWalletSubscription(s:Staff,input:WalletCancelInput,key:
             need(old?.first?.walletAgreement!=null && old.second==input.expectedVersion,"VERSION_CONFLICT","La suscripción cambió. Recarga antes de continuar.",409)
             commercial.sync(c,s.tenant,commercial.today(c,s.tenant))
             val current=commercial.plan(c,s.tenant)!!
-            val end=current.first.walletEndsOn?:current.third.toString()
+            val date=commercial.today(c,s.tenant)
+            val end=current.first.walletEndsOn?:coveredUntil(current,date).toString()
+            commercial.retainEarnedPeriod(c,s.tenant,current,date)
             val version=current.second+1
             commercial.savePlan(c,s.tenant,current.first.copy(recurring=false,nextChargeOn=current.third.toString(),walletEndsOn=end),version)
             c.exec("INSERT INTO audit_events(id,tenant_id,actor_id,action,target_id,created_at) VALUES(?,?,?,'WALLET_SUBSCRIPTION_CANCELLED',?,?)",id(),s.tenant,s.id,version.toString(),Timestamp.from(commercial.clock.instant()))
@@ -144,7 +150,7 @@ fun LoyaltyService.walletSubscriptionStatus(s:Staff):JsonObject {s.owner();retur
     val date=commercial.today(c,s.tenant)
     obj("today" to date,"version" to (current?.second?:0),"accepted" to (agreement!=null),"legacy" to (current!=null&&agreement==null),
         "recurring" to (current?.first?.recurring?:false),"trialUntil" to if(agreement!=null && date<WALLET_PROMOTION_END)"2026-12-31" else null,
-        "endsOn" to current?.first?.walletEndsOn,"nextChargeOn" to if(current?.first?.recurring==true)invoiceDate(current.third) else null,
+        "endsOn" to current?.first?.walletEndsOn,"coveredUntil" to current?.let{coveredUntil(it,date)},"nextChargeOn" to commercial.nextWalletCharge(c,s.tenant,current),
         "cycle" to if(current?.first?.intervalMonths==12)"ANNUAL" else "MONTHLY","intervalMonths" to (current?.first?.intervalMonths?:1),"periodMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"unitMinor" to (current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"monthlyMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"branches" to branches,
         "agreement" to agreement?.let { json.encodeToJsonElement(it) })
 }}

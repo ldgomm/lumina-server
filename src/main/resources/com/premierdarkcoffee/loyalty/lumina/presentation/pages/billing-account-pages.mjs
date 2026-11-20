@@ -51,7 +51,7 @@ function chargeForm(actor, account, base, values = {}, open = false) {
 }
 function subscriptionSummary(actor, account) {
   const membership = account.membership, plan = membership?.plan, agreement = plan?.walletAgreement;
-  if (!plan) return card('Wallet', `<p>No hay una tarifa recurrente aceptada.</p>${actor.kind === 'OWNER' ? localLink('/plans/wallet', 'Ver opciones de Wallet', 'btn secondary') : ''}`);
+  if (!plan) return card('Wallet', `${account.nextWalletChargeOn?'<p>Próximo cargo de Wallet el <strong>'+esc(billingDate(account.nextWalletChargeOn))+'</strong>.</p>':'<p>Consulta tus servicios y sus fechas en Mi suscripción.</p>'}${actor.kind === 'OWNER' ? localLink('/plans/wallet', 'Ver opciones de Wallet', 'btn secondary') : ''}`);
   const total = membership.branchMonthlyMinor ?? plan.feeMinor;
   const branches=agreement&&plan.feeMinor>0&&Number.isSafeInteger(total/plan.feeMinor)?total/plan.feeMinor:null;
   const interval = plan.intervalMonths === 12 ? 'año' : plan.intervalMonths === 1 ? 'mes' : `${plan.intervalMonths} meses`;

@@ -1,5 +1,9 @@
 # Loyalty
 
+## Lúmina release commits
+
+For releases prepared on behalf of José Ruiz, use the repository maintainer identity already associated with GitHub account ldgomm for both Git author and committer. Verify both fields before creating a release bundle or pushing a branch. Keep other contributors' commits and the published history intact unless the maintainer explicitly authorizes a history correction.
+
 ## Lúmina deployment — isolated checkpoint Docker
 
 - Deployment checkpoints use a persisted random run ID, scoped Compose project and image, private configuration under `.local-staging/checkpoints/`, and available loopback ports. Both Docker and gateway checks receive the same explicit context. Never adopt, delete or recreate another checkout's resources or its missing `.env`.

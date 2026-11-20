@@ -2,24 +2,26 @@ import { offerAvailable, requireCampaignOpen } from '../campaigns/season.mjs';
 import { requestPhone } from '../shared/contact.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { dateOnly, event, integer, isId, localDay, money, now, requireThat, text, uuid } from '../shared/domain.mjs';
-import { addSchedule, applyDueServices, nextCut, queueServices, selectionStart, walletLine } from './calendar.mjs';
+import { addSchedule, applyDueServices, periodEnd, queueServices, selectionStart, walletLine } from './calendar.mjs';
+import { checkSelection } from './coverage.mjs';
 import { getPlan } from './billing.mjs';
 
-export const walletCalendarTerms='Wallet se renueva el día 1. Si empiezas a mitad de mes, el primer corte incluye los días usados y el mes que empieza. Puedes pagar hasta el día 15. Desde el 16, si queda saldo de Wallet, se pausan Wallet y sus tarjetas hasta registrar el pago. El pago se registra en Lúmina.';
+export const walletCalendarTerms='Wallet es gratis hasta el 31 de diciembre de 2026 inclusive. Enero se cobra el 1 de febrero de 2027. Después, el cargo mensual se registra el día 1 por el mes terminado. Si empiezas a mitad de mes, pagas los días usados. La tarifa anual se registra una vez, al cierre de su primer mes completo. Puedes pagar hasta el día 15 inclusive. Desde el 16, un saldo vencido de Wallet pausa el servicio y las tarjetas hasta registrar el pago.';
 const commercial = (actor,company) => {
   requireThat(actor.kind==='AGENCY'||actor.kind==='OWNER'&&actor.company_id===company.id,'Tu acceso no incluye contrataciones.',403);
 };
 export const inclusiveEnd = end => new Date(Date.parse(end+'T12:00:00Z')-86400000).toISOString().slice(0,10);
 const afterDay = day => new Date(Date.parse(day+'T12:00:00Z')+86400000).toISOString().slice(0,10);
-export function monthlyEnd(start,anchor=start) {
+export function monthlyEnd(start,anchor=start,months=1) {
   const [year,month]=start.split('-').map(Number),day=Number(anchor.slice(-2));
-  return new Date(Date.UTC(year,month,Math.min(day,new Date(Date.UTC(year,month+1,0)).getUTCDate()))).toISOString().slice(0,10);
+  return new Date(Date.UTC(year,month-1+months,Math.min(day,new Date(Date.UTC(year,month+months,0)).getUTCDate()))).toISOString().slice(0,10);
 }
 export function orderTotals(lines) {
-  const totals={MONTHLY:{amount:0,pending:0},ONE_OFF:{amount:0,pending:0}};
+  const totals={MONTHLY:{amount:0,pending:0},ANNUAL:{amount:0,pending:0},ONE_OFF:{amount:0,pending:0}};
   for(const line of lines) {
-    if(line.unit_minor===null)totals[line.term].pending++;
-    else totals[line.term].amount+=line.unit_minor*line.units;
+    if(line.items && walletLine(line) && line.unit_minor!==null)requireThat(line.unit_minor*line.units<=1_000_000_000,'El importe supera el máximo de un cargo de Wallet.');
+    if(line.unit_minor===null)totals[line.months===12?'ANNUAL':line.term].pending++;
+    else totals[line.months===12?'ANNUAL':line.term].amount+=line.unit_minor*line.units;
   }
   requireThat(Object.values(totals).every(t=>Number.isSafeInteger(t.amount)&&t.amount<=9999999999),'La combinación excede el importe permitido.');
   return totals;
@@ -29,7 +31,7 @@ export function getOrder(db,actor,company,id) {
   const order=db.get('SELECT * FROM package_orders WHERE company_id=? AND id=?',company.id,id||'');
   requireThat(order,'Contratación no encontrada.',404);
   const lines=db.all('SELECT * FROM package_order_lines WHERE company_id=? AND order_id=? ORDER BY term,name,id',company.id,id)
-    .map(line=>{const plan=getPlan(db,line.plan_id);return {...line,items:JSON.parse(line.items_json),campaign:plan.campaign,campaign_available:offerAvailable(plan)};});
+    .map(line=>{const plan=getPlan(db,line.plan_id);return {...line,items:JSON.parse(line.items_json),months:plan.months,other_minor:plan.other_minor,campaign:plan.campaign,campaign_available:offerAvailable(plan)};});
   return {...order,lines,totals:orderTotals(lines)};
 }
 export function ordersFor(db,actor,company,page=0) {
@@ -56,7 +58,14 @@ export function submitOrder(db,actor,company,data,walletNotBefore=null) {
   const notes=text(data.notes||'','indicaciones',0,2000);
   return db.transaction(()=>{
     const replay=db.get('SELECT id FROM package_orders WHERE company_id=? AND submission_key=?',company.id,data.key);
-    if(replay)return replay.id;
+    if(replay) {
+      const saved=getOrder(db,actor,company,replay.id);
+      const requested=Object.entries(data).filter(([key,value])=>key.startsWith('qty_')&&Number(value)>0);
+      const same=data.renewal?saved.lines.length===1 && saved.lines[0].renewal_of===data.renewal:
+        requested.length===saved.lines.length && requested.every(([key,qty])=>saved.lines.some(l=>l.plan_id===key.slice(4)&&l.units===Number(qty)));
+      requireThat(same && saved.start_when===startWhen,'Esta selección ya se envió con otros servicios o fechas. Abre el catálogo para iniciar una nueva.',409);
+      return saved.id;
+    }
     const phone=requestPhone(data,company);
     let selections=[];
     if(data.renewal) {
@@ -86,7 +95,8 @@ export function submitOrder(db,actor,company,data,walletNotBefore=null) {
       db.run(`INSERT INTO package_order_lines(id,company_id,order_id,plan_id,name,term,wallet,units,items_json,catalog_minor,unit_minor,renewal_of)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,uuid(),company.id,id,plan.id,plan.name,plan.term,plan.wallet,units,JSON.stringify(plan.items),price,price,previous?.id||null);
     }
-    orderTotals(getOrder(db,actor,company,id).lines);
+    const saved=getOrder(db,actor,company,id);
+    checkSelection(db,saved,saved.lines);
     event(db,actor,company.id,'ORDER',id,'COMBINACIÓN_SOLICITADA',notes);
     return id;
   });
@@ -105,14 +115,16 @@ export function offerOrder(db,actor,company,id,data) {
       const previous=line.renewal_of?renewable(db,company,line.renewal_of):null;
       const starts=previous?.ends_before||dateOnly(data['start_'+line.id],'fecha de inicio');
       requireThat(starts>=localDay() && (order.start_when!=='NEXT_MONTH'||starts>=selectionStart(db,order,line)),'Revisa la fecha de inicio solicitada por el negocio.');
-      const end=line.term==='MONTHLY'?(walletLine(line)?nextCut(starts):monthlyEnd(starts,previous?.renewal_anchor||previous?.starts_on||starts)):
+      const end=line.term==='MONTHLY'?(walletLine(line)?periodEnd(starts,line.months):monthlyEnd(starts,previous?.renewal_anchor||previous?.starts_on||starts,line.months)):
         afterDay(dateOnly(data['end_'+line.id],'último día del trabajo puntual'));
       requireThat(end>starts,'El último día debe ser igual o posterior al inicio.');
       const amount=money(data['price_'+line.id]);
+      requireThat(!line.other_minor || line.other_minor<=amount,'El importe total debe cubrir los otros servicios incluidos.');
       requireThat(!line.campaign||amount===line.catalog_minor,'Conserva el precio promocional seleccionado. Para otro alcance prepara una oferta nueva.',409);
       return {...line,starts_on:starts,ends_before:end,unit_minor:amount};
     });
     orderTotals(lines);
+    checkSelection(db,order,lines);
     for(const line of lines)db.run('UPDATE package_order_lines SET unit_minor=?,starts_on=?,ends_before=? WHERE id=?',line.unit_minor,line.starts_on,line.ends_before,line.id);
     db.run("UPDATE package_orders SET status='QUOTED',terms=?,revision=revision+1 WHERE id=?",terms,id);
     event(db,actor,company.id,'ORDER',id,'PROPUESTA_PREPARADA',JSON.stringify({revision:order.revision+1,terms,lines:lines.map(l=>({id:l.id,price:l.unit_minor,units:l.units,start:l.starts_on,end:l.ends_before}))}));
@@ -127,6 +139,7 @@ export function acceptOrder(db,actor,company,id,data) {
     requireThat(data.confirm==='yes','Confirma los importes, fechas y condiciones.');
     for(const line of order.lines)requireCampaignOpen(getPlan(db,line.plan_id));
     requireThat(order.lines.every(l=>l.starts_on>=localDay()),'Las fechas vencieron. Solicita a Lúmina una propuesta actualizada.',409);
+    checkSelection(db,order,order.lines);
     db.run("UPDATE package_orders SET status='ACCEPTED',accepted_at=? WHERE id=?",now(),id);
     event(db,actor,company.id,'ORDER',id,'PROPUESTA_ACEPTADA','Versión '+order.revision);
   });
@@ -148,6 +161,7 @@ function activateAccepted(db,actor,company,id,data) {
     if(order.status==='ACTIVE')return;
     requireThat(order.status==='ACCEPTED','El dueño debe aceptar esta propuesta antes de activarla.',409);
     requireThat(order.lines.every(l=>l.starts_on>=localDay()),'Las fechas vencieron. Cierra esta propuesta y prepara una nueva.',409);
+    checkSelection(db,order,order.lines);
     for(const line of order.lines) {
       const previous=line.renewal_of?renewable(db,company,line.renewal_of):null;
       const contract=uuid();

@@ -29,6 +29,7 @@ export function createCampaignOffer(db,actor,data) {
     requireThat(data.confirm==='yes','Confirma el precio y el cierre automático de noviembre.');
     const id=uuid();
     db.run('INSERT INTO plans(id,name,term,price_minor,wallet,description,created_at) VALUES(?,?,?,?,?,?,?)',id,name,base.term,price,base.wallet,description,now());
+    if(base.months===12)db.run('INSERT INTO plan_billing VALUES(?,12,NULL)',id);
     for(const item of base.items)db.run('INSERT INTO plan_items VALUES(?,?,?)',id,item.service,item.quantity);
     db.run('INSERT INTO seasonal_offers VALUES(?,?,?,?,?,?,?,?,?)',id,base.id,dates.year,start,dates.until,base.price_minor,theme,conditions,data.key);
     event(db,actor,null,'PLAN',id,'VIERNES_NEGRO_PUBLICADO',JSON.stringify({base:base.id,regular:base.price_minor,price,start,end:dates.until,year:dates.year}));

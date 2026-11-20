@@ -1,12 +1,12 @@
 import { serviceName } from '../../memberships/catalog.mjs';
 import { inclusiveEnd } from '../../memberships/orders.mjs';
-import { nextCut } from '../../memberships/calendar.mjs';
+import { paidFrom, nextCut, walletLine } from '../../memberships/calendar.mjs';
 import { localDay, uuid } from '../../shared/domain.mjs';
 import { button, check, displayAmount, esc, form, hidden, localLink } from './components.mjs';
 import { contactField } from './contact.mjs';
 
 const shortDay=day=>new Intl.DateTimeFormat('es-EC',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'));
-const includesWallet=plan=>plan.wallet!=='NONE'||plan.items.some(i=>i.service==='WALLET');
+const includesWallet=walletLine;
 const bundled=plan=>plan.items.some(i=>i.service!=='WALLET');
 function tile(actor,company,plan,current,booked,legacy) {
   const price=plan.price_minor===null?'Por cotizar':esc(displayAmount(plan.price_minor));
@@ -15,11 +15,12 @@ function tile(actor,company,plan,current,booked,legacy) {
   const future=booked.some(row=>row.plan_id===plan.id);
   const existing=current.length>0 || booked.length>0 || legacy;
   let action;
-  if(recurring || future)action=`<p class="member-selected">${future?'Cambio programado':'Tu plan actual'}</p>`;
-  else action=form('/plans/request',actor,hidden('qty_'+plan.id,'1')+hidden('start_when',existing?'NEXT_MONTH':'TODAY')
-    +hidden('key',uuid())+(company.phone?hidden('phone',company.phone):contactField(''))+button(plan.price_minor===null?'Solicitar precio':present?'Revisar renovación':existing?'Revisar cambio':'Elegir este plan'));
+  if(plan.blockedNow && plan.blockedNext)action=`<p class="member-selected">${future?'Cambio programado':present?'Tu plan actual':'Ya incluido o solicitado'}</p><p>${esc(plan.blockedNext)}</p>`;
+  else if(recurring || future)action=`<p class="member-selected">${future?'Cambio programado':'Tu plan actual'}</p>`;
+  else action=form('/plans/request',actor,hidden('qty_'+plan.id,'1')+hidden('start_when',existing||plan.blockedNow?'NEXT_MONTH':'TODAY')
+    +hidden('key',uuid())+(company.phone?hidden('phone',company.phone):contactField(''))+button(plan.price_minor===null?'Solicitar precio':present?'Revisar renovación':existing&&plan.months===12?'Cambiar a anual':existing?'Revisar cambio':'Elegir este plan'));
   return `<article class="member-offer${present?' member-current':''}"><h3>${esc(plan.name)}</h3>
-    <p class="member-price">${price} ${plan.price_minor===null?'':`<small>${plan.term==='MONTHLY'?'/ mes':'por única vez'}</small>`}</p>
+    <p class="member-price">${price} ${plan.price_minor===null?'':`<small>${plan.months===12?'/ año':plan.term==='MONTHLY'?'/ mes':'por única vez'}</small>`}</p>
     ${plan.description?`<p>${esc(plan.description)}</p>`:''}<ul>${plan.items.map(i=>`<li>${i.service==='WALLET'?'Tarjetas de fidelización para tus clientes':esc(i.quantity+' × '+serviceName(i.service))}</li>`).join('')}</ul>${action}</article>`;
 }
 export function walletCheckoutPage({actor,company,plans,contracts,orders,active,legacy=false,error='',filter='all',booked=[],account=null,pending=false}) {
@@ -29,9 +30,13 @@ export function walletCheckoutPage({actor,company,plans,contracts,orders,active,
   const ongoing=orders.rows.filter(o=>['REQUESTED','QUOTED','ACCEPTED'].includes(o.status)&&o.wallet);
   const offers=plans.filter(includesWallet).filter(p=>filter==='all'||(filter==='packages')===bundled(p));
   const currentSchedule=current.find(c=>c.schedule_id);
-  const cuts=currentSchedule?.stop_on ? null : currentSchedule ? nextCut(today) : account?.membership?.nextChargeOn;
+  const firstPaid=currentSchedule && (currentSchedule.starts_on<paidFrom?paidFrom:currentSchedule.starts_on);
+  const firstCut=firstPaid && nextCut(firstPaid);
+  const fallbackCut=firstCut && (firstCut>today?firstCut:currentSchedule.months===12?nextCut(currentSchedule.ends_before):nextCut(today));
+  const cuts=account && Object.hasOwn(account,'nextWalletChargeOn') ? account.nextWalletChargeOn : fallbackCut||account?.membership?.nextChargeOn;
   const firstCharge=account?.summary?.nextDueOn;
   return `<div class="member-plans">
+    ${today<paidFrom?'<p class="notice"><strong>Wallet gratis hasta el 31 de diciembre de 2026.</strong> Si continúas en enero, el primer cargo por Wallet se registra el 1 de febrero de 2027.</p>':''}
     ${error?`<p class="notice" role="alert">${esc(error)}</p>`:''}
     ${currentTitle||active||booked.length?`<section class="member-summary"><div><span>Mi suscripción</span><h2>${esc(currentTitle||(booked.length?'Cambio programado':'Wallet del negocio'))}</h2>
        <p>${late?'Wallet está suspendida por un pago pendiente.':currentSchedule?.stop_on?'La renovación se detuvo. Tu plan termina el '+shortDay(inclusiveEnd(currentSchedule.stop_on))+'.':current.length?'Wallet está incluida en tu plan.':legacy?'Tu acuerdo anterior se conserva.':active?'Wallet está activa.':'Tu selección está confirmada.'}</p>
@@ -49,7 +54,7 @@ export function walletCheckoutPage({actor,company,plans,contracts,orders,active,
     <nav class="member-switch" aria-label="Tipo de plan">${[['all','Todos'],['wallet','Solo Wallet'],['packages','Con otros servicios']].map(([key,label])=>`<a href="/plans/wallet?offers=${key}" ${key===filter?'aria-current="page"':''}>${label}</a>`).join('')}</nav>
     <div class="member-grid">${offers.map(p=>tile(actor,company,p,current,booked,legacy)).join('')||'<p>Todavía no hay ofertas publicadas en esta categoría.</p>'}</div></section>
     <section class="member-add"><div><h3>Agregar un servicio</h3><p>Por ejemplo, suma Contenido o Web a tu cuenta y conserva tu Wallet.</p></div>${localLink('/plans?view=catalog','Ver todos los servicios','btn secondary')}</section>
-    ${currentSchedule && !currentSchedule.stop_on?`<details class="member-manage"><summary>Detener la renovación</summary>${form('/plans/wallet/stop',actor,hidden('schedule',currentSchedule.schedule_id)+check('confirm','Quiero usar este plan hasta el '+shortDay(inclusiveEnd(nextCut(today)))+'.',false,true)+button('Detener renovación','secondary'))}</details>`:''}
+    ${currentSchedule && !currentSchedule.stop_on?`<details class="member-manage"><summary>Detener la renovación</summary>${form('/plans/wallet/stop',actor,hidden('schedule',currentSchedule.schedule_id)+check('confirm','Quiero usar este plan hasta el '+shortDay(inclusiveEnd(currentSchedule.ends_before))+'.',false,true)+button('Detener renovación','secondary'))}</details>`:''}
     ${booked.filter(c=>c.schedule_id).map(c=>`<details class="member-manage"><summary>Cancelar el cambio a ${esc(c.name)}</summary>${form('/plans/wallet/stop',actor,hidden('schedule',c.schedule_id)+check('confirm','Quiero cancelar este cambio programado.',false,true)+button('Cancelar cambio','secondary'))}</details>`).join('')}
     </div>`;
 }

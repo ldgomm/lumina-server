@@ -53,6 +53,37 @@ def run(args, timeout=90, **kwargs):
         raise Blocked('COMMAND_FAILED_'+Path(args[0]).name.upper()+'_EXIT_'+str(process.returncode))
     return process.stdout.decode('utf-8', 'replace').strip()
 def git(*args, project=SOURCE): return run(['git', '-C', str(project), *args])
+# Published releases whose author headers were corrected. Each mapped object has
+# the same tree, message and dates. The normal path remains a fast-forward.
+AUTHOR_CORRECTIONS = {
+    'bc133327b313e36712ac0730470016d9bfa03438': '71619060a062af961bf502c01291ac038eaac6dc',
+    '9be695fe3f25fcfdb6e4d83b9281b6c53bee600e': '9c72ce9713cfec5a301bcf34ee0db020b68838e5',
+    'bb9e41bfbb6e3953e847ca70f2ad99b18434173f': '40e582cf7c2c7b5c8c04fda1917e6c22ab0815ac',
+    '81517e31f25b07c8aded360e0c723453e1a5ed9b': 'b7ee975aab5b7c405aa9d5f31c4367adc3b41831',
+}
+
+def require_release_ancestor(live, candidate, project=SOURCE):
+    need(all(re.fullmatch('[a-f0-9]{40}',oid) for oid in (live,candidate)), 'RELEASE_COMMIT_INVALID')
+    cmd=['git','--no-replace-objects','-C',str(project)]
+    result=subprocess.run([*cmd,'merge-base','--is-ancestor',live,candidate],capture_output=True)
+    if result.returncode==0:
+        return
+    need(result.returncode==1,'RELEASE_ANCESTRY_UNAVAILABLE')
+    mapped=AUTHOR_CORRECTIONS.get(live)
+    if not mapped:
+        # If the subscriptions release was deployed first, only its parent
+        # header may differ. Hash all other original commit bytes unchanged.
+        raw=subprocess.check_output([*cmd,'cat-file','commit',live])
+        headers,separator,message=raw.partition(b'\n\n')
+        parents=re.findall(rb'^parent ([0-9a-f]{40})$',headers,re.M)
+        need(len(parents)==1 and parents[0].decode() in AUTHOR_CORRECTIONS,'UNRELATED_RELEASE_HISTORY')
+        parent=parents[0]
+        corrected=AUTHOR_CORRECTIONS[parent.decode()].encode()
+        headers=headers.replace(b'parent '+parent+b'\n',b'parent '+corrected+b'\n',1)
+        mapped=subprocess.check_output([*cmd,'hash-object','-t','commit','--stdin'],input=headers+separator+message).decode().strip()
+    need(git('--no-replace-objects','rev-parse',live+'^{tree}',project=project)==git('--no-replace-objects','rev-parse',mapped+'^{tree}',project=project),'RELEASE_TREE_CHANGED')
+    git('--no-replace-objects','merge-base','--is-ancestor',mapped,candidate,project=project)
+
 def active_unit(name):
     return subprocess.run(['systemctl','is-active','--quiet',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
 def wait_for(work, seconds=120):
@@ -221,7 +252,7 @@ def deploy_locked(expected_commit):
             run(['systemctl','disable','lumina-wallet@'+previous['slot'],'lumina-portal@'+previous['slot']])
         public_checks(prod,config,old['sha'])
         return 'PRODUCTION_HTTPS_PASS_WALLET_DEVICE_TEST_PENDING'
-    git('merge-base','--is-ancestor',manifest['commit'],expected_commit)
+    require_release_ancestor(manifest['commit'],expected_commit)
     prod.ready(config,old['slot'],old['sha']);listeners()
     need(run(['node','--version']).startswith('v24.'),'NODE_24_REQUIRED')
     for executable in ('git','docker','java','javac','node','psql','pg_dump','nginx','systemctl','runuser'):

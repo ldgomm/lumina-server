@@ -184,6 +184,7 @@ class DeploymentTests(unittest.TestCase):
    stack.enter_context(patch.object(r,'load_production',return_value=production))
    stack.enter_context(patch.object(r.shutil,'which',return_value='/fixture'))
    stack.enter_context(patch.object(r.shutil,'disk_usage',return_value=Mock(free=8*1024**3)))
+   stack.enter_context(patch.object(r,'require_release_ancestor'))
    stack.enter_context(patch.object(r,'execute_checkpoint',side_effect=failed_checkpoint))
    output=io.StringIO();stack.enter_context(contextlib.redirect_stdout(output))
    with self.assertRaisesRegex(r.Blocked,'FULL_CHECKPOINT_FAILED_STAGING_FAILED'):r.main('a'*40)

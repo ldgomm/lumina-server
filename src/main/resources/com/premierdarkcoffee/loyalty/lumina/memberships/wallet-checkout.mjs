@@ -3,11 +3,12 @@ import { requireOwner } from '../access/accounts.mjs';
 import { requireOperating } from '../businesses/control.mjs';
 import { event, localDay, requireThat } from '../shared/domain.mjs';
 import { offerAvailable } from '../campaigns/season.mjs';
+import { checkSelection } from './coverage.mjs';
 import { getPlan } from './billing.mjs';
-import { firstStatement, nextCut, selectionStart, walletLine } from './calendar.mjs';
+import { firstStatement, nextCut, periodEnd, selectionStart, walletLine } from './calendar.mjs';
 import { acceptOrder, activateCatalogOrder, getOrder, monthlyEnd, walletCalendarTerms } from './orders.mjs';
 
-export const includesWallet = order => order.lines.some(line => line.wallet !== 'NONE' || line.items.some(item => item.service === 'WALLET'));
+export const includesWallet = order => order.lines.some(walletLine);
 
 // A read-only preview. No GET grants access, signs an agreement or changes a price.
 // Work with unspecified prices/delivery dates still needs a real quotation.
@@ -17,8 +18,8 @@ export function walletCheckout(db, order) {
     const plan = getPlan(db, line.plan_id);
     const previous = line.renewal_of ? db.get('SELECT * FROM contracts WHERE id=? AND company_id=? AND cancelled_at IS NULL', line.renewal_of, order.company_id) : null;
     const start = selectionStart(db,order,line);
-    return {...line, starts_on:start, ends_before:walletLine(line)?nextCut(start):monthlyEnd(start, previous?.renewal_anchor || previous?.starts_on || start),
-      statement:walletLine(line)?firstStatement(start,line.unit_minor*line.units):null,
+    return {...line, starts_on:start, ends_before:walletLine(line)?periodEnd(start,line.months):monthlyEnd(start, previous?.renewal_anchor || previous?.starts_on || start,line.months),
+      statement:walletLine(line)?firstStatement(start,(line.unit_minor-(line.wallet==='GIFT'?line.unit_minor:line.other_minor||0))*line.units,null,line.months):null,
       available:offerAvailable(plan) && (!line.renewal_of || Boolean(previous)), description:plan.description};
   });
   const terms = (includesWallet(order)?'Precio final del catálogo. ':'Precio final por el período indicado. ')
@@ -43,7 +44,8 @@ export function validateWalletCheckout(db, actor, company, id, data) {
     requireThat(data.offerHash === preview.checkoutHash && preview.lines.every(line => line.available && line.starts_on >= localDay()), 'La oferta o las fechas cambiaron. Revisa las condiciones actuales antes de confirmar.', 409);
   } else requireThat(['QUOTED','ACCEPTED'].includes(order.status), 'Esta contratación está cerrada.', 409);
   const proposed = preview || order;
-  const walletLines = proposed.lines.filter(line => line.wallet !== 'NONE' || line.items.some(item => item.service === 'WALLET'));
+  checkSelection(db,order,proposed.lines);
+  const walletLines = proposed.lines.filter(walletLine);
   requireThat(walletLines.length===0 || walletLines.length === 1 && walletLines[0].units === 1, 'Elige una sola oferta con Wallet para tu negocio. Puedes combinarla con otros servicios.', 409);
   for (const line of walletLines) {
     const scheduled=db.all('SELECT id,starts_on,plan_id FROM wallet_schedules WHERE company_id=? AND (ends_before IS NULL OR starts_on<ends_before AND ends_before>?)',company.id,line.starts_on);

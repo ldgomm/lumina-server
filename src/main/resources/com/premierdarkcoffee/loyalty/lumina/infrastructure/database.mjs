@@ -55,15 +55,17 @@ export function openDatabase(path) {
       db.exec('PRAGMA user_version='+target);
     });
   }
-  const calendar=readFileSync(new URL('./extensions/membership-calendar.sql',import.meta.url),'utf8');
-  const checksum=createHash('sha256').update(calendar).digest('hex');
   transaction(()=>{
     db.exec('CREATE TABLE IF NOT EXISTS lumina_extensions(name TEXT PRIMARY KEY,checksum TEXT NOT NULL) STRICT');
-    const prior=db.prepare('SELECT checksum FROM lumina_extensions WHERE name=?').get('membership-calendar');
-    if(prior && prior.checksum!==checksum)throw new Error('La migración del calendario de membresías cambió.');
-    if(!prior){
-      db.exec(calendar);
-      db.prepare('INSERT INTO lumina_extensions VALUES(?,?)').run('membership-calendar',checksum);
+    for(const name of ['membership-calendar','subscription-periods']) {
+      const sql=readFileSync(new URL('./extensions/'+name+'.sql',import.meta.url),'utf8');
+      const checksum=createHash('sha256').update(sql).digest('hex');
+      const prior=db.prepare('SELECT checksum FROM lumina_extensions WHERE name=?').get(name);
+      if(prior && prior.checksum!==checksum)throw new Error('La migración de membresías cambió: '+name);
+      if(!prior) {
+        db.exec(sql);
+        db.prepare('INSERT INTO lumina_extensions VALUES(?,?)').run(name,checksum);
+      }
     }
   });
   return {

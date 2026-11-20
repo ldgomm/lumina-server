@@ -18,7 +18,7 @@ class WalletSubscriptionTest {
     }
     @Test fun `terms disclose final price monthly account charge cancellation and actual provider`() {
         val terms=walletTerms(provider,"Restaurante Ejemplo",LocalDate.parse("2026-11-19"),LocalDate.parse("2027-01-01"),3)
-        for(value in listOf("14.97","4,99","2026","2027-01-01","impuestos","no autoriza débitos","sin penalidad","no equivale a aceptar","sin cargos retroactivos",provider.legalName,provider.privacyUrl))assertTrue(terms.contains(value),value)
+        for(value in listOf("14.97","4,99","2026","2027-02-01","impuestos","no autoriza débitos","sin penalidad","no equivale a aceptar","sin cargos retroactivos",provider.legalName,provider.privacyUrl))assertTrue(terms.contains(value),value)
     }
     @Test fun `contract requires real identification fields and secure privacy reference`() {
         provider.validate()

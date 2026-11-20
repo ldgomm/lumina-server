@@ -104,17 +104,21 @@ test('selección valida límites y retiro; reintento del envío conserva una ún
   assert.equal(w.db.get('SELECT count(*) n FROM package_orders').n,0);
   const o=await submit(w,[[a,3]]);
   assert.equal((await w.client.post('/plans/request',o.data)).location,o.path);
+  assert.equal((await w.client.post('/plans/request',{...o.data,['qty_'+a]:'2'})).status,409);
   assert.equal(w.db.get('SELECT count(*) n FROM package_order_lines').n,1);
   await w.admin.post('/plans/withdraw',{plan:a});
   assert.equal((await w.client.post('/plans/request',{key:uuid(),['qty_'+a]:'1'})).status,409);
   assert.equal(w.db.get('SELECT count(*) n FROM package_orders').n,1);
 });
 
-test('el mismo paquete se puede añadir de nuevo: cada contratación tiene su propio cupo y cancelación',async t=>{
+test('cada servicio recurrente tiene un solo acuerdo por negocio y período aunque cambie el nombre',async t=>{
   const w=await setup(t),a=await plan(w,'Solo stories','MONTHLY','15',{STORY:'3'});
-  for(let i=0;i<2;i++){const o=await submit(w,[[a,1]]),revision=await accepted(w,o);assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision})).status,303);}
-  assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,2);
-  assert.equal(w.db.get('SELECT sum(agreed_minor) n FROM contracts').n,3000);
+  const o=await submit(w,[[a,1]]),revision=await accepted(w,o);
+  assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision})).status,303);
+  const alias=await plan(w,'Diseño para redes','MONTHLY','25',{GRAPHIC:'1'});
+  for(const id of [a,alias])assert.equal((await w.client.post('/plans/request',{key:uuid(),['qty_'+id]:'1'})).status,409);
+  assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,1);
+  assert.equal(w.db.get('SELECT sum(agreed_minor) n FROM contracts').n,1500);
 });
 
 test('renovación conserva el día de corte, evita duplicados y exige aceptación de cada período',async t=>{
@@ -133,7 +137,7 @@ test('renovación conserva el día de corte, evita duplicados y exige aceptació
 });
 
 test('activar una combinación es atómico: un fallo en un acuerdo no deja otros activados',async t=>{
-  const w=await setup(t),a=await plan(w,'A primero','MONTHLY','10'),b=await plan(w,'B segundo','MONTHLY','20');
+  const w=await setup(t),a=await plan(w,'A primero','MONTHLY','10'),b=await plan(w,'B segundo','MONTHLY','20',{PHOTO:'1'});
   const o=await submit(w,[[a,1],[b,1]]),revision=await accepted(w,o);
   w.db.run(`CREATE TRIGGER reject_second BEFORE INSERT ON contracts WHEN NEW.plan_id='${b}' BEGIN SELECT RAISE(ABORT,'simulated'); END`);
   assert.equal((await w.admin.post(selected(o.path+'/activate',w.id),{revision})).status,500);

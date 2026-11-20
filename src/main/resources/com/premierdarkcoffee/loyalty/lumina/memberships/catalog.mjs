@@ -19,7 +19,7 @@ export function requestCommercial(plans=[],contracts=[],area='SOCIAL') {
   const today=localDay();
   return (area==='SOCIAL'?['VIDEO','PHOTO','GRAPHIC']:formats[area]||[]).map(service=>({service,
     offers:plans.filter(p=>p.published&&p.items.length===1&&p.items[0].service===service).map(p=>({
-      id:p.id,name:p.name,term:p.term,price:p.price_minor,quantity:p.items[0].quantity,campaign:p.campaign||null
+      id:p.id,name:p.name,term:p.term,months:p.months,price:p.price_minor,quantity:p.items[0].quantity,campaign:p.campaign||null
     })),
     available:contracts.filter(c=>!c.cancelled_at&&c.starts_on<=today&&c.ends_before>today)
       .flatMap(c=>c.items.filter(i=>area==='SOCIAL'?compatibleContentQuota(service,i.service):service===i.service)

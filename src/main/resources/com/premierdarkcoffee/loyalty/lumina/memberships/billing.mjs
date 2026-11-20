@@ -1,16 +1,17 @@
 import { checkRevision } from '../shared/revision.mjs';
 import { attachCampaign, offerAvailable } from '../campaigns/season.mjs';
+import { checkSelection } from './coverage.mjs';
 import { stopSchedule } from './calendar.mjs';
 import { normalizeOffer } from './offers.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { choice, dateOnly, event, integer, localDay, money, nextMonth, now, requireThat, services, text, uuid } from '../shared/domain.mjs';
 
 export function listPlans(db, includeHidden = false) {
-  return db.all('SELECT * FROM plans WHERE published=1 OR ?=1 ORDER BY term,name,created_at DESC', Number(includeHidden))
+  return db.all('SELECT p.*,coalesce(b.months,1) months,b.other_minor FROM plans p LEFT JOIN plan_billing b ON b.plan_id=p.id WHERE published=1 OR ?=1 ORDER BY term,name,created_at DESC', Number(includeHidden))
     .map(plan => ({ ...attachCampaign(db,plan), items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',plan.id) })).filter(plan=>includeHidden||offerAvailable(plan));
 }
 export function getPlan(db, id) {
-  const plan = db.get('SELECT * FROM plans WHERE id=?',id || '');
+  const plan = db.get('SELECT p.*,coalesce(b.months,1) months,b.other_minor FROM plans p LEFT JOIN plan_billing b ON b.plan_id=p.id WHERE p.id=?',id || '');
   requireThat(plan, 'Ese plan no está disponible.', 404);
   return { ...attachCampaign(db,plan), items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',id) };
 }
@@ -22,7 +23,8 @@ export function createPlan(db, actor, data) {
     data={...data,...Object.fromEntries(Object.keys(services).map(service=>[service,'0'])),[selected]:'1',wallet:selected==='WALLET'?'INCLUDED':'NONE'};
   } else if(data.offer_kind)choice(data.offer_kind,['BUNDLE'],'tipo de oferta');
   const name = text(data.name, 'nombre del plan', 2, 100);
-  const term = choice(data.term, ['MONTHLY','ONE_OFF'], 'tipo de plan');
+  const months=data.term==='ANNUAL'?12:1;
+  const term = months===12?'MONTHLY':choice(data.term, ['MONTHLY','ONE_OFF'], 'tipo de plan');
   const wallet = choice(data.wallet, ['NONE','INCLUDED','GIFT'], 'inclusión de Wallet');
   const price = money(data.price,true);
   const description = text(data.description || '', 'descripción', 0, 1200);
@@ -35,6 +37,9 @@ export function createPlan(db, actor, data) {
     const id = uuid();
     db.run('INSERT INTO plans(id,name,term,price_minor,wallet,description,created_at) VALUES(?,?,?,?,?,?,?)',
       id,name,term,price,wallet,description,now());
+    const other=wallet==='INCLUDED' && items.length>1 && term==='MONTHLY' ? money(data.other_price||'',true) : null;
+    requireThat(other===null || price!==null && other<=price,'El importe de los otros servicios debe estar dentro del precio total.');
+    if(months===12 || other!==null)db.run('INSERT INTO plan_billing VALUES(?,?,?)',id,months,other);
     for (const [service, quantity] of items) db.run('INSERT INTO plan_items VALUES(?,?,?)',id,service,quantity);
     event(db,actor,null,'PLAN',id,'PLAN_PUBLICADO',name);
     return id;
@@ -50,7 +55,7 @@ export function hidePlan(db, actor, id) {
   });
 }
 export function contractsFor(db, companyId) {
-  return db.all(`SELECT c.*,ws.ends_before AS stop_on,ws.amount_minor AS monthly_minor,p.name,p.term,p.wallet,s.year AS campaign_year,s.base_plan_id FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN wallet_schedules ws ON ws.id=c.schedule_id AND ws.company_id=c.company_id LEFT JOIN seasonal_offers s ON s.plan_id=p.id
+  return db.all(`SELECT c.*,ws.ends_before AS stop_on,ws.amount_minor AS monthly_minor,p.name,p.term,p.wallet,coalesce(b.months,1) months,s.year AS campaign_year,s.base_plan_id FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN wallet_schedules ws ON ws.id=c.schedule_id AND ws.company_id=c.company_id LEFT JOIN plan_billing b ON b.plan_id=p.id LEFT JOIN seasonal_offers s ON s.plan_id=p.id
     WHERE c.company_id=? ORDER BY starts_on DESC,created_at DESC`,companyId).map(contract => ({
     ...contract,
     items: db.all(`SELECT i.service,i.quantity * ? AS quantity,
@@ -82,6 +87,7 @@ export function activateContract(db, actor, company, data) {
       requireThat(plan.published,'Selecciona un plan publicado.',409);
     }
     requireThat(amount !== null,'Registra el monto acordado.');
+    checkSelection(db,{company_id:company.id,start_when:'TODAY'},[{...plan,units:1,starts_on:startsOn,ends_before:endsBefore,campaign:true}]);
     const overlap = db.get(`SELECT id FROM contracts WHERE company_id=? AND plan_id=? AND cancelled_at IS NULL
       AND starts_on<? AND ends_before>?`,company.id,plan.id,endsBefore,startsOn);
     requireThat(!overlap,'Ya existe un período superpuesto para este plan.',409);
