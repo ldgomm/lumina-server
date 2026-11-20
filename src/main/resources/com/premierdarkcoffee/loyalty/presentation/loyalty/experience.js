@@ -3,15 +3,15 @@
 (() => {
     const pages = {
         administration: ['Centro de control', 'Administración en un solo lugar.', 'Pendientes, personas, locales y cuenta, con acceso directo a cada decisión.', 'grid'],
-        overview: ['Resumen', 'Tu negocio, de un vistazo.', 'Actividad registrada y accesos para el día a día.', 'home'],
-        sales: ['Caja', 'Una buena visita empieza aquí.', 'Busca la tarjeta, registra la operación y sigue con el próximo cliente.', 'scan'],
+        overview: ['Resumen', 'Resumen de Wallet', 'Actividad registrada y accesos para el día a día.', 'home'],
+        sales: ['Caja', 'Caja', 'Busca la tarjeta, registra la operación y sigue con el próximo cliente.', 'scan'],
         radar: ['Radar de regreso', 'La próxima visita tiene una razón.', 'Ritmos de compra y oportunidades con una explicación clara.', 'spark'],
-        customers: ['Mis clientes', 'Conoce a quienes vuelven.', 'Compras, frecuencia y premios de todas tus sucursales.', 'people'],
-        programs: ['Promociones', 'Más motivos para volver.', 'Crea tus propias reglas y cambia cada promoción cuando lo necesites.', 'spark'],
-        rewards: ['Premios', 'Un beneficio que vale la visita.', 'Define qué se entrega y el saldo necesario para canjearlo.', 'gift'],
-        design: ['Mi tarjeta', 'Tu marca, en su Wallet.', 'Personaliza el diseño y comprueba los colores antes de guardar.', 'card'],
+        customers: ['Mis clientes', 'Mis clientes', 'Compras, frecuencia y premios de todas tus sucursales.', 'people'],
+        programs: ['Promociones', 'Promociones', 'Crea tus propias reglas y cambia cada promoción cuando lo necesites.', 'spark'],
+        rewards: ['Premios', 'Premios', 'Define qué se entrega y el saldo necesario para canjearlo.', 'gift'],
+        design: ['Mi tarjeta', 'Diseño de mi tarjeta', 'Personaliza el diseño y comprueba los colores antes de guardar.', 'card'],
         events: ['Eventos y cumpleaños', 'Mantén la conversación.', 'Organiza mensajes y eventos para tus clientes.', 'calendar'],
-        qr: ['QR de registro', 'La primera visita cuenta.', 'Un registro, una tarjeta y todas tus sucursales.', 'scan'],
+        qr: ['QR de registro', 'QR de registro', 'Un registro, una tarjeta y todas tus sucursales.', 'scan'],
         walletHealth: ['Estado de tarjetas', 'Tus tarjetas, bajo control.', 'Apple y Google: pendientes, conexión y reintentos con historial.', 'card'],
         team: ['Equipo y accesos', 'Tu equipo, bien organizado.', 'Personas, permisos y credenciales de cada sucursal.', 'people'],
         operations: ['Operación y equipo', 'Decide con datos de cada sucursal.', 'Compras, horarios y premios por responsable, con filtros y comprobantes.', 'chart'],
@@ -36,6 +36,20 @@
         arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>'
     };
     const icon = name => `<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${shapes[name] || shapes.spark}</svg>`;
+    function walletDesk() {
+        const sectionsTag=document.querySelector('meta[name="lumina-wallet-sections"]');
+        if (!sectionsTag || state.tab!=='overview') return '';
+        const allowed=JSON.parse(sectionsTag.content)||[];
+        const actions=[
+            ['sales','scan','Abrir caja','Registrar una compra o un canje'],
+            ['qr','card','Compartir mi QR','Invitar y registrar clientes'],
+            ['customers','people','Buscar un cliente','Consultar su tarjeta e historial'],
+        ].filter(([tab])=>allowed.includes(tab));
+        if(!actions.length)return '';
+        return `<nav class="wallet-desk" aria-label="Tareas de Wallet">${actions.map(([tab,mark,title,hint])=>
+            `<button type="button" data-wallet-task="${tab}">${icon(mark)}<span><strong>${title}</strong><small>${hint}</small></span>${icon('arrow')}</button>`
+        ).join('')}</nav>`;
+    }
     const busy = () => Boolean(document.querySelector('form[aria-busy="true"]'));
     const leaveDesign = action => { const proceed=()=>window.loyaltyDesignLeave ? window.loyaltyDesignLeave(action) : action(); return window.loyaltyOperationLeave ? window.loyaltyOperationLeave(proceed) : proceed(); };
     const go = tab => { if (busy()) { notice('Espera a que termine la operación.'); return; } window.loyaltyAdminLeave(()=>leaveDesign(() => { state.tab = tab; renderMerchant(); document.querySelector('#sectionTitle')?.focus(); })); };
@@ -75,18 +89,26 @@
             group.append(title, ...items); nav.append(group);
         }
         const shell = document.createElement('div'); shell.className = 'workspace';
-        shell.innerHTML = `<aside class="workspace-sidebar" id="workspaceSidebar"><div class="workspace-business"><span class="business-avatar">${esc(state.data.business.name.slice(0, 1).toUpperCase())}</span><div><strong>${esc(state.data.business.name)}</strong><small>${state.data.role === 'OWNER' ? 'Administración del negocio' : 'Acceso de caja'}</small></div></div><div id="navigationMount"></div><div class="sidebar-note">Una tarjeta.<br>Todas tus sucursales.</div></aside><section class="workspace-main"><div class="workspace-topline"><span>${esc(state.data.business.name)} <span aria-hidden="true">/</span> ${current[0]}</span><button type="button" class="quiet menu-toggle" id="workspaceMenu" aria-controls="workspaceSidebar" aria-expanded="false">Menú</button></div><div class="workspace-search"><label for="workspaceSearch">Ir a una sección</label><input id="workspaceSearch" type="search" maxlength="80" placeholder="Busca caja, clientes, promociones…"></div><div class="workspace-heading"><div><h1 id="sectionTitle" tabindex="-1">${current[1]}</h1><p>${current[2]}</p></div>${state.tab !== 'sales' ? `<button type="button" id="quickCounter">${icon('scan')} Abrir caja</button>` : ''}</div><div id="workspaceContent"></div></section>`;
+        shell.innerHTML = `<aside class="workspace-sidebar" id="workspaceSidebar"><div class="workspace-business"><span class="business-avatar">${esc(state.data.business.name.slice(0, 1).toUpperCase())}</span><div><strong>${esc(state.data.business.name)}</strong><small>${state.data.role === 'OWNER' ? 'Administración del negocio' : 'Acceso de caja'}</small></div></div><button type="button" class="quiet wallet-menu-close" hidden>Cerrar menú</button><div id="navigationMount"></div></aside><section class="workspace-main"><div class="workspace-topline"><span>${esc(state.data.business.name)} <span aria-hidden="true">/</span> ${current[0]}</span><button type="button" class="quiet menu-toggle" id="workspaceMenu" aria-controls="workspaceSidebar" aria-expanded="false">Menú</button></div><div class="workspace-search"><label for="workspaceSearch">Ir a una sección</label><input id="workspaceSearch" type="search" maxlength="80" placeholder="Busca caja, clientes, promociones…"></div><div class="workspace-heading"><div><h1 id="sectionTitle" tabindex="-1">${current[1]}</h1><p>${current[2]}</p></div>${state.tab !== 'sales' && !(state.tab==='overview'&&document.querySelector('meta[name="lumina-wallet-owner"]')) ? `<button type="button" id="quickCounter">${icon('scan')} Abrir caja</button>` : ''}</div>${walletDesk()}<div id="workspaceContent"></div></section>`;
         shell.querySelector('#navigationMount').replaceWith(nav); shell.querySelector('#workspaceContent').replaceWith(content); app.replaceChildren(shell);
         const permitted=buttons.filter(button=>pages[button.dataset.tab]);
         attachPredictiveSearch(shell.querySelector('#workspaceSearch'),{
             minimum:1,load:async q=>{const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();return permitted.map(b=>({tab:b.dataset.tab,title:pages[b.dataset.tab][0],detail:pages[b.dataset.tab][2]})).filter(x=>normalize(x.title+' '+x.detail).includes(normalize(q)));},
             label:row=>row.title,description:row=>row.detail,choose:row=>go(row.tab)
         });
+        for(const button of shell.querySelectorAll('[data-wallet-task]'))button.onclick=()=>go(button.dataset.walletTask);
         window.scrollTo(0, 0);
-        document.title = current[0] + ' · ' + state.data.business.name + ' · Loyalty';
+        document.title = current[0] + ' · ' + state.data.business.name + (document.querySelector('meta[name="lumina-csrf"]')?' · Lúmina Wallet':' · Loyalty');
         const toggle = shell.querySelector('#workspaceMenu');
-        toggle.onclick = () => { const opened = toggle.getAttribute('aria-expanded') !== 'true'; toggle.setAttribute('aria-expanded', String(opened)); shell.dataset.menuOpen = String(opened); };
-        shell.addEventListener('keydown', e => { if (e.key === 'Escape' && shell.dataset.menuOpen === 'true') { shell.dataset.menuOpen = 'false'; toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); } });
+        const closeMenu=shell.querySelector('.wallet-menu-close');
+        const menuOpen=(open,restore=true)=>{
+            shell.dataset.menuOpen=String(open);toggle.setAttribute('aria-expanded',String(open));
+            closeMenu.hidden=!open;
+            if(open)closeMenu.focus();else if(restore)toggle.focus();
+        };
+        toggle.onclick=()=>menuOpen(toggle.getAttribute('aria-expanded')!=='true');
+        closeMenu.onclick=()=>menuOpen(false);
+        shell.addEventListener('keydown',e=>{if(e.key==='Escape'&&shell.dataset.menuOpen==='true'){e.preventDefault();menuOpen(false);}});
         nav.addEventListener('click', e => {
             if (busy()) { e.preventDefault(); e.stopImmediatePropagation(); notice('Espera a que termine la operación.'); return; }
             const button = e.target.closest('button[data-tab]');
@@ -130,7 +152,7 @@
             if(!tasks.length)tasks.push({title:'Tu siguiente paso está en caja',body:'Registra compras y canjes para que este resumen refleje la actividad del negocio.',tab:'sales',tone:'opportunity'});
             const metric=(label,value,help,type)=>`<div class="overview-metric"><div>${icon(type)}<span>${label}</span></div><strong>${esc(value)}</strong><small>${esc(help)}</small></div>`;
             root.innerHTML=`<div class="overview-period"><div><label for="overviewDays">Período del resumen</label><select id="overviewDays">${[7,30,90].map(n=>`<option value="${n}" ${n===days?'selected':''}>Últimos ${n} días · incluye hoy</option>`).join('')}</select></div><button type="button" class="text-button" id="refreshOverview">Actualizar resumen</button></div><div class="overview-metrics">${metric('Compras registradas',s.periodPurchases,'Comprobantes del período','store')}${metric('Total pagado',money(s.periodSpentMinor),'Después de descuentos','chart')}${metric('Clientes que compraron',s.periodBuyers,'Personas distintas en el período','people')}${metric('Premios reclamados',s.periodClaimedRewards,'Canjes confirmados','gift')}</div>
-                <div class="overview-command-grid"><section class="overview-hero"><span class="eyebrow">LA PRÓXIMA VISITA</span><h2>Todo empieza<br>con un regreso.</h2><p>Identifica al cliente, elige sus promociones y revisa lo que ganará antes de guardar.</p><button type="button" data-go="sales">Atender a un cliente ${icon('arrow')}</button><div class="overview-hero-foot"><span>${s.registeredCustomers} clientes registrados</span><span>${enabled.length} promociones habilitadas</span></div></section><section class="panel overview-priorities"><div class="section-heading"><div><span class="eyebrow">SIGUIENTES PASOS</span><h2>Qué merece tu atención</h2></div></div><p class="small">Estado actual del catálogo y de los clientes; independiente del período elegido.</p>${tasks.slice(0,5).map((t,i)=>`<button type="button" class="priority-task tone-${t.tone}" data-task="${i}"><span class="task-dot" aria-hidden="true">${t.tone==='attention'?'!':'↗'}</span><span><strong>${esc(t.title)}</strong><small>${esc(t.body)}</small></span><span aria-hidden="true">→</span></button>`).join('')}</section></div>
+                <div class="overview-command-grid">${root.closest('.workspace-main')?.querySelector('.wallet-desk')?'':`<section class="overview-hero"><span class="eyebrow">LA PRÓXIMA VISITA</span><h2>Todo empieza<br>con un regreso.</h2><p>Identifica al cliente, elige sus promociones y revisa lo que ganará antes de guardar.</p><button type="button" data-go="sales">Atender a un cliente ${icon('arrow')}</button><div class="overview-hero-foot"><span>${s.registeredCustomers} clientes registrados</span><span>${enabled.length} promociones habilitadas</span></div></section>`}<section class="panel overview-priorities"><div class="section-heading"><div><span class="eyebrow">SIGUIENTES PASOS</span><h2>Pendientes de Wallet</h2></div></div><p class="small">Estado actual del catálogo y de los clientes; independiente del período elegido.</p>${tasks.slice(0,5).map((t,i)=>`<button type="button" class="priority-task tone-${t.tone}" data-task="${i}"><span class="task-dot" aria-hidden="true">${t.tone==='attention'?'!':'↗'}</span><span><strong>${esc(t.title)}</strong><small>${esc(t.body)}</small></span><span aria-hidden="true">→</span></button>`).join('')}</section></div>
                 <section class="panel setup-checklist"><div class="section-heading"><div><span class="eyebrow">CONFIGURACIÓN DEL NEGOCIO</span><h2>${complete===5?'Ya tienes la base para operar.':'Completa tu puesta a punto.'}</h2><p>${complete} de 5 pasos completados. La conexión y recepción en los teléfonos se prueban por separado.</p></div><strong class="setup-fraction">${complete}<span>/5</span></strong></div><progress max="5" value="${complete}" aria-label="Pasos de configuración completados"></progress><div class="setup-steps">${steps.map(([done,title,help,tab],i)=>`<button type="button" class="setup-step ${done?'is-complete':''}" data-go="${tab}"><span class="setup-number" aria-hidden="true">${done?'✓':i+1}</span><strong>${esc(title)}</strong><small>${esc(help)}</small><span class="setup-action">${done?'Revisar':'Completar'} →</span></button>`).join('')}</div></section>
                 <div class="overview-columns"><section class="panel"><div class="section-heading"><h2>Clientes con compras recientes</h2><button type="button" class="text-button" data-go="customers">Ver clientes ${icon('arrow')}</button></div>${data.customers.filter(c=>c.lastPurchase).slice(0,5).map(c=>`<div class="recent-customer"><span class="customer-avatar" aria-hidden="true">${esc(c.name.slice(0,1).toUpperCase())}</span><div><button type="button" class="text-button" data-profile="${esc(c.id||'')}">${esc(c.name)}</button><small>Última compra: ${esc(date(c.lastPurchase))}</small></div><div><strong>${c.purchases} compra${c.purchases===1?'':'s'}</strong><small>${esc(money(c.spentMinor))} acumulados</small></div></div>`).join('')||'<div class="experience-empty"><strong>La primera compra abre el camino.</strong><p>Invita a tus clientes con el QR de registro.</p><button type="button" class="quiet" data-go="qr">Ver QR de registro</button></div>'}<p class="small">Los datos de cada cliente abarcan todo su historial.</p></section><section class="panel overview-opportunities"><h2>Una próxima visita</h2><button type="button" class="opportunity-link" data-client-segment="NEAR"><strong>${s.nearCustomers}</strong><p>A un sello de un premio →</p></button><button type="button" class="opportunity-link" data-client-segment="INACTIVE"><strong>${s.inactiveCustomers}</strong><p>Sin volver en 30 días →</p></button><button type="button" class="quiet" data-go="radar">Entender sus ritmos de regreso</button><p class="small">Los grupos pueden coincidir. No se envían mensajes ni se crean premios al consultar.</p></section></div><p class="small overview-footnote">Del ${esc(date(data.from))} al ${esc(date(data.through))} · ${esc(data.timezone)}. Solo operaciones registradas en Loyalty.</p>`;
             root.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));

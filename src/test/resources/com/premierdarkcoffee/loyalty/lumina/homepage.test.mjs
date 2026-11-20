@@ -114,5 +114,5 @@ test('homepage remains usable without scripts and provides native disclosure, fo
  assert.doesNotMatch(page.body,/<script(?! defer src="\/assets\/homepage.js")|\sonclick=|style="|localStorage|sessionStorage/);
  assert.match(page.body,/<html lang="es">/);assert.match(page.body,/class="skip-link" href="#main"/);assert.equal((page.body.match(/<details\b/g)||[]).length,11);
  assert.match(css.body,/prefers-reduced-motion/);assert.match(css.body,/:focus-visible/);assert.match(css.body,/@media\(max-width:540px\)/);
- assert.match(page.body,/Una muestra visual/);assert.match(page.body,/Diseño ilustrativo/);assert.match(page.body,/class="demo-tag">Ejemplo/);
+ assert.match(page.body,/class="studio-photo"/);assert.match(page.body,/srcset="[^"]*studio-small\.webp 640w/);assert.match(page.body,/alt="Una cámara encuadra/);assert.match(page.body,/Diseño ilustrativo/);
 });

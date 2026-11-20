@@ -1,3 +1,5 @@
+import { taskPanel } from './task-panel.mjs';
+import { requestCards, requestNextStep } from './work-progress.mjs';
 import { areas, channels } from '../../shared/domain.mjs';
 import { badge, workBadge, card, esc, hidden, select, button, localLink, number, table, timestamp } from './components.mjs';
 import { icon } from './icons.mjs';
@@ -6,9 +8,12 @@ const stat=(name,value,note,mark)=>`<article class="metric-card"><div>${icon(mar
 const statusName={NEW:'Por revisar',REVIEW:'En revisión',QUOTED:'Cotizadas',APPROVED:'Aprobadas',SCHEDULED:'Agendadas',PRODUCTION:'En producción',DELIVERED:'Entregadas',CANCELLED:'Canceladas'};
 export function agencyOverview({counts,pipeline,visits,recent}) {
   const total=pipeline.reduce((n,r)=>n+r.count,0);
-  return `<section class="agency-workbar"><div><h2>Tu jornada de trabajo</h2><p>Revisa solicitudes, coordina entregas y consulta a tus clientes.</p>
-    <div class="actions">${localLink('/businesses','Gestionar clientes →','btn')}${localLink('/production','Ver producción','btn secondary')}${localLink('/teams','Equipos y roles','btn secondary')}</div></div>
-    <a class="agency-wallet-link" href="/wallet">${icon('wallet')}<span>Centro de Wallet</span>${icon('arrow')}</a></section>
+  const agenda=visits[0];
+  const first=counts.pending?{label:'Verificación',mark:'clients',title:counts.pending===1?'Un negocio pendiente de verificación':counts.pending+' negocios pendientes de verificación',
+    description:'Abre la ficha del negocio para revisar su registro.',action:'Revisar registros',href:'/businesses?verification=PENDING'}:
+    agenda?{label:'Próxima grabación',mark:'calendar',title:agenda.title,description:[agenda.company_name,timestamp(agenda.starts_at),agenda.place].filter(Boolean).join(' · '),action:'Abrir grabación',href:'/agency/requests/'+agenda.request_id+'?company='+agenda.company_id+'#visits'}:
+    {label:'Producción',mark:'social',title:'La jornada del estudio',description:counts.open?'Consulta los trabajos abiertos y decide qué entrega preparar primero.':'Consulta tu cartera de clientes y sus proyectos.',action:counts.open?'Ver producción':'Gestionar clientes',href:counts.open?'/production':'/businesses'};
+  return `${taskPanel({area:'work',...first})}<div class="workspace-tools">${localLink('/businesses','Clientes','btn secondary')}${localLink('/production','Producción','btn secondary')}${localLink('/teams','Equipos y roles','btn secondary')}${localLink('/wallet','Centro de Wallet','btn secondary')}</div>
     <section class="metric-grid" aria-label="Resumen de la agencia">${stat('Negocios en operación',counts.companies,counts.pending+' pendientes de verificación','clients')}${stat('Solicitudes abiertas',counts.open,'Contenido, servicios y cotizaciones','content')}${stat('Piezas entregadas',counts.delivered,'Entregas registradas en el historial','check')}${stat('Visitas programadas',counts.visits,'Próximas grabaciones por realizar','calendar')}</section>
     ${counts.blocked?`<p class="notice">${counts.blocked} solicitudes detenidas por el estado del negocio. ${localLink('/production?scope=blocked','Consultar registros →')}</p>`:''}<div class="overview-columns"><section class="card"><div class="section-heading"><div><p class="eyebrow">PRODUCCIÓN</p><h2>Del pedido a la entrega</h2></div>${localLink('/production','Ver todas →')}</div>
       <div class="pipeline">${Object.entries(statusName).filter(([key])=>!['CANCELLED','DELIVERED'].includes(key)).map(([key,name])=>{const n=pipeline.find(x=>x.status===key)?.count||0;return `<a class="pipeline-stage" href="/production?state=${key}"><div><span>${name}</span><strong>${number(n)}</strong></div><svg viewBox="0 0 240 5" preserveAspectRatio="none" aria-hidden="true"><rect width="240" height="5" rx="2" fill="#edf0f4"/><rect width="${total?Math.round(n/total*240):0}" height="5" rx="2" fill="#213f67"/></svg></a>`;}).join('')}</div>
@@ -37,14 +42,28 @@ const descriptions={
  MAPS:'Gestión del Perfil de Empresa, datos actualizados, fotografías, respuestas a reseñas y seguimiento del rendimiento.',
  BRAND:'Logo, identidad visual y manual de marca. Trabajos individuales con propuesta, revisión, entrega y cierre.',
 };
-export function channelWorkspace(channel,rows,url,canCreate,actor) {
-  const open=rows.filter(r=>(!r.business_state||r.business_state==='ACTIVE')&&!['DELIVERED','CANCELLED'].includes(r.status)).length;
-  const social=channel==='SOCIAL';
-  return `<section class="service-intro"><span class="eyebrow">${channel==='BRAND'?'PROYECTOS / CONTRATACIÓN INDIVIDUAL':'SERVICIOS DE LÚMINA'}</span><h2>${social?'Una pieza. Todas tus redes.':esc(areas[channel])}</h2><p>${esc(descriptions[channel]||'')}</p>
-    <div class="actions">${canCreate?localLink(url('/requests/new',{area:channel}),channel==='BRAND'?'Solicitar un proyecto':'Nueva solicitud','btn'):''}
-    ${channel==='MAPS'?localLink(url('/maps'),'Reseñas y rendimiento','btn secondary'):''}
-    ${social?localLink(url('/reports'),'Ver métricas por plataforma','btn secondary'):''}</div></section>
-    <div class="metric-grid compact"><div class="metric-card"><span>Solicitudes en esta vista</span><strong>${number(rows.length)}</strong></div><div class="metric-card"><span>Trabajos abiertos</span><strong>${number(open)}</strong></div></div>
-    ${card(social?'Contenido y entregables':'Proyectos y servicios',table(['Trabajo','Negocio','Estado','Cantidad','Registro'],rows.map(r=>[
-      localLink(actor?.kind==='AGENCY'&&!actor.readOnlyCompany?'/agency/requests/'+r.id+'?company='+r.company_id:url('/requests/'+r.id),r.title),esc(r.company_name),workBadge(r),number(r.quantity),esc(timestamp(r.created_at))])), 'Abre un trabajo para consultar su avance y sus entregas.')}`;
+export function channelWorkspace(channel,rows,url,canCreate,actor,company) {
+  const ongoing=rows.filter(r=>(!r.business_state||r.business_state==='ACTIVE')&&!['DELIVERED','CANCELLED'].includes(r.status));
+  const target=r=>actor?.kind==='AGENCY'&&!actor.readOnlyCompany?'/agency/requests/'+r.id+'?company='+r.company_id:url('/requests/'+r.id);
+  const service={
+    WEB:{mark:'web',title:'Tu sitio web',action:'Solicitar un proyecto web'},
+    MAPS:{mark:'maps',title:'Tus ubicaciones en Google',action:'Consultar reseñas'},
+    BRAND:{mark:'content',title:'Tu identidad de marca',action:'Solicitar un proyecto'},
+    SOCIAL:{mark:'social',title:'Tu contenido para redes',action:'Nueva solicitud'},
+  }[channel];
+  const next=ongoing[0];
+  const step=next&&requestNextStep(next,actor);
+  const newUrl=url('/requests/new',{area:channel});
+  const global=actor.kind==='AGENCY'&&!company;
+  const primary=next?target(next)+step.anchor:global?'/businesses':channel==='MAPS'?url('/maps'):canCreate?newUrl:null;
+  const focus=taskPanel({area:channel.toLowerCase(),mark:service.mark,label:next?'Continuar proyecto':areas[channel],
+    title:next?.title||service.title,description:next?step.title:descriptions[channel],action:next?step.caption:global?'Elegir un negocio':service.action,href:primary});
+  const extra=[];
+  if(canCreate&&primary!==newUrl)extra.push(localLink(newUrl,channel==='BRAND'?'Solicitar un proyecto':'Nueva solicitud','btn secondary'));
+  if(channel==='MAPS'&&!global&&primary!==url('/maps'))extra.push(localLink(url('/maps'),'Reseñas y rendimiento','btn secondary'));
+  if(channel==='SOCIAL')extra.push(localLink(url('/reports'),'Ver métricas por plataforma','btn secondary'));
+  return focus+(extra.length?'<div class="workspace-tools">'+extra.join('')+'</div>':'')+
+    `<section class="card service-projects"><div class="launcher-heading"><h2>Proyectos y servicios</h2><span>${number(ongoing.length)} en curso</span></div>${
+      rows.length?requestCards(rows,url,{actor,showCompany:actor?.kind==='AGENCY',resolveLink:target}):
+        '<div class="service-empty"><strong>Aquí aparecerá el primer proyecto</strong><p>Podrás consultar su avance, los archivos y las entregas.</p></div>'}</section>`;
 }

@@ -22,7 +22,7 @@ test('dueño registrado: Equipos y roles es el segundo enlace y tiene un acceso 
   assert.equal(home.status,200);assert.equal(actor(w,w.client).kind,'OWNER');
   assert.deepEqual([...menu.matchAll(/<a href="([^"]+)"/g)].slice(0,3).map(x=>x[1]),['/home','/team','/requests']);
   assert.equal((menu.match(/href="\/team"/g)||[]).length,1);assert.match(menu,/Equipos y roles/);
-  assert.match(home.body,/<section class="home-intro">[\s\S]*?href="\/team"[\s\S]*?Equipos y roles/);
+  assert.match(home.body,/<div class="workspace-tools">[\s\S]*?href="\/team"[\s\S]*?Equipos y roles/);
   assert.doesNotMatch(menu,/href="\/businesses"|href="\/dashboard"/);
   assert.match((await w.client.get('/team')).body,/<h1>Equipos y roles<\/h1>/);
 });

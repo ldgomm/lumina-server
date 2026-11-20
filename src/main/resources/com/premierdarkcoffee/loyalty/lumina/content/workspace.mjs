@@ -40,8 +40,12 @@ export function contentData(db,actor,company,query) {
     sql=`SELECT p.*,${requestBusinessSql},r.title AS request_title,r.type AS request_type,r.status AS request_status,c.name AS company_name,
       ((SELECT count(*) FROM evidence e WHERE e.company_id=p.company_id AND e.piece_id=p.id)
         +(SELECT count(DISTINCT f.asset_id) FROM content_files f WHERE f.company_id=p.company_id AND f.piece_id=p.id)) AS evidence_count,
+      preview.id AS preview_id,preview.label AS preview_label,preview.media_type AS preview_type,preview.version AS preview_version,
       (SELECT group_concat(platform) FROM request_platforms rp WHERE rp.company_id=r.company_id AND rp.request_id=r.id) AS targets
-      FROM ${pieceFrom} WHERE ${pieceWhere} AND ${state} ORDER BY p.created_at DESC,p.id DESC`;
+      FROM ${pieceFrom} LEFT JOIN content_files preview ON preview.id=(
+        SELECT f.id FROM content_files f WHERE f.company_id=p.company_id AND f.piece_id=p.id
+        ORDER BY f.created_at DESC,f.version DESC,f.id DESC LIMIT 1
+      ) WHERE ${pieceWhere} AND ${state} ORDER BY p.created_at DESC,p.id DESC`;
   } else if(view==='publications') {
     const platform=query.get('network')||'';
     requireThat(!platform||platforms.includes(platform),'No tienes acceso a esa plataforma.',403);

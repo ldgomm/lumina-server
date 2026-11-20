@@ -28,7 +28,7 @@ try{
     team.focus();assert.equal(d.activeElement,team);d.dispatchEvent(new view.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
     assert.equal(trigger.getAttribute('aria-expanded'),'false');assert.equal(d.activeElement,trigger);
   }
-  const home=dom((await business.client.get('/home')).body);assert.equal(home.document.querySelector('.home-intro a[href="/team"]').textContent,'Equipos y roles');
+  const home=dom((await business.client.get('/home')).body);assert.equal(home.document.querySelector('.workspace-tools a[href="/team"]').textContent,'Equipos y roles');
   const own=dom((await business.client.get('/team/'+member.id)).body);
   assert.equal(own.document.querySelectorAll('[data-module="WALLET"]').length,1);assert.ok(own.document.querySelector('form[action$="/access"] button[type="submit"]'));
   const directory=dom((await admin.get('/teams')).body),link=directory.document.querySelector('.team-company-card');assert.ok(link);

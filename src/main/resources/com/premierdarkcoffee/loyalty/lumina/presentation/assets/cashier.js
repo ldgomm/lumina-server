@@ -35,7 +35,7 @@
   if(heading){const p=document.createElement('p');p.className='cash-operations';p.textContent=[state.data.permissions?.purchases?'Registrar compras':null,state.data.permissions?.rewards?'Canjear premios y descuentos':null].filter(Boolean).join(' · ');heading.after(p);}
   const campaigns=window.luminaCampaignSummary?.(state.data,{cashier:true});if(campaigns)document.querySelector('#content')?.prepend(campaigns);
  };
- document.addEventListener('click',event=>{const link=event.target.closest('[data-cash-destination],[data-lumina-account]');if(link){event.preventDefault();leave(link.getAttribute('href'));}});
+ document.addEventListener('click',event=>{const link=event.target.closest('[data-cash-destination],[data-lumina-account],[data-lumina-back]');if(link){event.preventDefault();leave(link.getAttribute('href'));}});
  exit.onclick=()=>leave('/home');exit.textContent='Volver a Lúmina';
  state.token='lumina-delegated-session';state.member=null;
  merchant().catch(issue=>{

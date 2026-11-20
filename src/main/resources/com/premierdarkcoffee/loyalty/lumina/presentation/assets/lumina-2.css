@@ -1,0 +1,190 @@
+:is(.signed-in,.content-app,.lumina-loyalty) {
+  --ink:#16243b; --navy:#11213d; --muted:#53657a; --line:#dce2eb; --paper:#f3f5f8;
+  --accent:#294fcb; --lumina-sidebar:245px;
+  color:var(--ink); background:var(--paper); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+:is(.signed-in,.content-app,.lumina-loyalty) :is(a,button,select,input,textarea,summary):focus-visible { outline:3px solid #3869d7; outline-offset:3px }
+:is(.signed-in,.content-app,.lumina-loyalty) :is(a,button,summary) { touch-action:manipulation }
+:is(.signed-in,.content-app,.lumina-loyalty) :is(.card,.panel,.member-offer,.service-group,.workday-section) { border-color:var(--line); border-radius:16px; box-shadow:0 2px 5px #10234006 }
+.signed-in .site-header,.content-sidebar,.lumina-loyalty .workspace-sidebar { color:var(--ink); background:#fbfcff; border-right:1px solid #dbe1eb }
+.signed-in .site-header .top { background:#11213d; padding-inline:20px }
+.signed-in .workspace-context,.content-sidebar .content-context,.lumina-loyalty .workspace-business { background:transparent; border-color:var(--line); color:var(--ink) }
+.signed-in .workspace-context strong,.content-context .content-business strong,.lumina-loyalty .workspace-business strong { color:var(--ink) }
+.signed-in .workspace-context :is(small,span),.content-context .eyebrow,.content-sidebar .content-context>span:last-child,.lumina-loyalty .workspace-business small { color:#526578 }
+.content-sidebar .content-person,.signed-in .site-header .nav-foot { border-color:var(--line) }
+.signed-in .site-header .nav-foot p,.signed-in .site-header .nav-foot small,.content-sidebar .content-person :is(strong,span,a) { color:#45576f }
+:is(.content-sidebar,.lumina-loyalty) .business-avatar { background:#e0eaff; color:#234c9d; border:1px solid #cbd9f0 }
+:is(.signed-in .site-header,.content-sidebar) .lumina-sidebar-nav>a,.lumina-loyalty .workspace-nav button,.lumina-loyalty .wallet-section-link { color:#344963; background:transparent; box-shadow:none; border-radius:10px; font-weight:560 }
+:is(.signed-in .site-header,.content-sidebar) .lumina-sidebar-nav>a .icon,.lumina-loyalty .workspace-nav button .ui-icon { color:#476078 }
+:is(.signed-in .site-header,.content-sidebar) .lumina-sidebar-nav>a:hover,.lumina-loyalty .workspace-nav button:hover,.lumina-loyalty .wallet-section-link:hover { color:#122e61; background:#edf1f7 }
+:is(.signed-in .site-header,.content-sidebar) .lumina-sidebar-nav>a[aria-current=page],.lumina-loyalty .workspace-nav button.active { color:#193e99; background:#e1ebff; box-shadow:inset 3px 0 #365bd5 }
+:is(.signed-in .site-header,.content-sidebar) .lumina-sidebar-nav>a[aria-current=page] .icon,.lumina-loyalty .workspace-nav button.active .ui-icon { color:#264bb0 }
+:is(.signed-in .site-header,.content-app) .lumina-sidebar-nav .nav-label,.lumina-loyalty .nav-group-label { color:#5a6b81; font-weight:700 }
+:is(.signed-in .site-header,.content-sidebar) :is(.navigation-find label,.navigation-find p) { color:#455b74 }
+:is(.signed-in .site-header,.content-sidebar) .navigation-find input { background:white; color:var(--ink); border-color:#aebed2 }
+:is(.signed-in .site-header,.content-sidebar) .navigation-find input::placeholder { color:#586b82 }
+:is(.signed-in .site-header,.content-sidebar) :is(.navigation-close,[data-nav-clear]) { color:#23426b; background:#eef3fb; border-color:#c7d3e4 }
+.signed-in .workspace-topbar,.content-app .content-header,.lumina-loyalty>header { border-bottom:1px solid var(--line) }
+.content-app .content-header,.lumina-loyalty>header { background:#11213d }
+:is(.signed-in,.content-app) .page-title,.content-app .content-title { margin-bottom:clamp(18px,2vw,30px) }
+:is(.signed-in,.content-app,.lumina-loyalty) :is(.page-title,.content-title,.workspace-heading) h1 { color:#11213b; font-size:clamp(1.95rem,3vw,3.2rem); line-height:1.03; letter-spacing:-.055em; font-weight:690 }
+:is(.signed-in,.content-app) .page-title :is(p,.eyebrow),.content-app .content-breadcrumb { color:#526578 }
+:is(.signed-in,.content-app) .card h2,.lumina-loyalty .panel h2 { letter-spacing:-.034em }
+:is(.content-app,.signed-in) :is(.btn,button):not(.quiet,.secondary,.navigation-close,.menu-toggle):not([data-nav-clear]) { border-radius:10px }
+:is(.content-app,.signed-in) :is(.btn.secondary,button.secondary) { color:#263c60; background:#fff; border:1px solid #c9d3df; border-radius:10px }
+:is(.content-app,.signed-in) :is(.btn.secondary,button.secondary):hover { color:#182e50; background:#ecf2fd }
+.content-header-actions :is(.btn.secondary,button.secondary) { color:#142746; background:#f3f6ff }
+
+.task-panel { --task-bg:#172d50; --task-soft:#d1e2fe; --task-cta:#dce7ff; position:relative; isolation:isolate; overflow:hidden; min-width:0; background:var(--task-bg); color:#fff; border-radius:20px; margin:0 0 24px }
+.task-panel::after { content:""; position:absolute; width:min(36%,350px); aspect-ratio:1; border:1px solid #ffffff28; border-radius:50%; right:-5%; bottom:-52%; box-shadow:0 0 0 24px #ffffff09,0 0 0 48px #ffffff0c,0 0 0 72px #ffffff09; z-index:-1 }
+.task-panel[data-area=studio],.task-panel[data-area=social] { --task-bg:#293770; --task-cta:#ffd8b6 }
+.task-panel[data-area=wallet],.task-panel[data-area=maps] { --task-bg:#163e46; --task-soft:#c5e7e4; --task-cta:#cbefe6 }
+.task-panel[data-area=review],.task-panel[data-area=brand] { --task-bg:#50364f; --task-soft:#ffe4db; --task-cta:#ffdac3 }
+.task-body { padding:clamp(23px,3vw,44px); max-width:76ch }
+.task-panel .task-label { color:var(--task-soft); display:flex; gap:9px; align-items:center; margin:0 0 13px; font-size:.77rem; font-weight:700; letter-spacing:.075em; text-transform:uppercase }
+.task-panel .task-label svg { width:19px; height:19px }
+.task-panel h2 { color:inherit; margin:0; font-size:clamp(1.7rem,2.75vw,3rem); line-height:1.07; letter-spacing:-.045em; overflow-wrap:anywhere }
+.task-panel .task-description { color:var(--task-soft); margin:10px 0 0; max-width:59ch; line-height:1.55; font-size:1rem }
+.task-panel .task-action { display:inline-flex; align-items:center; gap:15px; min-height:44px; padding:9px 16px; margin-top:19px; background:var(--task-cta); color:#17263b; border-radius:10px; font-weight:700; text-decoration:none }
+.task-panel .task-action:hover { background:#fff }
+.task-panel .task-action:focus-visible { outline-color:white }
+.task-action svg { width:18px }
+.launcher-heading,.workspace-tools { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap }
+.launcher-heading { margin-bottom:15px }
+.launcher-heading h2 { margin:0; letter-spacing:-.04em; font-size:clamp(1.25rem,2vw,1.6rem) }
+.launcher-heading a { color:#2c4da4; min-height:44px; display:inline-flex; align-items:center; font-weight:600 }
+.workspace-tools { justify-content:flex-start; margin:0 0 22px }
+.service-launcher { margin:30px 0 22px }
+.service-launcher .home-modules { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr)); gap:12px }
+.service-launcher .home-module { display:grid; grid-template-columns:1fr auto; align-content:start; align-items:start; gap:15px 8px; border:1px solid var(--line); background:white; padding:18px; border-radius:15px; min-height:135px; color:var(--ink); text-decoration:none }
+.service-launcher .home-module:hover { border-color:#98aed5; box-shadow:0 4px 14px #1528440e }
+.service-launcher .home-module .service-symbol { grid-area:1/1; width:42px; height:42px; border-radius:12px }
+.service-launcher .home-module>div { grid-area:2/1/3/3; min-width:0 }
+.service-launcher .home-module>.icon { grid-area:1/2; width:17px; color:#66778b }
+.home-module h3 { font-size:1.05rem; margin:0 0 4px; color:var(--ink) }
+.home-module p { color:#526477; line-height:1.45 }
+:is([data-area=wallet],[data-service=WALLET])>.service-symbol { background:#d5ede8; color:#205d51 }
+:is([data-area=social],[data-service=SOCIAL])>.service-symbol { background:#ffe2ca; color:#79421f }
+:is([data-area=web],[data-service=WEB])>.service-symbol { background:#dce7ff; color:#294e99 }
+:is([data-area=maps],[data-service=MAPS])>.service-symbol { background:#d9ebcd; color:#36591f }
+:is([data-area=content],[data-service=BRAND])>.service-symbol { background:#f3dfee; color:#78466c }
+.content-app .content-overview { grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px }
+.content-app .metric-card { border:1px solid var(--line); border-radius:14px; background:#fff }
+.content-app .metric-card strong { color:#243b60; letter-spacing:-.05em; font-variant-numeric:tabular-nums }
+.content-app .metric-card.metric-pending { border-color:#b58d65; background:#fff4e7 }
+.content-app .content-filter,.signed-in .request-filter { background:#fbfcfe; border:1px solid var(--line); border-radius:13px }
+:is(.signed-in,.content-app) :is(.request-record,.piece-card) { border-radius:12px }
+:is(.signed-in,.content-app) .work-needs-review { border-inline-start:4px solid #a55a21; background:#fff9f0 }
+.service-projects .service-empty { background:#f4f7fb; border:1px dashed #bfcede; border-radius:12px; padding:22px }
+.service-empty p { margin-bottom:0 }
+.service-center .service-center-aside { background:#182e50; color:#fff; border-radius:18px }
+.service-center .service-center-aside :is(h2,strong) { color:inherit }
+.service-center .service-center-aside :is(p,a) { color:#d9e7fc }
+.service-center .service-price-note { background:#243e63; color:white; border-color:#466181 }
+.member-plans .member-summary { background:#153b42; color:#fff; border:0; border-radius:18px }
+.member-plans .member-summary :is(h2,h3,p,span,dt,dd,strong) { color:inherit }
+.member-plans .member-summary a { color:#d2f5e9 }
+.member-plans .member-grid { gap:14px }
+.member-plans .member-current { border:2px solid #3060c1; background:#f3f7ff }
+.member-plans .member-switch { border-radius:12px }
+
+.lumina-loyalty .workspace-heading { gap:16px; margin-bottom:20px }
+.lumina-loyalty .workspace-main { min-width:0 }
+.lumina-loyalty .workspace-heading h1 { margin:0 0 7px }
+.lumina-loyalty .workspace-heading p { color:#53657a }
+.lumina-loyalty .wallet-desk { display:grid; grid-template-columns:minmax(0,1.2fr) repeat(2,minmax(0,1fr)); gap:12px; margin:0 0 26px; padding:0; border:0; background:transparent }
+.lumina-loyalty .wallet-desk button { display:grid; grid-template-columns:1fr auto; gap:15px 8px; align-content:start; align-items:start; margin:0; padding:20px; min-width:0; min-height:132px; border-radius:16px; border:1px solid #c8d7de; color:#15374a; background:white; text-align:left; white-space:normal }
+.wallet-desk button>.ui-icon:first-child { width:26px; height:26px }
+.wallet-desk button>.ui-icon:last-child { grid-area:1/2; width:17px }
+.wallet-desk button>span { grid-area:2/1/3/3 }
+.wallet-desk button strong,.wallet-desk button small { display:block; color:inherit }
+.wallet-desk button strong { font-size:1.14rem; line-height:1.2 }
+.wallet-desk button small { margin-top:4px; font-size:.84rem; font-weight:450 }
+.lumina-loyalty .wallet-desk button:first-child { background:#153f46; color:white; border-color:#153f46 }
+.lumina-loyalty .wallet-desk button:hover { border-color:#426a70; box-shadow:0 3px 10px #1b394b1b }
+.lumina-loyalty .overview-command-grid:has(>.overview-priorities:only-child) { grid-template-columns:1fr }
+.lumina-loyalty .overview-metric { background:white; border:1px solid var(--line); border-radius:14px }
+.lumina-loyalty .wallet-subscription-note { margin:10px auto; background:#e8f2ef; color:#16483f; border:1px solid #c8dfd5; border-radius:12px; width:calc(100% - 36px) }
+.lumina-loyalty .wallet-subscription-note a { color:#184c46 }
+.lumina-loyalty .wallet-menu-close { color:#233e62; background:white; border:1px solid #becfe0; margin-bottom:10px }
+.lumina-loyalty .lookup-panel { border-top:4px solid #36756b; padding:clamp(18px,2.5vw,30px) }
+.lumina-loyalty .join-station { display:grid; grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr); gap:clamp(20px,3vw,40px); background:white; border:1px solid var(--line); border-radius:18px; padding:clamp(18px,3vw,35px); align-items:center }
+.join-sign { background:#e8f3ef; color:#183e3c; padding:22px; border-radius:15px; display:grid; justify-items:center; text-align:center; gap:15px }
+.join-sign strong { font-size:1.25rem }
+.join-sign .qr { display:block; width:min(235px,100%); height:auto; margin:0; border:10px solid white; border-radius:4px }
+.join-sign p { margin:0; color:inherit; font-weight:600 }
+.join-controls { min-width:0 }
+.join-controls input { width:100%; min-height:44px }
+.join-controls [data-join-status]:empty { display:none }
+.join-controls .actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 }
+.mobile-shortcuts { display:none }
+@media(max-width:1020px) {
+  .content-app .content-overview { grid-template-columns:repeat(2,minmax(0,1fr)) }
+  .lumina-loyalty .wallet-desk { gap:8px }
+  .lumina-loyalty .wallet-desk button { padding:14px }
+}
+@media(max-width:760px) {
+  .mobile-shortcuts { position:fixed; z-index:8; bottom:0; inset-inline:0; display:flex; justify-content:space-around; padding:3px max(8px,env(safe-area-inset-right)) max(3px,env(safe-area-inset-bottom)); background:#fbfcff; border-top:1px solid #cad4e0; box-shadow:0 -2px 12px #142b490b }
+  .mobile-shortcuts a { flex:1 1 0; min-width:0; padding:5px 1px; display:grid; align-content:center; justify-items:center; gap:3px; min-height:48px; color:#415775; text-decoration:none; font-size:.72rem; font-weight:600 }
+  .mobile-shortcuts a[aria-current] { color:#244dc4 }
+  .mobile-shortcuts a[aria-current] svg { background:#e0eaff; box-sizing:content-box; padding:1px 12px; margin:-1px -12px; border-radius:20px }
+  body:has(.mobile-shortcuts) { padding-bottom:calc(58px + env(safe-area-inset-bottom)) }
+  .nav-open .mobile-shortcuts,body:has(dialog[open]) .mobile-shortcuts,body:has(input:focus,textarea:focus) .mobile-shortcuts { display:none }
+  .content-app .content-header { padding-inline:14px }
+  .content-app .content-header-actions { gap:7px }
+  .content-app .content-header-actions :is(.btn,.menu-toggle) { padding-inline:10px }
+  .content-app .content-sidebar,.signed-in .site-header .lumina-sidebar-nav { background:#fbfcff }
+  .wallet-desk button>.ui-icon:first-child { width:22px; height:22px }
+  .lumina-loyalty .join-station { grid-template-columns:minmax(0,1fr) }
+}
+@media(max-width:540px) {
+  .service-launcher .home-modules { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px }
+  .service-launcher .home-module { padding:12px; min-height:125px; gap:8px }
+  .service-launcher .home-module h3 { font-size:.96rem }
+  .service-launcher .home-module p { font-size:.8rem }
+  .task-panel { border-radius:15px; margin-bottom:18px }
+  .task-body { padding:20px }
+  .task-panel .task-description { font-size:.94rem }
+  .content-app .metric-card { padding:13px; min-width:0 }
+  .content-app .metric-card small { font-size:.76rem }
+  .lumina-loyalty .wallet-desk { grid-template-columns:repeat(2,minmax(0,1fr)) }
+  .lumina-loyalty .wallet-desk button { min-height:96px; gap:8px }
+  .lumina-loyalty .wallet-desk button:first-child { grid-column:1/-1; min-height:66px; grid-template-columns:auto 1fr auto; align-items:center; align-content:center; gap:13px }
+  .wallet-desk button:first-child>span,.wallet-desk button:first-child>.ui-icon:last-child { grid-area:auto }
+  .lumina-loyalty .wallet-desk button strong { font-size:.99rem }
+  .lumina-loyalty .wallet-desk button small { font-size:.78rem }
+  .content-app .content-brand { gap:6px }
+  .content-app .content-brand strong { font-size:1.15rem }
+  .content-app .content-brand>.module-chip { display:none }
+}
+@media print {
+  body:has(.join-station) { margin:0!important; padding:0!important; background:white }
+  .lumina-loyalty:has(.join-station) :is(header,footer,.loyalty-breadcrumb,.wallet-subscription-note,.workspace-sidebar,.workspace-topline,.workspace-heading,.workspace-search,.join-controls,#notice,.wallet-desk,.cash-operations) { display:none!important }
+  .lumina-loyalty:has(.join-station) :is(#app,.workspace,.workspace-main,#content,.join-station) { display:block; width:100%; background:white; padding:0; margin:0; border:0; min-height:0; box-shadow:none }
+  .join-sign { margin:2cm auto; max-width:15cm; border:1px solid #333; color:black; background:white; break-inside:avoid; padding:1.2cm }
+  .join-sign .qr { width:7cm; max-width:100% }
+}
+
+.piece-summary .piece-preview { margin:10px 0 14px; border:1px solid #d0dbe9; border-radius:10px; background:#f2f5fb; color:#274266 }
+.piece-preview summary,.piece-preview>a { padding:10px 12px; min-height:44px; overflow-wrap:anywhere }
+.piece-preview summary { cursor:pointer; font-weight:600 }
+.piece-preview>a { display:inline-flex; align-items:center; gap:5px }
+.piece-media img,.piece-media video { display:block; width:100%; max-height:260px; object-fit:contain; background:#14213a }
+
+.lumina-loyalty>header { justify-content:flex-start; gap:12px }
+.lumina-loyalty>header #exit { margin-left:0 }
+.lumina-loyalty>header .wallet-account { margin-left:auto }
+.lumina-loyalty .loyalty-breadcrumb { flex-wrap:wrap }
+.content-app .content-filter { padding:14px }
+.signed-in .mobile-shortcuts a[aria-current],.content-app .mobile-shortcuts a[aria-current] { color:#173e98; background:#e8effe; box-shadow:none; border-radius:9px }
+.signed-in .mobile-shortcuts a[aria-current] svg,.content-app .mobile-shortcuts a[aria-current] svg { color:#204bc2; background:transparent }
+.map-summary { display:flex; flex-wrap:wrap; gap:12px 24px; padding:17px 20px; margin:16px 0; border-radius:12px; background:#edf5ee }
+.map-summary dt { font-size:.8rem; color:#375549 }
+.map-summary dd { margin:4px 0 0; color:#193a32; font-size:1.35rem; font-weight:700; font-variant-numeric:tabular-nums }
+.map-summary dd small { font-size:.77rem; font-weight:500 }
+@media(max-width:760px) {
+  .lumina-loyalty.staff-mode>header:has([data-lumina-back]) #exit { display:none }
+  .lumina-loyalty>header { flex-wrap:nowrap; min-height:65px }
+  .lumina-loyalty>header .brand { margin-right:0 }
+  .lumina-loyalty .workspace-topline { margin-bottom:12px }
+}

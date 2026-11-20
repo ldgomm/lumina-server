@@ -1,3 +1,4 @@
+import { requestProgressSql } from '../production/request-progress.mjs';
 import { operationState, operatingSql, requestBusinessSql } from '../businesses/operation-state.mjs';
 import { teamAdministrator } from '../access/team-administration.mjs';
 import { teamRoutes } from './team-routes.mjs';
@@ -69,6 +70,9 @@ import { packagesPage, orderPage } from '../presentation/pages/package-pages.mjs
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder, inclusiveEnd } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/studio.webp':['studio.webp','image/webp'],
+  '/assets/studio-small.webp':['studio-small.webp','image/webp'],
+  '/assets/lumina-2.css':['lumina-2.css','text/css; charset=utf-8'],
   '/assets/access.css':['access.css','text/css; charset=utf-8'],
   '/assets/homepage.js':['homepage.js','text/javascript; charset=utf-8'],
   '/assets/homepage.css':['homepage.css','text/css; charset=utf-8'],
@@ -616,11 +620,11 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if(actor.kind!=='AGENCY'||target.searchParams.get('company'))company=companyFor(db,actor,target.searchParams.get('company'));
         if(channel==='SOCIAL') return redirect(res,pathFor(actor,company)('/content'));
         const policy=requestAccessSql(actor);
-        const rows=db.all(`SELECT r.*,${requestBusinessSql},c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id WHERE ${company?'1=1':operatingSql()} AND r.channel=? AND ${policy.sql}
+        const rows=db.all(`SELECT r.*,${requestProgressSql},${requestBusinessSql},c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id WHERE ${company?'1=1':operatingSql()} AND r.channel=? AND ${policy.sql}
           AND (? IS NULL OR r.company_id=?)
           ORDER BY r.created_at DESC,r.id LIMIT 100`,channel,...policy.params,company?.id||null,company?.id||null);
         return render({title:areas[channel],description:channel==='SOCIAL'?'Solicitudes, producción y entregas en un solo lugar.':'Servicios, proyectos y seguimiento.',
-          body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'),actor)});
+          body:channelWorkspace(channel,rows,pathFor(actor,company),Boolean(company)&&can(actor,channel,'REQUEST'),actor,company)});
       }
       const accountView=options=>({title:'Mi cuenta',body:(actor.kind==='AGENCY'?'<section class="card"><h2>Datos del proveedor</h2><a href="/account/provider" class="btn secondary">Identificación legal de Lúmina</a></section>':'')+accountPage(actor,{otherSessions:db.get('SELECT count(*) n FROM sessions WHERE account_id=? AND digest<>? AND expires_at>?',actor.id,actor.session_id,now()).n,...options})});
       if (path==='/account' && method==='GET') return render(accountView({notice:target.searchParams.get('contact')==='saved'?'Teléfono guardado.':target.searchParams.get('state')==='password'?'Contraseña actualizada.':target.searchParams.get('state')==='sessions'?'Se cerraron tus otras sesiones.':''}));

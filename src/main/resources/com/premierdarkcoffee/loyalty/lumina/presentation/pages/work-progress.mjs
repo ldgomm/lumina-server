@@ -44,6 +44,14 @@ export function requestCards(rows,url,{actor=null,showCompany=false,resolveLink=
   }).join('')||'<div class="request-empty"><h3>Tu próxima idea empieza aquí.</h3><p>Cuando envíes una solicitud, podrás seguir su avance y revisar las entregas en este espacio.</p></div>'}</div>`;
 }
 
+function piecePreview(row,requestHref) {
+  if(!row.preview_id)return '';
+  const address=new URL(requestHref,'http://localhost');
+  address.pathname+='/files/'+encodeURIComponent(row.preview_id);
+  const href=esc(address.pathname+address.search);
+  return `<details class="piece-preview" data-piece-preview="${esc(row.preview_type)}"><summary>${row.preview_type==='application/pdf'?'Archivo PDF':'Vista previa'} · Versión ${esc(row.preview_version)}</summary>
+    <div class="piece-media"></div><a href="${href}" target="_blank" rel="noopener" data-preview-file>${esc(row.preview_label)} <span class="sr-only">(abre otra pestaña)</span> ↗</a></details>`;
+}
 export function pieceCards(rows,actor,resolveLink,{showCompany=false}={}) {
   return `<div class="piece-grid">${rows.map(row=>{
     const request={...row,id:row.request_id,channel:'SOCIAL',type:row.request_type,platforms:row.targets?row.targets.split(','):[]};
@@ -57,6 +65,7 @@ export function pieceCards(rows,actor,resolveLink,{showCompany=false}={}) {
     return `<article class="piece-summary${approve?' work-needs-review':''}"><div class="piece-summary-top"><span class="service-symbol" aria-hidden="true">${icon('social')}</span>${workBadge(row)}</div>
       ${showCompany?`<p class="eyebrow">${esc(row.company_name)}</p>`:''}<h3>${esc(row.title)}</h3><p class="piece-request">${esc(row.request_title)}</p><p class="piece-hint">${esc(hint)}</p>
       <div class="piece-summary-meta"><span>${icon('content')}${row.evidence_count} ${row.evidence_count===1?'archivo o enlace':'archivos o enlaces'}</span>${row.recorded_at?`<time datetime="${esc(row.recorded_at)}">Grabado: ${esc(timestamp(row.recorded_at))}</time>`:''}</div>
+      ${piecePreview(row,resolveLink(row))}
       ${localLink(resolveLink(row)+anchor,action+' →','btn '+(approve?'':'secondary'))}</article>`;
   }).join('')}</div>`;
 }

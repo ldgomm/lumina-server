@@ -41,6 +41,12 @@ test('upload is private, hashed, downloadable, and supports a single byte range'
 test('files cannot be read or uploaded across businesses, by owners, or from agency consultation',async t=>{
  const w=await setup(t);await w.upload();const f=files(w)[0],other=await owner(w,'Otro negocio','files-other');
  assert.equal((await other.client.get(filePath(w,f))).status,404);
+ const card=(await w.client.get('/content?view=production')).body;
+ assert.match(card,/data-piece-preview="image\/png"/);
+ assert.ok(card.includes('href="'+filePath(w,f)+'"'));
+ const agencyView=await w.admin.get('/agency/content?company='+w.id+'&view=production');
+ assert.ok(agencyView.body.includes('href="/agency'+filePath(w,f)+'?company='+w.id+'"'));
+ assert.ok(!(await other.client.get('/content?view=production')).body.includes(f.id));
  assert.equal((await w.upload({actor:w.client,target:w.path+'/upload'})).status,403);
  assert.equal((await w.upload({target:w.path+'/upload?company='+w.id})).status,403);
  assert.equal((await w.upload({target:selected(w.path+'/upload',other.id)})).status,404);

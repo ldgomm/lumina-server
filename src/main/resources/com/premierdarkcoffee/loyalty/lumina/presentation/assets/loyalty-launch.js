@@ -1,12 +1,38 @@
 'use strict';
 (async()=>{
  const back=document.querySelector('meta[name="lumina-wallet-back"]')?.content||'/home';
- document.addEventListener('click',event=>{if(event.target.closest('[data-lumina-account]')){event.preventDefault();leave('/account');}},true);
+ document.addEventListener('click',event=>{const link=event.target.closest('[data-lumina-account],[data-lumina-back],.wallet-subscription-note a,.loyalty-breadcrumb a');if(link){event.preventDefault();leave(link.getAttribute('href'));}},true);
  const central={administration:'/management',business:'/management/business',branches:'/management/branches',team:'/team',activity:'/management/activity',operations:'/management/operations',account:'/plans?view=agreements',reports:'/management/reports'};
  const leave=path=>{if(document.querySelector('form[aria-busy=true]')){notice('Espera a que termine el guardado.');return;}const go=()=>location.assign(path),design=()=>window.loyaltyDesignLeave?window.loyaltyDesignLeave(go):go(),operation=()=>window.loyaltyOperationLeave?window.loyaltyOperationLeave(design):design();window.loyaltyAdminLeave?window.loyaltyAdminLeave(operation):operation();};
  try{
   const company=document.querySelector('meta[name="lumina-wallet-company"]')?.content;
-  renderJoinQR=function(){const slug=encodeURIComponent(state.data.business.slug),scope=company?'?company='+encodeURIComponent(company):'';document.querySelector('#content').innerHTML=`<section class="panel narrow"><h2>Invita a tus clientes</h2><p>Coloca este QR en tu local para que tus clientes se registren y añadan su tarjeta. La misma tarjeta funciona en todas tus sucursales.</p><img class="qr" alt="QR de registro" src="/api/public/${slug}/qr${scope}"><a class="button" href="/join/${slug}${scope}" target="_blank" rel="noopener">Abrir formulario</a></section>`;};
+  renderJoinQR=function(){
+   const slug=encodeURIComponent(state.data.business.slug),scope=company?'?company='+encodeURIComponent(company):'';
+   const join='/join/'+slug+scope;
+   let publicLink='';
+   try {
+    const url=new URL(state.data.enrollmentUrl);
+    if((url.protocol==='https:'||(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))&&
+       url.pathname==='/join/'+slug&&!url.username&&!url.password&&!url.search&&!url.hash)publicLink=url.href;
+   }catch{}
+   const content=document.querySelector('#content');
+   content.innerHTML=`<section class="join-station"><div class="join-sign"><strong>${esc(state.data.business.name)}</strong><img class="qr" alt="QR de registro" src="/api/public/${slug}/qr${scope}"><p>Escanea para guardar tu tarjeta</p></div>
+    <div class="join-controls"><h2>Invita a tus clientes</h2><p>Coloca el QR en caja o comparte el enlace. El cliente puede registrarse desde su teléfono.</p>
+    ${publicLink?'<label for="joinAddress">Enlace de registro</label><input id="joinAddress" readonly type="url">':''}
+    <div class="actions">${publicLink?'<button type="button" data-copy-join>Copiar enlace</button>':''}<button type="button" class="quiet" data-print-join disabled>Imprimir QR</button></div>
+    <p data-join-status role="status"></p><a class="text-button" href="${esc(publicLink||join)}" target="_blank" rel="noopener">Abrir formulario ↗</a></div></section>`;
+   const field=content.querySelector('#joinAddress'),status=content.querySelector('[data-join-status]');
+   const print=content.querySelector('[data-print-join]'),qr=content.querySelector('.qr');
+   if(field)field.value=publicLink;
+   if(publicLink)content.querySelector('[data-copy-join]').onclick=async()=>{
+    try{await navigator.clipboard.writeText(publicLink);status.textContent='Enlace copiado.';}
+    catch{field.focus();field.select();status.textContent='El enlace está seleccionado. Elige Copiar en tu dispositivo.';}
+   };
+   print.onclick=()=>window.print();
+   qr.onload=()=>{print.disabled=false;};
+   qr.onerror=()=>{status.textContent=publicLink?'El QR no se pudo cargar. Puedes compartir el enlace.':'El QR no se pudo cargar. Vuelve a abrir esta sección.';};
+   if(qr.complete&&qr.naturalWidth)print.disabled=false;
+  };
   state.token='lumina-delegated-wallet-session';state.data=await api('/api/staff/dashboard');state.member=null;
   const allowed=JSON.parse(document.querySelector('meta[name="lumina-wallet-sections"]').content);
   if(!Array.isArray(allowed)||!allowed.length)throw new Error('No hay áreas de Wallet asignadas a tu cuenta.');

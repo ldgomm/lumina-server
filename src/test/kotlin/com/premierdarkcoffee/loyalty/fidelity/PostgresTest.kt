@@ -172,6 +172,9 @@ class PostgresTest {
         assertEquals(HttpStatusCode.Unauthorized,client.get("/api/staff/dashboard").status)
         val dashboard=client.get("/api/staff/dashboard"){bearerAuth(f.ownerToken)}
         assertEquals(HttpStatusCode.OK,dashboard.status)
+        val payload=json.parseToJsonElement(dashboard.bodyAsText()).jsonObject
+        val slug=payload.getValue("business").jsonObject.getValue("slug").jsonPrimitive.content
+        assertEquals("http://localhost:8080/join/$slug",payload.getValue("enrollmentUrl").jsonPrimitive.content)
         assertEquals(HttpStatusCode.OK,client.get("/api/me/qr"){bearerAuth(f.memberToken)}.status)
         assertEquals(HttpStatusCode.ServiceUnavailable,client.get("/api/me/wallet/apple"){bearerAuth(f.memberToken)}.status)
         val bad=client.post("/api/staff/purchases"){bearerAuth(f.ownerToken);contentType(ContentType.Application.Json);setBody("{}")}

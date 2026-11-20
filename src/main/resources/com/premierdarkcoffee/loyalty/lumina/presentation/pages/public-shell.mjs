@@ -19,7 +19,7 @@ export function accessShell({title,description='',body,mode='login'}) {
   <body class="public-access"><a class="skip-link" href="#main">Saltar al contenido</a><header class="public-header"><div class="home-container header-row">${publicBrand()}<a class="access-back" href="/">Volver a Lúmina ${publicArrow}</a></div></header>
     <main id="main" class="home-container access-layout access-${esc(mode)}">
       <aside class="access-story" aria-label="Tu espacio en Lúmina"><p class="eyebrow">${eyebrow}</p><h2>${first}<br><em>${second}</em></h2><p>${copy}</p>
-        <div class="access-art" aria-hidden="true"><div class="access-art-orbit"></div><div class="access-art-card"><span>LÚMINA / TU ESPACIO</span><strong>De la idea<br>a la entrega.</strong><div><i>01</i><span>Tu idea</span><b>✓</b></div><div><i>02</i><span>En creación</span><b>✓</b></div><div><i>03</i><span>Lista para ti</span><b>→</b></div></div><span class="access-art-note">CREATIVIDAD. CON DIRECCIÓN.</span></div>
+        <figure class="access-photo"><img src="/assets/studio-small.webp" width="640" height="427" alt=""></figure>
         <div class="access-story-foot">${mode==='register'?'<span>Una cuenta para ti y accesos propios para tu equipo.</span><span>Wallet se activa solo cuando lo eliges y aceptas sus condiciones.</span>':'<span>Una cuenta. Tus servicios. Tu equipo.</span><a href="/#services">Conoce lo que hacemos →</a>'}</div>
       </aside>
       <section class="access-panel" aria-labelledby="access-title"><header><span class="eyebrow">${mode==='register'?'CREA TU CUENTA':mode==='activate'?'ACTIVA TU ACCESO':'BIENVENIDO A LÚMINA'}</span><h1 id="access-title">${esc(title)}</h1><p>${esc(description)}</p></header>${body}</section>

@@ -35,3 +35,16 @@ if(requestDetail){
 }
 
 for(const form of document.querySelectorAll('[data-file-upload]'))form.addEventListener('submit',event=>{const file=form.querySelector('[type=file]').files[0],status=form.querySelector('[data-upload-status]');if(file&&file.size>100*1024*1024){event.preventDefault();status.hidden=false;status.textContent='El archivo supera los 100 MB. Selecciona uno más pequeño.';return;}status.hidden=false;status.textContent='Subiendo archivo… Mantén esta página abierta.';form.querySelector('button[type=submit],button:not([type])')?.setAttribute('disabled','');});
+
+for(const panel of document.querySelectorAll('[data-piece-preview]')){
+  panel.addEventListener('toggle',()=>{
+    const mount=panel.querySelector('.piece-media');
+    if(!panel.open){mount.querySelector('video')?.pause();return;}
+    if(mount.childElementCount)return;
+    const type=panel.dataset.piecePreview,link=panel.querySelector('[data-preview-file]');
+    let media;
+    if(type.startsWith('image/')){media=new Image();media.alt=link.firstChild.textContent.trim();}
+    else if(type.startsWith('video/')){media=document.createElement('video');media.controls=true;media.playsInline=true;media.preload='none';media.setAttribute('aria-label',link.firstChild.textContent.trim());}
+    if(media){media.src=link.href;mount.append(media);}
+  });
+}

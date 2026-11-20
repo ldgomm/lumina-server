@@ -25,7 +25,7 @@ export function walletRouteAllowed(role,method,path) {
 function scopedDashboard(actor,data) {
   if(actor.kind!=='COLLABORATOR')return data;
   const programRead=['WALLET_DESIGN','WALLET_PROGRAMS','WALLET_CUSTOMERS'].some(scope=>can(actor,scope));
-  return {business:data.business,role:data.role,branchId:null,permissions:{purchases:false,rewards:false},
+  return {business:data.business,...(can(actor,'WALLET_DESIGN')?{enrollmentUrl:data.enrollmentUrl}:{}),role:data.role,branchId:null,permissions:{purchases:false,rewards:false},
     branches:data.branches||[],programs:programRead?data.programs||[]:[],rewards:programRead?data.rewards||[]:[],
     ...(can(actor,'WALLET_PROGRAMS','EDIT')?{promotionSuggestions:data.promotionSuggestions}:{}),wallet:data.wallet};
 }

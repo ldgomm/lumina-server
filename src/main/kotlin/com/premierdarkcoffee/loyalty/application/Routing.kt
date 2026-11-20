@@ -188,7 +188,11 @@ fun Application.loyaltyRoutes(service: LoyaltyService, platformToken: String, pu
             io { service.rateLimit("login:$slug:${call.request.local.remoteHost}"); service.rateLimit("login-document:$slug:${input.document.trim().uppercase()}") }
             call.respond(io { service.login(slug,input) })
         }
-        get("/api/staff/dashboard") { val s = io { service.staff(call.bearer()) }; call.respond(io { service.dashboard(s) }) }
+        get("/api/staff/dashboard") {
+            val data = io { service.dashboard(service.staff(call.bearer())) }
+            val slug = data.getValue("business").jsonObject.getValue("slug").jsonPrimitive.content
+            call.respond(JsonObject(data + ("enrollmentUrl" to JsonPrimitive("$publicUrl/join/$slug"))))
+        }
         post("/api/staff/branches") { val s = io { service.staff(call.bearer()) }; val input = call.body<NewBranch>(); call.respond(HttpStatusCode.Created,io { service.newBranch(s,input) }) }
         post("/api/staff/credentials") { val s = io { service.staff(call.bearer()) }; val input = call.body<NewStaff>(); call.respond(HttpStatusCode.Created,io { service.newStaff(s,input) }) }
         delete("/api/staff/credentials/{id}") { val s = io { service.staff(call.bearer()) }; call.respond(io { service.revokeStaff(s,call.parameters["id"]!!) }) }

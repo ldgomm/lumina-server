@@ -1,7 +1,9 @@
+import { taskPanel } from './task-panel.mjs';
 import { workdayAgenda, paging } from './workday-pages.mjs';
 import { priceGuide } from './request-composer.mjs';
 import { requestCards, pieceCards } from './work-progress.mjs';
 import { can } from '../../access/accounts.mjs';
+import { canRequest } from '../../access/content-policy.mjs';
 import { contentViews } from '../../content/workspace.mjs';
 import { badge, button, card, esc, external, hidden, input, label, localLink, select, table, timestamp } from './components.mjs';
 import { requestForm } from './production-pages.mjs';
@@ -48,6 +50,21 @@ export function contentPage({actor,company,url,data,metricsHtml='',calendar=null
   else body=card(view==='overview'?'Solicitudes recientes':'Solicitudes de contenido',rows.length?requestCards(rows,url,{actor,showCompany:actor.kind==='AGENCY',resolveLink:requestLink}):emptyContent(view,data.q,url,actor.businessBlocked))+pagination;
   const stats=view==='overview'?`<div class="metric-grid content-overview">${[['Solicitudes abiertas',counts.open,'requests'],['En producción',counts.production,'production'],['En revisión',counts.review,'reviews'],['Piezas entregadas',counts.delivered,'deliveries']].map(([caption,value,target])=>
     `<a class="metric-card${target==='reviews'&&value?' metric-pending':''}" href="${esc(url('/content',{view:target,q:data.q,...(target==='requests'?{filter:'open'}:{})}))}"><span>${caption}</span><strong>${value}</strong><small>${target==='reviews'?'Ver entregas en revisión':'Ver '+contentViews[target].toLowerCase()} ${icon('arrow')}</small></a>`).join('')}</div>`:'';
+  let focus='';
+  if(view==='overview'&&!actor.businessBlocked) {
+    const review=counts.review>0, production=counts.production>0;
+    const requestable=company&&can(actor,'SOCIAL','REQUEST');
+    const direct=review&&rows.find(row=>row.review_piece_id&&row.status==='PRODUCTION');
+    const href=review?(direct?requestLink(direct)+'#piece-'+direct.review_piece_id:url('/content',{view:'reviews',q:data.q})):
+      production?url('/content',{view:'production',q:data.q}):requestable?url('/requests/new',{area:'SOCIAL'}):url('/content',{view:'requests'});
+    const decision=review&&actor.kind!=='AGENCY'&&(direct?canRequest(actor,{...direct,platforms:direct.targets?.split(',')||[]},'APPROVE'):actor.kind==='OWNER');
+    focus=taskPanel({area:'studio',mark:review?'check':'social',label:review?'En revisión':'Contenido para redes',
+      title:review?(counts.review===1?'Una entrega en revisión':counts.review+' entregas en revisión'):
+        production?(counts.production===1?'Una pieza en producción':counts.production+' piezas en producción'):'Tu mesa de contenido',
+      description:review?(direct?'«'+direct.title+'». ':'')+(decision?'Abre la versión más reciente para aprobarla o pedir un ajuste.':'Consulta los archivos y los comentarios de la revisión.'):
+        production?'Sigue el avance de las piezas que está preparando Lúmina.':requestable?'Envía una idea para una grabación, un video o una publicación.':'Encuentra las solicitudes de contenido y sigue sus entregas.',
+      action:review?(decision?'Revisar entrega':'Ver entregas'):production?'Ver producción':requestable?'Enviar una idea':'Ver solicitudes',href});
+  }
   const create=view==='requests'&&company&&can(actor,'SOCIAL','REQUEST')?'<details class="disclosure content-create"'+(!counts.requests&&!data.q?' open':'')+'><summary>Nueva solicitud de contenido</summary><div class="request-workspace">'+card('Cuéntanos tu idea',requestForm(actor,url,false,'SOCIAL',true,{phone:company.phone}),'')+priceGuide(actor,url,'SOCIAL',plans,contracts)+'</div></details>' : '';
-  return stats+create+(view==='metrics'?'':requestTabs+filter)+(data.q?`<p class="filter-result">Resultados para «${esc(data.q)}»</p>`:'')+`<div data-content-list>${body}</div>`;
+  return focus+stats+create+(view==='metrics'?'':requestTabs+filter)+(data.q?`<p class="filter-result">Resultados para «${esc(data.q)}»</p>`:'')+`<div data-content-list>${body}</div>`;
 }

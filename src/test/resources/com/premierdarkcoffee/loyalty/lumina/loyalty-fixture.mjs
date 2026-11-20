@@ -134,7 +134,7 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
     if(req.method==='GET'&&path==='/api/staff/account'&&p.role==='OWNER')return json(res,200,{membership:null,summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0,offset:0,today:'2026-11-13'});
     const b = branches.get(p.company.id);
     if (req.method==='GET' && path==='/api/staff/dashboard') return json(res,200,{
-      business:p.company,role:p.role,branchId:p.branchId,permissions:p.permissions,
+      business:p.company,enrollmentUrl:origin+'/join/'+p.company.slug,role:p.role,branchId:p.branchId,permissions:p.permissions,
       branches:p.branchId ? b.filter(item=>item.id===p.branchId) : b,programs:configuration.programs||[],rewards:configuration.rewards||[],
     });
     if (req.method==='GET' && path==='/api/staff/metrics' && p.role==='OWNER')return json(res,200,{days:30,fromDate:'2026-10-13',throughDate:'2026-11-11',totalClients:5,newClients:2,activeClients:3,repeatClients:1,purchases:7,redemptions:1,salesMinor:10500,branches:[],daily:[],topRewards:[]});

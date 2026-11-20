@@ -9,8 +9,7 @@ export function businessOverview(db,actor,companyId) {
   const policy=requestAccessSql(actor);
   const recent=db.all(`SELECT r.*,${requestProgressSql} FROM requests r
     WHERE r.company_id=? AND ${policy.sql} ORDER BY r.created_at DESC,r.id DESC LIMIT 4`,companyId,...policy.params);
-  const reviews=db.all(`SELECT r.*, (SELECT group_concat(platform) FROM request_platforms rp
-    WHERE rp.company_id=r.company_id AND rp.request_id=r.id) AS targets FROM requests r
+  const reviews=db.all(`SELECT r.*,${requestProgressSql} FROM requests r
     WHERE r.company_id=? AND ${policy.sql} AND r.status NOT IN ('CANCELLED','DELIVERED')
     AND EXISTS(SELECT 1 FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='REVIEW')
     ORDER BY r.created_at,r.id`,companyId,...policy.params)

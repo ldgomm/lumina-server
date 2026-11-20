@@ -31,9 +31,11 @@ export function mapsPage(actor,url,locations) {
   const cards = locations.map(loc=>{
     const last = loc.cuts[0];
     const previous = loc.cuts[1];
-    const view = last ? `<p>${last.rating_hundredths===null ? 'Sin calificación' : (last.rating_hundredths/100).toFixed(2)+' / 5'} ·
-      ${number(last.review_count)} reseñas ${previous ? `· Cambio ${last.review_count-previous.review_count>=0 ? '+' : ''}${last.review_count-previous.review_count}` : ''}</p>` :
-      message('Aún no hay un corte para esta ubicación.');
+    const pending=loc.reviews.filter(r=>r.status==='PENDING'||r.status==='DRAFT').length;
+    const change=previous&&last?last.review_count-previous.review_count:null;
+    const view=last?`<dl class="map-summary"><div><dt>Calificación registrada</dt><dd>${last.rating_hundredths===null?'Sin calificación':(last.rating_hundredths/100).toFixed(2)+' / 5'}</dd></div>
+      <div><dt>Reseñas registradas</dt><dd>${number(last.review_count)} ${change!==null?'<small>Cambio '+(change>=0?'+':'')+number(change)+'</small>':''}</dd></div>
+      <div><dt>Respuestas pendientes en la lista</dt><dd>${number(pending)}</dd></div></dl>`:message('Aún no hay un corte para esta ubicación.');
     const cuts = table(['Fecha de corte','Calificación','Reseñas','Observaciones'],loc.cuts.map(row=>[
       esc(timestamp(row.observed_at)),row.rating_hundredths===null ? '—' : (row.rating_hundredths/100).toFixed(2),
       number(row.review_count),esc(row.notes),
