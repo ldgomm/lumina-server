@@ -69,6 +69,12 @@ try {
    }
   }
   await page.goto(w.origin+'/wallet');assert.equal(new URL(page.url()).pathname,'/plans/wallet');
+  assert.equal(await page.getByRole('button',{name:'Elegir plan mensual'}).isVisible(),true);
+  assert.equal(await page.getByRole('button',{name:'Elegir plan anual'}).isVisible(),true);
+  await page.getByRole('link',{name:'Wallet con otros servicios'}).click();
+  assert.equal(await page.getByRole('heading',{name:'Wallet con Contenido'}).isVisible(),true);
+  await page.getByRole('link',{name:'Solo Wallet',exact:true}).click();
+  await page.getByText('Otras ofertas de Wallet',{exact:true}).click();
   await page.getByRole('article').filter({has:page.getByRole('heading',{name:'Wallet de mi negocio',exact:true})}).getByRole('button',{name:'Elegir este plan'}).click();
   await page.getByRole('button',{name:'Aceptar y activar Wallet',exact:true}).waitFor();
   assert.match(await page.locator('body').innerText(),/13,75/);
@@ -80,7 +86,9 @@ try {
    if(output)await page.screenshot({path:resolve(output,`wallet-review-${javaScriptEnabled}-${width}.png`),fullPage:true});
   }
   await confirmation.check();await page.getByRole('button',{name:'Aceptar y activar Wallet',exact:true}).click();
-  await page.waitForURL(w.origin+'/wallet');
+  await page.getByRole('heading',{name:'Suscripción confirmada',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Aceptar y activar Wallet',exact:true}).count(),0);
+  await page.getByRole('link',{name:'Abrir Wallet',exact:true}).click();await page.waitForURL(w.origin+'/wallet');
   assert.equal(await page.getByRole('link',{name:'Volver a Lúmina',exact:true}).count(),1);
   assert.equal(await page.locator('main#app').count(),1);
   const company=w.db.get('SELECT company_id FROM accounts WHERE document=?',document);
@@ -96,12 +104,17 @@ try {
   const existing=page.locator('[data-package]').filter({has:page.getByRole('heading',{name:'Wallet de mi negocio',exact:true})});
   assert.equal(await existing.locator('[data-package-quantity]').count(),0);
   await page.goto(w.origin+'/plans/wallet');
+  assert.equal(await page.locator('#planes-wallet').getAttribute('open'),null);
+  await page.getByText('Comparar y cambiar de plan',{exact:true}).click();
   const annual=page.getByRole('article').filter({has:page.getByRole('heading',{name:'Wallet anual',exact:true})});
   await annual.getByRole('button',{name:'Cambiar a anual'}).click();
   await page.getByLabel('Revisé los servicios, precios, fechas y condiciones de esta propuesta.',{exact:true}).check();
   await page.getByRole('button',{name:'Confirmar para el próximo período'}).click();
-  await page.waitForURL(w.origin+'/plans/wallet');
+  await page.getByRole('heading',{name:'Tu cambio está programado'}).waitFor();
+  await page.getByRole('link',{name:'Ver mi suscripción',exact:true}).click();await page.waitForURL(w.origin+'/plans/wallet');
+  await page.getByText('Comparar y cambiar de plan',{exact:true}).click();
   assert.match(await annual.innerText(),/Cambio programado/);
+  assert.equal(await annual.getByRole('button').count(),0);
   await context.close();
  }
  assert.deepEqual(errors,[]);

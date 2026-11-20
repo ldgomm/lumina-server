@@ -1,7 +1,7 @@
 import { checkRevision } from '../shared/revision.mjs';
 import { attachCampaign, offerAvailable } from '../campaigns/season.mjs';
 import { checkSelection } from './coverage.mjs';
-import { dirtyCalendar, inTrial, standardFor, standardIds, standards, trialOffer, walletLine } from './trial.mjs';
+import { dirtyCalendar, inTrial, paidFrom, standardFor, standardIds, standards, trialOffer, walletLine } from './trial.mjs';
 import { stopSchedule } from './calendar.mjs';
 import { normalizeOffer } from './offers.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
@@ -87,9 +87,13 @@ export function hidePlan(db, actor, id) {
     }
   });
 }
-export function contractsFor(db, companyId) {
+export function contractsFor(db, companyId, {walletSince=null}={}) {
+  const walletFilter=walletSince?`AND c.cancelled_at IS NULL AND c.ends_before>?
+    AND coalesce(ws.consent_on,date(o.accepted_at,'-5 hours'),'')>=?
+    AND (p.wallet IN ('INCLUDED','GIFT') OR EXISTS(SELECT 1 FROM plan_items i WHERE i.plan_id=p.id AND i.service='WALLET'))`:'';
+  const params=walletSince?[companyId,walletSince,paidFrom]:[companyId];
   return db.all(`SELECT c.*,ws.consent_on,ws.other_minor,b.other_minor AS catalog_other_minor,ws.initial_branches,date(o.accepted_at,'-5 hours') AS accepted_on,ws.ends_before AS stop_on,ws.amount_minor AS monthly_minor,p.name,p.term,p.wallet,coalesce(b.months,1) months,s.year AS campaign_year,s.base_plan_id FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN package_order_lines l ON l.id=c.order_line_id LEFT JOIN package_orders o ON o.id=l.order_id LEFT JOIN wallet_schedules ws ON ws.id=c.schedule_id AND ws.company_id=c.company_id LEFT JOIN plan_billing b ON b.plan_id=p.id LEFT JOIN seasonal_offers s ON s.plan_id=p.id
-    WHERE c.company_id=? ORDER BY starts_on DESC,created_at DESC`,companyId).map(contract => ({
+    WHERE c.company_id=? ${walletFilter} ORDER BY starts_on DESC,created_at DESC`,...params).map(contract => ({
     ...contract,
     items: db.all(`SELECT i.service,i.quantity * ? AS quantity,
       (SELECT count(*) FROM pieces x WHERE x.company_id=? AND x.contract_id=? AND x.service=i.service AND x.status='DELIVERED') AS used,

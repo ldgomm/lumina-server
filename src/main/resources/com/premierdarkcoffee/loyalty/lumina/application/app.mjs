@@ -12,6 +12,7 @@ import { canonicalTarget, legacyRedirectAllowed } from '../shared/routes.mjs';
 import { serviceState, requireService, serviceCatalog, beginService, completeWalletActivation, finishWelcome, routeService } from '../businesses/services.mjs';
 import { serviceStatus } from '../businesses/service-status.mjs';
 import { businessStatusPage, collaboratorServicesPage } from '../presentation/pages/service-status-pages.mjs';
+import { walletHomeEntry, walletPaymentReminder, walletTrialReminder } from '../presentation/pages/wallet-reminders.mjs';
 import { welcomePage, servicesPage, inactiveServicePage } from '../presentation/pages/welcome-pages.mjs';
 import { businessWorkSummary } from '../businesses/work-summary.mjs';
 import { businessDirectory } from '../businesses/directory.mjs';
@@ -25,6 +26,7 @@ import { campaignPage, campaignBanner } from '../presentation/pages/campaign-pag
 import { campaignBases, createCampaignOffer } from '../campaigns/offers.mjs';
 import { legalProfile, saveLegalProfile } from '../billing/subscription.mjs';
 import { subscriptionPage, legalProfilePage } from '../presentation/pages/subscription-pages.mjs';
+import { openWalletOrders, walletPlanContext } from '../memberships/wallet-overview.mjs';
 import { walletCheckoutPage } from '../presentation/pages/wallet-checkout-pages.mjs';
 import { inTrial, paidFrom, paidWallet, setChoice, standardIds, trialChoice, trialOffer } from '../memberships/trial.mjs';
 import { advanceCalendar, stopSchedule, syncCalendars, expiryAlerts } from '../memberships/calendar.mjs';
@@ -159,9 +161,6 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
     const render = (view,status=200) => {
       if(actor?.kind==='OWNER' && (path==='/home' || path==='/content' || path==='/services/web' || path==='/billing')){
         const alerts=expiryAlerts(db,actor.company_id);
-        const choice=path==='/home'&&!inTrial()?trialChoice(db,actor.company_id):null;
-        if(choice?.enabled && !choice.declined && !paidWallet(db,actor.company_id) && !db.get("SELECT 1 FROM wallet_schedules WHERE company_id=? AND consent_on IS NOT NULL AND starts_on>? AND (ends_before IS NULL OR ends_before>starts_on)",actor.company_id,localDay()))
-          view={...view,body:'<aside class="notice" role="status"><strong>¿Quieres continuar con Wallet?</strong> Elige un plan mensual o anual para activar tus tarjetas. '+localLink('/plans/wallet','Elegir mi plan')+'</aside>'+view.body};
         if(alerts.length)view={...view,body:alerts.map(a=>`<aside class="notice" role="status"><strong>${esc(a.name)}</strong> · Vigente hasta el ${esc(inclusiveEnd(a.ends_before))}. Por favor, realiza el pago para renovar. ${localLink('/plans?view=agreements','Ver mi suscripción')}</aside>`).join('')+view.body};
       }
       const businessState=company?.id?operationState(db,company.id):actor?.businessState;
@@ -301,7 +300,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         try { await wallets.validate(actor); }
         catch(issue) {
           if(!(issue instanceof Problem))throw issue;
-          if(issue.status===423)return render({title:'Wallet suspendida',body:card('Wallet suspendida',actor.kind==='OWNER'?'<p>Revisa el pago pendiente y su fecha límite. Tus tarjetas se reactivan cuando Lúmina registra el pago completo.</p>'+localLink('/billing?view=charges','Ver cargos pendientes','btn'):'<p>Comunícate con el dueño del negocio para revisar la suscripción.</p>')},423);
+          if(issue.status===423)return render({title:'Wallet suspendida',body:card('Wallet suspendida',actor.kind==='OWNER'?'<p>Consulta el estado de tu suscripción y los cargos de Wallet que requieren atención.</p>'+localLink('/plans/wallet','Revisar mi suscripción','btn'):'<p>Comunícate con el dueño del negocio para revisar la suscripción.</p>')},423);
           const blocked=actor.kind==='OWNER'?db.all("SELECT w.account_id,a.name,a.revision FROM wallet_access w JOIN accounts a ON a.id=w.account_id WHERE w.company_id=? AND w.status='BLOCKED' AND a.active=1 AND a.kind IN ('OWNER','COLLABORATOR')",company.id):[];
           return render({title:'Abrir Wallet',body:walletPage({actor,company,error:issue.status>=500?'Wallet no está disponible en este momento. Tu cuenta y tus tarjetas se conservan. Vuelve a intentarlo en unos minutos.':issue.message,blocked})},issue.status);
         }
@@ -415,7 +414,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         beginService(db,actor,data.service);
         return redirect(res,data.service==='WALLET'?'/plans/wallet':serviceCatalog[data.service].path);
       }
-      if(path==='/wallet/benefits'&&method==='GET')return render({title:'Lúmina Wallet',body:walletComparison()});
+      if(path==='/wallet/benefits'&&method==='GET')return render({title:'Lúmina Wallet',body:walletComparison(actor)});
+      if(path==='/help'&&method==='GET'&&target.searchParams.get('topic')==='payment'){
+        requireOwner(actor);
+        const provider=legalProfile(db);
+        const contact=provider ? `<div class="actions"><a class="btn" href="mailto:${esc(provider.email)}?subject=Consulta%20de%20pago">Escribir a Lúmina</a><a class="btn secondary" href="tel:${esc(provider.phone.replace(/[^+0-9]/g,''))}">Llamar a Lúmina</a></div>`
+          : '<p>Comunícate con la persona de Lúmina que atiende tu negocio.</p>';
+        return render({title:'Consultar mi pago',body:card('¿Ya realizaste el pago?','<p>Indica el nombre de tu negocio, el importe, la fecha y la referencia del pago. Cuando Lúmina lo registre podrás consultar el comprobante en tu cuenta.</p>'+contact)+localLink('/billing?view=charges','Volver a mis cargos')});
+      }
       if(path==='/help'&&method==='GET') {
         const provider=legalProfile(db);
         return render({title:'Ayuda de Lúmina',body:card('Soporte prioritario de Wallet',`<p>Indica el negocio, la sucursal y qué operación necesitas resolver. Damos prioridad a incidencias que impiden registrar compras o canjear.</p>${provider?`<div class="actions"><a class="btn" href="mailto:${esc(provider.email)}?subject=Soporte%20Wallet">${esc(provider.email)}</a><a class="btn secondary" href="tel:${esc(provider.phone.replace(/[^+0-9]/g,''))}">${esc(provider.phone)}</a></div>`:'<p>El contacto de Lúmina está pendiente de configuración.</p>'}<p class="muted">No compartas contraseñas ni datos completos de clientes.</p>`)});
@@ -423,7 +429,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       const billingView=()=>{
         const offset=Number(target.searchParams.get('offset')||0);
         const view=target.searchParams.get('view')||(offset?'charges':'overview');
-        requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000&&['overview','charges','payments'].includes(view),'Página inválida.');
+        requireThat(Number.isSafeInteger(offset)&&offset>=0&&offset<=1_000_000&&(['overview','charges','payments'].includes(view)||view==='wallet'&&actor.kind==='AGENCY'),'Página inválida.');
         return {offset:view==='overview'?0:offset,view};
       };
       const paymentReceipt=path.match(/^\/(billing|admin\/businesses\/([0-9a-f-]{36}))\/payments\/([0-9a-f-]{36})(\.txt)?$/i);
@@ -445,7 +451,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         let account;
         try{account=company.loyalty_tenant?await wallets.account(actor,offset):emptyAccount(company,localDay());}
         catch(error){if(!(error instanceof Problem))throw error;return render({title:'Mi cuenta y pagos',body:card('Saldo no disponible','<p>No pudimos consultar los cargos y pagos. Tus registros se conservan.</p>'+localLink('/billing','Reintentar','btn secondary'))+contractSummary(contracts,localDay())},503);}
-        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,account,'/billing','',{},{view,contracts})});
+        return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,account,'/billing','',{},{view,contracts,trial:inTrial()?trialChoice(db,company.id):null})});
       }
       const administrationTeam=path.match(/^\/admin\/businesses\/([0-9a-f-]{36})\/team(?:\/|$)/i);
       if(administrationTeam) {
@@ -462,7 +468,10 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const view=async(status=200)=>{
           company=companyFor(db,actor,company.id);
           let account=company.loyalty_tenant?null:emptyAccount(company,localDay());if(company.loyalty_tenant)try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
-          return render({title:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id),account,issueText,data||{},{work:businessWorkSummary(db,actor,company.id),serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:contractsFor(db,company.id),view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',delete:'Negocio eliminado. Su historial se conserva.',restore:'Negocio restaurado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
+          const walletOnly=panel.view==='wallet';
+          const commands=walletOnly?[]:db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id);
+          const details=walletOnly?{}:{work:businessWorkSummary(db,actor,company.id),serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:contractsFor(db,company.id)};
+          return render({title:walletOnly?'Cobros de Wallet · '+company.name:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),commands,account,issueText,data||{},{...details,view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',delete:'Negocio eliminado. Su historial se conserva.',restore:'Negocio restaurado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
         };
         if(method==='POST')try {
           let savedPayment=null;
@@ -478,7 +487,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           else throw new Problem('Acción no encontrada.',404);
           if(['payment','reverse','charge','void'].includes(administration[2])&&!db.get("SELECT seq FROM audit WHERE subject='BILLING' AND subject_id=? AND company_id=?",data.requestKey,company.id))event(db,actor,company.id,'BILLING',data.requestKey,'CUENTA_'+({payment:'PAGO',reverse:'REVERTIR',charge:'CARGO',void:'ANULAR'}[administration[2]]),JSON.stringify({invoice:data.invoiceId||null,payment:data.paymentId||null,reference:data.reference||null,reason:data.reason||null}),'WALLET');
           return redirect(res,savedPayment?base+'/payments/'+savedPayment.id:base+'?'+new URLSearchParams({view:administration[2]==='reverse'?'payments':['charge','void'].includes(administration[2])?'charges':'overview',saved:administration[2]}));
-        }catch(issue){if(!(issue instanceof Problem))throw issue;issueText=issue.message;panel.view=['payment','charge','void'].includes(administration[2])?'charges':administration[2]==='reverse'?'payments':panel.view;return view(issue.status);}
+        }catch(issue){if(!(issue instanceof Problem))throw issue;issueText=issue.message;if(panel.view!=='wallet')panel.view=['payment','charge','void'].includes(administration[2])?'charges':administration[2]==='reverse'?'payments':panel.view;return view(issue.status);}
         requireThat(!administration[2],'Página no encontrada.',404);
         company=companyFor(db,actor,company.id);
         return view();
@@ -489,6 +498,15 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         try{saveLegalProfile(db,actor,data);return redirect(res,'/account');}
         catch(issue){if(!(issue instanceof Problem))throw issue;return render({title:'Revisa los datos',body:legalProfilePage(actor,data,issue.message)},issue.status);}
       }
+      const showWalletPlans=(context=null,selectionError='',status=200)=>{
+        if(inTrial())return render({title:'Mi suscripción de Wallet',body:walletCheckoutPage({actor,company,trial:trialChoice(db,company.id),error:selectionError,
+          pending:Boolean(db.get('SELECT 1 FROM wallet_calendar_sync WHERE company_id=? AND sent<revision',company.id))})},status);
+        const {account}=context;
+        const filter=['wallet','packages'].includes(target.searchParams.get('offers'))?target.searchParams.get('offers'):'all';
+        const plans=withEligibility(db,company.id,listPlans(db),account?.membership);
+        const orders=openWalletOrders(db,company.id);
+        return render({title:'Mi suscripción de Wallet',body:walletCheckoutPage({actor,company,...context,plans,orders,filter,selectionError})},status);
+      };
       if(path.startsWith('/plans/wallet')) {
         requireOwner(actor);company=companyFor(db,actor);
         if(path==='/plans/wallet/choice' && method==='POST'){
@@ -509,7 +527,9 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         }
         if(path==='/plans/wallet/stop'&&method==='POST') {
           requireThat(data.confirm==='yes','Confirma que deseas detener la renovación.');
-          db.transaction(()=>{stopSchedule(db,company.id,data.schedule,localDay());event(db,actor,company.id,'CONTRACT',data.schedule,'RENOVACIÓN_DETENIDA','Solicitud del dueño.');});
+          db.transaction(()=>{
+            if(stopSchedule(db,company.id,data.schedule,localDay()))event(db,actor,company.id,'CONTRACT',data.schedule,'RENOVACIÓN_DETENIDA','Solicitud del dueño.');
+          });
           await syncCalendars(db,wallets.controlRemote);
           return redirect(res,'/plans/wallet');
         }
@@ -557,25 +577,17 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         requireThat(['/plans/wallet','/plans/wallet/state'].includes(path),'Página no encontrada.',404);
         if(inTrial()){
           const trial=trialChoice(db,company.id);
-          if(path==='/plans/wallet/state')return json(res,200,{active:trial.enabled,kind:'TRIAL',description:trial.enabled?'Prueba gratuita hasta el 31 de diciembre':'Prueba gratuita disponible'});
-          return render({title:'Mi suscripción de Wallet',body:walletCheckoutPage({actor,company,trial,pending:Boolean(db.get('SELECT 1 FROM wallet_calendar_sync WHERE company_id=? AND sent<revision',company.id))})});
+          if(path==='/plans/wallet/state')return json(res,200,{active:trial.enabled,kind:'TRIAL',reminder:walletTrialReminder(trial.enabled),description:trial.enabled?'Prueba gratuita hasta el 31 de diciembre':'Prueba gratuita disponible'});
+          return showWalletPlans();
         }
-        const all=contractsFor(db,company.id).filter(c=>!c.cancelled_at&&(c.consent_on||c.accepted_on||'')>=paidFrom&&c.items.some(i=>i.service==='WALLET'));
-        const contracts=all.filter(c=>c.starts_on<=localDay()&&c.ends_before>localDay());
-        const booked=all.filter(c=>c.starts_on>localDay());
-        let active=serviceState(db,company.id,'WALLET')==='ACTIVE',legacy=false,error='',account=null;
-        if(company.loyalty_tenant)try {
-          account=await wallets.account(actor);
-          const plan=account.membership?.plan;
-          legacy=!contracts.length && Boolean(plan?.walletAgreement?.activationOn>=paidFrom&&(plan.recurring||!plan.walletEndsOn||plan.walletEndsOn>localDay()));
-          if(account.access?.effectiveState==='SUSPENDED')active=false;
-        } catch(issue){if(!(issue instanceof Problem))throw issue;error='No pudimos consultar el saldo de Wallet. Puedes volver a intentarlo.';}
-        if(path==='/plans/wallet/state')return json(res,200,{active,kind:contracts.length?'CATALOG':legacy?'LEGACY':'NONE',description:account?.access?.overdueSuspension?'Wallet suspendida por pago pendiente':contracts.length?'Wallet incluida en '+contracts.map(c=>c.name).join(', '):active?'Wallet activa':legacy?'Tu acuerdo anterior se conserva.':'Elige una oferta publicada para activar Wallet.'});
-        const orders=ordersFor(db,actor,company);
-        orders.rows=orders.rows.map(o=>{const full=getOrder(db,actor,company,o.id);return {...o,wallet:includesWallet(full),names:full.lines.map(l=>l.name).join(' + ')};});
-        const filter=['wallet','packages'].includes(target.searchParams.get('offers'))?target.searchParams.get('offers'):'all';
-        const pending=Boolean(db.get('SELECT 1 FROM wallet_calendar_sync WHERE company_id=? AND sent<revision',company.id));
-        return render({title:'Mi suscripción de Wallet',body:walletCheckoutPage({actor,company,plans:withEligibility(db,company.id,listPlans(db),account?.membership),contracts,orders,active,legacy,error,filter,booked,account,pending})});
+        const context=await walletPlanContext(db,wallets,actor,company);
+        const {contracts,booked,active,legacy,error,account,pending}=context;
+        if(path==='/plans/wallet/state') {
+          const reminder=walletPaymentReminder(account);
+          const description=account?.access?.overdueSuspension?reminder.title:contracts.length?'Wallet incluida en '+contracts.map(c=>c.name).join(', '):active?'Wallet activa':legacy?'Tu acuerdo anterior se conserva.':'Elige un plan para activar Wallet.';
+          return json(res,200,{active,reminder,kind:contracts.length?'CATALOG':legacy?'LEGACY':'NONE',description});
+        }
+        return showWalletPlans(context);
       }
       if (['/wallet/connect','/wallet/disconnect','/team/loyalty/link','/wallet/link'].includes(path))throw new Problem('El acceso ahora usa tu cuenta de Lúmina. Abre Fidelización digital.',410);
       if(path==='/wallet/access'&&method==='GET') {
@@ -732,7 +744,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
         const courtesy = actor.kind==='OWNER' ? db.get("SELECT id,status FROM requests WHERE company_id=? AND type='COURTESY'",company.id) : null;
         return render({title:actor.kind==='AGENCY'?'Información del negocio':'Panel de trabajo',description:'Servicios y actividades del negocio.',
-          body:(actor.kind==='OWNER'?campaignBanner(listPlans(db),url):'')+homePage({actor,company,url,groups,upcoming,courtesy,cash,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
+          body:(actor.kind==='OWNER'?campaignBanner(listPlans(db),url):'')+homePage({actor,company,url,groups,upcoming,courtesy,cash,walletEntry:actor.kind==='OWNER'?walletHomeEntry(db,company):null,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
             videoRequested:videos.reduce((sum,row)=>sum+row.quantity,0),videoDelivered:videos.reduce((sum,row)=>sum+row.delivered,0)})});
       }
       if (path==='/businesses/verify' && method==='POST') {
@@ -872,7 +884,12 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
             const id=submitOrder(db,actor,company,data,walletNotBefore);
             return redirect(res,url('/plans/orders/'+id));
           }catch(issue){
-            if(!(issue instanceof Problem)||![400,409].includes(issue.status)||actor.kind!=='OWNER'||data.renewal)throw issue;
+            if(!(issue instanceof Problem)||actor?.kind!=='OWNER'||data.renewal)throw issue;
+            if(data.source==='wallet' && [400,409,502,503].includes(issue.status)){
+              const context=inTrial()?null:await walletPlanContext(db,wallets,actor,company);
+              return showWalletPlans(context,issue.message,issue.status);
+            }
+            if(![400,409].includes(issue.status))throw issue;
             return render({title:'Revisa tu selección',body:packagesPage({actor,company,url,plans:withEligibility(db,company.id,listPlans(db).map(p=>trialOffer(p)).filter(Boolean)),contracts:contractsFor(db,company.id),orders:{rows:[],page:0,more:false},view:'catalog',values:data,error:issue.message})},issue.status);
           }
         }
@@ -882,8 +899,21 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           const order=getOrder(db,actor,company,id);
           const currentBranches=async()=>order.lines.some(l=>standardIds.includes(l.plan_id))&&['REQUESTED','QUOTED'].includes(order.status)&&company.loyalty_tenant?
             (actor.kind==='AGENCY'?await wallets.administration(actor,company.id,'account'):await wallets.account(actor)).branchCount||1:order.initial_branches||1;
-          if(method==='GET'&&!action)return render({title:order.lines.length===1&&standardIds.includes(order.lines[0].plan_id)?'Mi plan de Wallet':'Tu combinación de servicios',description:company.name,
-            body:orderPage({actor,company,url,order:walletCheckout(db,order,await currentBranches())||order,audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})});
+          if(method==='GET'&&!action){
+            let walletAvailable=false,walletScheduled=false;
+            if(actor.kind==='OWNER' && order.status==='ACTIVE' && includesWallet(order)){
+              const seed=db.all(`SELECT c.id,c.schedule_id,c.order_line_id FROM contracts c
+                JOIN package_order_lines l ON l.id=c.order_line_id WHERE c.company_id=? AND l.order_id=? AND c.cancelled_at IS NULL`,company.id,order.id);
+              if(seed.length){
+                const context=await walletPlanContext(db,wallets,actor,company);
+                const belongsToOrder=contract=>seed.some(initial=>initial.id===contract.id || initial.schedule_id && initial.schedule_id===contract.schedule_id);
+                walletScheduled=context.booked.some(belongsToOrder);
+                walletAvailable=!actor.businessBlocked && context.active && !context.error && !context.pending && context.contracts.some(belongsToOrder);
+              }
+            }
+            return render({title:order.lines.length===1&&includesWallet(order)?'Mi plan de Wallet':'Tu combinación de servicios',
+            body:orderPage({actor,company,url,walletAvailable,walletScheduled,order:walletCheckout(db,order,await currentBranches())||order,audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})});
+          }
           if(method==='POST'&&action) {
             try {
               await commercialTurn(company.id,async()=>{
@@ -919,11 +949,19 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
                 ({quote:offerOrder,accept:acceptOrder,activate:activateOrder,cancel:cancelOrder})[action](db,actor,company,id,data);
                 if(action==='activate')advanceCalendar(db);
               });
-              return redirect(res,action==='accept'&&actor.kind==='OWNER'&&includesWallet(order)?(order.start_when==='NEXT_MONTH'?'/plans/wallet':'/wallet'):url('/plans/orders/'+id));
+              if(actor.kind==='OWNER'&&includesWallet(order)){
+                if(action==='cancel'&&data.source==='wallet')return redirect(res,'/plans/wallet');
+                if(action==='accept'){
+                  const pendingSync=db.get('SELECT 1 FROM wallet_calendar_sync WHERE company_id=? AND sent<revision',company.id);
+                  if(pendingSync)return redirect(res,'/plans/wallet');
+                  if(data.source!=='wallet')return redirect(res,order.start_when==='NEXT_MONTH'?'/plans/wallet':'/wallet');
+                }
+              }
+              return redirect(res,url('/plans/orders/'+id));
             } catch(issue) {
               if (!(issue instanceof Problem) || ![400,409,503].includes(issue.status)) throw issue;
               const refreshed=getOrder(db,actor,company,id);
-              return render({title:'Revisa tu propuesta',body:orderPage({actor,company,url,order:walletCheckout(db,refreshed,await currentBranches())||refreshed,
+              return render({title:refreshed.lines.length===1&&includesWallet(refreshed)?'Mi plan de Wallet':'Revisa tu propuesta',body:orderPage({actor,company,url,order:walletCheckout(db,refreshed,await currentBranches())||refreshed,
                 values:action==='quote'?data:{revision:data.revision},error:issue.message,
                 audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})},issue.status);
             }

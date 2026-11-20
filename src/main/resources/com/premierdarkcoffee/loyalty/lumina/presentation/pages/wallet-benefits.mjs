@@ -1,7 +1,7 @@
 import { inTrial } from '../../memberships/trial.mjs';
 import { card, esc, external, localLink, table } from './components.mjs';
 export function walletBenefits() {
- return card('Crece sin cobrar por cada cliente',`<div class="benefit-grid"><div><strong>Clientes ilimitados</strong><p>Sin tarifa por tarjeta ni por cliente registrado.</p></div><div><strong>Tu equipo, incluido</strong><p>Colaboradores sin cargo por usuario, con permisos y sucursal de trabajo.</p></div><div><strong>Apple y Google Wallet</strong><p>Registro por QR, sin instalar otra aplicación de fidelización.</p></div><div><strong>Tu marca y tus reglas</strong><p>Diseños, puntos, sellos, premios, promociones y cumpleaños.</p></div><div><strong>Control de tu negocio</strong><p>Compras, canjes, historial e informes. Una tarjeta por negocio funciona en sus sucursales.</p></div><div><strong>Soporte prioritario</strong><p>Atención de Lúmina desde Ayuda. Las incidencias de operación tienen prioridad.</p></div></div><p class="muted">Contenido, web, diseño y otros servicios se contratan por separado.</p>`);
+  return card('Qué incluye Wallet','<div class="benefit-grid"><div><strong>Tarjetas y clientes ilimitados</strong><p>Tus clientes escanean el QR y guardan su tarjeta en Apple Wallet o Google Wallet.</p></div><div><strong>Fidelización en caja</strong><p>Tu equipo registra compras y canjes. Los puntos, sellos y premios funcionan en las sucursales de tu negocio.</p></div><div><strong>Administración del negocio</strong><p>Configura las tarjetas, los permisos del equipo y las recompensas. Consulta el historial y los informes.</p></div></div>');
 }
 const competitors=[
  ['Loopy Loyalty','USD 25/mes o 250/año','Starter: 1 local, 3 accesos de personal; clientes ilimitados.','https://loopyloyalty.com/pricing/'],
@@ -13,6 +13,12 @@ const competitors=[
  ['FaveCard','Plan gratuito y planes de pago','Las funciones y condiciones dependen del plan. Consulta el precio vigente en su página.','https://www.favecard.co/en/pricing/'],
  ['Square Loyalty','Según mercado y plan','Integrado con el ecosistema Square; no se presupone disponibilidad comercial en Ecuador.','https://squareup.com/us/en/software/loyalty'],
 ];
-export function walletComparison() {
- return walletBenefits()+card('Una oferta para tu negocio',`<p>${inTrial()?'Activa la prueba gratuita hasta el 31 de diciembre de 2026. Desde enero podrás elegir si continúas.':'Elige mensual o anual y revisa el importe antes de confirmar.'}</p><details><summary>Comparar alternativas</summary><p>Revisión de páginas oficiales: 13-11-2026. Muestra de ocho alternativas; no es un catálogo exhaustivo. Precios, impuestos, países y funciones pueden diferir.</p>${table(['Servicio','Precio publicado','Qué comparar','Fuente'],competitors.map(([name,price,note,url])=>[esc(name),esc(price),esc(note),external(url,'Ver precios')]))}</details>`);
+export function walletComparison(actor) {
+  const trial=inTrial();
+  const decision=trial?'La prueba gratuita termina el 31 de diciembre de 2026. Desde enero, el dueño elige si desea continuar.':
+    'El dueño puede elegir una suscripción mensual o anual. Antes de confirmar verá el total y la fecha del primer cargo.';
+  const action=actor?.kind==='OWNER'&&!actor.businessBlocked?localLink('/plans/wallet',trial?'Ver mi prueba gratuita':'Ver mi suscripción','btn'):'';
+  return walletBenefits()+card('Tu suscripción','<p>'+decision+'</p>'+action)+
+    '<details class="disclosure"><summary>Comparar con otros servicios</summary><div><p>Precios consultados el 13 de noviembre de 2026. Revisa las condiciones actuales y la disponibilidad en cada país.</p>'+
+    table(['Servicio','Precio publicado','Qué comparar','Fuente'],competitors.map(([name,price,note,url])=>[esc(name),esc(price),esc(note),external(url,'Ver precios')]))+'</div></details>';
 }

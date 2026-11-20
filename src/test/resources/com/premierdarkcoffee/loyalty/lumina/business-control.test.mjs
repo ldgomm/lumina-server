@@ -6,15 +6,17 @@ import {fakeLoyalty} from './loyalty-fixture.mjs';
 import {businessControl,requestBusinessChange,createBusinessControlSync,requireOperating} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/businesses/control.mjs';
 import {paymentInput,chargeInput} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/billing/payment-input.mjs';
 const newId=randomUUID;
-async function world(t){
+async function world(t,{walletCharges=false}={}){
  const accesses=new Map(),replies=new Map(),calls=[],rows=new Map();let fail=false,drop=false;
  const state=id=>{if(!accesses.has(id))accesses.set(id,{state:'ACTIVE',version:1});return accesses.get(id);};
  const account=(id,offset=0)=>{
   if(!rows.has(id))rows.set(id,{invoice:newId(),payments:[],paid:0});const row=rows.get(id);
-  return {today:'2026-11-13',business:{id,name:'Negocio de prueba'},access:state(id),summary:{balanceMinor:5000-row.paid,overdueMinor:0,invoiceCount:101},membership:null,
+  const dueOn='2027-02-15',remaining=walletCharges?5000-row.paid:0;
+  return {today:walletCharges?'2027-02-16':'2026-11-13',business:{id,name:'Negocio de prueba'},access:state(id),summary:{balanceMinor:5000-row.paid,overdueMinor:0,invoiceCount:101},membership:null,
+   walletBilling:{balanceMinor:remaining,overdueMinor:remaining,nextCut:remaining?{invoiceId:row.invoice,remainingMinor:remaining,dueOn,invoiceCount:1}:null},
    invoices:[{id:row.invoice,description:'Servicio acordado',amountMinor:5000,paidMinor:row.paid,remainingMinor:5000-row.paid,dueOn:'2026-11-30',status:row.paid===5000?'PAID':row.paid?'PARTIAL':'OPEN'}],payments:row.payments,paymentCount:row.payments.length,offset};
  };
- const receipt=(id,payment)=>{const a=account(id),p=a.payments.find(p=>p.id===payment);return p?{body:{business:a.business,payment:p,invoice:a.invoices[0],today:a.today}}:{status:404,body:{message:'Pago no encontrado'}};};
+ const receipt=(id,payment)=>{const a=account(id),p=a.payments.find(p=>p.id===payment);return p?{body:{business:a.business,payment:p,invoice:a.invoices[0],today:a.today,allocations:p.walletCut?[{description:'Wallet enero',amountMinor:p.amountMinor}]:[]}}:{status:404,body:{message:'Pago no encontrado'}};};
  const loyalty=await fakeLoyalty(t,null,{receipt:async(company,id)=>receipt(company.id,id),account:async(company,url)=>account(company.id,Number(url.searchParams.get('offset')||0)),administration:async call=>{
   calls.push(call);const id=call.path.split('/')[4],operation=call.path.split('/')[5];
   if(fail)return {status:503,body:{message:'Sin conexión temporal'}};
@@ -43,7 +45,13 @@ async function world(t){
 }
 test('agency has an administration entry while owner and collaborator cannot administer businesses',async t=>{
  const w=await world(t);const member=await colleague(w,w.client,{name:'Persona',document:'1738277993',view:['WALLET']});
- assert.match((await w.admin.get('/businesses')).body,new RegExp(w.base));
+ const directory=await w.admin.get('/businesses');
+ assert.match(directory.body,new RegExp(w.base));assert.ok(directory.body.includes(w.base+'?view=wallet'));
+ const trial=await w.admin.get(w.base+'?view=wallet');
+ assert.equal(trial.status,200);assert.match(trial.body,/Sin cobros pendientes de Wallet/);assert.match(trial.body,/31 de diciembre de 2026/);
+ assert.doesNotMatch(trial.body,/name="invoiceId"|Eliminar negocio|Registrar un cargo acordado/);
+ assert.equal((await w.client.get('/billing?view=wallet')).status,400);
+ assert.equal((await w.client.get(w.base+'?view=wallet')).status,403);
  assert.equal((await w.admin.get(w.base)).status,200);
  for(const actor of [w.client,w.other.client,member.session]){assert.equal((await actor.get(w.base)).status,403);assert.equal((await actor.post(w.base+'/state',w.command())).status,403);}
  assert.equal(w.db.get('SELECT count(*) n FROM business_commands').n,0);
@@ -126,11 +134,21 @@ test('admin records payment and business reads the same ledger without mutation 
  assert.equal(w.rows.get(tenant).paid,499);assert.equal(w.db.get("SELECT actor_name FROM audit WHERE action='CUENTA_PAGO'").actor_name,'Equipo Lúmina');
 });
 test('payment retry is idempotent and validation error retains its reference and operation key',async t=>{
- const w=await world(t);await w.admin.get(w.base);
+ const w=await world(t,{walletCharges:true});
+ const dashboard=await w.admin.get(w.base+'?view=wallet');assert.equal(dashboard.status,200,dashboard.body);
+ assert.match(dashboard.body,/Pago vencido el/);assert.match(dashboard.body,/Registrar pago de/);
+ assert.match(dashboard.body,/name="walletCut" value="yes"/);assert.match(dashboard.body,/readonly value="50.00"/);
  const tenant=w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant,invoice=w.account(tenant).invoices[0].id;
- const data={confirm:'yes',requestKey:newId(),invoiceId:invoice,amount:'50',method:'TRANSFER',paidOn:'2026-11-13',reference:'REC-RETRY'};
- w.drop();assert.equal((await w.admin.post(w.base+'/payment',data)).status,503);
- assert.equal((await w.admin.post(w.base+'/payment',data)).status,303);assert.equal(w.rows.get(tenant).payments.length,1);
+ const requestKey=dashboard.body.match(/name="requestKey" value="([0-9a-f-]+)"/)[1];
+ const post=w.base+'/payment?view=wallet';
+ const data={confirm:'yes',requestKey,invoiceId:invoice,walletCut:'yes',amount:'50.00',method:'TRANSFER',paidOn:'2027-02-16',reference:'REC-RETRY'};
+ w.drop();const failure=await w.admin.post(post,data);assert.equal(failure.status,503);
+ assert.match(failure.body,/Comprobar el pago enviado/);assert.match(failure.body,/REC-RETRY/);
+ assert.equal(failure.body.match(/name="requestKey"/g).length,1);assert.ok(failure.body.includes(requestKey));
+ const replay=await w.admin.post(post,data);assert.equal(replay.status,303);assert.equal(w.rows.get(tenant).payments.length,1);
+ assert.match((await w.admin.get(replay.location)).body,/Volver a cobros de Wallet/);
+ const settled=await w.admin.get(w.base+'?view=wallet');assert.match(settled.body,/Sin cobros pendientes de Wallet/);
+ assert.doesNotMatch(settled.body,/name="invoiceId"/);
  const otherTenant=w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.other.id).loyalty_tenant;
  const bad={...data,invoiceId:w.account(otherTenant).invoices[0].id,requestKey:newId(),amount:'51',reference:'BORRADOR'};
  const result=await w.admin.post('/admin/businesses/'+w.other.id+'/payment',bad);assert.equal(result.status,409);

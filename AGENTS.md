@@ -9,7 +9,7 @@ For releases prepared on behalf of José Ruiz, use the repository maintainer ide
 - Deployment checkpoints use a persisted random run ID, scoped Compose project and image, private configuration under `.local-staging/checkpoints/`, and available loopback ports. Both Docker and gateway checks receive the same explicit context. Never adopt, delete or recreate another checkout's resources or its missing `.env`.
 - The persistent developer pilot keeps its existing `loyalty-staging` name and credentials. An isolated run with existing data but a missing private configuration must also fail closed. Checkpoint gateways never read pilot Wallet secrets or start external tunnels.
 - Stop only containers whose Compose project and source directory match the deployment context; validate all owners before stopping any. Preserve test volumes/configuration for retries. Production services and data remain unchanged on a failed checkpoint.
-- Current Python gate: 223 checks. Preserve all 518 portal tests, 312 native unit/HTTP tests, 352 PostgreSQL tests and Docker/gateway gates. Store the original failed staging report and advertise only logs that exist at the failed stage. Local Python success is not a full production PASS.
+- Current Python gate: 223 checks. Preserve all 522 portal tests, 312 native unit/HTTP tests, 352 PostgreSQL tests and Docker/gateway gates. Store the original failed staging report and advertise only logs that exist at the failed stage. Local Python success is not a full production PASS.
 
 ## Lúmina v075 — Git-based production deployment
 

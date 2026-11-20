@@ -113,7 +113,7 @@ test('two overlapping Wallet selections cannot create duplicate commercial agree
  const offers=(await w.client.get('/plans/wallet')).body;
  assert.match(offers,/Tu plan actual/);assert.match(offers,/Cambiar a anual/);
  const change=await selection(w,[annual],{start_when:'NEXT_MONTH'});
- assert.match(change.body,/Wallet anual/i);assert.equal((await w.client.post(change.path+'/accept',change.data)).status,303);
+ assert.match(change.body,/Wallet anual/i);assert.match(change.body,/Confirmar para el próximo período/);assert.equal((await w.client.post(change.path+'/accept',change.data)).status,303);
  const periods=w.db.all('SELECT * FROM wallet_schedules ORDER BY starts_on');
  assert.equal(periods.length,2);assert.equal(periods[0].ends_before,periods[1].starts_on);
  assert.equal((await w.client.post('/plans/request',{key:randomUUID(),start_when:'NEXT_MONTH',['qty_'+annual]:'1'})).status,409);
@@ -177,6 +177,8 @@ test('cancelling a scheduled replacement keeps the original plan and fee',async 
  assert.equal((await w.client.post(next.path+'/accept',next.data)).status,303);
  const current=w.db.get('SELECT * FROM wallet_schedules ORDER BY starts_on LIMIT 1'),future=w.db.get('SELECT * FROM wallet_schedules ORDER BY starts_on DESC LIMIT 1');
  assert.equal((await w.client.post('/plans/wallet/stop',{schedule:future.id,confirm:'yes'})).status,303);
+ assert.equal((await w.client.post('/plans/wallet/stop',{schedule:future.id,confirm:'yes'})).status,303);
+ assert.equal(w.db.get("SELECT count(*) AS n FROM audit WHERE subject_id=? AND action='RENOVACIÓN_DETENIDA'",future.id).n,1);
  assert.equal(w.db.get('SELECT ends_before FROM wallet_schedules WHERE id=?',current.id).ends_before,null);
  advanceCalendar(w.db,future.starts_on);
  assert.equal(w.db.get('SELECT count(*) n FROM contracts WHERE starts_on=? AND cancelled_at IS NULL AND plan_id=?',future.starts_on,current.plan_id).n,1);
@@ -234,6 +236,9 @@ test('standard Wallet freezes the reviewed branch count and charges the displaye
  t.mock.timers.setTime(Date.parse('2027-01-01T05:01:00Z'));
  const rate=await plan(w,{price:'4.99',name:'Lealtad'}),o=await selection(w,[rate]);
  assert.match(o.body,/9,98/);assert.match(o.body,/2 sucursales/);
+ assert.match(o.body,/Pagar hasta el<\/dt><dd>15 de febrero de 2027/);
+ assert.match(o.body,/Se registra el<\/dt><dd>1 de febrero de 2027/);
+ assert.match(o.body,/Precio mensual del negocio<\/dt><dd>[^<]*9,98/);
  branches=3;
  assert.equal((await w.client.post(o.path+'/accept',o.data)).status,409);
  const updated=await w.client.get(o.path);
@@ -266,4 +271,45 @@ test('archived trial requests stay readable and cannot reserve a paid period or 
  assert.doesNotMatch((await w.client.get('/plans?view=orders')).body,new RegExp(o.path));
  assert.match((await w.client.get('/plans?view=orders&history=trial')).body,new RegExp(o.path));
  const fresh=await selection(w,[p]);assert.equal((await w.client.post(fresh.path+'/accept',fresh.data)).status,303);
+});
+
+test('Wallet selections return to the subscription on conflicts and open an idempotent confirmation after acceptance',async t=>{
+  const w=await world(t);
+  const rate=await plan(w,{name:'Wallet mensual de prueba',price:'4.99'});
+  const first=await selection(w,[rate],{source:'wallet'});
+  const conflict=await w.client.post('/plans/request',{source:'wallet',key:randomUUID(),['qty_'+rate]:'1'});
+  assert.equal(conflict.status,409);
+  assert.match(conflict.body,/Mi suscripción de Wallet/);
+  assert.match(conflict.body,/role="alert"/);
+  assert.ok(conflict.body.includes(first.path));
+  assert.equal(count(w,'package_orders'),1);
+  for(let attempt=0;attempt<2;attempt++){
+    const result=await w.client.post(first.path+'/accept',{...first.data,source:'wallet'});
+    assert.equal(result.status,303,result.body);
+    assert.equal(result.location,first.path);
+  }
+  const confirmed=await w.client.get(first.path);
+  assert.equal(confirmed.status,200);
+  assert.ok(!confirmed.body.includes('action="'+first.path+'/accept"'));
+  assert.match(confirmed.body,/Abrir Wallet/);
+  assert.equal(count(w,'contracts'),1);
+  assert.equal(count(w,'wallet_schedules'),1);
+});
+
+test('a pending Wallet order stays visible after other business orders and can be discarded from the subscription',async t=>{
+  const w=await world(t),rate=await plan(w),wallet=await selection(w,[rate]);
+  const ownerId=w.db.get("SELECT id FROM accounts WHERE company_id=? AND kind='OWNER'",w.id).id;
+  for(let i=0;i<22;i++){
+    w.db.run(`INSERT INTO package_orders(id,company_id,submitted_by,submission_key,status,notes,created_at)
+      VALUES(?,?,?,?,'CANCELLED','','2027-01-23T14:00:00Z')`,randomUUID(),w.id,ownerId,randomUUID());
+  }
+  assert.ok(!(await w.client.get('/plans?view=orders')).body.includes(wallet.path));
+  const center=await w.client.get('/plans/wallet');
+  assert.equal(center.status,200);
+  assert.ok(center.body.includes(wallet.path));
+  const cancel=await w.client.post(wallet.path+'/cancel',{revision:wallet.data.revision,reason:'Prefiero decidir más adelante.',source:'wallet'});
+  assert.equal(cancel.status,303);
+  assert.equal(cancel.location,'/plans/wallet');
+  assert.ok(!(await w.client.get(cancel.location)).body.includes(wallet.path));
+  assert.equal(count(w,'contracts'),0);
 });

@@ -71,13 +71,14 @@ export function stopSchedule(db,company,schedule,day) {
   requireThat(row,'Suscripción no encontrada.',404);
   const current=db.get('SELECT ends_before FROM contracts WHERE schedule_id=? AND starts_on<=? AND ends_before>? AND cancelled_at IS NULL',row.id,day,day);
   const end=row.starts_on>day?row.starts_on:current?.ends_before||nextCut(day);
-  if(row.ends_before && row.ends_before<=end)return;
+  if(row.ends_before && row.ends_before<=end)return false;
   db.run('UPDATE wallet_schedules SET ends_before=? WHERE id=?',end,row.id);
   if(end===row.starts_on && row.replaces_id && row.starts_on>day){
     db.run('UPDATE wallet_schedules SET ends_before=? WHERE id=? AND company_id=? AND ends_before=?',row.prior_end,row.replaces_id,company,row.starts_on);
   }
   if(end===row.starts_on)db.run('UPDATE contracts SET cancelled_at=? WHERE schedule_id=? AND starts_on>=? AND cancelled_at IS NULL',now(),row.id,end);
   dirty(db,company);
+  return true;
 }
 export function queueServices(db,contract,day) {
   db.run('INSERT OR IGNORE INTO scheduled_services(contract_id,starts_on) VALUES(?,?)',contract,day);

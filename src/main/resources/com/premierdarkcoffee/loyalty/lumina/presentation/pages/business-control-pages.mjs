@@ -1,3 +1,4 @@
+import { walletCollections } from './wallet-collections.mjs';
 import { serviceImpact } from './service-status-pages.mjs';
 import { randomUUID } from 'node:crypto';
 import { businessStates } from '../../businesses/control.mjs';
@@ -20,6 +21,7 @@ export function businessWorkPanel(company, work) {
 
 export function controlPage(actor,company,control,commands,account,error='',values={},options={}) {
  const base='/admin/businesses/'+company.id;
+ if(options.view==='wallet' && actor.kind==='AGENCY')return walletCollections(actor,company,account,error,values,options);
  const editing=options.action==='state',pending=control.pending_id;
  const lifecycle=(action,title,copy)=>`<details class="control-state-editor"${options.action===action?' open':''}><summary>${title}</summary>${form(base+'/'+action,actor,hidden('revision',options.action===action?values.revision??control.revision:control.revision)+hidden('requestKey',options.action===action&&values.requestKey?values.requestKey:randomUUID())+`<p>${copy}</p>`+textarea('reason','Motivo','required minlength="5" maxlength="500" rows="2"',options.action===action?values.reason||'':'')+(action==='delete'?input('name','Escribe el nombre: '+company.name,'text','required autocomplete="off"',options.action===action?values.name||'':''):'')+check('confirm','Confirmo el cambio.',false,true)+button(title,action==='delete'?'danger':'secondary'))}</details>`;
  const target=commands.find(row=>row.id===pending)?.state;
@@ -29,7 +31,7 @@ export function controlPage(actor,company,control,commands,account,error='',valu
   CLOSED:'Se bloquean los servicios y se detienen los próximos cargos de Wallet. La deuda y el historial se conservan.',
   ACTIVE:'El negocio recupera el acceso después de confirmar el cambio. Conserva sus servicios y permisos anteriores. Una suscripción cancelada requiere aceptación del dueño.',
  };
- return `<div class="actions">${localLink('/businesses','← Negocios')}${localLink('/home?company='+company.id,'Consultar negocio')}${localLink(base+'/team','Equipo y permisos','btn secondary')}</div>
+ return `<div class="actions">${localLink('/businesses','← Negocios')}${localLink(base+'?view=wallet','Cobros de Wallet','btn secondary')}${localLink('/home?company='+company.id,'Consultar negocio')}${localLink(base+'/team','Equipo y permisos','btn secondary')}</div>
  <section class="card business-control"><div class="split"><div><p class="eyebrow">ADMINISTRACIÓN DEL NEGOCIO</p><h2>${esc(company.name)}</h2><p>${esc(company.phone)}</p>${company.ruc?`<p>RUC ${esc(company.ruc)} · <a href="https://srienlinea.sri.gob.ec/facturacion-internet/consultas/publico/ruc-datos1.jspa" target="_blank" rel="noopener noreferrer">Consultar en el SRI</a></p>`:''}</div>${badge(pending?'Cambio pendiente':control.archived_at?'Eliminado':businessStates[control.state],control.state==='ACTIVE'&&!pending?'success':'warning')}</div>
  ${options.notice?`<p class="notice" role="status">${esc(options.notice)}</p>`:''}${error?`<p role="alert" class="notice">${esc(error)}</p>`:''}
  ${control.reason?`<p><strong>Último motivo:</strong> ${esc(control.reason)}</p>`:''}

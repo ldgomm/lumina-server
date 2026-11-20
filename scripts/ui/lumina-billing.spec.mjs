@@ -68,7 +68,9 @@ try {
       await page.goto(world.origin + '/businesses');
       await page.getByLabel('Buscar negocio o contacto').fill('aurora'); await page.getByRole('button', { name: 'Buscar', exact: true }).click();
       assert.equal(await page.locator('.business-directory-row').count(), 1);
-      assert.equal(await page.getByRole('link', { name: 'Ver equipo', exact: true }).getAttribute('href'), '/teams?company=' + company.id);
+      const businessRow = page.locator('.business-directory-row');
+      assert.equal(await businessRow.getByRole('link', { name: 'Equipo y permisos', exact: true }).getAttribute('href'), base + '/team');
+      assert.equal(await businessRow.getByRole('link', { name: 'Cobros de Wallet', exact: true }).getAttribute('href'), base + '?view=wallet');
       await page.goto(world.origin + base + '?view=charges');
       const form = page.locator('.billing-action').first().locator('form');
       await page.locator('.billing-action').first().locator('summary').click();

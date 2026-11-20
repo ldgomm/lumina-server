@@ -351,6 +351,25 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         }
         obj("business" to business, "payment" to record, "invoice" to bill,"allocations" to allocations,"today" to date.toString())
     }
+    private fun walletBilling(c: Connection, tenant: String, date: LocalDate): JsonObject {
+        val cut = c.one("""
+            WITH cuts AS (
+                SELECT due_on, min(id::text) AS invoice_id, count(*) AS invoice_count,
+                       sum(amount_minor-paid_minor) AS remaining
+                FROM billing_invoices
+                WHERE tenant_id=? AND wallet_due AND voided_at IS NULL AND amount_minor>paid_minor
+                GROUP BY due_on
+            )
+            SELECT cuts.*, sum(remaining) OVER () AS balance,
+                   coalesce(sum(remaining) FILTER (WHERE due_on<?) OVER (),0) AS overdue
+            FROM cuts ORDER BY due_on LIMIT 1
+        """, tenant, Date.valueOf(date)) { rs ->
+            obj("balanceMinor" to rs.getLong("balance"), "overdueMinor" to rs.getLong("overdue"),
+                "nextCut" to obj("invoiceId" to rs.getString("invoice_id"), "invoiceCount" to rs.getLong("invoice_count"),
+                    "dueOn" to rs.getDate("due_on").toString(), "remainingMinor" to rs.getLong("remaining")))
+        }
+        return cut ?: obj("balanceMinor" to 0, "overdueMinor" to 0, "nextCut" to null)
+    }
     fun ownerAccount(s: Staff, offset: Int = 0): JsonObject { s.owner(); return account(s.tenant, s.id, offset) }
     fun account(tenant: String, staffId: String? = null, offset: Int = 0): JsonObject = db.tx { c ->
         need(offset in 0..1_000_000, "INVALID_PAGE", "Página inválida.")
@@ -364,6 +383,7 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
             obj("id" to it.getString("id"), "title" to it.getString("title"), "body" to it.getString("body"), "severity" to it.getString("severity"), "read" to (it.getTimestamp("read_at") != null), "createdAt" to it.instant("created_at"))
         }
         obj("business" to business, "today" to date.toString(), "access" to effective(c, tenant, access, date), "summary" to summary,
+            "walletBilling" to walletBilling(c, tenant, date),
             "branchCount" to c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){it.getInt(1)}, "nextWalletChargeOn" to nextWalletCharge(c,tenant,p),
             "membership" to p?.let { obj("version" to it.second, "plan" to json.encodeToJsonElement(it.first), "coveredUntil" to coveredUntil(it,date), "nextChargeOn" to (if(calendarPlan(c,tenant,it.first))nextWalletCharge(c,tenant,it) else it.third)?.toString(), "nextDueOn" to (if(calendarPlan(c,tenant,it.first))nextWalletCharge(c,tenant,it)?.withDayOfMonth(15) else it.third.plusDays(it.first.dueDays.toLong()))?.toString(), "branchMonthlyMinor" to if(it.first.walletAgreement!=null)Math.multiplyExact(it.first.feeMinor,c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){r->r.getLong(1)}!!)else null) },
             "invoices" to c.rows("""SELECT i.*,sum(CASE WHEN wallet_due AND voided_at IS NULL THEN amount_minor-paid_minor ELSE 0 END)

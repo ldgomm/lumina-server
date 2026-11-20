@@ -34,6 +34,23 @@ test('wallet monthly and annual totals show exact per-branch calculation and one
    const page=accountPage(actor,{...base,today:'2027-01-22',membership});
    assert.match(page,/3 sucursales/);assert.match(page,new RegExp('/ '+word));assert.doesNotMatch(page,/Prueba gratuita hasta/);assert.doesNotMatch(page,/cobro bancario automático/);
  }
+ const next={today:'2027-01-22',summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0};
+ const scheduled={name:'Fidelidad anual',items:[{service:'WALLET',quantity:1,used:0,reserved:0}],wallet:'INCLUDED',agreed_minor:5000,consent_on:'2027-01-22',starts_on:'2027-02-01',ends_before:'2028-02-01',schedule_id:'planned',months:12,term:'MONTHLY'};
+ const booked=accountPage(actor,next,'/billing','',{},{contracts:[scheduled]});
+ assert.match(booked,/Fidelidad anual<\/strong> comienza el/);assert.doesNotMatch(booked,/La siguiente renovación se acuerda/);
+ assert.doesNotMatch(booked,/Entregados: 0/);
+ const balance={...next,today:'2027-02-16',access:{overdueSuspension:true},walletBilling:{overdueMinor:499,nextCut:{invoiceId:'offpage',dueOn:'2027-02-15',remainingMinor:499,invoiceCount:2}},summary:{balanceMinor:20499,overdueMinor:10000,invoiceCount:2},invoices:[
+   {id:'other',description:'Otro servicio',dueOn:'2027-02-18',amountMinor:20000,paidMinor:0,remainingMinor:20000,status:'OPEN'},
+   {id:'wallet',description:'Tarjetas de enero',walletDue:true,periodStart:'2027-01-22',periodEnd:'2027-02-01',dueOn:'2027-02-15',amountMinor:499,paidMinor:0,remainingMinor:499,status:'OVERDUE'}]};
+ const charges=accountPage(actor,balance,'/billing','',{},{view:'charges'});
+ const focused=charges.match(/id="pago-wallet"[^>]*>([\s\S]*?)<\/section>/)[1];
+ assert.match(focused,/Importe para este vencimiento[^<]*<\/span><strong>[^<]*4[.,]99/);assert.match(focused,/15 feb 2027/);assert.doesNotMatch(focused,/204[.,]99/);assert.match(charges,/href="\/help\?topic=payment"/);
+ assert.ok(charges.indexOf('Tarjetas de enero')<charges.indexOf('Otro servicio'));
+ assert.match(charges,/Período del 22 ene 2027 al 31 ene 2027/);
+ const offPage=accountPage(actor,{...balance,offset:100,invoices:[balance.invoices[0]]},'/billing','',{},{view:'charges'});
+ assert.ok(offPage.includes(focused));assert.doesNotMatch(offPage,/Tarjetas de enero/);
+ const unknownDebt=accountPage(actor,{...balance,walletBilling:{balanceMinor:0,overdueMinor:0,nextCut:null}},'/billing','',{},{view:'charges'});
+ assert.match(unknownDebt,/Revisa el acceso a Wallet/);assert.doesNotMatch(unknownDebt,/Saldo vencido de Wallet/);
 });
 test('a failed Wallet account lookup never presents a false zero balance',async t=>{
  const native=await fakeLoyalty(t);

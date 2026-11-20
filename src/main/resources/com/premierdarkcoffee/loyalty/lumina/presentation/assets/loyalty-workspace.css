@@ -2,3 +2,9 @@
 .lumina-loyalty .wallet-section-link{display:flex;align-items:center;min-height:48px;padding:12px 14px;color:#cad7e7;font-size:14px;font-weight:600;text-decoration:none;border-radius:9px}.lumina-loyalty .wallet-section-link:hover,.lumina-loyalty .wallet-section-link:focus-visible{background:#203e61;color:#fff}.cash-operations{font-size:14px;color:#365571;margin:-12px 0 24px}.lumina-cashier .workspace-heading h1{font-size:clamp(26px,3vw,38px)}
 
 .lumina-loyalty>header .wallet-account{color:#fff;text-decoration:none;font-size:14px;font-weight:600;border:1px solid #ffffff40;padding:10px 14px;border-radius:10px;margin-left:auto;white-space:nowrap}.lumina-loyalty>header .wallet-account:focus-visible{outline:3px solid #a4c6f3;outline-offset:3px}@media(max-width:520px){.lumina-loyalty>header{flex-wrap:wrap}.lumina-loyalty>header .brand{margin-right:auto}.lumina-loyalty>header .wallet-account{margin-left:0}}
+
+.lumina-loyalty .loyalty-breadcrumb .wallet-plan-link { margin-inline-start:auto; font-weight:650; padding:4px 0; text-decoration:underline; text-underline-offset:3px }
+.lumina-loyalty [data-wallet-reminder][hidden] { display:none }
+.lumina-loyalty aside[data-wallet-reminder]:not([hidden]) { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; max-width:1200px; padding:14px 18px }
+.lumina-loyalty aside[data-wallet-reminder] p { flex:1 1 220px; margin:0; color:inherit }
+.lumina-loyalty aside[data-wallet-reminder][data-urgency="payment"], .lumina-loyalty aside[data-wallet-reminder][data-urgency="overdue"] { background:#fff4df; border-color:#e4c88f; color:#5b3e0b }

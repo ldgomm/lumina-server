@@ -71,3 +71,43 @@ test('setup keeps the public layout and closes after agency registration',async 
  const w=await portal(t),client=w.session(),page=await client.get('/setup');assert.equal(page.status,200);assert.match(page.body,/class="public-access"/);assert.match(page.body,/action="\/setup"/);assert.doesNotMatch(page.body,/terminal local muestra/i);
  await agency(w);assert.equal((await client.get('/setup')).status,404);assert.doesNotMatch((await client.get('/login')).body,/href="\/setup"/);
 });
+
+test('owner sees the trial decision once per choice and never again after a signed plan ends',async t=>{
+ const { walletHomeEntry,walletTrialReminder }=await import('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/wallet-reminders.mjs');
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2027-01-01T05:00:00Z')});
+ const w=await portal(t),a=await fresh(w,'owner-wallet-trial');
+ w.db.run('INSERT INTO wallet_choices(company_id,trial_active) VALUES(?,1)',a.id);
+ const home=await a.client.get('/home');
+ assert.equal((home.body.match(/¿Quieres continuar con Wallet\?/g)||[]).length,1);
+ assert.doesNotMatch(home.body,/Abrir caja|data-wallet-reminder="home"/);
+ assert.match(home.body,/action="\/plans\/wallet\/choice"[^]*?value="later"[^]*?>Ahora no</);
+ const member=await colleague(w,a.client,{name:'Colaborador',document:documentFor('wallet-role'),'SOCIAL.VIEW':'yes'});
+ assert.doesNotMatch((await member.session.get('/home')).body,/¿Quieres continuar con Wallet|data-wallet-reminder/);
+ await a.client.post('/plans/wallet/choice',{choice:'later'});
+ assert.doesNotMatch((await a.client.get('/home')).body,/¿Quieres continuar con Wallet/);
+ w.db.run("UPDATE wallet_choices SET declined=0,legacy_until='2027-01-18' WHERE company_id=?",a.id);
+ assert.equal(walletHomeEntry(w.db,{id:a.id,loyalty_tenant:'linked'},'2027-02-01').choosePlan,false);
+ assert.equal(walletHomeEntry(w.db,{id:a.id,loyalty_tenant:'linked'},'2027-02-01').checkPayment,true);
+ assert.equal(walletTrialReminder(true,'2026-12-24'),null);
+ assert.equal(walletTrialReminder(true,'2026-12-25').type,'trial');
+ assert.equal(walletTrialReminder(false,'2026-12-31'),null);
+ assert.equal(walletTrialReminder(true,'2027-01-01'),null);
+});
+
+test('Wallet entry keeps a quiet owner link and shows only confirmed Wallet debt',async ()=>{
+ const { walletPaymentReminder }=await import('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/wallet-reminders.mjs');
+ const { loyaltyWorkspaceHtml }=await import('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/wallet-pages.mjs');
+ const active=loyaltyWorkspaceHtml({kind:'OWNER'},'overview',['overview'],{id:'1',name:'Negocio'});
+ assert.match(active,/class="wallet-plan-link" href="\/plans\/wallet">Mi suscripción/);
+ assert.match(active,/data-wallet-reminder="overview"[^>]+hidden/);
+ const team=loyaltyWorkspaceHtml({kind:'COLLABORATOR',grants:[]},'sales',['sales'],{id:'1',name:'Negocio'});
+ assert.doesNotMatch(team,/data-wallet-reminder|wallet-plan-link|wallet-subscription\.js/);
+ assert.equal(walletPaymentReminder({summary:{balanceMinor:1000},invoices:[{walletDue:false,remainingMinor:1000,dueOn:'2027-02-15'}]}),null);
+ const bill={balanceMinor:1497,overdueMinor:0,nextCut:{dueOn:'2027-02-15',remainingMinor:998}};
+ const current=walletPaymentReminder({walletBilling:bill});
+ assert.equal(current.type,'payment');assert.match(current.description,/9,98/);assert.match(current.description,/15 de febrero/);assert.equal(current.href,'/billing?view=charges#pago-wallet');
+ const legacy=walletPaymentReminder({walletBilling:{...bill,overdueMinor:0},access:{overdueSuspension:true}});
+ assert.equal(legacy.type,'suspended');assert.doesNotMatch(legacy.description,/pago|vencid/);
+ const suspended=walletPaymentReminder({walletBilling:{...bill,overdueMinor:499},access:{overdueSuspension:true}});
+ assert.equal(suspended.type,'overdue');assert.match(suspended.description,/4,99/);
+});

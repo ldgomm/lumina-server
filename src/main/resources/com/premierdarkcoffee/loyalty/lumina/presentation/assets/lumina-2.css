@@ -188,3 +188,7 @@
   .lumina-loyalty>header .brand { margin-right:0 }
   .lumina-loyalty .workspace-topline { margin-bottom:12px }
 }
+
+.task-panel form.task-dismiss { display:inline-block; margin-inline-start:12px }
+.task-panel .task-dismiss button { min-height:44px; padding:9px 12px; background:transparent; color:#fff; border:1px solid #ffffff75 }
+.task-panel .task-dismiss button:hover,.task-panel .task-dismiss button:focus-visible { border-color:#fff; background:#ffffff12 }

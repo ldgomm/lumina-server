@@ -26,8 +26,8 @@ export function requestForm(actor,url,courtesy = false,selected='',onlySocial=fa
   if(onlySocial)return composer(actor,url,{area:'SOCIAL',onlySocial:true,values});
   return Object.hasOwn(areas,selected)?composer(actor,url,{area:selected,values}):serviceChoices(actor,url);
 }
-export function homePage({actor,company,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash,overview}) {
-  if(actor.kind!=='AGENCY')return businessHome({actor,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash,overview,giftForm:actor.kind==='OWNER'?requestForm(actor,url,true,'',false,{phone:company.phone}):''});
+export function homePage({actor,company,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash,overview,walletEntry}) {
+  if(actor.kind!=='AGENCY')return businessHome({actor,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash,overview,walletEntry,giftForm:actor.kind==='OWNER'?requestForm(actor,url,true,'',false,{phone:company.phone}):''});
   const hasScopes = Object.keys(channels).some(channel=>can(actor,channel));
   const open = groups.filter(row=>!['CANCELLED','DELIVERED'].includes(row.status)).reduce((sum,row)=>sum+row.count,0);
   const gift = actor.kind === 'OWNER' ? card('Tu video de cortesía',

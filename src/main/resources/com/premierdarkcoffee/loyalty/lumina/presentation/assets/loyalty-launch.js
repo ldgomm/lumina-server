@@ -60,7 +60,7 @@
     }
    }
   };
-  renderMerchant=function(){if(central[state.tab]){leave(central[state.tab]);return;}if(!allowed.includes(state.tab))state.tab=allowed[0];render();restrict();};
+  renderMerchant=function(){if(central[state.tab]){leave(central[state.tab]);return;}if(!allowed.includes(state.tab))state.tab=allowed[0];render();restrict();if(owner)document.dispatchEvent(new CustomEvent('lumina-wallet-section',{detail:state.tab}));};
   document.addEventListener('click',event=>{const control=event.target.closest('[data-tab],[data-destination],[data-branch-team],#openTeam');if(!control)return;const tab=control.dataset.tab||control.dataset.destination||'team';if(central[tab]){event.preventDefault();event.stopImmediatePropagation();leave(central[tab]);}else if(control.dataset.tab&&!allowed.includes(tab)){event.preventDefault();event.stopImmediatePropagation();}},true);
   new MutationObserver(restrict).observe(app,{childList:true,subtree:true});
   state.tab=document.querySelector('meta[name="lumina-wallet-section"]').content;exit.hidden=false;renderMerchant();
