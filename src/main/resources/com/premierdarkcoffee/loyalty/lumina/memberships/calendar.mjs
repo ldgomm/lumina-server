@@ -4,24 +4,32 @@ import { serviceArea } from './catalog.mjs';
 
 export const monthStart = date => date.slice(0,7)+'-01';
 export const nextCut = date => nextMonth(monthStart(date));
-export const paidFrom='2027-01-01';
+import { dirtyCalendar as dirty, paidFrom, standardIds, trialChoice, walletLine } from './trial.mjs';
+export {paidFrom,walletLine};
 export function periodEnd(start,months=1) {
   if(months!==12)return nextCut(start);
   if(start<paidFrom)return paidFrom;
   return start.endsWith('-01')?(Number(start.slice(0,4))+1)+start.slice(4):nextCut(start);
 }
 export function firstStatement(start, amount, end=null, months=1) {
-  const from=start<paidFrom?paidFrom:start, cut=nextCut(from);
+  if(start<paidFrom)return {cut:null,due:null,days:0,monthDays:0,amount:0};
+  const from=start,cut=nextCut(from);
   const stop=end&&end<cut?end:cut;
   const days=Math.max(0,(Date.parse(stop)-Date.parse(from))/86400000);
   const monthDays=(Date.parse(cut)-Date.parse(monthStart(from)))/86400000;
   const fee=months===12 && from===monthStart(from) && days===monthDays ? amount : Math.round(amount*days/(monthDays*months));
   return {cut,due:cut.slice(0,8)+'15',days,monthDays,amount:fee};
 }
-export const walletLine = line => ['INCLUDED','GIFT'].includes(line.wallet)||line.items.some(i=>i.service==='WALLET');
+
 
 // Accepted fixed-term contracts continue through their exclusive end. A recurring
 // plan can be replaced at the first uncommitted calendar cut.
+export function coveredThrough(db,company,day){
+  let end=day;
+  const periods=db.all('SELECT starts_on,ends_before FROM wallet_prepaid_coverage WHERE company_id=? AND ends_before>? ORDER BY starts_on',company,day);
+  for(const p of periods){if(p.starts_on>end)break;if(p.ends_before>end)end=p.ends_before;}
+  return end;
+}
 export function selectionStart(db, order, line, today=localDay()) {
   if(line.renewal_of) {
     const previous=db.get('SELECT ends_before FROM contracts WHERE id=? AND company_id=? AND cancelled_at IS NULL',line.renewal_of,order.company_id);
@@ -30,22 +38,20 @@ export function selectionStart(db, order, line, today=localDay()) {
   let start=order.start_when==='NEXT_MONTH'?nextCut(today):today;
   if(order.start_when==='NEXT_MONTH') {
     const wanted=new Set(line.items.map(i=>contentKind(i.service)));
-    const fixed=db.all(`SELECT c.ends_before,i.service FROM contracts c JOIN plan_items i ON i.plan_id=c.plan_id
+    const fixed=db.all(`SELECT c.ends_before,i.service,date(o.accepted_at,'-5 hours') AS accepted_on,ws.consent_on FROM contracts c JOIN plan_items i ON i.plan_id=c.plan_id LEFT JOIN wallet_schedules ws ON ws.id=c.schedule_id LEFT JOIN package_order_lines l ON l.id=c.order_line_id LEFT JOIN package_orders o ON o.id=l.order_id
       WHERE c.company_id=? AND c.cancelled_at IS NULL AND c.starts_on<=? AND c.ends_before>?
         AND (i.service='WALLET' OR EXISTS(SELECT 1 FROM plans p WHERE p.id=c.plan_id AND p.term='MONTHLY'))`,order.company_id,today,start);
     for(const period of fixed){
+      if(period.service==='WALLET' && (period.consent_on||period.accepted_on||'')<paidFrom)continue;
       if(wanted.has(contentKind(period.service)) && period.ends_before>start)start=period.ends_before;
     }
     if(walletLine(line) && order.wallet_not_before && order.wallet_not_before>start)start=order.wallet_not_before;
   }
-  return start;
-}
-function dirty(db,company) {
-  db.run('INSERT INTO wallet_calendar_sync(company_id) VALUES(?) ON CONFLICT(company_id) DO UPDATE SET revision=revision+1',company);
+  return walletLine(line)?coveredThrough(db,order.company_id,start):start;
 }
 export function addSchedule(db,actor,company,contract,line,order) {
   const start=line.starts_on;
-  const overlapping=db.all('SELECT * FROM wallet_schedules WHERE company_id=? AND (ends_before IS NULL OR starts_on<ends_before AND ends_before>?) ORDER BY starts_on',company.id,start);
+  const overlapping=db.all('SELECT * FROM wallet_schedules WHERE company_id=? AND consent_on IS NOT NULL AND (ends_before IS NULL OR starts_on<ends_before AND ends_before>?) ORDER BY starts_on',company.id,start);
   const previous=overlapping[0];
   if(overlapping.length) {
     const old=overlapping[0];
@@ -55,8 +61,8 @@ export function addSchedule(db,actor,company,contract,line,order) {
   }
   // Seasonal prices apply only to their accepted period.
   const end=line.campaign?line.ends_before:null;
-  db.run('INSERT INTO wallet_schedules(id,company_id,plan_id,starts_on,ends_before,next_period,amount_minor,units,owner_id,replaces_id,prior_end,other_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
-    contract,company.id,line.plan_id,start,end,line.ends_before,line.unit_minor*line.units,line.units,actor.id,previous?.id??null,previous?.ends_before??null,(line.wallet==='GIFT'?line.unit_minor:line.other_minor||0)*line.units);
+  db.run('INSERT INTO wallet_schedules(id,company_id,plan_id,starts_on,ends_before,next_period,amount_minor,units,owner_id,replaces_id,prior_end,other_minor,consent_on,initial_branches) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    contract,company.id,line.plan_id,start,end,line.ends_before,line.unit_minor*line.units,line.units,actor.id,previous?.id??null,previous?.ends_before??null,(line.wallet==='GIFT'?line.unit_minor:line.other_minor||0)*line.units,localDay(new Date(order.accepted_at)),order.initial_branches||1);
   db.run('UPDATE contracts SET schedule_id=? WHERE id=?',contract,contract);
   dirty(db,company.id);
 }
@@ -84,7 +90,7 @@ export function applyDueServices(db,today=localDay()) {
     AND coalesce(b.state,'ACTIVE')='ACTIVE' AND b.pending_id IS NULL`,today,today);
   for(const row of due) {
     for(const {service} of db.all('SELECT service FROM plan_items WHERE plan_id=?',row.plan_id)) {
-      const area=serviceArea(service); if(!area)continue;
+      const area=serviceArea(service); if(!area || area==='WALLET' && !db.get('SELECT 1 FROM package_orders o JOIN package_order_lines l ON l.order_id=o.id JOIN contracts c ON c.order_line_id=l.id WHERE c.id=? AND date(o.accepted_at,\'-5 hours\')>=?',row.contract_id,paidFrom))continue;
       db.run(`INSERT INTO company_services VALUES(?,?,'ACTIVE',?,?) ON CONFLICT(company_id,service) DO UPDATE SET status='ACTIVE'`,row.company_id,area,row.submitted_by,now());
     }
     db.run('UPDATE scheduled_services SET applied=1 WHERE contract_id=?',row.contract_id);
@@ -115,7 +121,7 @@ export function advanceCalendar(db,today=localDay()) {
 export function calendarSnapshot(db,company) {
   const state=db.get('SELECT * FROM wallet_calendar_sync WHERE company_id=?',company);
   if(!state || state.sent===state.revision)return null;
-  const entries=db.all(`SELECT s.id,p.name,s.starts_on AS "startsOn",s.ends_before AS "endsBefore",s.amount_minor AS "feeMinor",s.next_period AS "billBefore",coalesce(b.months,1) months,s.other_minor AS "otherMinor"
+  const entries=db.all(`SELECT s.id,s.plan_id,s.consent_on AS "consentOn",s.initial_branches AS "initialBranches",p.name,s.starts_on AS "startsOn",s.ends_before AS "endsBefore",s.amount_minor AS "feeMinor",s.next_period AS "billBefore",coalesce(b.months,1) months,s.other_minor AS "otherMinor"
     FROM wallet_schedules s JOIN plans p ON p.id=s.plan_id LEFT JOIN plan_billing b ON b.plan_id=s.plan_id WHERE s.company_id=? ORDER BY s.starts_on,s.id`,company);
   const paid=db.all('SELECT contract_id AS id,name,starts_on AS startsOn,ends_before AS endsBefore,0 AS feeMinor FROM wallet_prepaid_coverage WHERE company_id=? ORDER BY starts_on,ends_before',company);
   // Previously sold bundles may share coverage; one zero-charge interval suffices.
@@ -125,7 +131,12 @@ export function calendarSnapshot(db,company) {
     if(prior && interval.startsOn<prior.endsBefore)prior.endsBefore=prior.endsBefore>interval.endsBefore?prior.endsBefore:interval.endsBefore;
     else coverage.push(interval);
   }
-  return {companyId:company,revision:state.revision,entries:[...coverage.map(c=>({...c,billBefore:c.endsBefore,replacesLegacy:false})),...entries]};
+  const fixed=db.all(`SELECT c.id,p.name,c.starts_on AS "startsOn",CASE WHEN c.cancelled_at IS NULL THEN c.ends_before ELSE max(c.starts_on,min(c.ends_before,date(c.cancelled_at,'-5 hours'))) END AS "endsBefore",c.ends_before AS "billBefore",date(o.accepted_at,'-5 hours') AS "consentOn"
+    FROM contracts c JOIN plans p ON p.id=c.plan_id JOIN package_order_lines l ON l.id=c.order_line_id JOIN package_orders o ON o.id=l.order_id
+    WHERE c.company_id=? AND c.schedule_id IS NULL AND l.wallet<>'NONE' AND date(o.accepted_at,'-5 hours')>=?`,company,paidFrom);
+  return {companyId:company,revision:state.revision,trialActive:trialChoice(db,company).enabled,
+    entries:[...coverage.map(c=>({...c,billBefore:c.endsBefore,replacesLegacy:false})),...fixed.map(c=>({...c,feeMinor:0})),
+      ...entries.map(({plan_id,...e})=>({...e,perBranch:standardIds.includes(plan_id)}))]};
 }
 export async function syncCalendars(db,remote) {
   const pending=db.all(`SELECT q.company_id,c.loyalty_tenant FROM wallet_calendar_sync q JOIN companies c ON c.id=q.company_id

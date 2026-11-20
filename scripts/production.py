@@ -126,7 +126,7 @@ def pg(c,sql):return run(['psql','-X','-qAt','-v','ON_ERROR_STOP=1','-c',sql],pg
 PG_CALENDAR = 'infrastructure/persistence/extensions/membership-calendar.sql'
 PORTAL_CALENDAR = 'lumina/infrastructure/extensions/membership-calendar.sql'
 
-MEMBERSHIP_EXTENSIONS = ('membership-calendar', 'subscription-periods')
+MEMBERSHIP_EXTENSIONS = ('membership-calendar', 'subscription-periods', 'wallet-consent')
 MEMBERSHIP_SQL = tuple(path.replace('membership-calendar', name)
                        for name in MEMBERSHIP_EXTENSIONS for path in (PG_CALENDAR, PORTAL_CALENDAR))
 

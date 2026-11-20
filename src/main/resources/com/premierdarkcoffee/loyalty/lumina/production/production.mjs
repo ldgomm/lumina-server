@@ -7,6 +7,7 @@ import { requestPhone } from '../shared/contact.mjs';
 import { compatibleContentQuota } from '../content/service-options.mjs';
 import { canRequest, platformTargets, requestAccessSql } from '../access/content-policy.mjs';
 import { can, requireAccess, requireAgency, requireOwner, requireBusinessActor } from '../access/accounts.mjs';
+import { inTrial, trialMessage, walletOnly, walletLine } from '../memberships/trial.mjs';
 import { checkCapacity, getPlan } from '../memberships/billing.mjs';
 import { channels, areas, choice, event, formats, httpsUrl, integer, isId, localInstant, now, requireThat, socialChannels, text, uuid } from '../shared/domain.mjs';
 
@@ -62,6 +63,7 @@ export function createRequest(db, actor, company, data) {
   if (type === 'VISIT') requireThat(channel==='SOCIAL','Elige un canal de video para la visita.');
   const plan = type === 'PLAN' ? getPlan(db,data.plan) : null;
   requireThat(!plan || plan.published,'El plan ya no se ofrece.',409);
+  if(plan && inTrial() && walletLine(plan))requireThat(false,walletOnly(plan)?trialMessage:'Elige los otros servicios desde Paquetes y servicios. Wallet está en prueba gratuita.',409);
   requireThat(!plan?.campaign,'Solicita la promoción desde Paquetes y servicios para revisar sus condiciones.',409);
   const quantity = ['COURTESY','PLAN','VISIT'].includes(type) ? 1 :
     integer(data.quantity,'cantidad',{ min:1,max:100 });

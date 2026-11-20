@@ -1,19 +1,52 @@
 import { checkRevision } from '../shared/revision.mjs';
 import { attachCampaign, offerAvailable } from '../campaigns/season.mjs';
 import { checkSelection } from './coverage.mjs';
+import { dirtyCalendar, inTrial, standardFor, standardIds, standards, trialOffer, walletLine } from './trial.mjs';
 import { stopSchedule } from './calendar.mjs';
 import { normalizeOffer } from './offers.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { choice, dateOnly, event, integer, localDay, money, nextMonth, now, requireThat, services, text, uuid } from '../shared/domain.mjs';
 
 export function listPlans(db, includeHidden = false) {
-  return db.all('SELECT p.*,coalesce(b.months,1) months,b.other_minor FROM plans p LEFT JOIN plan_billing b ON b.plan_id=p.id WHERE published=1 OR ?=1 ORDER BY term,name,created_at DESC', Number(includeHidden))
-    .map(plan => ({ ...attachCampaign(db,plan), items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',plan.id) })).filter(plan=>includeHidden||offerAvailable(plan));
+  const plans=db.all('SELECT p.*,coalesce(b.months,1) months,b.other_minor FROM plans p LEFT JOIN plan_billing b ON b.plan_id=p.id WHERE (published=1 OR ?=1) AND NOT EXISTS(SELECT 1 FROM wallet_trial_variants v WHERE v.plan_id=p.id) ORDER BY term,name,created_at DESC', Number(includeHidden))
+    .map(plan => ({ ...attachCampaign(db,plan), items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',plan.id) })).filter(plan=>includeHidden||offerAvailable(plan)).filter(p=>!standardIds.includes(p.id));
+  if(includeHidden || inTrial())return plans;
+  return [...plans.filter(p=>!standardFor(p)),...standards];
 }
 export function getPlan(db, id) {
+  const standard=standards.find(p=>p.id===id);
+  if(standard)return {...standard};
+  const variant=db.get('SELECT source_id FROM wallet_trial_variants WHERE plan_id=?',id||'');
   const plan = db.get('SELECT p.*,coalesce(b.months,1) months,b.other_minor FROM plans p LEFT JOIN plan_billing b ON b.plan_id=p.id WHERE p.id=?',id || '');
   requireThat(plan, 'Ese plan no está disponible.', 404);
-  return { ...attachCampaign(db,plan), items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',id) };
+  const source=variant?getPlan(db,variant.source_id):null;
+  return { ...attachCampaign(db,plan), ...(source?{published:source.published,campaign:source.campaign,trialBundle:true}:{}), items: db.all('SELECT service,quantity FROM plan_items WHERE plan_id=? ORDER BY service',id) };
+}
+// Store the exact items and price to which the owner agreed. A trial bundle grants
+// the other services only. Wallet can subsequently be paused or resumed independently.
+export function purchasePlan(db,plan) {
+  const standard=standardFor(plan);
+  if(standard){
+    plan=standard;
+    requireThat(!inTrial(),'Wallet está en prueba gratuita.',409);
+    db.run("INSERT OR IGNORE INTO plans(id,name,term,price_minor,wallet,description,created_at) VALUES(?,?,'MONTHLY',?,'INCLUDED',?,?)",plan.id,plan.name,plan.price_minor,plan.description,now());
+    db.run("INSERT OR IGNORE INTO plan_items(plan_id,service,quantity) VALUES(?,'WALLET',1)",plan.id);
+    db.run('INSERT OR IGNORE INTO plan_billing VALUES(?,?,NULL)',plan.id,plan.months);
+    return plan;
+  }
+  if(!inTrial()||!walletLine(plan))return plan;
+  const offer=trialOffer(plan);
+  requireThat(offer,'Wallet es gratis hasta el 31 de diciembre. Activa la prueba desde Mi suscripción de Wallet.',409);
+  let variant=db.get('SELECT plan_id FROM wallet_trial_variants WHERE source_id=?',plan.id);
+  if(!variant){
+    const id=uuid();
+    db.run("INSERT INTO plans(id,name,term,price_minor,wallet,description,published,created_at) VALUES(?,?,?,?,'NONE',?,0,?)",id,plan.name,plan.term,offer.price_minor,plan.description,now());
+    for(const i of offer.items)db.run('INSERT INTO plan_items VALUES(?,?,?)',id,i.service,i.quantity);
+    db.run('INSERT INTO plan_billing VALUES(?,?,NULL)',id,plan.months);
+    db.run('INSERT INTO wallet_trial_variants VALUES(?,?)',plan.id,id);
+    variant={plan_id:id};
+  }
+  return getPlan(db,variant.plan_id);
 }
 export function createPlan(db, actor, data) {
   requireAgency(actor);
@@ -55,7 +88,7 @@ export function hidePlan(db, actor, id) {
   });
 }
 export function contractsFor(db, companyId) {
-  return db.all(`SELECT c.*,ws.ends_before AS stop_on,ws.amount_minor AS monthly_minor,p.name,p.term,p.wallet,coalesce(b.months,1) months,s.year AS campaign_year,s.base_plan_id FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN wallet_schedules ws ON ws.id=c.schedule_id AND ws.company_id=c.company_id LEFT JOIN plan_billing b ON b.plan_id=p.id LEFT JOIN seasonal_offers s ON s.plan_id=p.id
+  return db.all(`SELECT c.*,ws.consent_on,ws.other_minor,b.other_minor AS catalog_other_minor,ws.initial_branches,date(o.accepted_at,'-5 hours') AS accepted_on,ws.ends_before AS stop_on,ws.amount_minor AS monthly_minor,p.name,p.term,p.wallet,coalesce(b.months,1) months,s.year AS campaign_year,s.base_plan_id FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN package_order_lines l ON l.id=c.order_line_id LEFT JOIN package_orders o ON o.id=l.order_id LEFT JOIN wallet_schedules ws ON ws.id=c.schedule_id AND ws.company_id=c.company_id LEFT JOIN plan_billing b ON b.plan_id=p.id LEFT JOIN seasonal_offers s ON s.plan_id=p.id
     WHERE c.company_id=? ORDER BY starts_on DESC,created_at DESC`,companyId).map(contract => ({
     ...contract,
     items: db.all(`SELECT i.service,i.quantity * ? AS quantity,
@@ -69,6 +102,7 @@ export function activateContract(db, actor, company, data) {
   requireAgency(actor);
   requireThat(company.approved,'Verifica el negocio antes de activar un plan.',409);
   const plan = getPlan(db,data.plan);
+  requireThat(!walletLine(plan),'Solo el dueño puede activar una suscripción de Wallet.',409);
   requireThat(!plan.campaign,'Las promociones requieren una propuesta aceptada desde Paquetes y servicios.',409);
   const startsOn = dateOnly(data.startsOn,'la fecha de inicio');
   const endsBefore = plan.term === 'MONTHLY' ? nextMonth(startsOn) : dateOnly(data.endsBefore,'la fecha de fin exclusiva');
@@ -111,6 +145,7 @@ export function cancelContract(db, actor, company, id, reason) {
     }
     requireThat(db.run('UPDATE contracts SET cancelled_at=? WHERE id=? AND company_id=? AND cancelled_at IS NULL',
       now(),id,company.id).changes === 1,'El período ya no está activo.',409);
+    if(db.get("SELECT 1 FROM contracts c JOIN plans p ON p.id=c.plan_id WHERE c.id=? AND p.wallet<>'NONE'",id))dirtyCalendar(db,company.id);
     event(db,actor,company.id,'CONTRACT',id,'PLAN_CANCELADO',note);
   });
 }

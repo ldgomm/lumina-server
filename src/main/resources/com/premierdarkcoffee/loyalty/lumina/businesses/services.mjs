@@ -1,4 +1,5 @@
 import { event, now, requireThat } from '../shared/domain.mjs';
+import { inTrial, paidWallet, trialChoice } from '../memberships/trial.mjs';
 import { requireOperating } from './control.mjs';
 
 export const serviceCatalog = Object.freeze({
@@ -9,10 +10,16 @@ export const serviceCatalog = Object.freeze({
   BRAND: {name:'Diseño de marca', description:'Tu logo e identidad visual.', icon:'content', path:'/services/brand'},
 });
 export function serviceState(db,companyId,service) {
+  if(service==='WALLET'){
+    if(inTrial() && !trialChoice(db,companyId).enabled || !inTrial()&&!paidWallet(db,companyId)){
+      const raw=db.get("SELECT status FROM company_services WHERE company_id=? AND service='WALLET'",companyId)?.status;
+      return raw?'SETUP':'INACTIVE';
+    }
+  }
   return db.get('SELECT status FROM company_services WHERE company_id=? AND service=?',companyId,service)?.status || 'INACTIVE';
 }
 export function activeServices(db,companyId) {
-  return db.all("SELECT service FROM company_services WHERE company_id=? AND status='ACTIVE'",companyId).map(row=>row.service);
+  return db.all("SELECT service FROM company_services WHERE company_id=? AND status='ACTIVE'",companyId).map(row=>row.service).filter(s=>s!=='WALLET'||serviceState(db,companyId,s)==='ACTIVE');
 }
 export function requireService(db,companyId,service,{setup=false}={}) {
   const status=serviceState(db,companyId,service);

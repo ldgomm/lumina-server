@@ -1,9 +1,11 @@
+import { visibleContracts } from '../../memberships/trial.mjs';
 import { inclusiveEnd } from '../../memberships/orders.mjs';
 import { badge, card, displayAmount, esc, label, localLink } from './components.mjs';
 
 const contractDate = value => new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value + 'T12:00:00Z'));
 
 export function contractSummary(contracts=[],today,owner=true) {
+  contracts=visibleContracts(contracts);
   const active=contracts.filter(c=>!c.cancelled_at&&c.starts_on<=today&&c.ends_before>today);
   const upcoming=contracts.filter(c=>!c.cancelled_at&&c.starts_on>today);
   const row=c=>`<article class="contract-account"><div class="split"><div><h3>${esc(c.name)}</h3><p>${esc(contractDate(c.starts_on))} → ${esc(contractDate(inclusiveEnd(c.ends_before)))}</p></div><div><strong>${esc(displayAmount(c.agreed_minor))}</strong><p>${c.months===12?'Por este período anual':c.term==='MONTHLY'?'Por este período mensual':'Por este trabajo'}</p></div></div>

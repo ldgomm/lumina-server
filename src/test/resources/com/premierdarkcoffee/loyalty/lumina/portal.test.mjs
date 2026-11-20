@@ -79,6 +79,7 @@ test('una solicitud conserva fecha, visita, evidencia, aprobación y estadístic
   assert.doesNotMatch((await other.get('/requests?company='+id)).body,/Campaña de noviembre/);
 });
 test('membresía Premium y paquete individual mantienen precio, cupos y cotización',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:new Date('2027-01-22T16:00:00Z')});
   const loyalty=await fakeLoyalty(t);
   const world = await portal(t,loyalty.origin,{platformToken:loyalty.platformToken});
   const admin = await agency(world);

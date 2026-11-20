@@ -23,7 +23,7 @@ test('oferta nueva conserva cantidades y precio exacto, con Wallet de cortesía 
  const w=await setup(t),tenant=w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant,registrations=w.l.registrations.size;
  assert.equal((await w.admin.post('/plans',data)).status,303);const p=w.db.get('SELECT * FROM plans');assert.equal(p.price_minor,10025);assert.equal(p.wallet,'GIFT');
  assert.deepEqual(w.db.all('SELECT service,quantity FROM plan_items ORDER BY service').map(r=>({...r})),[{service:'VIDEO',quantity:2},{service:'WALLET',quantity:1}]);
- const catalog=await w.client.get('/plans');assert.match(catalog.body,/100[,.]25/);assert.match(catalog.body,/<strong>2<\/strong> Video/);assert.match(catalog.body,/sin recargo/);assert.equal(w.l.registrations.size,registrations);assert.equal(w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant,tenant);
+ const catalog=await w.client.get('/plans');assert.match(catalog.body,/100[,.]25/);assert.match(catalog.body,/<strong>2<\/strong> Video/);assert.match(catalog.body,/sin recargo|activar Wallet gratis/);assert.equal(w.l.registrations.size,registrations);assert.equal(w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant,tenant);
 });
 
 test('publicación exige revisión y valida selección, cortesía, cantidad, modalidad y precio en el servidor',async t=>{
@@ -86,6 +86,7 @@ test('no hay activación alternativa sin aceptación; la propuesta conjunta acti
 });
 
 test('cancelar un servicio no revoca Wallet ni los demás contratos y el historial no vende otro plan',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date('2027-01-22T16:00:00Z')});
  const w=await setup(t);await w.admin.post(provider('/businesses/verify',w.id));await w.admin.post('/plans',data);const plan=w.db.get('SELECT id FROM plans').id;
  const a=await acceptedContract(w,w.admin,w.client,w.id,plan);await w.admin.post('/plans',{name:'Solo fotos adicionales',term:'MONTHLY',price:'20',PHOTO:'1',wallet:'NONE'});const content=w.db.get("SELECT id FROM plans WHERE name='Solo fotos adicionales'").id,b=await acceptedContract(w,w.admin,w.client,w.id,content);await w.client.get('/wallet');const before=w.db.all('SELECT * FROM wallet_access');
  assert.equal((await w.admin.post(provider('/plans/cancel',w.id),{contract:a.id,reason:'Cancelación acordada para la prueba.'})).status,303);assert.equal(w.db.get('SELECT ends_before FROM wallet_schedules WHERE id=?',a.id).ends_before,a.ends_before);assert.equal(w.db.get('SELECT cancelled_at FROM contracts WHERE id=?',b.id).cancelled_at,null);

@@ -2,11 +2,12 @@ import { offerAvailable, requireCampaignOpen } from '../campaigns/season.mjs';
 import { requestPhone } from '../shared/contact.mjs';
 import { requireAgency, requireOwner } from '../access/accounts.mjs';
 import { dateOnly, event, integer, isId, localDay, money, now, requireThat, text, uuid } from '../shared/domain.mjs';
-import { addSchedule, applyDueServices, periodEnd, queueServices, selectionStart, walletLine } from './calendar.mjs';
+import { addSchedule, applyDueServices, coveredThrough, periodEnd, queueServices, selectionStart, walletLine } from './calendar.mjs';
 import { checkSelection } from './coverage.mjs';
-import { getPlan } from './billing.mjs';
+import { dirtyCalendar, inTrial, standardFor, standardIds, trialMessage } from './trial.mjs';
+import { getPlan, purchasePlan } from './billing.mjs';
 
-export const walletCalendarTerms='Wallet es gratis hasta el 31 de diciembre de 2026 inclusive. Enero se cobra el 1 de febrero de 2027. Después, el cargo mensual se registra el día 1 por el mes terminado. Si empiezas a mitad de mes, pagas los días usados. La tarifa anual se registra una vez, al cierre de su primer mes completo. Puedes pagar hasta el día 15 inclusive. Desde el 16, un saldo vencido de Wallet pausa el servicio y las tarjetas hasta registrar el pago.';
+export const walletCalendarTerms='Wallet es gratis hasta el 31 de diciembre de 2026 inclusive. Enero se cobra el 1 de febrero de 2027. Después, el cargo mensual se registra el día 1 por el mes terminado. La prueba termina sin renovación automática. El dueño elige el plan desde enero. Si empiezas a mitad de mes, pagas los días usados. La tarifa anual se registra una vez, al cierre de su primer mes completo. Puedes pagar hasta el día 15 inclusive. Desde el 16, un saldo vencido de Wallet pausa el servicio y las tarjetas hasta registrar el pago.';
 const commercial = (actor,company) => {
   requireThat(actor.kind==='AGENCY'||actor.kind==='OWNER'&&actor.company_id===company.id,'Tu acceso no incluye contrataciones.',403);
 };
@@ -16,12 +17,13 @@ export function monthlyEnd(start,anchor=start,months=1) {
   const [year,month]=start.split('-').map(Number),day=Number(anchor.slice(-2));
   return new Date(Date.UTC(year,month-1+months,Math.min(day,new Date(Date.UTC(year,month+months,0)).getUTCDate()))).toISOString().slice(0,10);
 }
-export function orderTotals(lines) {
+export function orderTotals(lines,branches=1) {
   const totals={MONTHLY:{amount:0,pending:0},ANNUAL:{amount:0,pending:0},ONE_OFF:{amount:0,pending:0}};
   for(const line of lines) {
-    if(line.items && walletLine(line) && line.unit_minor!==null)requireThat(line.unit_minor*line.units<=1_000_000_000,'El importe supera el máximo de un cargo de Wallet.');
+    const quantity=line.units*(standardIds.includes(line.plan_id)?branches:1);
+    if(line.items && walletLine(line) && line.unit_minor!==null)requireThat(line.unit_minor*quantity<=1_000_000_000,'El importe supera el máximo de un cargo de Wallet.');
     if(line.unit_minor===null)totals[line.months===12?'ANNUAL':line.term].pending++;
-    else totals[line.months===12?'ANNUAL':line.term].amount+=line.unit_minor*line.units;
+    else totals[line.months===12?'ANNUAL':line.term].amount+=line.unit_minor*quantity;
   }
   requireThat(Object.values(totals).every(t=>Number.isSafeInteger(t.amount)&&t.amount<=9999999999),'La combinación excede el importe permitido.');
   return totals;
@@ -32,14 +34,14 @@ export function getOrder(db,actor,company,id) {
   requireThat(order,'Contratación no encontrada.',404);
   const lines=db.all('SELECT * FROM package_order_lines WHERE company_id=? AND order_id=? ORDER BY term,name,id',company.id,id)
     .map(line=>{const plan=getPlan(db,line.plan_id);return {...line,items:JSON.parse(line.items_json),months:plan.months,other_minor:plan.other_minor,campaign:plan.campaign,campaign_available:offerAvailable(plan)};});
-  return {...order,lines,totals:orderTotals(lines)};
+  return {...order,lines,totals:orderTotals(lines,order.initial_branches)};
 }
-export function ordersFor(db,actor,company,page=0) {
+export function ordersFor(db,actor,company,page=0,archive=false) {
   requireThat(actor.kind!=='COLLABORATOR','Tu acceso no incluye contrataciones.',403);
   if(company)commercial(actor,company);else requireAgency(actor);
   const rows=db.all(`SELECT o.*,c.name AS company_name FROM package_orders o JOIN companies c ON c.id=o.company_id
-    WHERE (? IS NULL OR o.company_id=?) ORDER BY o.created_at DESC,o.id DESC LIMIT 21 OFFSET ?`,company?.id||null,company?.id||null,page*20);
-  return {rows:rows.slice(0,20),more:rows.length>20,page};
+    WHERE o.trial_archive=? AND (? IS NULL OR o.company_id=?) ORDER BY o.created_at DESC,o.id DESC LIMIT 21 OFFSET ?`,Number(archive),company?.id||null,company?.id||null,page*20);
+  return {rows:rows.slice(0,20),more:rows.length>20,page,archive};
 }
 function renewable(db,company,id) {
   const contract=db.get(`SELECT c.*,p.name,p.term,p.wallet FROM contracts c JOIN plans p ON p.id=c.plan_id
@@ -62,7 +64,7 @@ export function submitOrder(db,actor,company,data,walletNotBefore=null) {
       const saved=getOrder(db,actor,company,replay.id);
       const requested=Object.entries(data).filter(([key,value])=>key.startsWith('qty_')&&Number(value)>0);
       const same=data.renewal?saved.lines.length===1 && saved.lines[0].renewal_of===data.renewal:
-        requested.length===saved.lines.length && requested.every(([key,qty])=>saved.lines.some(l=>l.plan_id===key.slice(4)&&l.units===Number(qty)));
+        requested.length===saved.lines.length && requested.every(([key,qty])=>saved.lines.some(l=>(l.plan_id===key.slice(4)||standardFor(getPlan(db,key.slice(4)))?.id===l.plan_id||db.get('SELECT source_id FROM wallet_trial_variants WHERE plan_id=?',l.plan_id)?.source_id===key.slice(4))&&l.units===Number(qty)));
       requireThat(same && saved.start_when===startWhen,'Esta selección ya se envió con otros servicios o fechas. Abre el catálogo para iniciar una nueva.',409);
       return saved.id;
     }
@@ -81,6 +83,7 @@ export function submitOrder(db,actor,company,data,walletNotBefore=null) {
         const units=integer(value,'cantidad de paquetes',{min:0,max:10});
         if(!units)continue;
         const plan=getPlan(db,key.slice(4));
+        requireThat(!db.get('SELECT 1 FROM wallet_trial_variants WHERE plan_id=?',plan.id),'Elige una oferta vigente del catálogo.',409);
         requireThat(offerAvailable(plan),'Una oferta fue retirada o la promoción terminó. Actualiza el catálogo.',409);
         selections.push({plan,units});
       }
@@ -89,8 +92,9 @@ export function submitOrder(db,actor,company,data,walletNotBefore=null) {
     const id=uuid();
     db.run(`INSERT INTO package_orders(id,company_id,submitted_by,submission_key,status,notes,created_at,contact_phone,start_when,wallet_not_before)
       VALUES(?,?,?,?,'REQUESTED',?,?,?,?,?)`,id,company.id,actor.id,data.key,notes,now(),phone,startWhen,walletNotBefore);
-    for(const {plan,units,previous,regularRenewal} of selections) {
-      const price=previous&&!regularRenewal?previous.agreed_minor/previous.units:plan.price_minor;
+    for(const {plan:source,units,previous,regularRenewal} of selections) {
+      const plan=purchasePlan(db,source);
+      const price=previous&&!regularRenewal&&source.id===plan.id?previous.agreed_minor/previous.units:plan.price_minor;
       requireThat(price===null||Number.isSafeInteger(price),'Revisa el precio unitario del acuerdo.');
       db.run(`INSERT INTO package_order_lines(id,company_id,order_id,plan_id,name,term,wallet,units,items_json,catalog_minor,unit_minor,renewal_of)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,uuid(),company.id,id,plan.id,plan.name,plan.term,plan.wallet,units,JSON.stringify(plan.items),price,price,previous?.id||null);
@@ -101,8 +105,12 @@ export function submitOrder(db,actor,company,data,walletNotBefore=null) {
     return id;
   });
 }
-const checkVersion = (order,data) => requireThat(order.revision===integer(data.revision,'versión',{min:1}),
+const checkVersion = (order,data) => {
+  requireThat(!order.trial_archive,'Esta solicitud pertenece al historial de la prueba gratuita.',409);
+  if(inTrial() && order.lines.some(walletLine))requireThat(false,trialMessage,409);
+  return requireThat(order.revision===integer(data.revision,'versión',{min:1}),
   'La propuesta cambió. Revisa la versión actual antes de continuar.',409);
+};
 export function offerOrder(db,actor,company,id,data) {
   requireAgency(actor);
   return db.transaction(()=>{
@@ -119,6 +127,7 @@ export function offerOrder(db,actor,company,id,data) {
         afterDay(dateOnly(data['end_'+line.id],'último día del trabajo puntual'));
       requireThat(end>starts,'El último día debe ser igual o posterior al inicio.');
       const amount=money(data['price_'+line.id]);
+      requireThat(!standardIds.includes(line.plan_id)||amount===line.catalog_minor,'La tarifa de Wallet por sucursal es fija.',409);
       requireThat(!line.other_minor || line.other_minor<=amount,'El importe total debe cubrir los otros servicios incluidos.');
       requireThat(!line.campaign||amount===line.catalog_minor,'Conserva el precio promocional seleccionado. Para otro alcance prepara una oferta nueva.',409);
       return {...line,starts_on:starts,ends_before:end,unit_minor:amount};
@@ -169,7 +178,9 @@ function activateAccepted(db,actor,company,id,data) {
         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,contract,company.id,line.plan_id,line.unit_minor*line.units,line.starts_on,line.ends_before,now(),line.units,line.id,line.renewal_of,
         line.term==='MONTHLY'?(previous?.renewal_anchor||previous?.starts_on||line.starts_on):null);
       queueServices(db,contract,line.starts_on);
+      if(walletLine(line)&&line.starts_on>localDay()&&line.starts_on<=coveredThrough(db,company.id,localDay()))db.run("INSERT INTO company_services VALUES(?,'WALLET','ACTIVE',?,?) ON CONFLICT(company_id,service) DO UPDATE SET status='ACTIVE'",company.id,actor.id,now());
       if(walletLine(line) && line.term==='MONTHLY')addSchedule(db,actor,company,contract,line,order);
+      else if(walletLine(line))dirtyCalendar(db,company.id);
       event(db,actor,company.id,'CONTRACT',contract,'PAQUETE_ACTIVADO',line.name+' · '+line.units+' unidad(es)');
     }
     applyDueServices(db);

@@ -72,13 +72,14 @@ Negocio contratante: $business. Inicio: $activation. Sucursales registradas: $br
 private fun walletBranches(c:Connection,tenant:String) = c.rows("SELECT id,name FROM branches WHERE tenant_id=? ORDER BY id",tenant) { obj("id" to it.getString(1),"name" to it.getString(2)) }
 private fun LoyaltyService.offer(c:Connection,s:Staff,input:WalletOfferInput):JsonObject {
     val catalogDay=commercial.today(c,s.tenant)
-    need(!c.one("""SELECT EXISTS(SELECT 1 FROM wallet_catalog_schedules WHERE tenant_id=? AND replaces_legacy
+    need(catalogDay>=WALLET_PROMOTION_END,"TRIAL_ACTIVE","Wallet es gratis hasta el 31 de diciembre. El dueño elige un plan desde enero.",409)
+    need(!c.one("""SELECT EXISTS(SELECT 1 FROM wallet_catalog_schedules WHERE tenant_id=? AND consent_on IS NOT NULL AND replaces_legacy
         AND (ends_before IS NULL OR ends_before>? AND starts_on<ends_before))""",s.tenant,java.sql.Date.valueOf(catalogDay)){it.getBoolean(1)}!!,
         "CATALOG_ACTIVE","Cambia tu plan desde Mi suscripción de Wallet.",409)
     input.provider.validate();uuid(input.companyId);uuid(input.ownerId);text(input.ownerName,100)
     need(if(input.ownerDocument.isNotEmpty()) consistentCedula(input.ownerDocument) else input.ownerEmail.matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")),"INVALID_OWNER_IDENTITY","Revisa la identificación del responsable.")
     need(c.one("SELECT tenant_id FROM lumina_business_registrations WHERE company_id=?",input.companyId){it.getString(1)}==s.tenant,"BUSINESS_MISMATCH","La suscripción corresponde a otro negocio.",403)
-    val current=commercial.plan(c,s.tenant)
+    val current=commercial.plan(c,s.tenant)?.takeIf { it.first.walletAgreement?.activationOn?.let(::billingDate)?.let{d->d>=WALLET_PROMOTION_END}==true }
     need(current==null || !current.first.recurring || current.first.walletAgreement==null ||
         current.first.intervalMonths!=(if(input.cycle=="ANNUAL")12 else 1),"ALREADY_ACTIVE","Tu negocio ya tiene esta modalidad de Wallet. Puedes elegir otra para el siguiente período.",409)
     need(current==null || current.first.walletAgreement!=null,"EXISTING_AGREEMENT","Este negocio tiene una programación anterior. Lúmina debe revisarla antes de aceptar otra tarifa para evitar cargos duplicados.",409)
@@ -103,7 +104,8 @@ fun LoyaltyService.acceptWalletSubscription(s:Staff,input:WalletAcceptInput,key:
             commercial.sync(c,s.tenant,commercial.today(c,s.tenant))
             val quote=offer(c,s,input.offer)
             need(Security.equal(quote.getValue("hash").jsonPrimitive.content,input.expectedHash),"OFFER_CHANGED","Cambió la fecha, el número de sucursales o las condiciones. Revisa el resumen actualizado antes de aceptar.",409)
-            val previous=commercial.plan(c,s.tenant)
+            val saved=commercial.plan(c,s.tenant)
+            val previous=saved?.takeIf { it.first.walletAgreement?.activationOn?.let(::billingDate)?.let{d->d>=WALLET_PROMOTION_END}==true }
             need(previous==null || !previous.first.recurring || previous.first.intervalMonths!=(if(input.offer.cycle=="ANNUAL")12 else 1),"ALREADY_ACTIVE","La suscripción ya está activa.",409)
             val date=commercial.today(c,s.tenant)
             // A cancelled period remains paid/available; resuming cannot charge it a second time.
@@ -115,7 +117,7 @@ fun LoyaltyService.acceptWalletSubscription(s:Staff,input:WalletAcceptInput,key:
             val plan=MembershipPlan(if(annual)"Wallet · USD 50,00 al año por sucursal" else "Wallet · USD 4,99 al mes por sucursal",walletUnitPrice(input.offer.cycle),date.toString(),(if(paid.dayOfMonth==1)paid else nextCalendarCut(paid)).toString(),intervalMonths=if(annual)12 else 1,anchorDay=1,walletAgreement=agreement)
             val access=commercial.lock(c,s.tenant)
             need(access.getValue("state").jsonPrimitive.content=="ACTIVE","BUSINESS_SUSPENDED","El negocio debe estar activo antes de contratar.",409)
-            val version=(previous?.second?:0)+1
+            val version=(saved?.second?:0)+1
             previous?.let{commercial.retainEarnedPeriod(c,s.tenant,it,date)}
             commercial.savePlan(c,s.tenant,plan,version)
             if(paid.dayOfMonth!=1)c.exec("INSERT INTO wallet_opening_periods(tenant_id,starts_on,version) VALUES(?,?,?) ON CONFLICT DO NOTHING",
@@ -148,9 +150,10 @@ fun LoyaltyService.walletSubscriptionStatus(s:Staff):JsonObject {s.owner();retur
     val current=commercial.plan(c,s.tenant);val agreement=current?.first?.walletAgreement
     val branches=walletBranches(c,s.tenant)
     val date=commercial.today(c,s.tenant)
+    val authorized=agreement?.activationOn?.let(::billingDate)?.let{it>=WALLET_PROMOTION_END}==true
     obj("today" to date,"version" to (current?.second?:0),"accepted" to (agreement!=null),"legacy" to (current!=null&&agreement==null),
-        "recurring" to (current?.first?.recurring?:false),"trialUntil" to if(agreement!=null && date<WALLET_PROMOTION_END)"2026-12-31" else null,
-        "endsOn" to current?.first?.walletEndsOn,"coveredUntil" to current?.let{coveredUntil(it,date)},"nextChargeOn" to commercial.nextWalletCharge(c,s.tenant,current),
+        "recurring" to (authorized && current?.first?.recurring==true),"trialUntil" to if(agreement!=null && date<WALLET_PROMOTION_END)"2026-12-31" else null,
+        "endsOn" to current?.first?.walletEndsOn,"coveredUntil" to current?.takeIf{authorized}?.let{coveredUntil(it,date)},"nextChargeOn" to commercial.nextWalletCharge(c,s.tenant,current),
         "cycle" to if(current?.first?.intervalMonths==12)"ANNUAL" else "MONTHLY","intervalMonths" to (current?.first?.intervalMonths?:1),"periodMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"unitMinor" to (current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"monthlyMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"branches" to branches,
         "agreement" to agreement?.let { json.encodeToJsonElement(it) })
 }}

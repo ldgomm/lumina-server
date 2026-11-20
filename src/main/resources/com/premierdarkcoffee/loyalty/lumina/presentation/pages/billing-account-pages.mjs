@@ -50,14 +50,18 @@ function chargeForm(actor, account, base, values = {}, open = false) {
     check('confirm', 'Verifiqué el acuerdo y que este cargo no está registrado.', false, true) + button('Registrar cargo'), 'billing-form')}</details>`;
 }
 function subscriptionSummary(actor, account) {
-  const membership = account.membership, plan = membership?.plan, agreement = plan?.walletAgreement;
+  const membership=account.membership,saved=membership?.plan;
+  const signed=saved?.walletAgreement?.activationOn||saved?.startedOn;
+  const plan=signed&&signed<'2027-01-01'?null:saved,agreement=plan?.walletAgreement;
+  const state=account.access?.walletSubscriptionState;
+  if(account.today<'2027-01-01' || state==='INACTIVE')return card('Wallet',account.today<'2027-01-01'?
+    '<p><strong>Prueba gratuita hasta el 31 de diciembre de 2026.</strong> El dueño podrá elegir un plan desde enero. Importe de Wallet durante la prueba: $0,00.</p>'+(state==='TRIAL'?'<p>Prueba activa.</p>':state==='INACTIVE'?'<p>Prueba desactivada.</p>':'')+ (actor.kind==='OWNER'?localLink('/plans/wallet','Ver mi prueba','btn secondary'):''):
+    '<p>Sin suscripción activa. El dueño puede elegir mensual o anual cuando quiera volver.</p>'+(actor.kind==='OWNER'?localLink('/plans/wallet','Elegir un plan','btn secondary'):''));
   if (!plan) return card('Wallet', `${account.nextWalletChargeOn?'<p>Próximo cargo de Wallet el <strong>'+esc(billingDate(account.nextWalletChargeOn))+'</strong>.</p>':'<p>Consulta tus servicios y sus fechas en Mi suscripción.</p>'}${actor.kind === 'OWNER' ? localLink('/plans/wallet', 'Ver opciones de Wallet', 'btn secondary') : ''}`);
   const total = membership.branchMonthlyMinor ?? plan.feeMinor;
   const branches=agreement&&plan.feeMinor>0&&Number.isSafeInteger(total/plan.feeMinor)?total/plan.feeMinor:null;
   const interval = plan.intervalMonths === 12 ? 'año' : plan.intervalMonths === 1 ? 'mes' : `${plan.intervalMonths} meses`;
-  const free = agreement && account.today < '2027-01-01' && membership.nextChargeOn >= '2027-01-01';
-  return card(plan.name, `${free ? '<p class="subscription-free">Gratis hasta el <strong>31 de diciembre de 2026</strong></p>' : ''}
-    <p class="muted">${!plan.recurring ? 'Última tarifa acordada' : free ? 'Después de la promoción' : 'Tarifa para el próximo corte'}</p><p class="billing-plan-price"><strong>${money(total)}</strong> / ${interval}${agreement ? ' en total' : ''}</p>
+  return card(plan.name, `<p class="muted">${plan.recurring?'Tarifa para el próximo corte':'Última tarifa acordada'}</p><p class="billing-plan-price"><strong>${money(total)}</strong> / ${interval}${agreement ? ' en total' : ''}</p>
     ${branches!==null?`<p class="billing-branch-calculation"><strong>${branches} ${branches===1?'sucursal':'sucursales'}</strong> × ${money(plan.feeMinor)} = <strong>${money(total)} / ${interval}</strong></p>`:''}
     <p>${agreement ? money(plan.feeMinor) + ' por sucursal · ' : ''}${plan.recurring ? 'Próximo cargo: <strong>' + esc(billingDate(membership.nextChargeOn)) + '</strong>' : '<strong>Renovación desactivada</strong>'}</p>
     ${!plan.recurring && plan.walletEndsOn ? `<p>La suscripción finaliza el ${esc(billingDate(plan.walletEndsOn))}.</p>` : ''}

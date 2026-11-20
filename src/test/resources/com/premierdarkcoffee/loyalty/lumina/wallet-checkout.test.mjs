@@ -7,7 +7,8 @@ import {localDay} from '../../../../../../main/resources/com/premierdarkcoffee/l
 
 import {advanceCalendar,firstStatement,nextCut,expiryAlerts} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/calendar.mjs';
 
-async function world(t,configuration={}) {
+async function world(t,configuration={},date='2027-01-22T17:00:00Z') {
+ t.mock.timers.enable({apis:['Date'],now:new Date(date)});
  const native=await fakeLoyalty(t,null,configuration),w=await portal(t,native.origin,{platformToken:native.platformToken}),admin=await agency(w),client=w.session(),document=documentFor('checkout');
  const r=await client.post('/register',{company:'Comercio sin verificar',name:'Dueña',document,ruc:document+'001',phone:'0991234567',password,consent:'yes',category:'CAFE'});assert.equal(r.status,303);
  await client.get('/welcome');await client.post('/welcome',{service:'LATER'});await client.get('/services');
@@ -23,15 +24,20 @@ async function selection(w,plans,extra={}) {
  const page=await w.client.get(r.location);assert.equal(page.status,200,page.body);
  return {path:r.location,body:page.body,data:{revision:page.body.match(/name="revision" value="([^"]+)"/)[1],offerHash:page.body.match(/name="offerHash" value="([^"]+)"/)?.[1],confirm:'yes'}};
 }
+async function signIn(w){
+  w.client=w.session();
+  assert.equal((await w.client.post('/login',{document:documentFor('checkout'),password})).status,303);
+  await w.client.get('/home');
+}
 const state=w=>w.db.get("SELECT status FROM company_services WHERE company_id=? AND service='WALLET'",w.id)?.status||'INACTIVE';
 const count=(w,table)=>w.db.get('SELECT count(*) n FROM '+table).n;
 
-test('four reported routes lead to published Wallet offers without redirect loops, provisioning or fixed tariff',async t=>{
+test('four reported routes lead to Wallet without redirect loops or provisioning',async t=>{
  const w=await world(t);await plan(w);
  for(const route of ['/plans','/plans/wallet','/wallet','/services']) {
   let r=await w.client.get(route),steps=0;
   while(r.status===303){assert.ok(++steps<3,route);r=await w.client.get(r.location);}
-  assert.equal(r.status,200,route);assert.doesNotMatch(r.body,/\$4,99|\$50,00|identificación del proveedor/);
+  assert.equal(r.status,200,route);assert.doesNotMatch(r.body,/identificación del proveedor/);
  }
  assert.equal(w.native.registrations.size,0);assert.equal(state(w),'INACTIVE');assert.equal(count(w,'contracts'),0);
 });
@@ -90,7 +96,7 @@ test('a monthly package with Wallet activates included services at its published
  const w=await world(t),p=await plan(w,{VIDEO:'2',WEBSITE:'1',name:'Contenido con Wallet',price:'120',wallet_gift:'yes'}),o=await selection(w,[p]);
  const r=await w.client.post(o.path+'/accept',o.data);assert.equal(r.status,303,r.body);assert.equal(w.db.get('SELECT agreed_minor FROM contracts').agreed_minor,12000);
  for(const code of ['WALLET','SOCIAL','WEB'])assert.equal(w.db.get('SELECT status FROM company_services WHERE service=?',code)?.status,'ACTIVE',code);
- const page=await w.client.get('/plans/wallet');assert.match(page.body,/Contenido con Wallet/);assert.match(page.body,/120,00/);assert.doesNotMatch(page.body,/4,99/);
+ const page=await w.client.get('/plans/wallet');assert.match(page.body,/Contenido con Wallet/);assert.match(page.body,/120,00/);assert.match(page.body,/Wallet mensual/);
 });
 test('two overlapping Wallet selections cannot create duplicate commercial agreements',async t=>{
  const w=await world(t),p=await plan(w),key=randomUUID();
@@ -107,7 +113,7 @@ test('two overlapping Wallet selections cannot create duplicate commercial agree
  const offers=(await w.client.get('/plans/wallet')).body;
  assert.match(offers,/Tu plan actual/);assert.match(offers,/Cambiar a anual/);
  const change=await selection(w,[annual],{start_when:'NEXT_MONTH'});
- assert.match(change.body,/Anual/);assert.equal((await w.client.post(change.path+'/accept',change.data)).status,303);
+ assert.match(change.body,/Wallet anual/i);assert.equal((await w.client.post(change.path+'/accept',change.data)).status,303);
  const periods=w.db.all('SELECT * FROM wallet_schedules ORDER BY starts_on');
  assert.equal(periods.length,2);assert.equal(periods[0].ends_before,periods[1].starts_on);
  assert.equal((await w.client.post('/plans/request',{key:randomUUID(),start_when:'NEXT_MONTH',['qty_'+annual]:'1'})).status,409);
@@ -178,9 +184,86 @@ test('cancelling a scheduled replacement keeps the original plan and fee',async 
 test('first statement counts the enrollment date and actual calendar days',()=>{
  assert.deepEqual(firstStatement('2027-04-22',499),{cut:'2027-05-01',due:'2027-05-15',days:9,monthDays:30,amount:150});
  assert.equal(firstStatement('2028-02-29',499).amount,17);
- assert.deepEqual(firstStatement('2026-11-22',499),{cut:'2027-02-01',due:'2027-02-15',days:31,monthDays:31,amount:499});
+ assert.deepEqual(firstStatement('2026-11-22',499),{cut:null,due:null,days:0,monthDays:0,amount:0});
  assert.equal(firstStatement('2026-12-31',499,'2027-01-01').amount,0);
  assert.equal(firstStatement('2027-01-22',499).amount,161);
  assert.equal(firstStatement('2027-02-01',499).cut,'2027-03-01');
  assert.equal(firstStatement('2027-01-01',5000,null,12).amount,5000);
+});
+
+test('free Wallet has a single reversible choice and never creates a purchase in November or December',async t=>{
+ const w=await world(t,{},'2026-11-20T17:00:00Z'),p=await plan(w,{name:'Lealtad',price:'4.99'});
+ for(const date of ['2026-11-20T17:00:00Z','2026-12-31T23:00:00Z']){
+  t.mock.timers.setTime(new Date(date).getTime());await signIn(w);
+  const page=await w.client.get('/plans/wallet');
+  assert.match(page.body,/Activar prueba gratuita/);assert.doesNotMatch(page.body,/Lealtad|qty_|4,99/);
+  const catalog=await w.client.get('/plans');assert.doesNotMatch(catalog.body,new RegExp('qty_'+p));
+  assert.equal((await w.client.post('/requests',{type:'PLAN',plan:p})).status,409);
+  for(const start_when of ['TODAY','NEXT_MONTH'])assert.equal((await w.client.post('/plans/request',{key:randomUUID(),['qty_'+p]:'1',start_when})).status,409);
+  for(const choice of ['start','start','stop','start','stop'])assert.equal((await w.client.post('/plans/wallet/choice',{choice})).status,303);
+ }
+ assert.equal(count(w,'package_orders'),0);assert.equal(count(w,'contracts'),0);assert.equal(count(w,'wallet_schedules'),0);assert.equal(w.native.registrations.size,1);
+ assert.equal((await w.client.get('/wallet')).location,'/plans/wallet');
+});
+
+test('midnight in Ecuador requires fresh consent and a returning owner is billed only from confirmation',async t=>{
+ const w=await world(t,{},'2027-01-01T04:59:59Z');
+ await w.client.post('/plans/wallet/choice',{choice:'start'});
+ const tenant=w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant;
+ t.mock.timers.setTime(Date.parse('2027-01-01T05:00:00Z'));
+ assert.equal((await w.client.get('/wallet')).location,'/plans/wallet');
+ const page=await w.client.get('/plans/wallet');assert.match(page.body,/Wallet mensual/);assert.match(page.body,/Wallet anual/);assert.match(page.body,/Ahora no/);
+ assert.match((await w.client.get('/home')).body,/¿Quieres continuar con Wallet/);
+ await w.client.post('/plans/wallet/choice',{choice:'later'});assert.doesNotMatch((await w.client.get('/home')).body,/¿Quieres continuar con Wallet/);
+ t.mock.timers.setTime(Date.parse('2027-01-22T16:00:00Z'));await signIn(w);
+ const standard='b32a3473-4d70-45ee-9937-9d702510a001',o=await selection(w,[standard]);
+ assert.match(o.body,/1,61/);assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);
+ const schedule=w.db.get('SELECT * FROM wallet_schedules');assert.equal(schedule.starts_on,'2027-01-22');assert.equal(schedule.consent_on,schedule.starts_on);
+ await w.client.post('/plans/wallet/stop',{schedule:schedule.id,confirm:'yes'});
+ t.mock.timers.setTime(Date.parse('2027-02-08T16:00:00Z'));advanceCalendar(w.db);await signIn(w);
+ assert.equal((await w.client.get('/wallet')).location,'/plans/wallet');
+ const back=await selection(w,[standard]);assert.equal((await w.client.post(back.path+'/accept',back.data)).status,303);
+ assert.equal(w.db.get('SELECT loyalty_tenant FROM companies').loyalty_tenant,tenant);
+ assert.deepEqual(w.db.all('SELECT starts_on,ends_before FROM wallet_schedules ORDER BY starts_on').map(x=>[x.starts_on,x.ends_before]),[['2027-01-22','2027-02-01'],['2027-02-08',null]]);
+});
+
+test('standard Wallet freezes the reviewed branch count and charges the displayed business total once',async t=>{
+ let branches=2;
+ const w=await world(t,{account:async()=>({branchCount:branches,membership:null,summary:{balanceMinor:0}})},'2027-01-01T04:59:00Z');
+ await w.client.post('/plans/wallet/choice',{choice:'start'});
+ t.mock.timers.setTime(Date.parse('2027-01-01T05:01:00Z'));
+ const rate=await plan(w,{price:'4.99',name:'Lealtad'}),o=await selection(w,[rate]);
+ assert.match(o.body,/9,98/);assert.match(o.body,/2 sucursales/);
+ branches=3;
+ assert.equal((await w.client.post(o.path+'/accept',o.data)).status,409);
+ const updated=await w.client.get(o.path);
+ assert.match(updated.body,/14,97/);
+ const form={...o.data,offerHash:updated.body.match(/name="offerHash" value="([^"]+)"/)[1]};
+ assert.equal((await w.client.post(o.path+'/accept',form)).status,303);
+ assert.equal((await w.client.post(o.path+'/accept',form)).status,303);
+ assert.equal(w.db.get('SELECT initial_branches FROM wallet_schedules').initial_branches,3);
+ assert.equal(count(w,'contracts'),1);
+ assert.match((await w.client.get(o.path)).body,/14,97/);
+});
+test('trial bundles quote only other services and cannot authorize Wallet for January',async t=>{
+ const w=await world(t,{},'2026-12-15T16:00:00Z'),p=await plan(w,{name:'Wallet y contenido',price:'24.99',VIDEO:'1',other_price:'20'});
+ const page=await w.client.get('/plans');assert.match(page.body,/20,00/);assert.doesNotMatch(page.body,/24,99/);
+ const o=await selection(w,[p],{start_when:'NEXT_MONTH'});assert.match(o.body,/20,00/);assert.ok(o.data.offerHash);
+ assert.equal((await w.client.post(o.path+'/accept',o.data)).status,303);
+ t.mock.timers.setTime(Date.parse('2027-01-01T05:00:00Z'));advanceCalendar(w.db);await signIn(w);
+ assert.equal(w.db.get("SELECT status FROM company_services WHERE service='SOCIAL'").status,'ACTIVE');
+ assert.equal(count(w,'wallet_schedules'),0);assert.equal((await w.client.get('/wallet')).location,'/plans/wallet');
+ // Simulate an activated mixed order carried forward from the previous release.
+ w.db.run("UPDATE package_order_lines SET plan_id=?,wallet='INCLUDED',unit_minor=2499,items_json=?",p,JSON.stringify([{service:'WALLET',quantity:1},{service:'VIDEO',quantity:1}]));
+ const old=await w.client.get(o.path);assert.match(old.body,/Acuerdo durante la prueba/);assert.match(old.body,/20,00/);assert.doesNotMatch(old.body,/24,99|Tu primer cargo de Wallet/);
+});
+
+test('archived trial requests stay readable and cannot reserve a paid period or be accepted by direct link',async t=>{
+ const w=await world(t),p=await plan(w,{name:'Lealtad'}),o=await selection(w,[p]);
+ w.db.run("UPDATE package_orders SET trial_archive=1,created_at='2026-11-20T14:00:00Z'");
+ const historical=await w.client.get(o.path);assert.match(historical.body,/Historial de la prueba/);assert.doesNotMatch(historical.body,/Aceptar y activar|offerHash|13,75/);
+ assert.equal((await w.client.post(o.path+'/accept',o.data)).status,409);
+ assert.doesNotMatch((await w.client.get('/plans?view=orders')).body,new RegExp(o.path));
+ assert.match((await w.client.get('/plans?view=orders&history=trial')).body,new RegExp(o.path));
+ const fresh=await selection(w,[p]);assert.equal((await w.client.post(fresh.path+'/accept',fresh.data)).status,303);
 });

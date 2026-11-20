@@ -4,9 +4,11 @@ import {randomUUID} from 'node:crypto';
 import {portal,agency,owner,colleague,acceptedContract} from './helpers.mjs';
 import {fakeLoyalty} from './loyalty-fixture.mjs';
 const legal={revision:'0',legalName:'Agencia de prueba',ruc:'1234567890001',address:'Dirección ficticia en Quito',email:'legal@example.test',phone:'0991234567',privacyUrl:'https://example.test/privacidad',confirm:'yes'};
-async function world(t,existing=false){
+async function world(t,existing=false,date='2026-11-20'){
+ const returning=existing && date>='2027-01-01';
+ t.mock.timers.enable({apis:['Date'],now:new Date(returning?'2027-01-01T04:59:00Z':date+'T16:00:00Z')});
  const calls=[];let active=existing,cycle='MONTHLY';
- const loyalty=await fakeLoyalty(t,null,{account:async()=>({membership:active?{plan:{walletAgreement:{},recurring:true}}:null}),subscription:async call=>{
+ const loyalty=await fakeLoyalty(t,null,{account:async()=>({membership:active?{plan:{walletAgreement:{activationOn:date},startedOn:date,recurring:true}}:null}),subscription:async call=>{
   calls.push(call);
   if(call.path.endsWith('/accept')){
    if(!call.payload.accepted)return {status:400,body:{message:'Aceptación requerida'}};
@@ -14,10 +16,11 @@ async function world(t,existing=false){
    active=true;cycle=call.payload.offer.cycle;return {body:{version:1,accepted:true}};
   }
   if(call.path.endsWith('/offer'))return {body:{hash:'hash-oferta',paidFrom:'2027-01-01',trialUntil:'2026-12-31',cycle:call.payload.cycle||'MONTHLY',unitMinor:call.payload.cycle==='ANNUAL'?5000:499,totalMinor:call.payload.cycle==='ANNUAL'?5000:499,branches:[{name:'Principal'}],terms:'Condiciones de prueba. Cargo de $4,99.'}};
-  return {body:{version:active?1:0,accepted:active,recurring:active,legacy:false,trialUntil:active?'2026-12-31':null,nextChargeOn:active?'2027-01-01':null,cycle,unitMinor:cycle==='ANNUAL'?5000:499,periodMinor:cycle==='ANNUAL'?5000:499,monthlyMinor:499,branches:[{name:'Principal'}],agreement:active?{ownerName:'Dueño de Ejemplo',acceptedAt:'2026-11-19T15:00:00Z',terms:'Condiciones aceptadas de prueba'}:null}};
+  return {body:{coveredUntil:'2027-02-01',version:active?1:0,accepted:active,recurring:active,legacy:false,trialUntil:active?'2026-12-31':null,nextChargeOn:active?'2027-01-01':null,cycle,unitMinor:cycle==='ANNUAL'?5000:499,periodMinor:cycle==='ANNUAL'?5000:499,monthlyMinor:499,branches:[{name:'Principal'}],agreement:active?{ownerName:'Dueño de Ejemplo',activationOn:date,acceptedAt:date+'T15:00:00Z',terms:'Condiciones aceptadas de prueba'}:null}};
  }});
  const w=await portal(t,loyalty.origin,{platformToken:loyalty.platformToken});
  const admin=await agency(w),o=await owner(w,'Ejemplo',1,{category:'CAFE'});
+ if(returning)t.mock.timers.setTime(Date.parse('2027-01-01T05:01:00Z'));
  return {...w,...o,admin,calls,loyalty};
 }
 test('registration asks and persists business category with compatibility for older callers',async t=>{
@@ -34,7 +37,7 @@ test('operator identification is agency only and requires confirmed valid inform
  assert.equal((await w.admin.post('/account/provider',legal)).status,409);
 });
 test('unconfigured legal provider does not offer a hidden fixed subscription or invent consent',async t=>{
- const w=await world(t),p=await w.client.get('/plans/wallet');assert.equal(p.status,200);assert.match(p.body,/Elige tu plan de Wallet/);assert.doesNotMatch(p.body,/4,99|50,00|identificación del proveedor|name="accept"/);assert.equal(w.calls.length,0);
+ const w=await world(t),p=await w.client.get('/plans/wallet');assert.equal(p.status,200);assert.match(p.body,/Prueba Wallet gratis|Tu prueba está activa/);assert.doesNotMatch(p.body,/4,99|50,00|identificación del proveedor|name="accept"/);assert.equal(w.calls.length,0);
 });
 
 test('historical accepted terms remain downloadable exactly and cannot be replaced with a fresh offer',async t=>{
@@ -65,7 +68,7 @@ test('native subscription routes cannot be reached through the general Wallet pr
  assert.ok([403,404].includes(result.status));assert.equal(w.calls.filter(c=>c.path.endsWith('/accept')).length,0);
 });
 test('an existing included Wallet agreement blocks a second automatic subscription',async t=>{
- const w=await world(t);await w.admin.post('/account/provider',legal);
+ const w=await world(t,false,'2027-01-22');await w.admin.post('/account/provider',legal);
  await w.admin.post('/agency/businesses/verify?company='+w.id);
  const offer={catalog_version:'SIMPLE',name:'Contenido con Wallet',term:'MONTHLY',price_type:'FIXED',price:'100',VIDEO:'2',WALLET:'1',wallet_gift:'yes',confirm_offer:'yes',description:'Dos videos y fidelización incluida.'};
  assert.equal((await w.admin.post('/plans',offer)).status,303);
@@ -84,7 +87,7 @@ test('invalid billing cycle cannot reach the native subscription endpoint',async
 });
 
 test('a native Wallet agreement blocks an overlapping package and preserves the quote',async t=>{
- const w=await world(t,true);await w.admin.post('/account/provider',legal);
+ const w=await world(t,true,'2027-01-01');await w.admin.post('/account/provider',legal);
  await w.admin.post('/plans',{name:'Video y Wallet',term:'MONTHLY',price:'100',VIDEO:'2',wallet:'GIFT'});
  const plan=w.db.get('SELECT id FROM plans').id;
  const requested=await w.client.post('/plans/request',{key:randomUUID(),['qty_'+plan]:'1'});
@@ -93,7 +96,7 @@ test('a native Wallet agreement blocks an overlapping package and preserves the 
  assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);
 });
 test('a previously accepted Wallet order has a visible continuation instead of another fixed agreement',async t=>{
- const w=await world(t);await w.admin.post('/account/provider',legal);await w.admin.post('/agency/businesses/verify?company='+w.id);
+ const w=await world(t,false,'2027-01-22');await w.admin.post('/account/provider',legal);await w.admin.post('/agency/businesses/verify?company='+w.id);
  await w.admin.post('/plans',{name:'Wallet incluido',term:'MONTHLY',price:'50',VIDEO:'1',wallet:'GIFT'});
  const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,w.client,w.id,plan);
  w.db.run("UPDATE package_orders SET status='ACCEPTED'");w.db.run('DELETE FROM contracts');
@@ -101,14 +104,14 @@ test('a previously accepted Wallet order has a visible continuation instead of a
 });
 
 test('an already signed subscription resumes a pending Wallet without signing again',async t=>{
- const w=await world(t,true);w.db.run("UPDATE company_services SET status='SETUP' WHERE company_id=? AND service='WALLET'",w.id);
+ const w=await world(t,true,'2027-01-01');w.db.run("UPDATE company_services SET status='SETUP' WHERE company_id=? AND service='WALLET'",w.id);
  const page=await w.client.get('/plans/wallet/legacy');assert.match(page.body,/Activar mi Wallet/);assert.doesNotMatch(page.body,/href="\/wallet"/);
  assert.equal(w.db.get("SELECT status FROM company_services WHERE service='WALLET'").status,'SETUP');
  const r=await w.client.post('/plans/wallet/resume',{confirm:'yes'});assert.equal(r.status,303,r.body);
  assert.equal(w.db.get("SELECT status FROM company_services WHERE service='WALLET'").status,'ACTIVE');assert.equal(w.calls.filter(c=>c.method==='POST').length,0);
 });
 test('resume cannot activate a pending Wallet without any accepted agreement',async t=>{
- const w=await world(t);w.db.run("UPDATE company_services SET status='SETUP' WHERE company_id=? AND service='WALLET'",w.id);
+ const w=await world(t,false,'2027-01-22');w.db.run("UPDATE company_services SET status='SETUP' WHERE company_id=? AND service='WALLET'",w.id);
  assert.equal((await w.client.post('/plans/wallet/resume',{confirm:'yes'})).status,409);
  assert.equal(w.db.get("SELECT status FROM company_services WHERE service='WALLET'").status,'SETUP');
 });

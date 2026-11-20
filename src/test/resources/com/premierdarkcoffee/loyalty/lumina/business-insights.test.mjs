@@ -29,8 +29,10 @@ test('business account lists active combined and individual agreements with actu
 test('wallet monthly and annual totals show exact per-branch calculation and one annual charge',()=>{
  const actor={kind:'OWNER'},base={today:'2026-11-14',summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0,offset:0};
  for(const [fee,months,total,word] of [[499,1,1497,'mes'],[5000,12,15000,'año']]){
-   const page=accountPage(actor,{...base,membership:{branchMonthlyMinor:total,nextChargeOn:'2027-01-01',plan:{feeMinor:fee,intervalMonths:months,recurring:true,name:'Wallet',walletAgreement:{ownerName:'Dueño'}}}});
-   assert.match(page,/3 sucursales/);assert.match(page,new RegExp('/ '+word));assert.match(page,/Gratis hasta el/);assert.doesNotMatch(page,/cobro bancario automático/);
+   const membership={branchMonthlyMinor:total,nextChargeOn:'2027-02-01',plan:{feeMinor:fee,intervalMonths:months,recurring:true,name:'Wallet',walletAgreement:{activationOn:'2027-01-01',ownerName:'Dueño'}}};
+   const trial=accountPage(actor,{...base,membership});assert.match(trial,/Prueba gratuita hasta el 31 de diciembre/);assert.doesNotMatch(trial,/Tarifa para el próximo corte|3 sucursales/);
+   const page=accountPage(actor,{...base,today:'2027-01-22',membership});
+   assert.match(page,/3 sucursales/);assert.match(page,new RegExp('/ '+word));assert.doesNotMatch(page,/Prueba gratuita hasta/);assert.doesNotMatch(page,/cobro bancario automático/);
  }
 });
 test('a failed Wallet account lookup never presents a false zero balance',async t=>{

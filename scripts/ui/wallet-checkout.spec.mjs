@@ -1,5 +1,6 @@
 // Disposable accounts and provider fixture: never operates a production business.
 import assert from 'node:assert/strict';
+import {mock} from 'node:test';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -10,6 +11,7 @@ const {chromium}=createRequire(import.meta.url)('playwright');
 const cleanup=[],t={after:fn=>cleanup.push(fn)},output=process.env.LUMINA_UI_EVIDENCE;
 let browser;
 try {
+ mock.timers.enable({apis:['Date'],now:new Date('2027-01-01T04:59:00Z')});
  const native=await fakeLoyalty(t,fileURLToPath(new URL('../../src/main/resources/com/premierdarkcoffee/loyalty/presentation/loyalty/',import.meta.url)));
  const w=await portal(t,native.origin,{platformToken:native.platformToken}),admin=await agency(w);
  assert.equal((await admin.post('/plans',{catalog_version:'SIMPLE',name:'Wallet de mi negocio',description:'Fidelización y soporte.',term:'MONTHLY',price_type:'FIXED',price:'13.75',WALLET:'1',confirm_offer:'yes'})).status,303);
@@ -19,6 +21,7 @@ try {
  if(output)await mkdir(output,{recursive:true});
  const errors=[];
  for(const javaScriptEnabled of [true,false]) {
+  mock.timers.setTime(Date.parse('2027-01-01T04:59:00Z'));
   const session=w.session(),document=documentFor('browser-'+javaScriptEnabled);
   assert.equal((await session.post('/register',{company:'Comercio de prueba',name:'Responsable',document,ruc:document+'001',phone:'0991234567',password,consent:'yes',category:'CAFE'})).status,303);
   await session.get('/welcome');await session.post('/welcome',{service:'LATER'});await session.get('/services');
@@ -46,12 +49,23 @@ try {
       Array.from(document.querySelectorAll('main *')).filter(e=>e.getBoundingClientRect().right>innerWidth+1).map(e=>e.tagName+'.'+e.className+' '+e.textContent.trim().slice(0,45)+' '+e.parentElement.className+' '+Math.round(e.getBoundingClientRect().right)).slice(0,12));
     assert.deepEqual(overflowing,[],`Overflow at ${page.viewportSize().width} on ${page.url()}: ${overflowing.join(', ')}`);
   };
+  for(const width of [390,1440]){
+   await page.setViewportSize({width,height:1000});await page.goto(w.origin+'/plans/wallet');await fit();
+   assert.equal(await page.getByRole('button',{name:'Activar prueba gratuita'}).count(),1);
+   assert.doesNotMatch(await page.locator('main').innerText(),/4,99|50,00|Elegir este plan/);
+   if(output&&javaScriptEnabled)await page.screenshot({path:resolve(output,'trial-'+width+'.png'),fullPage:true});
+  }
+  await page.getByRole('button',{name:'Activar prueba gratuita'}).click();await page.waitForURL(w.origin+'/wallet');
+  mock.timers.setTime(Date.parse('2027-01-01T05:01:00Z'));
+  await page.goto(w.origin+'/home');assert.match(await page.locator('main').innerText(),/¿Quieres continuar con Wallet/);
+  await page.goto(w.origin+'/plans/wallet');await page.getByRole('button',{name:'Ahora no'}).click();
+  assert.doesNotMatch(await page.locator('main').innerText(),/¿Quieres continuar con Wallet/);
   for(const width of [320,390,1024,1440]) {
    await page.setViewportSize({width,height:1000});
    for(const path of ['/plans','/plans/wallet','/wallet','/services']) {
     const response=await page.goto(w.origin+path);assert.equal(response.status(),200);await fit();
     if(output && path==='/plans/wallet' && javaScriptEnabled && [390,1440].includes(width))await page.screenshot({path:resolve(output,'plans-'+width+'.png'),fullPage:true});
-    assert.doesNotMatch(await page.locator('body').innerText(),/\$4,99|identificación del proveedor|Por confirmar/);
+    assert.doesNotMatch(await page.locator('body').innerText(),/identificación del proveedor|Por confirmar/);
    }
   }
   await page.goto(w.origin+'/wallet');assert.equal(new URL(page.url()).pathname,'/plans/wallet');

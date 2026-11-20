@@ -1,3 +1,4 @@
+import { trialOffer, visibleContracts } from '../../memberships/trial.mjs';
 import { contactField } from './contact.mjs';
 import { can } from '../../access/accounts.mjs';
 import { areas, formats, services, uuid } from '../../shared/domain.mjs';
@@ -12,7 +13,7 @@ export function serviceChoices(actor,url) {
 }
 export function priceGuide(actor,url,area,plans=[],contracts=[]) {
   if(actor.kind!=='OWNER')return '';
-  const entries=requestCommercial(plans,contracts,area);
+  const entries=requestCommercial(plans.map(p=>trialOffer(p)).filter(Boolean),visibleContracts(contracts),area);
   return `<aside class="request-price-guide"><p class="eyebrow">PRECIOS Y CUPOS</p><h2>Antes de solicitar</h2>${entries.map(entry=>{
     const priced=entry.offers.filter(o=>o.price!==null);
     const offers=priced.slice(0,4).map(o=>`<li><span>${esc(o.name)} · ${o.quantity} ${esc(serviceName(entry.service))}</span><strong>${esc(displayAmount(o.price))}<small>${o.months===12?' / año':o.term==='MONTHLY'?(o.campaign?' · primer período mensual':' / mes'):' · pago único'}</small>${o.campaign?'<small>Viernes Negro · hasta el 30 de noviembre de '+o.campaign.year+'. Después se desactiva.</small>':''}</strong></li>`).join('');

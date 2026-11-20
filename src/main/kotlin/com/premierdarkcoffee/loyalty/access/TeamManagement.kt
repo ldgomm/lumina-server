@@ -100,7 +100,13 @@ fun LoyaltyService.createTeamUser(s: Staff, input: NewStaff): JsonObject {
     input.requestId?.let(::uuid)
     val permissions = input.permissions ?: StaffPermissions(); permissions.validate(input.role)
     return db.tx { c ->
-        authorizeStaff(c,s,true); commercial.requireActive(c,s.tenant)
+        authorizeStaff(c,s,true)
+        // Lúmina needs an owner identity to show the bill or accept the first plan.
+        // Operations with that identity still require an active Wallet.
+        val enrollment=s.id=="platform" && input.role=="OWNER" && input.requestId!=null &&
+            c.one("SELECT EXISTS(SELECT 1 FROM lumina_business_registrations WHERE tenant_id=?)",s.tenant){it.getBoolean(1)}==true
+        if(enrollment)need(commercial.lock(c,s.tenant).getValue("state").jsonPrimitive.content=="ACTIVE","BUSINESS_SUSPENDED","El negocio está suspendido.",423)
+        else commercial.requireActive(c,s.tenant)
         input.branchId?.let { branch(c,s.tenant,it) }
         if (input.requestId != null) {
             val previous = c.one("SELECT id,request_hash FROM staff_tokens WHERE tenant_id=? AND request_id=?",s.tenant,input.requestId) { it.getString(1) to it.getString(2) }

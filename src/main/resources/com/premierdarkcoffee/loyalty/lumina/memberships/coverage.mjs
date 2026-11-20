@@ -1,12 +1,14 @@
 import { contentKind } from '../content/service-options.mjs';
 import { localDay, requireThat } from '../shared/domain.mjs';
 import { serviceName } from './catalog.mjs';
+import { inTrial, paidFrom, trialMessage, walletOnly } from './trial.mjs';
 import { periodEnd, selectionStart, walletLine } from './calendar.mjs';
 
 const openEnd='9999-12-31';
 function services(line) {
   const result=new Set(line.items.map(i=>contentKind(i.service)).filter(s=>s==='WALLET'||line.term==='MONTHLY'));
   if(walletLine(line))result.add('WALLET');
+  if(line.trialOnly)result.delete('WALLET');
   return result;
 }
 function sameServiceSet(a,b) {
@@ -35,16 +37,17 @@ export function coverageFor(db,company,today=localDay()) {
     if(!plans.has(id))plans.set(id,db.all('SELECT service,quantity FROM plan_items WHERE plan_id=?',id));
     return plans.get(id);
   };
-  const records=db.all(`SELECT c.plan_id,c.starts_on AS start,c.ends_before AS end,p.name,p.term,p.wallet,coalesce(b.months,1) months
+  const records=db.all(`SELECT CASE WHEN EXISTS(SELECT 1 FROM wallet_schedules s WHERE s.id=c.schedule_id AND s.consent_on IS NOT NULL)
+    OR EXISTS(SELECT 1 FROM package_orders o JOIN package_order_lines l ON l.order_id=o.id WHERE l.id=c.order_line_id AND date(o.accepted_at,'-5 hours')>='2027-01-01') THEN 0 ELSE 1 END AS trialOnly,c.plan_id,c.starts_on AS start,c.ends_before AS end,p.name,p.term,p.wallet,coalesce(b.months,1) months
     FROM contracts c JOIN plans p ON p.id=c.plan_id LEFT JOIN plan_billing b ON b.plan_id=p.id
     WHERE c.company_id=? AND c.cancelled_at IS NULL AND c.ends_before>?`,company,today);
-  const schedules=db.all(`SELECT s.plan_id,s.starts_on AS start,s.ends_before AS end,p.name,p.term,p.wallet,coalesce(b.months,1) months
+  const schedules=db.all(`SELECT s.consent_on IS NULL AS trialOnly,s.plan_id,s.starts_on AS start,s.ends_before AS end,p.name,p.term,p.wallet,coalesce(b.months,1) months
     FROM wallet_schedules s JOIN plans p ON p.id=s.plan_id LEFT JOIN plan_billing b ON b.plan_id=p.id
     WHERE s.company_id=? AND (s.ends_before IS NULL OR (s.ends_before>s.starts_on AND s.ends_before>?))`,company,today);
   const current=[...records,...schedules.map(s=>({...s,schedule:true}))].map(r=>({...r,end:r.end||openEnd,items:items(r.plan_id)}));
   const pending=db.all(`SELECT o.id AS order_id,o.company_id,o.start_when,o.wallet_not_before,l.*,coalesce(b.months,1) months,
     s.plan_id AS campaign FROM package_orders o JOIN package_order_lines l ON l.order_id=o.id LEFT JOIN plan_billing b ON b.plan_id=l.plan_id
-    LEFT JOIN seasonal_offers s ON s.plan_id=l.plan_id WHERE o.company_id=? AND o.status IN ('REQUESTED','QUOTED','ACCEPTED')`,company);
+    LEFT JOIN seasonal_offers s ON s.plan_id=l.plan_id WHERE o.company_id=? AND o.trial_archive=0 AND o.status IN ('REQUESTED','QUOTED','ACCEPTED')`,company);
   for(const r of pending){
     if(r.ends_before && r.ends_before<=today)continue;
     const line={...r,items:JSON.parse(r.items_json)};
@@ -57,6 +60,7 @@ export function coverageFor(db,company,today=localDay()) {
 export function selectionConflict(db,order,lines,records=coverageFor(db,order.company_id),today=localDay()) {
   const occupied=records.filter(r=>!order.id || r.order_id!==order.id);
   for(const line of lines){
+    if(inTrial(today)&&walletOnly(line))return trialMessage;
     const wanted=services(line);
     if(!wanted.size)continue;
     if(wanted.has('WALLET') && line.units>1)return 'Wallet se contrata una sola vez por negocio. Elige una unidad.';
@@ -67,7 +71,7 @@ export function selectionConflict(db,order,lines,records=coverageFor(db,order.co
       if(!match)continue;
       // A confirmed change can end the current recurring schedule, once the
       // committed contract has expired. A future reservation cannot be displaced.
-      if(r.schedule && order.start_when==='NEXT_MONTH' && r.start<=today && r.start<start &&
+      if(r.schedule && !r.trialOnly && order.start_when==='NEXT_MONTH' && r.start<=today && r.start<start &&
          walletLine(line) && line.term==='MONTHLY' && (line.months!==r.months || !sameServiceSet(line,r)))continue;
       if(r.order_id)return 'Ya tienes una solicitud para '+r.name+' en este período. Puedes continuarla o cancelarla en Mis solicitudes.';
       if(r.selection)return 'La selección incluye '+serviceName(match)+' más de una vez durante el mismo período.';
@@ -93,6 +97,7 @@ export function withEligibility(db,company,plans,native=null) {
 }
 export function legacySelection(membership,line,today=localDay()) {
   const plan=membership?.plan;
+  if(plan?.startedOn && (plan.walletAgreement?.activationOn||plan.startedOn)<paidFrom)return {};
   const until=plan?.walletEndsOn || membership?.coveredUntil || membership?.nextChargeOn;
   if(!walletLine(line) || !plan || !plan.recurring && (!until || until<=today))return {};
   const same=plan.recurring && line.term==='MONTHLY' && (line.months||1)===(plan.intervalMonths||1) && services(line).size===1;

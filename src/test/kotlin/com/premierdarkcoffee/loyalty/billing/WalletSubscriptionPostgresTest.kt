@@ -41,7 +41,7 @@ class WalletSubscriptionPostgresTest {
         db=Database(HikariDataSource(HikariConfig().apply{jdbcUrl=url;username=user;this.password=this@WalletSubscriptionPostgresTest.password;maximumPoolSize=6;connectionInitSql="SET search_path TO ${this@WalletSubscriptionPostgresTest.schema}"}))
         db.migrate();service=LoyaltyService(db,"subscription-test-identity-pepper",time)
     }
-    @BeforeEach fun reset(){time.value=Instant.parse("2026-11-19T15:00:00Z")}
+    @BeforeEach fun reset(){time.value=Instant.parse("2027-01-01T15:00:00Z")}
     @AfterAll fun cleanup(){if(::db.isInitialized)db.close();DriverManager.getConnection(url,user,password).use{it.createStatement().use{s->s.execute("DROP SCHEMA $schema CASCADE")}}}
     private fun JsonObject.str(key:String)=getValue(key).jsonPrimitive.content
     private fun fixture():Fixture {
@@ -57,6 +57,9 @@ class WalletSubscriptionPostgresTest {
     private fun invoices(f:Fixture):JsonArray=service.commercial.ownerAccount(f.staff).getValue("invoices").jsonArray
     private fun balance(f:Fixture)=service.commercial.ownerAccount(f.staff).getValue("summary").jsonObject.getValue("balanceMinor").jsonPrimitive.long
     private fun cancel(f:Fixture)=service.cancelWalletSubscription(f.staff,WalletCancelInput(status(f).getValue("version").jsonPrimitive.int,true),id())
+    private fun seedBranch(f:Fixture) {
+        db.tx { c->c.exec("INSERT INTO branches(tenant_id,id,name,code,created_at) VALUES(?,?,?,?,?)",f.tenant,id(),"Sucursal previamente registrada",id().take(8),Timestamp.from(time.instant())) }
+    }
     private fun branch(f:Fixture):String {
         val result=service.newBranch(f.staff,NewBranch("Local adicional",id().take(8)))
         db.tx{it.exec("UPDATE branches SET created_at=? WHERE tenant_id=? AND id=?",Timestamp.from(time.instant()),f.tenant,result.str("id"))}
@@ -64,7 +67,7 @@ class WalletSubscriptionPostgresTest {
     }
     @Test fun `catalogue trial is free and January usage suspends on February sixteen only for unpaid Wallet`() {
         val f=fixture();val schedule=CatalogSchedule(id(),"Wallet y contenido","2026-11-22",null,499)
-        val request=CatalogCalendar(f.registration.companyId,1,listOf(schedule))
+        val request=CatalogCalendar(f.registration.companyId,1,listOf(schedule),trialActive=true)
         time.value=Instant.parse("2026-11-22T16:00:00Z")
         service.commercial.updateCalendar(f.tenant,request)
         val customer=service.member(service.enrollWithoutPassword("lumina-"+f.registration.companyId.replace("-",""),com.premierdarkcoffee.loyalty.wallet.WalletEnrollment("Cliente","DEMO12345",true,phone="0991234567")).str("token"))
@@ -74,7 +77,10 @@ class WalletSubscriptionPostgresTest {
         time.value=Instant.parse("2026-12-01T05:00:00Z");val december=request.copy(revision=2,entries=listOf(schedule.copy(billBefore="2027-01-01")))
         repeat(2){service.commercial.sweep();service.commercial.updateCalendar(f.tenant,december)}
         assertEquals(0L,balance(f));assertTrue(invoices(f).isEmpty())
-        val january=december.copy(revision=3,entries=listOf(schedule.copy(billBefore="2027-02-01")))
+        val closed=schedule.copy(endsBefore="2027-01-01",billBefore="2027-01-01")
+        val january=december.copy(revision=3,entries=listOf(closed,CatalogSchedule(id(),"Wallet mensual","2027-01-01",null,499,"2027-02-01",consentOn="2027-01-01")))
+        time.value=Instant.parse("2027-01-01T05:00:00Z")
+        assertFalse(service.commercial.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
         time.value=Instant.parse("2027-01-01T05:00:00Z");service.commercial.updateCalendar(f.tenant,january)
         time.value=Instant.parse("2027-02-01T04:59:59Z");assertTrue(invoices(f).isEmpty())
         time.value=Instant.parse("2027-02-01T05:00:00Z");repeat(2){service.commercial.sweep()}
@@ -85,7 +91,7 @@ class WalletSubscriptionPostgresTest {
         assertEquals(original.serial,suspended.serial)
         assertTrue(suspended.appleJson("pass.example","TEAM","https://example.test").getValue("voided").jsonPrimitive.boolean)
         assertEquals("INACTIVE",suspended.googleJson("issuer.object","issuer.class","https://example.test").str("state"))
-        val other=fixture();assertEquals("ACTIVE",service.commercial.publicAccess(other.tenant).str("state"))
+        val other=fixture();accept(other);assertEquals("ACTIVE",service.commercial.publicAccess(other.tenant).str("state"))
         service.commercial.charge(f.tenant,NewCharge("Web",5000,"2026-12-05"),id())
         val charges=invoices(f).map{it.jsonObject}.filter{it.str("description")!="Web"}
         val first=charges.first()
@@ -109,7 +115,7 @@ class WalletSubscriptionPostgresTest {
 
     @Test fun `replacing the signed Wallet with a bundle keeps its prepaid period and charges one rate at the cut`() {
         val f=fixture(); accept(f)
-        val combo=CatalogSchedule(id(),"Wallet con Contenido","2027-01-01",null,2000,"2027-02-01")
+        val combo=CatalogSchedule(id(),"Wallet con Contenido","2027-01-01",null,2000,"2027-02-01",consentOn="2027-01-01")
         val transfer=CatalogCalendar(f.registration.companyId,1,listOf(combo))
         service.commercial.updateCalendar(f.tenant,transfer)
         assertEquals(0L,balance(f))
@@ -132,9 +138,12 @@ class WalletSubscriptionPostgresTest {
         service.commercial.updateCalendar(bundle.tenant,CatalogCalendar(bundle.registration.companyId,1,listOf(split)))
         time.value=Instant.parse("2027-01-01T05:00:00Z");assertEquals(2000L,balance(bundle))
         assertFalse(invoices(bundle).single().jsonObject.getValue("walletDue").jsonPrimitive.boolean)
+        assertEquals("SUSPENDED",service.commercial.publicAccess(bundle.tenant).str("state"))
+        val consent=CatalogSchedule(id(),"Wallet mensual","2027-01-01",null,499,"2027-02-01",consentOn="2027-01-01")
+        service.commercial.updateCalendar(bundle.tenant,CatalogCalendar(bundle.registration.companyId,2,listOf(split,consent)))
         time.value=Instant.parse("2027-01-22T15:00:00Z");assertEquals("ACTIVE",service.commercial.publicAccess(bundle.tenant).str("state"))
         val partial=fixture()
-        val partialSchedule=CatalogSchedule(id(),"Wallet mensual","2027-01-22",null,499,"2027-02-01")
+        val partialSchedule=CatalogSchedule(id(),"Wallet mensual","2027-01-22",null,499,"2027-02-01",consentOn="2027-01-22")
         service.commercial.updateCalendar(partial.tenant,CatalogCalendar(partial.registration.companyId,1,listOf(partialSchedule)))
         time.value=Instant.parse("2027-02-01T05:00:00Z")
         assertEquals(161L,balance(partial));assertEquals(4499L,balance(bundle))
@@ -144,9 +153,9 @@ class WalletSubscriptionPostgresTest {
         service.commercial.pay(bundle.tenant,RecordPayment(wallet.str("id"),499,id(),"TRANSFER","2027-02-16"),id())
         assertEquals("ACTIVE",service.commercial.publicAccess(bundle.tenant).str("state"));assertEquals(4000L,balance(bundle))
 
-        time.value=Instant.parse("2026-12-10T15:00:00Z")
+        time.value=Instant.parse("2027-01-01T15:00:00Z")
         val annual=fixture()
-        val yearly=CatalogSchedule(id(),"Wallet anual","2027-01-01",null,5000,"2028-01-01",months=12)
+        val yearly=CatalogSchedule(id(),"Wallet anual","2027-01-01",null,5000,"2028-01-01",months=12,consentOn="2027-01-01")
         service.commercial.updateCalendar(annual.tenant,CatalogCalendar(annual.registration.companyId,1,listOf(yearly)))
         time.value=Instant.parse("2027-01-31T15:00:00Z");assertTrue(invoices(annual).isEmpty())
         time.value=Instant.parse("2027-02-01T05:00:00Z");assertEquals(5000L,balance(annual))
@@ -155,13 +164,31 @@ class WalletSubscriptionPostgresTest {
         assertEquals("OVERLAPPING_PERIOD",assertFailsWith<Problem>{service.commercial.updateCalendar(annual.tenant,CatalogCalendar(annual.registration.companyId,2,listOf(yearly,overlap)))}.code)
     }
 
+    @Test fun `a returning owner keeps prepaid days only after consent and is charged after the next uncovered month`() {
+        val f=fixture()
+        val prepaid=CatalogSchedule(id(),"Período anterior","2026-12-15","2027-02-01",0,"2027-02-01",replacesLegacy=false)
+        val old=CatalogCalendar(f.registration.companyId,1,listOf(prepaid),trialActive=true)
+        service.commercial.updateCalendar(f.tenant,old)
+        assertEquals("SUSPENDED",service.commercial.publicAccess(f.tenant).str("state"))
+        time.value=Instant.parse("2027-01-22T15:00:00Z")
+        val chosen=CatalogSchedule(id(),"Wallet mensual","2027-02-01",null,499,"2027-03-01",consentOn="2027-01-22",perBranch=true,initialBranches=2)
+        seedBranch(f)
+        service.commercial.updateCalendar(f.tenant,old.copy(revision=2,entries=listOf(prepaid,chosen)))
+        assertEquals("ACTIVE",service.commercial.publicAccess(f.tenant).str("state"))
+        time.value=Instant.parse("2027-02-01T15:00:00Z")
+        assertTrue(invoices(f).isEmpty())
+        time.value=Instant.parse("2027-03-01T15:00:00Z")
+        repeat(2){service.commercial.sweep()}
+        assertEquals(listOf(998L),invoices(f).map{it.jsonObject.getValue("amountMinor").jsonPrimitive.long})
+    }
+
     @Test fun `a late calendar handover replaces an unpaid advance and respects a recorded payment`() {
         for(alreadyPaid in listOf(false,true)){
-            time.value=Instant.parse("2026-12-10T15:00:00Z");val f=fixture();accept(f)
+            time.value=Instant.parse("2027-01-01T15:00:00Z");val f=fixture();accept(f)
             time.value=Instant.parse("2027-02-01T15:00:00Z");service.commercial.sweep()
             val old=invoices(f).single().jsonObject
             if(alreadyPaid)service.commercial.pay(f.tenant,RecordPayment(old.str("id"),499,id(),"CASH","2027-02-01"),id())
-            val combo=CatalogSchedule(id(),"Wallet y redes","2027-01-01",null,2000,"2027-02-01")
+            val combo=CatalogSchedule(id(),"Wallet y redes","2027-01-01",null,2000,"2027-02-01",consentOn="2027-01-01")
             service.commercial.updateCalendar(f.tenant,CatalogCalendar(f.registration.companyId,1,listOf(combo)))
             val active=invoices(f).map{it.jsonObject}.filter{it.str("status")!="VOID"}
             assertEquals(1,active.size)
@@ -190,8 +217,12 @@ class WalletSubscriptionPostgresTest {
         assertEquals(1,state.getValue("version").jsonPrimitive.int)
     }
     @Test fun `trial and January create no invoice until February first in Ecuador`() {
-        val f=fixture();accept(f);assertEquals(0L,balance(f));assertEquals("2026-12-31",status(f).str("trialUntil"))
-        time.value=Instant.parse("2027-01-01T04:59:59Z");assertEquals(0L,balance(f))
+        time.value=Instant.parse("2027-01-01T04:59:59Z")
+        val f=fixture()
+        service.commercial.updateCalendar(f.tenant,CatalogCalendar(f.registration.companyId,1,emptyList(),trialActive=true))
+        assertEquals("TRIAL_ACTIVE",assertFailsWith<Problem>{accept(f)}.code);assertEquals(0L,balance(f))
+        time.value=Instant.parse("2027-01-01T05:00:00Z")
+        assertEquals("INACTIVE",service.commercial.accessState(f.tenant).str("walletSubscriptionState"));accept(f)
         time.value=Instant.parse("2027-02-01T04:59:59Z");assertEquals(0L,balance(f));assertTrue(invoices(f).isEmpty())
         assertEquals("2027-02-01",status(f).str("nextChargeOn"))
         time.value=Instant.parse("2027-02-01T05:00:00Z");assertEquals(499L,balance(f));assertEquals(1,invoices(f).size)
@@ -209,11 +240,11 @@ class WalletSubscriptionPostgresTest {
         assertEquals(0L,balance(f))
     }
     @Test fun `quote cannot silently change branches provider or date`() {
-        val f=fixture();val q=service.walletSubscriptionOffer(f.staff,f.offer);branch(f)
+        val f=fixture();val q=service.walletSubscriptionOffer(f.staff,f.offer);seedBranch(f)
         assertEquals("OFFER_CHANGED",assertFailsWith<Problem>{accept(f,quote=q)}.code)
         val fresh=service.walletSubscriptionOffer(f.staff,f.offer)
         assertFailsWith<Problem>{service.acceptWalletSubscription(f.staff,WalletAcceptInput(f.offer.copy(provider=provider.copy(legalName="Otro proveedor")),fresh.str("hash"),true),id())}
-        time.value=Instant.parse("2026-11-20T15:00:00Z");assertFailsWith<Problem>{accept(f,quote=fresh)}
+        time.value=Instant.parse("2027-01-02T15:00:00Z");assertFailsWith<Problem>{accept(f,quote=fresh)}
     }
     @Test fun `retries and concurrent acceptances create only one version`() {
         val f=fixture();val q=service.walletSubscriptionOffer(f.staff,f.offer);val key=id();val pool=Executors.newFixedThreadPool(4)
@@ -227,7 +258,7 @@ class WalletSubscriptionPostgresTest {
         assertFailsWith<Problem>{accept(f,quote=q)}
     }
     @Test fun `catch up charges use historical branches once per period`() {
-        val f=fixture();accept(f);time.value=Instant.parse("2026-12-03T12:00:00Z");branch(f)
+        val f=fixture();seedBranch(f);accept(f)
         time.value=Instant.parse("2027-01-15T12:00:00Z");branch(f)
         time.value=Instant.parse("2027-03-01T12:00:00Z");service.commercial.sweep();service.commercial.sweep()
         assertEquals(2,invoices(f).size);assertEquals(2495L,balance(f)) // January had two branches and February had three.
@@ -241,7 +272,10 @@ class WalletSubscriptionPostgresTest {
         time.value=Instant.parse("2027-05-01T05:00:00Z");assertEquals(1207L,balance(f))
     }
     @Test fun `cancel trial preserves card identities and issues no January charge`() {
-        val f=fixture();val original=service.businessProfile(f.tenant);accept(f);cancel(f)
+        time.value=Instant.parse("2026-12-10T15:00:00Z")
+        val f=fixture();val original=service.businessProfile(f.tenant)
+        service.commercial.updateCalendar(f.tenant,CatalogCalendar(f.registration.companyId,1,emptyList(),true))
+        service.commercial.updateCalendar(f.tenant,CatalogCalendar(f.registration.companyId,2,emptyList(),false))
         time.value=Instant.parse("2027-02-01T12:00:00Z");assertEquals(0L,balance(f));assertFalse(service.commercial.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
         assertEquals(f.tenant,service.staff(f.token).tenant);assertEquals(original.getValue("business"),service.businessProfile(f.tenant).getValue("business"))
         assertEquals(f.tenant,service.registerLuminaBusiness(f.registration).getValue("business").jsonObject.str("id"))
@@ -254,8 +288,10 @@ class WalletSubscriptionPostgresTest {
         assertEquals("2027-04-01",status(f).str("nextChargeOn"))
     }
     @Test fun `legacy plans cannot be replaced and platform cannot overwrite accepted rate`() {
-        val f=fixture();service.commercial.configure(f.tenant,MembershipChange(0,MembershipPlan("Anterior",2000,"2026-11-19","2027-01-01")))
-        assertEquals("EXISTING_AGREEMENT",assertFailsWith<Problem>{service.walletSubscriptionOffer(f.staff,f.offer)}.code)
+        val f=fixture()
+        assertEquals("WALLET_ACCEPTANCE_REQUIRED",assertFailsWith<Problem>{service.commercial.configure(f.tenant,MembershipChange(0,MembershipPlan("Anterior",2000,"2026-11-19","2027-01-01")))}.code)
+        db.tx{c->service.commercial.savePlan(c,f.tenant,MembershipPlan("Anterior",2000,"2026-11-19","2027-01-01"),1)}
+        time.value=Instant.parse("2027-02-01T12:00:00Z");assertEquals(0L,balance(f));accept(f)
         val other=fixture();accept(other)
         assertEquals("WALLET_ACCEPTANCE_REQUIRED",assertFailsWith<Problem>{service.commercial.configure(other.tenant,MembershipChange(1,MembershipPlan("Alterado",999,"2026-11-19","2027-01-01")))}.code)
     }
@@ -270,8 +306,8 @@ class WalletSubscriptionPostgresTest {
     }
 
     @Test fun `annual promotion and historical branches charge one full year once`() {
-        val f=fixture().let{it.copy(offer=it.offer.copy(cycle="ANNUAL"))};accept(f)
-        assertEquals(0L,balance(f));time.value=Instant.parse("2026-12-03T12:00:00Z");branch(f)
+        val f=fixture().let{it.copy(offer=it.offer.copy(cycle="ANNUAL"))};seedBranch(f);accept(f)
+        assertEquals(0L,balance(f))
         time.value=Instant.parse("2027-01-31T15:00:00Z");assertEquals(0L,balance(f))
         time.value=Instant.parse("2027-02-01T05:00:00Z");assertEquals(10000L,balance(f));assertEquals("2028-02-01",status(f).str("nextChargeOn"))
         val january=invoices(f).single().jsonObject
@@ -311,7 +347,7 @@ class WalletSubscriptionPostgresTest {
         assertTrue(service.commercial.changeAccess(f.tenant,suspend).getValue("replayed").jsonPrimitive.boolean)
         assertFailsWith<Problem>{service.commercial.changeAccess(f.tenant,suspend.copy(state="ACTIVE"))}
         service.commercial.changeAccess(f.tenant,AccessChange("CLOSED","Terminación del servicio",initial+1,id()))
-        time.value=Instant.parse("2027-02-01T12:00:00Z");assertEquals(0L,balance(f));assertFalse(status(f).getValue("recurring").jsonPrimitive.boolean)
+        time.value=Instant.parse("2027-02-01T12:00:00Z");assertEquals(499L,balance(f));assertFalse(status(f).getValue("recurring").jsonPrimitive.boolean)
         service.commercial.changeAccess(f.tenant,AccessChange("ACTIVE","Reabrir el negocio",initial+2,id()))
         assertFalse(status(f).getValue("recurring").jsonPrimitive.boolean)
         assertEquals(f.tenant,service.staff(f.token).tenant)

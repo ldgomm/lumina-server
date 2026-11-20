@@ -135,6 +135,7 @@ test('accepting content packages works without a Wallet and does not silently en
  const w=await world(t),o=await signup(w);await o.client.post('/welcome',{service:'SOCIAL'});await w.admin.post('/agency/businesses/verify?company='+o.id);await w.admin.post('/plans',{name:'Video simple',term:'MONTHLY',price:'20',VIDEO:'1',wallet:'NONE'});const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,o.client,o.id,plan);assert.equal(w.native.registrations.size,0);assert.equal(serviceState(w.db,o.id,'WALLET'),'INACTIVE');
 });
 test('accepting a quoted package activates its Wallet without another subscription or admin confirmation',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date('2027-01-22T16:00:00Z')});
  const w=await world(t),o=await signup(w);await o.client.post('/welcome',{service:'SOCIAL'});await w.admin.post('/agency/businesses/verify?company='+o.id);await w.admin.post('/plans',{name:'Video con Wallet',term:'MONTHLY',price:'50',VIDEO:'1',wallet:'GIFT'});const plan=w.db.get('SELECT id FROM plans').id;await acceptedContract(w,w.admin,o.client,o.id,plan);assert.equal(serviceState(w.db,o.id,'WALLET'),'ACTIVE');assert.equal((await o.client.get('/wallet')).status,200);assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,1);
 });
 test('a confirmed manual service charge may prepare billing infrastructure but never enables Wallet',async t=>{

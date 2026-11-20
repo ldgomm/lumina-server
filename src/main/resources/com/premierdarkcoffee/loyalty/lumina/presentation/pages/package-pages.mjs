@@ -6,7 +6,8 @@ import { contentOptions } from '../../content/service-options.mjs';
 import { icon } from './icons.mjs';
 import { areas, formats, localDay, services, uuid } from '../../shared/domain.mjs';
 import { inclusiveEnd } from '../../memberships/orders.mjs';
-import { firstStatement, walletLine } from '../../memberships/calendar.mjs';
+import { inTrial, standardIds, trialOffer, visibleContracts } from '../../memberships/trial.mjs';
+import { firstStatement, nextCut, walletLine } from '../../memberships/calendar.mjs';
 import { includesWallet } from '../../memberships/wallet-checkout.mjs';
 import { badge, button, card, check, disclosure, displayAmount, esc, form, hidden, input, label, localLink, message, select, table, textarea, timestamp } from './components.mjs';
 
@@ -25,19 +26,20 @@ export function totalsPanel(totals,lines=null) {
   }).join('')}</div>`;
 }
 export function catalog(actor,company,url,plans,values={}) {
+  if(actor.kind==='OWNER')plans=plans.map(p=>trialOffer(p)).filter(Boolean);
   const selectable=actor.kind==='OWNER'&&Boolean(company),active=plans.filter(p=>offerAvailable(p)).sort((a,b)=>Number(Boolean(b.campaign))-Number(Boolean(a.campaign)));
   const cards=active.map(plan=>{
     const info=describeOffer(plan);
     return `<article class="package-card price-card ${plan.campaign?'bf-'+plan.campaign.theme:''}" id="offer-${esc(plan.id)}" data-package data-kind="${info.kind}" data-areas="${info.areas.join(' ')}" data-name="${esc(plan.name)}" data-term="${plan.months===12?'ANNUAL':plan.term}" data-price="${plan.price_minor??''}">
       <div class="offer-labels">${badge(info.kind==='individual'?'Individual':'Paquete')}${badge(termName(plan))}</div>
       <h3>${esc(plan.name)}</h3><p class="package-price">${plan.price_minor===null?'Por cotizar':esc(displayAmount(plan.price_minor))}<small>${plan.months===12?'por año':plan.term==='MONTHLY'?(plan.campaign?'primer período mensual':'por mes'):'pago único'}</small></p>
-      ${campaignLabel(plan)}${info.unitMinor!==null?`<p class="unit-price">≈ ${esc(displayAmount(info.unitMinor))} por unidad · referencia dentro de este paquete</p>`:''}
+      ${inTrial()&&actor.kind==='AGENCY'&&walletLine(plan)?'<p>Tarifa de catálogo para después de la prueba. Wallet cuesta $0 hasta el 31 de diciembre.</p>':''}${standardIds.includes(plan.id)?'<p>Tarifa por sucursal. Revisa el total antes de confirmar.</p>':''}${plan.trialBundle?'<p class="commercial-wallet">Este precio corresponde a los otros servicios. Puedes activar Wallet gratis por separado.</p>':campaignLabel(plan)}${info.unitMinor!==null?`<p class="unit-price">≈ ${esc(displayAmount(info.unitMinor))} por unidad · referencia dentro de este paquete</p>`:''}
       <p class="prewrap">${esc(plan.description)}</p><h4>Incluye${plan.months===12?' cada año':plan.term==='MONTHLY'?(plan.campaign?' este período':' cada mes'):''}</h4>${itemsList(plan.items)}${walletNote(plan.wallet)}
       ${selectable&&plan.blockedNow&&plan.blockedNext?`<p class="member-selected">${esc(plan.blockedNow)}</p>`:selectable?`<div class="offer-selection" data-now="${esc(plan.blockedNow||'')}" data-next="${esc(plan.blockedNext||'')}">${plan.blockedNow||plan.blockedNext?`<p data-period-note>${esc(plan.blockedNow||plan.blockedNext)} ${plan.blockedNow?'Elige el próximo período para revisar un cambio.':''}</p>`:''}<span>${info.kind==='individual'?'Cantidad':'Número de paquetes'}</span><div class="quantity-control"><button type="button" data-quantity-change="-1" aria-label="Quitar una unidad de ${esc(plan.name)}" hidden>−</button><label><span class="sr-only">Cantidad de ${esc(plan.name)}</span><input type="number" name="qty_${plan.id}" min="0" max="${plan.wallet!=='NONE'?1:10}" step="1" value="${esc(values['qty_'+plan.id]??'0')}" data-package-quantity></label><button type="button" data-quantity-change="1" aria-label="Añadir una unidad de ${esc(plan.name)}" hidden>+</button></div></div>`:''}</article>`;
   }).join('');
   const selection=`<div class="catalog-offers"><details class="catalog-filter-options" data-catalog-filters hidden><summary>Filtrar ofertas <span data-active-filters></span></summary><div class="catalog-filters">${select('catalog_kind','Tipo de oferta',[['','Todas'],['individual','Servicios individuales'],['package','Paquetes']])}${select('catalog_area','Servicio',[['','Todos los servicios'],...Object.entries(areas)])}${select('catalog_term','Modalidad',[['','Todas'],['MONTHLY','Mensual'],['ANNUAL','Anual'],['ONE_OFF','Pago único']])}<button type="button" class="secondary" data-clear-filters>Ver todas</button></div></details><p class="muted" data-catalog-count aria-live="polite"></p><div class="package-grid">${cards||message('Todavía no hay precios publicados. Lúmina debe publicar sus servicios y paquetes; mientras tanto, puedes solicitar una cotización.')}</div><p data-catalog-empty hidden>No hay ofertas con estos filtros. Prueba otra modalidad o servicio.</p>${actor.kind==='OWNER'?localLink(url('/requests/new'),'¿Necesitas algo distinto? Pide una cotización →'):''}</div>`;
   const summary=selectable&&active.length?`<aside class="selection-summary" id="your-selection" tabindex="-1"><h3>Tu selección</h3><p>Combina servicios sueltos y paquetes como necesites.</p><div data-package-lines><p>Elige un servicio para ver el total.</p></div><div data-package-totals aria-live="polite"><p>Revisaremos los importes antes de confirmar.</p></div>
-    ${select('start_when','¿Cuándo quieres empezar?',[['TODAY','Ahora'],['NEXT_MONTH','El próximo mes']],values.start_when||'TODAY')}${contactField(values.phone??company.phone)}${disclosure('Añadir una indicación (opcional)',textarea('notes','Detalles para tu propuesta','maxlength="2000" rows="3" placeholder="Puedes pedir ajustes o combinar servicios."',values.notes||''))}<p class="purchase-note">Revisa el total y las condiciones antes de contratar. Wallet se activa al confirmar una oferta con precio publicado.</p>${hidden('key',values.key||uuid())}${button('Revisar selección')}</aside>`:'';
+    ${select('start_when','¿Cuándo quieres empezar?',[['TODAY','Ahora'],['NEXT_MONTH','El próximo mes']],values.start_when||'TODAY')}${contactField(values.phone??company.phone)}${disclosure('Añadir una indicación (opcional)',textarea('notes','Detalles para tu propuesta','maxlength="2000" rows="3" placeholder="Puedes pedir ajustes o combinar servicios."',values.notes||''))}<p class="purchase-note">Revisa el total y las condiciones antes de contratar. ${inTrial()?'La prueba de Wallet se activa por separado.':'Wallet se activa al confirmar una oferta con precio publicado.'}</p>${hidden('key',values.key||uuid())}${button('Revisar selección')}</aside>`:'';
   return selectable&&active.length?form(url('/plans/request'),actor,selection+summary+'<a class="selection-jump" href="#your-selection" data-selection-jump hidden><span data-selection-count></span><strong>Revisar selección →</strong></a>','package-selection catalog-layout'):`<div class="catalog-layout catalog-readonly">${selection}</div>`;
 }
 function publishForm(actor,url) {
@@ -45,6 +47,7 @@ function publishForm(actor,url) {
 }
 function contractsPanel(actor,company,url,contracts) {
   if(!company)return message('Selecciona un negocio para consultar sus acuerdos.');
+  contracts=visibleContracts(contracts);
   const current=contracts.filter(c=>!c.cancelled_at&&c.starts_on<=localDay()&&c.ends_before>localDay());
   const monthly=current.filter(c=>c.term==='MONTHLY'&&c.months!==12).reduce((s,c)=>s+c.agreed_minor,0);
   const annual=current.filter(c=>c.months===12).reduce((s,c)=>s+c.agreed_minor,0);
@@ -69,17 +72,32 @@ function contractsPanel(actor,company,url,contracts) {
 }
 function ordersPanel(actor,company,url,orders) {
   const link=row=>actor.kind==='AGENCY'?(actor.agencyWork||!company?'/agency':'')+'/plans/orders/'+row.id+'?company='+row.company_id:'/plans/orders/'+row.id;
-  return card('Solicitudes de contratación',table(['Registro','Negocio','Estado','Versión','Propuesta'],orders.rows.map(o=>[
-    esc(timestamp(o.created_at)),esc(o.company_name),badge(stateName(o.status)),o.revision,localLink(link(o),'Revisar combinación →'),
-  ]),'Tus combinaciones solicitadas aparecerán aquí.')+`<div class="actions">${orders.page>0?localLink(url('/plans',{view:'orders',page:orders.page-1}),'← Anterior','btn secondary'):''}${orders.more?localLink(url('/plans',{view:'orders',page:orders.page+1}),'Siguiente →','btn secondary'):''}</div>`);
+  const nav=localLink(url('/plans',orders.archive?{view:'orders'}:{view:'orders',history:'trial'}),orders.archive?'Volver a solicitudes':'Ver historial de la prueba');
+  return card(orders.archive?'Historial de la prueba de Wallet':'Solicitudes de contratación',table(['Registro','Negocio','Estado','Detalle'],orders.rows.map(o=>[
+    esc(timestamp(o.created_at)),esc(o.company_name),badge(o.trial_archive?'Historial':stateName(o.status)),localLink(link(o),o.trial_archive?'Ver detalle':'Ver solicitud'),
+  ]),'No hay solicitudes en esta vista.')+`<div class="actions">${nav}${orders.page>0?localLink(url('/plans',{view:'orders',page:orders.page-1,...(orders.archive?{history:'trial'}:{})}),'← Anterior','btn secondary'):''}${orders.more?localLink(url('/plans',{view:'orders',page:orders.page+1,...(orders.archive?{history:'trial'}:{})}),'Siguiente →','btn secondary'):''}</div>`);
 }
 export function packagesPage({actor,company,url,plans,contracts,orders,view,values={},error=''}) {
   const intro=`<section class="pricing-intro"><div><h2>Elige tus servicios</h2><p>Agrega un servicio a tu plan actual o elige un paquete. Puedes empezar ahora o el próximo mes.</p></div><div class="pricing-key"><div><strong>Pago único</strong><span>Un trabajo concreto, con entrega y cierre.</span></div><div><strong>Mensual</strong><span>Consulta el precio y la próxima fecha de pago.</span></div></div></section>`;
-  return packageNav(url,view,actor.kind==='AGENCY')+(error?`<p class="notice" role="alert">${esc(error)}</p>`:'')+(view==='catalog'?(actor.kind==='AGENCY'&&!actor.readOnlyCompany?publishForm(actor,url):intro)+catalog(actor,company,url,plans,values)+(actor.kind==='AGENCY'&&!actor.readOnlyCompany?disclosure('Retirar ofertas del catálogo',
+  const notice=inTrial()&&view!=='orders'?`<aside class="notice"><strong>Wallet gratis hasta el 31 de diciembre.</strong> ${actor.kind==='OWNER'?localLink('/plans/wallet','Ver mi prueba gratuita'):'Cada negocio elige su plan desde el 1 de enero.'}</aside>`:'';
+  return packageNav(url,view,actor.kind==='AGENCY')+notice+(error?`<p class="notice" role="alert">${esc(error)}</p>`:'')+(view==='catalog'?(actor.kind==='AGENCY'&&!actor.readOnlyCompany?publishForm(actor,url):intro)+catalog(actor,company,url,plans,values)+(actor.kind==='AGENCY'&&!actor.readOnlyCompany?disclosure('Retirar ofertas del catálogo',
     plans.filter(p=>p.published).map(p=>form(url('/plans/withdraw'),actor,hidden('plan',p.id)+`<p>${esc(p.name)}</p>`+button('Retirar oferta','secondary'))).join('')):''):
     view==='agreements'?contractsPanel(actor,company,url,contracts):ordersPanel(actor,company,url,orders));
 }
 export function orderPage({actor,company,url,order,audit,values={},error=''}) {
+  if(order.trial_archive)return packageNav(url,'orders',actor.kind==='AGENCY')+card('Historial de la prueba gratuita',
+    '<p>'+esc(order.lines.map(l=>l.name).join(' + '))+'</p><p>Esta selección se hizo durante la prueba. El negocio puede elegir una suscripción desde el 1 de enero de 2027. Esta solicitud no autoriza cargos de Wallet.</p>'+
+    (actor.kind==='OWNER'?localLink('/plans/wallet','Ver mi Wallet','btn'):''));
+  const acceptedAt=order.accepted_at||order.created_at;
+  const acceptedDay=acceptedAt&&localDay(new Date(acceptedAt));
+  if(acceptedDay&&['ACTIVE','CANCELLED'].includes(order.status) && inTrial(acceptedDay) && includesWallet(order)){
+    const other=order.lines.map(l=>trialOffer({...l,price_minor:l.unit_minor},acceptedDay)).filter(Boolean);
+    return packageNav(url,'orders',actor.kind==='AGENCY')+card('Acuerdo durante la prueba de Wallet',
+      '<p>Wallet fue gratis. Este acuerdo no inicia una suscripción de pago en enero.</p>'+
+      (other.length?table(['Servicio','Importe acordado','Modalidad'],other.map(l=>[esc(l.name),l.price_minor==null?'Sin desglose acordado':esc(displayAmount(l.price_minor*l.units)),esc(termName(l))])):'')+
+      (actor.kind==='OWNER'?localLink('/plans/wallet','Ver mi Wallet','btn secondary'):'')+
+      (order.terms?disclosure('Consultar las condiciones originales','<p class="prewrap">'+esc(order.terms)+'</p>'):''));
+  }
   const base='/plans/orders/'+order.id;
   const version=hidden('revision',values.revision??order.revision);
   const value=(key,fallback)=>values[key]??fallback;
@@ -90,16 +108,38 @@ export function orderPage({actor,company,url,order,audit,values={},error=''}) {
   if(walletPlan){
     const price=walletPlan.unit_minor*walletPlan.units;
     const other=(walletPlan.wallet==='GIFT'?walletPlan.unit_minor:walletPlan.other_minor||0)*walletPlan.units;
-    const first=firstStatement(walletPlan.starts_on,price-other,walletPlan.campaign?walletPlan.ends_before:null,walletPlan.months);
+    const first=firstStatement(walletPlan.starts_on,(price-other)*(walletPlan.branchCount||order.initial_branches||1),walletPlan.campaign?walletPlan.ends_before:null,walletPlan.months);
     statement=`<section class="member-bill"><h3>Tu primer cargo de Wallet</h3>
       ${walletPlan.starts_on<'2027-01-01'?'<p>Wallet es gratis hasta el 31 de diciembre de 2026 inclusive.</p>':''}
       ${first.days&&first.amount?`<p>Se registra el ${esc(first.cut)}. Puedes pagar hasta el ${esc(first.due)}.</p>
       <dl><div><dt>${first.days!==first.monthDays?first.days+' de '+first.monthDays+' días':walletPlan.months===12?'Tarifa anual':'Mes terminado'}</dt><dd>${esc(displayAmount(first.amount))}</dd></div></dl>`:'<p>Wallet de cortesía para este período.</p>'}
+      ${standardIds.includes(walletPlan.plan_id)?`<p>${(walletPlan.branchCount||order.initial_branches||1)===1?'1 sucursal':(walletPlan.branchCount||order.initial_branches)+' sucursales'} · ${esc(displayAmount(walletPlan.unit_minor))} por sucursal.</p>`:''}
       ${other?`<p>Los otros servicios de este paquete cuestan ${esc(displayAmount(other))} por ${walletPlan.months===12?'año':'mes'}. Se registran por separado.</p>`:''}</section>`;
 
   }
-  const lines=order.lines.map(line=>`<article class="package-card"><div class="split">${badge(termName(line))}<span>${line.units} × oferta</span></div><h3>${esc(line.name)}</h3>
-    <p><strong>${line.unit_minor===null?'Por cotizar':esc(displayAmount(line.unit_minor*line.units))}</strong> ${line.months===12?'por año':line.term==='MONTHLY'?'por mes':'una sola vez'}${line.units>1&&line.unit_minor!==null?' · '+esc(displayAmount(line.unit_minor))+' por oferta':''}</p>
+  const standard=order.lines.length===1 && walletPlan && standardIds.includes(walletPlan.plan_id);
+  if(standard && confirmed && actor.kind==='OWNER' && ['REQUESTED','QUOTED','ACCEPTED','ACTIVE'].includes(order.status)){
+    const count=walletPlan.branchCount||order.initial_branches||1,annual=walletPlan.months===12,total=walletPlan.unit_minor*count;
+    const date=day=>new Intl.DateTimeFormat('es-EC',{dateStyle:'long',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'));
+    const active=order.status==='ACTIVE',scheduled=walletPlan.starts_on>localDay();
+    const first=firstStatement(walletPlan.starts_on,total,null,walletPlan.months);
+    const label=order.start_when==='NEXT_MONTH'?'Confirmar para el próximo período':'Aceptar y activar Wallet';
+    const action=active?localLink('/plans/wallet','Ver mi suscripción','btn'):form(url(base+'/accept'),actor,version+(instant?hidden('offerHash',order.checkoutHash):'')+
+      check('confirm','Revisé los servicios, precios, fechas y condiciones de esta propuesta.',false,true)+button(label));
+    return localLink('/plans/wallet','← Mi Wallet')+(error?'<p class="notice" role="alert">'+esc(error)+'</p>':'')+
+      '<section class="member-summary"><div><h2>'+esc(walletPlan.name)+'</h2><p>'+esc(active?(scheduled?'Cambio programado.':'Suscripción confirmada.'):'Revisa el importe antes de confirmar.')+'</p>'+
+      '<p>'+count+(count===1?' sucursal':' sucursales')+' · '+esc(displayAmount(walletPlan.unit_minor))+' por sucursal.</p></div><dl>'+
+      '<div><dt>Precio '+(annual?'anual':'mensual')+'</dt><dd>'+esc(displayAmount(total))+'</dd></div>'+
+      '<div><dt>Inicio del plan</dt><dd>'+esc(date(walletPlan.starts_on))+'</dd></div>'+
+      '<div><dt>Primer cargo · '+esc(date(first.cut))+'</dt><dd>'+esc(displayAmount(first.amount))+'</dd></div>'+
+      '<div><dt>Pagar hasta</dt><dd>'+esc(date(first.due))+'</dd></div></dl></section>'+
+      (first.days<first.monthDays?'<p>El primer cargo cubre '+first.days+' de los '+first.monthDays+' días del mes. '+(annual?'El cargo anual de '+esc(displayAmount(total))+' se registrará el '+esc(date(nextCut(first.cut)))+'.':'')+'</p>':'')+
+      '<p>El plan se renueva cada '+(annual?'año':'mes')+'. Puedes detener la renovación desde Mi Wallet y usar lo que ya contrataste hasta el último día del período.</p>'+
+      action+(active?'':form(url(base+'/cancel'),actor,version+hidden('reason','El dueño decidió no contratar este plan.')+button('Descartar esta selección','secondary')))+
+      disclosure('Condiciones del plan','<p class="prewrap">'+esc(order.terms)+'</p>');
+  }
+  const lines=order.lines.map(line=>`<article class="package-card"><div class="split">${badge(termName(line))}<span>${standardIds.includes(line.plan_id)?((line.branchCount||order.initial_branches||1)===1?'1 sucursal':(line.branchCount||order.initial_branches)+' sucursales'):line.units+' × oferta'}</span></div><h3>${esc(line.name)}</h3>
+    <p><strong>${line.unit_minor===null?'Por cotizar':esc(displayAmount(line.unit_minor*line.units*(standardIds.includes(line.plan_id)?line.branchCount||order.initial_branches||1:1)))}</strong> ${line.months===12?'por año':line.term==='MONTHLY'?'por mes':'una sola vez'}${line.units>1&&line.unit_minor!==null?' · '+esc(displayAmount(line.unit_minor))+' por oferta':''}</p>
     ${line.campaign?`<div class="bf-offer-note"><strong>Viernes Negro ${line.campaign.year}</strong><p>${esc(campaignNotice(line.campaign.year))}</p><p>${esc(line.campaign.conditions)}</p>${line.term==='MONTHLY'?'<p>Descuento por este período. Renovación a tarifa habitual y con nueva aceptación.</p>':''}</div>`:''}${itemsList(line.items,line.units)}${walletNote(line.wallet)}${line.starts_on?`<p>${esc(line.starts_on)} al ${esc(inclusiveEnd(line.ends_before))}, ambos incluidos.</p>`:''}</article>`).join('');
   const expired=order.lines.some(l=>l.campaign&&!l.campaign_available)&&['REQUESTED','QUOTED'].includes(order.status);
   const editor=!expired&&actor.kind==='AGENCY'&&!actor.readOnlyCompany&&['REQUESTED','QUOTED'].includes(order.status)?card('Preparar propuesta',form(url(base+'/quote'),actor,version+order.lines.map(line=>`
