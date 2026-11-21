@@ -22,6 +22,7 @@ async function run(){
    if(u.pathname.startsWith('/api/')){
     calls.push({path:u.pathname,query:Object.fromEntries(u.searchParams),method:req.method(),body:req.postDataJSON()});
     if(u.pathname==='/api/staff/access')return route.fulfill({json:{canOperate:true}});
+    if(u.pathname==='/api/staff/wallet-design'&&req.method()==='GET')return route.fulfill({json:{version:1,design:{displayName:staff.business.name}}});
     if(u.pathname==='/api/staff/customer-activity')return route.fulfill({json:{summary,customers:[client],total:51,offset:Number(u.searchParams.get('offset')||0),hasMore:!u.searchParams.get('offset')||u.searchParams.get('offset')==='0',from:'2026-10-09T05:00:00Z',through:'2026-11-07T17:00:00Z',timezone:'America/Guayaquil'}});
     if(u.pathname==='/api/staff/customer-suggestions')return route.fulfill({json:{items:[{id:'ana',name:client.name,cardSuffix:'000001'}]}});
     if(u.pathname==='/api/staff/customer-workspace/ana'){

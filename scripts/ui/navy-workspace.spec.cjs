@@ -75,13 +75,13 @@ async function run(){
   await page.locator('#name').fill('Café Aurora');await page.locator('#legalName').fill(profile.legalName);await page.locator('#ruc').fill('123');await page.locator('#activity').fill(profile.activity);await page.locator('#registrationNext').click();
   assert.equal(await page.locator('[data-registration-panel="0"]').isVisible(),true);assert.match(await page.locator('#rucHelp').textContent(),/13 dígitos/);
   await page.locator('#ruc').fill(profile.ruc);await page.locator('#category').selectOption('CAFE');await page.locator('#registrationNext').click();;assert.equal(await page.locator('[data-registration-panel="1"]').isVisible(),true);
-  for(const key of ['contactName','email','phone','province','city','address','website'])await page.locator('#'+key).fill(profile[key]);
-  await page.locator('#registrationBack').click();assert.equal(await page.locator('#legalName').inputValue(),profile.legalName);await page.locator('#registrationNext').click();assert.equal(await page.locator('#email').inputValue(),profile.email);
+  for(const key of ['contactName','phone','province','city','address','website'])await page.locator('#'+key).fill(profile[key]);
+  await page.locator('#registrationBack').click();assert.equal(await page.locator('#legalName').inputValue(),profile.legalName);await page.locator('#registrationNext').click();assert.equal(await page.locator('#phone').inputValue(),profile.phone);assert.equal(await page.locator('input[type=email]').count(),0);
   await page.locator('#registrationNext').click();assert.match(await page.locator('#registrationSummary').textContent(),/1790012345001/);assert.equal(await page.locator('#slug').inputValue(),'cafe-aurora');
   assert.equal(calls.filter(c=>c.path==='/api/platform/businesses').length,0);await shot('navy-registration-review');
   await page.locator('#registrationNext').click();await waitUntil(()=>pendingCreate);assert.equal(await page.locator('#registrationNext').isDisabled(),true);await page.keyboard.press('Escape');assert.equal(await page.locator('#commercialDialog').isVisible(),true);
   await page.evaluate(()=>document.querySelector('#businessRegistration').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));assert.equal(calls.filter(c=>c.path==='/api/platform/businesses').length,1);
-  const sent=calls.find(c=>c.path==='/api/platform/businesses').body;assert.deepEqual(sent.profile,profile);assert.deepEqual(sent.firstBranch,{name:'Principal',code:'PRINCIPAL'});
+  const sent=calls.find(c=>c.path==='/api/platform/businesses').body;assert.deepEqual(sent.profile,{...profile,email:''});assert.deepEqual(sent.firstBranch,{name:'Principal',code:'PRINCIPAL'});
   await pendingCreate();await page.locator('#openCreatedBusiness').waitFor();assert.match(await page.locator('.business-created').textContent(),/FICTIONAL-ONE-TIME-CREDENTIAL/);
   checks.push('Three-step registration validates RUC, preserves previous steps, previews data and sends exactly one request');
   await page.locator('#openCreatedBusiness').click();await page.locator('#businessProfileForm').waitFor();failProfile=true;await page.locator('#city').fill('Cuenca');await page.locator('#correctionReason').fill('Cambio solicitado y verificado');await page.locator('#businessProfileForm button[type=submit]').click();
@@ -106,7 +106,7 @@ async function run(){
   assert.equal(await page.locator('.workspace-sidebar').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(11, 31, 58)');await noOverflow();
   await page.goto('https://loyalty.test/platform');await page.locator('#platformToken').fill('FICTIONAL');await page.locator('#platformLogin button').click();await page.locator('[data-manage]').click();await page.locator('#newBusiness').click();
   await page.locator('#name').fill('Otra marca de ejemplo');for(const key of ['legalName','ruc','activity'])await page.locator('#'+key).fill(profile[key]);await page.locator('#category').selectOption('CAFE');await page.locator('#registrationNext').click();;
-  for(const key of ['contactName','email','phone','province','city','address'])await page.locator('#'+key).fill(profile[key]);await page.locator('#registrationNext').click();
+  for(const key of ['contactName','phone','province','city','address'])await page.locator('#'+key).fill(profile[key]);await page.locator('#registrationNext').click();
   pendingCreate=null;delayList=true;await page.locator('#registrationNext').click();await waitUntil(()=>pendingCreate);await pendingCreate();await waitUntil(()=>pendingList);
   await page.locator('#exit').click();await page.locator('#platformLogin').waitFor();await pendingList();await page.waitForTimeout(80);
   assert.equal(await page.locator('.business-created').count(),0);assert.doesNotMatch(await page.locator('body').textContent(),/FICTIONAL-ONE-TIME-CREDENTIAL/);

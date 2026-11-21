@@ -26,6 +26,7 @@ async function run() {
     const browser = await chromium.launch({headless: true, ...(process.env.LOYALTY_UI_CHROMIUM ? {executablePath: process.env.LOYALTY_UI_CHROMIUM, args: ['--no-sandbox', '--disable-dev-shm-usage']} : {})});
     const checks = [], errors = [], calls = [];
     let pendingPurchase, failPurchase = true, pendingRedemption;
+    let conflictQuote = false, conflictSave = false, failRefresh = false, refreshedMember = null;
     const waitPending = async read => { const until = Date.now() + 5000; while (!read()) { if (Date.now() > until) throw new Error('Expected request was not sent'); await new Promise(r => setTimeout(r, 10)); } };
     try {
         const page = await browser.newPage({viewport: {width: 1440, height: 1100}});
@@ -35,7 +36,16 @@ async function run() {
             assert.equal(url.origin, 'https://loyalty.test');
             if (url.pathname.startsWith('/api/')) {
                 const payload = request.postDataJSON(); calls.push({path: url.pathname, payload, key: request.headers()['idempotency-key']});
-                if (url.pathname === '/api/staff/members/lookup') return route.fulfill({json: member});
+                if (url.pathname === '/api/staff/members/lookup') {
+                    if (failRefresh) { failRefresh=false; return route.fulfill({status:503,json:{message:'Conexión interrumpida.'}}); }
+                    return route.fulfill({json:refreshedMember || member});
+                }
+                if (url.pathname === '/api/staff/purchases/quote' && conflictQuote) {
+                    conflictQuote=false; return route.fulfill({status:409,json:{code:'CARD_CHANGED'}});
+                }
+                if (url.pathname === '/api/staff/purchases' && conflictSave) {
+                    conflictSave=false; return route.fulfill({status:409,json:{code:'REWARD_CHANGED'}});
+                }
                 if (url.pathname === '/api/staff/purchases/quote') return route.fulfill({json: {grossMinor: 1000, discountMinor: payload.rewardId === 'discount' ? 500 : 200, amountMinor: payload.rewardId === 'discount' ? 500 : 800, rewardName: rewards.find(r => r.id === payload.rewardId)?.name}});
                 if (url.pathname === '/api/staff/purchases') {
                     pendingPurchase = () => route.fulfill(failPurchase ? {status: 503, json: {message: 'Respuesta pendiente. Reintenta con el mismo comprobante.'}} : {json: {purchaseId: 'receipt', amountMinor: payload.amountMinor, discountMinor: 200, earned: [], redemptionId: 'redemption', replayed: true}});
@@ -83,7 +93,7 @@ async function run() {
         checks.push('Balance-ready filter counts alternatives without combining program balances');
 
         await page.locator('#checkoutBranch').selectOption('b'); await page.locator('#receipt').fill('AURORA-001');
-        await page.locator('[data-name]').fill('Servicio elegido'); await page.locator('[data-group]').fill('servicio');
+        await page.locator('[data-name]').fill('Servicio elegido'); await page.locator('[data-group-choice]').selectOption('servicio');
         await page.locator('[data-price]').fill('10');
         await pick('discount').click();
         assert.equal(await page.locator('#reward').inputValue(), 'discount');
@@ -144,10 +154,44 @@ async function run() {
         const simple = structuredClone(fixture); simple.programs.forEach(p => {p.config.productGroup = ''; p.config.countUnits = false;});
         await page.evaluate(data => {state.data = data; renderSales();}, simple);
         await page.locator('#value').fill('FAKE-CARD'); await page.locator('#lookup button').first().click(); await page.locator('#purchase').waitFor();
-        await page.locator('#purchaseBranch').selectOption('b'); await page.locator('#receipt').fill('AURORA-002');
+        await page.locator('#purchaseBranch').selectOption('b'); await page.locator('#receipt').fill('AURORA-002'); await page.locator('#amount').fill('12.25');
         await pick('discount').click(); await page.locator('#productPurchase').waitFor();
-        assert.equal(await page.locator('#checkoutBranch').inputValue(), 'b'); assert.equal(await page.locator('#receipt').inputValue(), 'AURORA-002');
-        checks.push('Conversion from simple purchase retains selected branch and receipt');
+        assert.equal(await page.locator('#checkoutBranch').inputValue(), 'b'); assert.equal(await page.locator('#receipt').inputValue(), 'AURORA-002'); assert.equal(await page.locator('[data-price]').inputValue(), '12.25');
+        checks.push('Conversion from simple purchase retains amount, branch and receipt');
+        await page.locator('[data-name]').fill('Dos servicios'); await page.locator('[data-group-choice]').selectOption('servicio');
+        await page.locator('[data-quantity]').fill('2');
+        await page.locator('#productPurchase [name=program][value=points]').check();
+        await page.locator('[name=verified]').check(); await page.locator('[name=confirmed]').check();
+        const refreshDiscount=page.getByRole('button',{name:'Actualizar saldo y descuento'});
+        const reviewProducts=page.locator('#productPurchase > button').last();
+        conflictQuote=true; await reviewProducts.click(); await refreshDiscount.waitFor();
+        assert.ok(await reviewProducts.isDisabled());
+        failRefresh=true; await refreshDiscount.click();
+        await page.getByText('Conexión interrumpida.',{exact:false}).waitFor();
+        assert.equal(await page.locator('[data-price]').inputValue(),'12.25');
+        refreshedMember=structuredClone(member); refreshedMember.member.revision++;
+        await refreshDiscount.click(); await page.getByText('Saldo actualizado.',{exact:false}).waitFor();
+        assert.equal(await page.locator('#reward').inputValue(),'discount');
+        assert.equal(await page.locator('[name=verified]').isChecked(),false);assert.ok(await reviewProducts.isDisabled());
+        assert.equal(await page.locator('#checkoutBranch').inputValue(),'b');
+        assert.equal(await page.locator('#receipt').inputValue(),'AURORA-002');
+        assert.equal(await page.locator('[data-name]').inputValue(),'Dos servicios');
+        assert.equal(await page.locator('[data-quantity]').inputValue(),'2');
+        assert.ok(await page.locator('#productPurchase [name=program][value=points]').isChecked());
+        await page.locator('[name=verified]').check(); await page.locator('[name=confirmed]').check();
+        await reviewProducts.click();await page.locator('#finishPurchase button').waitFor();
+        assert.equal(calls.filter(c=>c.path.endsWith('/quote')).at(-1).payload.expectedRevision,refreshedMember.member.revision);
+        conflictSave=true;await page.locator('#finishPurchase button').click();await refreshDiscount.waitFor();
+        const writes=calls.filter(c=>c.path==='/api/staff/purchases').length;
+        refreshedMember.balances.find(b=>b.programId==='service').available=0;refreshedMember.member.revision++;
+        await refreshDiscount.click();await page.getByText('El premio anterior ya no está disponible.',{exact:false}).waitFor();
+        assert.equal(await page.locator('#reward').inputValue(),'');assert.equal(await page.locator('#reward option[value=discount]').count(),0);
+        assert.equal(await page.locator('[data-price]').inputValue(),'12.25');assert.equal(await page.locator('#finishPurchase').count(),0);
+        assert.equal(calls.filter(c=>c.path==='/api/staff/purchases').length,writes);
+        await page.locator('#changeCustomer').click();await page.locator('#keepOperationDraft').click();
+        assert.equal(await page.locator('#receipt').inputValue(),'AURORA-002');
+        refreshedMember=null;
+        checks.push('Changed discounts refresh read-only at quote and save, retain the full draft, remove expired options and require new consent');
         await lookup();
         await page.evaluate(() => {clearTimeout(noticeTimer); document.querySelector('#notice').style.display = 'none';});
         if (evidence) {fs.mkdirSync(evidence, {recursive: true}); await page.screenshot({path: path.join(evidence, 'counter-rewards-desktop.png'), fullPage: true});}

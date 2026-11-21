@@ -16,28 +16,77 @@ async function api(path,body,method='POST',key=null){
  if (!response.ok) { const issue = new Error(data.message || 'No se pudo completar la operación.'); issue.code = data.code; issue.status = response.status; throw issue; }
  return data;
 }
-function form(id, handler) {
+function form(id, handler, ready) {
     const f = document.getElementById(id); if (!f) return;
+    const submit = f.querySelector('button[type=submit],button:not([type])');
+    const update = () => {
+        if (!submit || (!ready && !f.hasAttribute('data-require-valid')) || f.getAttribute('aria-busy') === 'true') return;
+        if (f.dataset.reviewExpired) { submit.disabled = true; return; }
+        const valid = [...f.elements].every(n => !n.willValidate || (n.validity.valid &&
+            (!n.required || (n.value.trim() && !n.selectedOptions?.[0]?.disabled))));
+        submit.disabled = !valid || Boolean(ready && !ready(f));
+    };
+    if (ready || f.hasAttribute('data-require-valid')) {
+        const edited = () => {
+            if (f.dataset.reviewExpired === 'untilEdited') delete f.dataset.reviewExpired;
+            update();
+            if (f.dataset.reviewExpired) return;
+            const error = f.querySelector(':scope > .form-feedback');
+            if (error) error.hidden = true;
+        };
+        f.addEventListener('input', edited); f.addEventListener('change', edited); update();
+    }
     f.addEventListener('submit', async e => {
         e.preventDefault();
-        const button = e.submitter || f.querySelector('button[type=submit],button:not([type])');
-        if (!button || button.disabled || f.getAttribute('aria-busy') === 'true') return;
+        update();
+        const button = e.submitter || submit;
+        if (!button || button.disabled || f.dataset.reviewExpired || f.getAttribute('aria-busy') === 'true') return;
         if (document.querySelector('form[aria-busy="true"]')) { notice('Espera a que termine la operación anterior.'); return; }
         const values = Object.fromEntries(new FormData(f));
-        const controls = [...(f.closest('.customer-counter') || f).querySelectorAll('input,select,textarea,button')].map(node => [node, node.disabled]);
+        const controls = [...(f.closest('.customer-counter,.lookup-panel') || f).querySelectorAll('input,select,textarea,button')].map(node => [node, node.disabled]);
         const label = button.textContent;
         let error = f.querySelector(':scope > .form-feedback');
         if (!error) { error = document.createElement('p'); error.className = 'form-feedback'; error.setAttribute('role', 'alert'); error.tabIndex = -1; f.append(error); }
         error.hidden = true; f.setAttribute('aria-busy', 'true');
-        controls.forEach(([node]) => node.disabled = true); button.textContent = 'Procesando…';
+        controls.forEach(([node]) => node.disabled = true); button.textContent = id === 'lookup' ? 'Buscando…' : 'Procesando…';
         try { await handler(values, f); }
-        catch (issue) { if (f.isConnected) { error.textContent = issue.message || 'No se pudo completar la operación. Inténtalo de nuevo.'; error.hidden = false; error.focus(); } }
-        finally { f.removeAttribute('aria-busy'); controls.forEach(([node, disabled]) => node.disabled = disabled); button.textContent = label; }
+        catch (issue) {
+            if (f.isConnected) {
+                error.textContent = issue.message || 'No se pudo completar la operación. Inténtalo de nuevo.';
+                if (issue.reviewAction) {
+                    f.dataset.reviewExpired = issue.reviewAction.allowEdit ? 'untilEdited' : 'true';
+                    const revise = document.createElement('button'); revise.type = 'button'; revise.className = 'quiet';
+                    revise.textContent = issue.reviewAction.label;
+                    revise.onclick = async () => {
+                        if (revise.disabled || document.querySelector('form[aria-busy="true"]')) return;
+                        revise.disabled = true;
+                        try { await issue.reviewAction.run(); }
+                        catch (retryIssue) { error.firstChild.textContent = retryIssue.message || 'No pudimos actualizar la tarjeta. Inténtalo otra vez.'; error.focus(); }
+                        finally { revise.disabled = false; }
+                    };
+                    error.append(document.createElement('br'), revise);
+                }
+                error.hidden = false; error.focus();
+            }
+        } finally {
+            f.removeAttribute('aria-busy'); controls.forEach(([node, disabled]) => node.disabled = disabled); button.textContent = label;
+            update(); if (f.dataset.reviewExpired) button.disabled = true;
+        }
     });
 }
 function action(id,handler){document.getElementById(id)?.addEventListener('click',async()=>{try{await handler()}catch(e){notice(e.message)}})}
 // The key is reused after network errors; edits create a new operation, explicit success clears it.
 function operationKey(f,payload){const signature=JSON.stringify(payload);if(f.dataset.payload!==signature){f.dataset.payload=signature;f.dataset.key=crypto.randomUUID()}return f.dataset.key}
+async function saveReviewedPurchase(source, payload) {
+    try { return await api('/api/staff/purchases', payload, 'POST', operationKey(source, payload)); }
+    catch (issue) {
+        if (issue.code === 'EARNING_REVIEW_CHANGED') {
+            issue.message = 'Las condiciones de acumulación cambiaron. Revisa el total y los premios antes de guardar.';
+            issue.reviewAction = {label:'Volver a revisar la compra', run:() => source.requestSubmit()};
+        }
+        throw issue;
+    }
+}
 function options(items,selected){return items.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.name)}</option>`).join('')}
 function localDateTime(value){if(!value)return '';const parts=new Intl.DateTimeFormat('en-CA',{timeZone:state.data.business.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value));const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`}
 function utcDateTime(local){if(!local)return null;const naive=Date.parse(local+'Z');const offsets=new Set([-36,0,36].map(h=>{const sample=naive+h*3600000;return Date.parse(localDateTime(sample)+'Z')-sample}));const candidates=[...offsets].map(o=>naive-o).filter(t=>localDateTime(t)===local);if(candidates.length!==1)throw new Error('La hora elegida no existe o se repite por un cambio de horario. Elige otra hora.');return new Date(candidates[0]).toISOString()}
@@ -74,16 +123,16 @@ document.addEventListener('click',e=>{
     input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));input.focus();
 });
 document.addEventListener('keydown',e=>{if(e.target.matches('input[data-money]')&&['ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();adjustMoney(e.target,e.key==='ArrowUp'?1:-1);}});
-document.addEventListener('input',e=>{if(e.target.matches('input[data-money]'))e.target.setCustomValidity(!e.target.value||/^\d+(\.\d{1,2})?$/.test(e.target.value)?'':'Escribe un monto positivo con hasta dos decimales.');});
+document.addEventListener('input',e=>{if(e.target.matches('input[data-money]'))e.target.setCustomValidity(!e.target.value||/^\d+(\.\d{1,2})?$/.test(e.target.value)?'':'Escribe un monto positivo con hasta dos decimales.');},true);
 // Read-only suggestions. A result is selected explicitly; no purchase or canje is submitted here.
 function attachPredictiveSearch(input, {load, choose, label, description = () => '', enabled = () => true, minimum = 2}) {
     const wrap = document.createElement('div'); wrap.className = 'predictive-search'; input.before(wrap); wrap.append(input);
     const popup = document.createElement('div'); popup.className = 'predictive-results'; popup.id = input.id + '-suggestions'; popup.setAttribute('role', 'listbox'); popup.hidden = true;
     const status = document.createElement('p'); status.className = 'predictive-status'; status.id = input.id + '-search-status'; status.setAttribute('role', 'status');
     wrap.append(popup, status); input.setAttribute('role', 'combobox'); input.setAttribute('aria-autocomplete', 'list'); input.setAttribute('aria-controls', popup.id); input.setAttribute('aria-expanded', 'false'); input.setAttribute('aria-describedby', [input.getAttribute('aria-describedby'), status.id].filter(Boolean).join(' ')); input.autocomplete = 'off';
-    let revision = 0, timer, rows = [], active = -1, composing = false;
+    let revision = 0, timer, rows = [], active = -1, composing = false, started = '';
     const busy = () => Boolean(document.querySelector('form[aria-busy="true"]'));
-    const clear = () => { revision++; clearTimeout(timer); rows = []; active = -1; popup.replaceChildren(); popup.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); status.textContent = ''; };
+    const clear = () => { revision++; clearTimeout(timer); started = ''; rows = []; active = -1; popup.replaceChildren(); popup.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); status.textContent = ''; };
     const select = row => {
         if (busy() || !input.isConnected) return;
         clear(); Promise.resolve().then(() => choose(row)).catch(e => notice(e.message || 'No se pudo abrir el resultado.'));
@@ -92,10 +141,12 @@ function attachPredictiveSearch(input, {load, choose, label, description = () =>
         active = index; [...popup.children].forEach((node, i) => node.setAttribute('aria-selected', String(i === index)));
         const node = popup.children[index]; if (node) { input.setAttribute('aria-activedescendant', node.id); node.scrollIntoView({block: 'nearest'}); }
     };
-    const search = () => {
+    const search = (immediate = false) => {
+        if (immediate && started && started === input.value.trim()) return;
         clear(); const q = input.value.trim(); if (composing || !enabled() || q.length < minimum || busy()) return;
         const ticket = revision, token = state.token; status.textContent = 'Buscando…';
-        timer = setTimeout(async () => {
+        const run = async () => {
+            started = q;
             try {
                 const data = await load(q);
                 if (ticket !== revision || token !== state.token || !input.isConnected || !enabled() || busy()) return;
@@ -106,24 +157,25 @@ function attachPredictiveSearch(input, {load, choose, label, description = () =>
                     button.addEventListener('pointerdown', e => e.preventDefault()); button.onclick = () => select(row); popup.append(button);
                 });
                 popup.hidden = !rows.length; input.setAttribute('aria-expanded', String(Boolean(rows.length)));
-                status.textContent = rows.length ? `${rows.length} sugerencias. Elige una o usa las flechas y Enter.` : 'Sin coincidencias. Prueba con otro nombre.';
+                status.textContent = rows.length ? (rows.length === 1 ? '1 coincidencia.' : rows.length + ' coincidencias.') + ' Elige una o usa las flechas y Enter.' : 'Sin coincidencias. Prueba con otro nombre.';
             } catch {
-                if (ticket === revision && token === state.token && input.isConnected) status.textContent = 'No se pudo buscar. Vuelve a escribir para reintentar.';
+                if (ticket === revision && token === state.token && input.isConnected) { started = ''; status.textContent = 'No se pudo buscar. Inténtalo otra vez.'; }
             }
-        }, 280);
+        };
+        if (immediate) run(); else timer = setTimeout(run, 280);
     };
-    input.addEventListener('input', search); input.addEventListener('compositionstart', () => { composing = true; clear(); }); input.addEventListener('compositionend', () => { composing = false; search(); });
+    input.addEventListener('input', () => search()); input.addEventListener('compositionstart', () => { composing = true; clear(); }); input.addEventListener('compositionend', () => { composing = false; search(); });
     input.addEventListener('keydown', e => {
         if (e.isComposing) return;
         if (e.key === 'Escape') { clear(); return; }
         if (!rows.length || popup.hidden) return;
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); highlight((active + (e.key === 'ArrowDown' ? 1 : rows.length - 1) + rows.length) % rows.length); }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const down = e.key === 'ArrowDown'; highlight(active < 0 ? (down ? 0 : rows.length - 1) : (active + (down ? 1 : -1) + rows.length) % rows.length); }
         if (e.key === 'Enter' && active >= 0) { e.preventDefault(); select(rows[active]); }
         if (e.key === 'Tab') clear();
     });
     wrap.addEventListener('focusout', () => setTimeout(() => { if (!wrap.contains(document.activeElement)) clear(); }, 0));
     input.form?.addEventListener('submit', clear);
-    return {clear};
+    return {clear, searchNow: () => search(true)};
 }
 // A pending purchase or promotion stays in memory until saved or explicitly discarded.
 (() => {
@@ -224,54 +276,159 @@ function purchaseEarningsReceipt(earned, selected) {
 function counterReceipt(title, body) {
     const found = document.querySelector('#found'); if (!found) return;
     state.member = null; counterStep(3);
+    const area = found.parentElement; area.querySelector('.lookup-panel').hidden = true; area.querySelector('.counter-legacy').hidden = true;
     found.innerHTML = `<section class="panel counter-receipt" tabindex="-1"><span class="receipt-check" aria-hidden="true">✓</span><div class="eyebrow">Operación registrada</div><h2>${esc(title)}</h2>${body}<button type="button" id="nextCustomer">Atender al siguiente cliente</button></section>`;
-    action('nextCustomer', () => { renderSales(); document.querySelector('#value')?.focus(); });
+    action('nextCustomer', () => { renderSales(); document.querySelector(found.dataset.fromCamera === 'true' ? '#scanWallet' : '#value')?.focus(); });
     found.firstElementChild.focus();
 }
+function rewardUnits(value, kind, currency) {
+    if (kind === 'CASHBACK') return Math.trunc(value / 100) + '.' + String(value % 100).padStart(2, '0') + ' ' + currency;
+    const unit = kind === 'STAMPS' ? 'sello' : kind === 'POINTS' ? 'punto' : 'unidad';
+    return value + ' ' + (value === 1 ? unit : unit === 'unidad' ? 'unidades' : unit + 's');
+}
+function counterRewards(member) {
+    return member.rewards.filter(reward => reward.active).map(reward => {
+        const balance = member.balances.find(b => b.programId === reward.programId);
+        const program = state.data.programs.find(p => p.id === reward.programId)?.config;
+        const kind = balance?.kind || program?.kind, available = balance?.available ?? 0;
+        const exact = Number.isSafeInteger(available) && available >= 0 && Number.isSafeInteger(reward.cost) &&
+            reward.cost > 0 && ['POINTS','STAMPS','CASHBACK'].includes(kind);
+        return {reward, name:balance?.name || program?.name || 'Promoción', kind, available, exact, ready:exact && available >= reward.cost};
+    }).sort((a, b) => {
+        if (a.exact !== b.exact) return Number(b.exact) - Number(a.exact);
+        if (!a.exact) return 0;
+        const left = BigInt(Math.min(a.available, a.reward.cost)) * BigInt(b.reward.cost);
+        const right = BigInt(Math.min(b.available, b.reward.cost)) * BigInt(a.reward.cost);
+        return left === right ? 0 : left > right ? -1 : 1;
+    });
+}
 function counterRewardSummary(member, business) {
-    const reward = member.rewards.find(r => r.active && r.cost > 0);
-    if (!reward) return '';
-    const balance = member.balances.find(b => b.programId === reward.programId);
-    const program = state.data.programs?.find(p => p.id === reward.programId);
-    const kind = balance?.kind || program?.config.kind;
-    const available = balance?.available || 0;
-    const ready = available >= reward.cost;
-    const unit = n => kind === 'CASHBACK' ? (n / 100).toFixed(2) + ' ' + business.currency :
-        n + ' ' + (kind === 'STAMPS' ? (n === 1 ? 'sello' : 'sellos') : (n === 1 ? 'punto' : 'puntos'));
+    const first = counterRewards(member)[0];
+    if (!first?.exact) return '';
+    const {reward, kind, available, ready} = first;
+    const unit = value => rewardUnits(value, kind, business.currency);
     const detail = ready ? 'Canje de ' + unit(reward.cost) + ' · Saldo disponible ' + unit(available) :
         'Avance ' + unit(available) + ' de ' + unit(reward.cost);
-    return `<section class="counter-wallet-reward${ready ? ' is-ready' : ''}" aria-labelledby="counterWalletReward"><span>${ready ? 'Disponible para canjear' : 'Próximo premio'}</span><h3 id="counterWalletReward">${esc(reward.name)}</h3><p>${esc(detail)}</p>${ready && reward.benefit ? '<p>Se aplica al registrar una compra elegible.</p>' : ''}</section>`;
+    return `<section class="counter-wallet-reward${ready ? ' is-ready' : ''}" aria-labelledby="counterWalletReward">
+        <div><span>${ready ? 'Disponible para canjear' : 'Próximo premio'}</span><h3 id="counterWalletReward">${esc(reward.name)}</h3><p>${esc(detail)}</p>
+        ${ready && reward.benefit ? '<p>Se aplica al registrar una compra elegible.</p>' : ''}</div>
+        ${ready ? `<button type="button" id="counterPriorityAction" data-reward="${esc(reward.id)}" hidden>${reward.benefit ? 'Aplicar a una compra' : 'Preparar canje'}</button>` : ''}</section>`;
+}
+function counterLookupReady(lookup) {
+    const value = lookup.elements.value.value.trim();
+    switch (lookup.elements.kind.value) {
+        case 'name': return value.length >= 2 && value.length <= 100;
+        case 'document': return /^[a-z0-9-]{5,40}$/i.test(value) || /^[A-Za-z0-9_-]{43}$/.test(value);
+        case 'memberId': return Boolean(value);
+        case 'cardCode': return Boolean(value) && value.length <= 128 && !/\s/.test(value);
+        default: return false;
+    }
 }
 function renderSales() {
     const d = state.data; state.member = null;
     const content = document.querySelector('#content');
-    content.innerHTML = `<ol class="counter-steps" aria-label="Pasos de caja"><li data-counter-step="1" class="current" aria-current="step"><span>1</span>Cliente</li><li data-counter-step="2"><span>2</span>Operación</li><li data-counter-step="3"><span>3</span>Recibo</li></ol><section class="panel lookup-panel"><h2>Atender a un cliente</h2><p>Escanea su tarjeta o busca por cédula o nombre.</p><form id="lookup"><div class="row"><div><label for="kind">Buscar por</label><select id="kind" name="kind"><option value="cardCode">QR de Wallet</option><option value="document">Cédula</option><option value="name">Nombre · sugerencias</option></select></div><div>${field('value', 'Código de tarjeta o cédula', 'text', '', 'required autocomplete="off"')}</div></div><button>Buscar cliente</button><button type="button" class="quiet" id="scanWallet">Escanear con cámara</button></form><div id="scannerMount"></div></section><div id="found"></div><details class="panel"><summary>Confirmar un código de canje anterior</summary><p>Solo para reservas creadas antes de esta actualización. Los nuevos canjes se hacen al buscar la tarjeta.</p><form id="confirm">${field('token', 'Código de canje anterior', 'text', '', 'required autocomplete="off"')}<label for="legacyBranch">Sucursal</label><select id="legacyBranch" name="branchId" required>${options(d.branches)}</select><button>Confirmar entrega</button></form><div id="confirmation"></div></details>`;
-    if(d.role!=='OWNER'&&d.permissions?.rewards===false)content.querySelector('#confirm').closest('details').hidden=true;
-    const lookupInput = content.querySelector('#value'), lookupKind = content.querySelector('#kind');
+    content.innerHTML = `<ol class="counter-steps" aria-label="Pasos de caja">
+        <li data-counter-step="1" class="current" aria-current="step"><span>1</span>Cliente</li>
+        <li data-counter-step="2"><span>2</span>Operación</li><li data-counter-step="3"><span>3</span>Recibo</li></ol>
+        <section class="panel lookup-panel" aria-label="Identificar al cliente">
+            <section class="counter-scan" aria-labelledby="scanTitle">
+                <div class="counter-scan-title"><span class="scan-mark" aria-hidden="true"></span><h2 id="scanTitle">Tarjeta Wallet</h2></div>
+                <p>Pide al cliente que muestre el QR de su tarjeta.</p>
+                <button type="button" id="scanWallet" aria-controls="scannerMount" aria-expanded="false">Escanear con cámara</button>
+                <div id="scannerMount"></div>
+            </section>
+            <section class="counter-manual" aria-labelledby="lookupTitle">
+                <h2 id="lookupTitle">Búsqueda manual</h2>
+                <form id="lookup"><div class="lookup-method"><label for="kind">Buscar por</label>
+                    <select id="kind" name="kind"><option value="document">Cédula</option><option value="name">Nombre</option><option value="cardCode">Código de tarjeta</option></select></div>
+                    <div class="lookup-entry"><label for="value">Cédula del cliente</label>
+                    <input id="value" name="value" type="text" required autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="lookupHint">
+                    <small id="lookupHint"></small></div>
+                    <button id="findCustomer" disabled>Buscar cliente</button>
+                </form>
+            </section>
+        </section><div id="found"></div>
+        <details class="panel counter-legacy"><summary>Confirmar un código de canje anterior</summary>
+            <p>Usa esta opción si el cliente ya tiene un código de reserva.</p>
+            <form id="confirm" data-require-valid>${field('token','Código de canje anterior','text','','required maxlength="128" autocomplete="off"')}
+                <label for="legacyBranch">Sucursal</label><select id="legacyBranch" name="branchId" required>${options(d.branches)}</select><button disabled>Confirmar entrega</button>
+            </form></details>`;
+    const legacy = content.querySelector('.counter-legacy');
+    if (d.role !== 'OWNER' && d.permissions?.rewards === false) legacy.hidden = true;
+    const lookup = content.querySelector('#lookup'), lookupInput = lookup.elements.value, lookupKind = lookup.elements.kind;
+    const scanButton = content.querySelector('#scanWallet'), mount = content.querySelector('#scannerMount');
+    const findButton = content.querySelector('#findCustomer');
+    const settings = {
+        document: ['Cédula del cliente', 'Escribe el documento completo.', 'numeric', 128],
+        name: ['Nombre del cliente', 'Escribe al menos dos letras y elige al cliente por la terminación de su tarjeta.', 'text', 100],
+        cardCode: ['Código de la tarjeta', 'Pega el código completo o usa un lector USB.', 'text', 128],
+        memberId: ['Cliente seleccionado', 'Puedes cambiar el método de búsqueda.', 'text', 128]
+    };
+    function showMethod() {
+        const [label, hint, mode, limit] = settings[lookupKind.value];
+        lookup.querySelector('label[for=value]').textContent = label;
+        lookup.querySelector('#lookupHint').textContent = hint;
+        lookupInput.inputMode = mode; lookupInput.maxLength = limit;
+        findButton.textContent = lookupKind.value === 'name' ? 'Ver coincidencias' : 'Buscar cliente';
+    }
+    function readCard(code, fromCamera) {
+        if (!lookup.isConnected || lookup.getAttribute('aria-busy') === 'true') return;
+        lookupKind.value = 'cardCode'; showMethod(); lookupInput.value = code;
+        if (fromCamera) lookup.dataset.fromCamera = 'true'; else delete lookup.dataset.fromCamera;
+        lookupInput.dispatchEvent(new Event('input', {bubbles:true})); lookup.requestSubmit();
+    }
     const suggestions = attachPredictiveSearch(lookupInput, {
         enabled: () => lookupKind.value === 'name',
         load: async q => (await api('/api/staff/member-suggestions?q=' + encodeURIComponent(q))).items,
         label: row => row.name, description: row => 'Tarjeta terminada en ' + row.cardCode.slice(-6),
-        choose: row => { lookupKind.value = 'cardCode'; lookupInput.value = row.cardCode; content.querySelector('#lookup').requestSubmit(); }
+        choose: row => readCard(row.cardCode, false)
     });
-    lookupKind.addEventListener('change', () => { suggestions.clear(); lookupInput.value = ''; content.querySelector('label[for=value]').textContent = lookupKind.value === 'name' ? 'Nombre del cliente' : lookupKind.value === 'document' ? 'Cédula completa' : 'Código de la tarjeta'; lookupInput.placeholder = lookupKind.value === 'name' ? 'Escribe al menos 2 letras' : lookupKind.value === 'document' ? 'Cédula completa' : 'Escanea o pega el código de Wallet'; lookupInput.focus(); });
-    action('scanWallet', () => window.startComebackScanner(document.querySelector('#scannerMount'), code => {
-        const lookup = document.querySelector('#lookup');
-        lookup.elements.kind.value = 'cardCode';
-        lookup.elements.value.value = code;
-        lookup.requestSubmit();
-    }));
+    showMethod();
+    lookupInput.addEventListener('input', e => { if (e.isTrusted) delete lookup.dataset.fromCamera; });
+    lookupKind.addEventListener('change', () => {
+        suggestions.clear(); delete lookup.dataset.fromCamera; lookupInput.value = ''; showMethod(); lookupInput.focus();
+    });
+    lookup.addEventListener('submit', e => {
+        if (!counterLookupReady(lookup) || lookup.getAttribute('aria-busy') === 'true') { e.preventDefault(); e.stopImmediatePropagation(); return; }
+        window.stopComebackScanner?.(); mount.replaceChildren();
+        if (lookupKind.value === 'name') {
+            e.preventDefault(); e.stopImmediatePropagation(); lookupInput.focus(); suggestions.searchNow();
+        }
+    }, true);
+    const manual = () => {
+        if (!lookup.isConnected) return;
+        lookupKind.value = 'document'; lookupKind.dispatchEvent(new Event('change', {bubbles:true}));
+    };
+    scanButton.onclick = () => {
+        if (content.querySelector('form[aria-busy="true"]')) return;
+        suggestions.clear(); legacy.open = false;
+        window.startComebackScanner(mount, code => readCard(code, true), {trigger:scanButton, manual});
+    };
     form('lookup', async (data, lookupForm) => {
-        if (data.kind === 'name') throw new Error('Elige al cliente de las sugerencias. También puedes buscar su cédula completa o escanear Wallet.');
-        window.stopComebackScanner?.();
         state.member = null;
         content.querySelector('#found').replaceChildren();
-        const m = await api('/api/staff/members/lookup', {[data.kind]: data.value.trim()});
-        if (!content.isConnected || !lookupForm.isConnected) return;
-        state.member = m; counterStep(2); content.querySelector('.lookup-panel').hidden = true;
+        const value = data.value.trim();
+        const kind = data.kind === 'document' && /^[A-Za-z0-9_-]{43}$/.test(value) ? 'cardCode' : data.kind;
+        const session = state.token;
+        let m;
+        try { m = await api('/api/staff/members/lookup', {[kind]: value}); }
+        catch (issue) {
+            if (issue.status === 404) throw new Error('Cliente no encontrado en este negocio. Revisa el dato o busca por nombre.');
+            throw issue;
+        }
+        if (!content.isConnected || !lookupForm.isConnected || session !== state.token) return;
+        showCustomer(m, lookupForm);
+    }, counterLookupReady);
+    function showCustomer(m, lookupForm, restorePurchase) {
+        state.member = m; counterStep(2); content.querySelector('.lookup-panel').hidden = true; legacy.hidden = true;
         const availableRewards = m.rewards.filter(r => r.active && !r.benefit);
-                const found = document.querySelector('#found');
-        found.innerHTML = `<section class="panel customer-counter"><div class="counter-customer-heading"><div><span class="eyebrow">Cliente en caja</span><h2>${esc(m.member.name)}</h2></div><button type="button" class="quiet" id="changeCustomer">Cambiar cliente</button></div>${d.walletAccess?.effectiveState && d.walletAccess.effectiveState !== 'ACTIVE' ? '' : counterRewardSummary(m,d.business)}${m.balances.length ? `<details class="counter-wallet-balances"><summary>Ver saldos por promoción</summary><ul>${m.balances.map(b => `<li>${esc(b.name)} · ${b.kind === 'CASHBACK' ? (b.available / 100).toFixed(2) + ' ' + esc(d.business.currency) : b.available + ' ' + esc(kinds[b.kind])}</li>`).join('')}</ul></details>` : '<p>Su primera compra empieza aquí.</p>'}${d.role === 'OWNER' ? '<div class="wallet-recovery-callout"><div><strong>Apple y Google Wallet</strong><p>¿No se actualiza o cambió de teléfono?</p></div><button type="button" id="openWalletRecovery" aria-expanded="false" aria-controls="walletRecoveryPanel">Actualizar o recuperar esta tarjeta</button></div><section id="walletRecoveryPanel" class="wallet-recovery-panel" aria-labelledby="walletRecoveryTitle" hidden><div class="counter-customer-heading"><h3 id="walletRecoveryTitle">Actualizar o recuperar esta tarjeta</h3><button type="button" class="quiet" id="closeWalletRecovery">Cerrar ayuda</button></div><p>1. Verifica al titular. 2. Genera el enlace. 3. El cliente abre el QR en su teléfono y guarda la misma tarjeta en Apple o Google Wallet.</p><p>Se conservan su tarjeta y sus saldos. No necesita borrarla ni registrarse de nuevo.</p><form id="restoreIssue"><label for="restoreReason">Qué necesita el cliente</label><select id="restoreReason" name="reason"><option value="CONNECTION_REPAIR">Su tarjeta no se actualiza</option><option value="DEVICE_CHANGE">Cambió o perdió el teléfono</option><option value="REMOVED_CARD">Borró la tarjeta</option></select><label class="check"><input name="identityVerified" type="checkbox" required>Verifiqué presencialmente la identidad del titular.</label><button>Generar QR de actualización o recuperación</button></form><div id="restoreResult" aria-live="polite"></div></section>' : ''}<div class="counter-modes" role="group" aria-label="Qué deseas hacer"><button type="button" data-counter-mode="purchase" aria-pressed="true">Registrar compra</button><button type="button" data-counter-mode="redemption" aria-pressed="false">Canjear un premio</button></div><div class="counter-operation"><section id="counterPurchase"><h3>Registrar compra</h3><form id="purchase"><label for="purchaseBranch">Sucursal</label><select id="purchaseBranch" name="branchId" required>${options(d.branches)}</select>${field('receipt', 'Número único del comprobante', 'text', '', 'required maxlength="100"')}${field('amount', 'Total pagado (' + esc(d.business.currency) + ')', 'number', '', 'required min="0.01" step="any" data-money max="10000000"')}${purchasePromotionSelection()}<button>Revisar compra</button></form><div id="purchaseReview"></div></section><section id="counterRedemption" hidden><h3>Canjear un premio</h3><p>El cliente presenta su tarjeta y solicita el premio. No necesita abrir la web.</p><form id="counterChoose"><label for="rewardId">Premio</label><select id="rewardId" name="rewardId" required>${availableRewards.map(r => `<option value="${esc(r.id)}" ${(m.balances.find(b => b.programId === r.programId)?.available || 0) < r.cost ? 'disabled' : ''}>${esc(r.name)} · ${rewardCost(r, m.balances)}</option>`).join('')}</select><label for="counterBranch">Sucursal</label><select id="counterBranch" name="branchId" required>${options(d.branches)}</select><button ${availableRewards.some(r => (m.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost) ? '' : 'disabled'}>Revisar canje</button></form><div id="counterReview"></div></section></div></section>`;;
+        const found = content.querySelector('#found');
+        found.dataset.fromCamera = String(lookupForm.dataset.fromCamera === 'true');
+        found.innerHTML = `<section class="panel customer-counter"><div class="counter-customer-heading"><div><span class="eyebrow">Cliente en caja</span><h2>${esc(m.member.name)}</h2></div><button type="button" class="quiet" id="changeCustomer">Cambiar cliente</button></div>${d.walletAccess?.effectiveState && d.walletAccess.effectiveState !== 'ACTIVE' ? '' : counterRewardSummary(m,d.business)}${m.balances.length ? `<details class="counter-wallet-balances"><summary>Ver saldos por promoción</summary><ul>${m.balances.map(b => `<li>${esc(b.name)} · ${esc(rewardUnits(b.available, b.kind, d.business.currency))}</li>`).join('')}</ul></details>` : '<p>Su primera compra empieza aquí.</p>'}${d.role === 'OWNER' ? '<div class="wallet-recovery-callout"><div><strong>Apple y Google Wallet</strong><p>¿No se actualiza o cambió de teléfono?</p></div><button type="button" id="openWalletRecovery" aria-expanded="false" aria-controls="walletRecoveryPanel">Actualizar o recuperar esta tarjeta</button></div><section id="walletRecoveryPanel" class="wallet-recovery-panel" aria-labelledby="walletRecoveryTitle" hidden><div class="counter-customer-heading"><h3 id="walletRecoveryTitle">Actualizar o recuperar esta tarjeta</h3><button type="button" class="quiet" id="closeWalletRecovery">Cerrar ayuda</button></div><p>1. Verifica al titular. 2. Genera el enlace. 3. El cliente abre el QR en su teléfono y guarda la misma tarjeta en Apple o Google Wallet.</p><p>Se conservan su tarjeta y sus saldos. No necesita borrarla ni registrarse de nuevo.</p><form id="restoreIssue" data-require-valid><label for="restoreReason">Qué necesita el cliente</label><select id="restoreReason" name="reason"><option value="CONNECTION_REPAIR">Su tarjeta no se actualiza</option><option value="DEVICE_CHANGE">Cambió o perdió el teléfono</option><option value="REMOVED_CARD">Borró la tarjeta</option></select><label class="check"><input name="identityVerified" type="checkbox" required>Verifiqué presencialmente la identidad del titular.</label><button>Generar QR de actualización o recuperación</button></form><div id="restoreResult" aria-live="polite"></div></section>' : ''}<div class="counter-modes" role="group" aria-label="Qué deseas hacer"><button type="button" data-counter-mode="purchase" aria-pressed="true">Registrar compra</button><button type="button" data-counter-mode="redemption" aria-pressed="false">Canjear un premio</button></div><div class="counter-operation"><section id="counterPurchase"><h3>Registrar compra</h3><form id="purchase" data-require-valid><label for="purchaseBranch">Sucursal</label><select id="purchaseBranch" name="branchId" required>${options(d.branches)}</select>${field('receipt', 'Número único del comprobante', 'text', '', 'required maxlength="100"')}${field('amount', 'Total pagado (' + esc(d.business.currency) + ')', 'number', '', 'required min="0.01" step="any" data-money max="10000000"')}${purchasePromotionSelection()}<button>Revisar compra</button></form><div id="purchaseReview"></div></section><section id="counterRedemption" hidden><h3>Canjear un premio</h3><p>El cliente presenta su tarjeta y solicita el premio. No necesita abrir la web.</p><form id="counterChoose" data-require-valid><label for="rewardId">Premio</label><select id="rewardId" name="rewardId" required>${availableRewards.map(r => `<option value="${esc(r.id)}" ${(m.balances.find(b => b.programId === r.programId)?.available || 0) < r.cost ? 'disabled' : ''}>${esc(r.name)} · ${rewardCost(r, m.balances)}</option>`).join('')}</select><label for="counterBranch">Sucursal</label><select id="counterBranch" name="branchId" required>${options(d.branches)}</select><button ${availableRewards.some(r => (m.balances.find(b => b.programId === r.programId)?.available || 0) >= r.cost) ? '' : 'disabled'}>Revisar canje</button></form><div id="counterReview"></div></section></div></section>`;;
+        const customerTitle = found.querySelector('.counter-customer-heading h2');
+        customerTitle.tabIndex = -1; customerTitle.focus();
+        const customerCard = found.querySelector('.customer-counter');
+        for (const extra of customerCard.querySelectorAll('.wallet-recovery-callout,.wallet-recovery-panel')) customerCard.append(extra);
         const recoveryButton = found.querySelector('#openWalletRecovery'), recoveryPanel = found.querySelector('#walletRecoveryPanel');
         const showRecovery = show => {
             if (!recoveryPanel || content.querySelector('form[aria-busy="true"]')) return;
@@ -288,7 +445,7 @@ function renderSales() {
         }
         action('changeCustomer', () => {
             if (content.querySelector('form[aria-busy="true"]')) { notice('Espera a que termine la operación.'); return; }
-            renderSales(); document.querySelector('#value')?.focus();
+            renderSales(); document.querySelector(found.dataset.fromCamera === 'true' ? '#scanWallet' : '#value')?.focus();
         });
         found.querySelectorAll('[data-counter-mode]').forEach(button => button.onclick = () => {
             if (content.querySelector('form[aria-busy="true"]')) { notice('Espera a que termine la operación.'); return; }
@@ -311,6 +468,17 @@ function renderSales() {
             if(!allowedPurchase||!allowedReward){const note=document.createElement('p');note.className='commercial-note';note.textContent=allowedPurchase?'Tu acceso permite registrar compras. Los premios y descuentos requieren otro usuario autorizado.':'Tu acceso permite entregar premios directos. Registrar compras o aplicar un descuento en una compra requiere otro usuario autorizado.';found.querySelector('.counter-modes').before(note);}
         }
         const purchaseForm = found.querySelector('#purchase');
+        purchaseForm.refreshCustomer = async (source, restore) => {
+            if (!source.isConnected || state.member !== m) return;
+            const session = state.token;
+            source.setAttribute('aria-busy', 'true'); customerCard.inert = true;
+            try {
+                const fresh = await api('/api/staff/members/lookup', {cardCode:m.member.cardCode});
+                if (!source.isConnected || session !== state.token || state.member !== m) return;
+                if (fresh.member.id !== m.member.id) throw new Error('No pudimos confirmar la tarjeta de este cliente. Vuelve a intentarlo.');
+                showCustomer(fresh, lookupForm, restore);
+            } finally { customerCard.inert = false; source.removeAttribute('aria-busy'); }
+        };
         bindPurchasePromotionSelection(purchaseForm);
         let purchaseRevision = 0;
         const clearPurchaseReview = () => { purchaseRevision++; found.querySelector('#purchaseReview')?.replaceChildren(); };
@@ -326,7 +494,8 @@ function renderSales() {
             review.innerHTML = `<section class="panel purchase-confirmation"><h3>Confirmar compra</h3><p>${esc(m.member.name)} · <strong>${(quote.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</strong></p>${purchasePromotionReview(payload.programIds)}${purchaseEarningReview(quote)}<p>Confirma cuando el cobro esté realizado en caja.</p><form id="finishSimplePurchase"><button>Guardar compra</button></form></section>`;
             form('finishSimplePurchase', async () => {
                 if (ticket !== purchaseRevision || !f.isConnected) throw new Error('La compra cambió. Revisa el total otra vez.');
-                const r = await api('/api/staff/purchases', payload, 'POST', operationKey(f, payload));
+                const r = await saveReviewedPurchase(f, payload);
+                if (!f.isConnected || state.member !== m) return;
                 counterReceipt(r.replayed ? 'Esta compra ya estaba registrada' : 'Compra registrada', `<p>${esc(m.member.name)} · ${(payload.amountMinor / 100).toFixed(2)} ${esc(d.business.currency)}</p>${purchaseEarningsReceipt(r.earned, payload.programIds)}<p>La actualización de Wallet se enviará automáticamente cuando esté habilitado.</p><p class="small">Comprobante: ${esc(r.purchaseId)}</p>`);
                 notice('Compra registrada una sola vez.');
             });
@@ -341,11 +510,23 @@ function renderSales() {
             if (!reward) throw new Error('Selecciona un premio disponible.');
             const payload = {memberId: m.member.id, branchId: p.branchId, rewardId: reward.id, expectedRevision: m.member.revision, expectedRewardVersion: reward.version, identityVerified: true, customerConfirmed: true};
             const review = document.querySelector('#counterReview');
-            review.innerHTML = `<hr><h3>Confirmar ${esc(reward.name)}</h3><p>${esc(m.member.name)} · ${rewardCost(reward, m.balances)} · ${esc(d.branches.find(b => b.id === p.branchId)?.name)}</p><p>El saldo se descontará al confirmar. Entrega el premio solo después de ver el recibo.</p><form id="counterConfirm"><label class="check"><input type="checkbox" name="identityVerified" required>Verifiqué al titular de la tarjeta.</label><label class="check"><input type="checkbox" name="customerConfirmed" required>El cliente solicitó este premio y acepta el descuento.</label><button>Confirmar canje y descontar</button></form>`;
+            review.innerHTML = `<hr><h3>Confirmar ${esc(reward.name)}</h3><p>${esc(m.member.name)} · ${rewardCost(reward, m.balances)} · ${esc(d.branches.find(b => b.id === p.branchId)?.name)}</p><p>El saldo se descontará al confirmar. Entrega el premio solo después de ver el recibo.</p><form id="counterConfirm" data-require-valid><label class="check"><input type="checkbox" name="identityVerified" required>Verifiqué al titular de la tarjeta.</label><label class="check"><input type="checkbox" name="customerConfirmed" required>El cliente solicitó este premio y acepta el descuento.</label><button>Confirmar canje y descontar</button></form>`;
             form('counterConfirm', async (confirmation, f) => {
                 if (ticket !== counterRevision || !f.isConnected) throw new Error('El premio o la sucursal cambió. Revisa el canje otra vez.');
                 if (confirmation.identityVerified !== 'on' || confirmation.customerConfirmed !== 'on') throw new Error('Falta la confirmación del titular.');
-                const r = await api('/api/staff/counter-redemptions', payload, 'POST', operationKey(f, payload));
+                let r;
+                try { r = await api('/api/staff/counter-redemptions', payload, 'POST', operationKey(found.querySelector('#counterChoose'), payload)); }
+                catch (issue) {
+                    if (['CARD_CHANGED','REWARD_CHANGED','INSUFFICIENT_BALANCE'].includes(issue.code)) {
+                        issue.message = 'El saldo o el premio cambió. Consulta la tarjeta actualizada antes de preparar el canje.';
+                        issue.reviewAction = {label:'Actualizar saldo y premios', run:() => window.loyaltyOperationLeave(() => {
+                            if (!lookupForm.isConnected || state.member !== m || document.querySelector('form[aria-busy="true"]')) return;
+                            content.querySelector('.lookup-panel').hidden = false; counterStep(1); lookupForm.requestSubmit();
+                        })};
+                    }
+                    throw issue;
+                }
+                if (!f.isConnected || state.member !== m) return;
                 counterReceipt(r.replayed ? 'Canje ya confirmado: no entregues otro premio' : 'Canje confirmado', `<p>${esc(r.name)} · ${esc(m.member.name)}</p><p>${r.replayed ? 'Este recibo corresponde a la entrega anterior. Comprueba si ya entregaste el premio.' : 'Ya puedes entregar el premio. El saldo se descontó una sola vez.'}</p><p class="small">Recibo único: ${esc(r.receipt)}</p>`);
                 notice(r.replayed ? 'Recibo recuperado. No repitas la entrega.' : 'Canje confirmado.');
             });
@@ -379,12 +560,14 @@ function renderSales() {
                 const source = URL.createObjectURL(new Blob([bytes], {type: 'image/png'})); image.onload = () => URL.revokeObjectURL(source); image.src = source; target.prepend(image);
             }
         });
-    });
+        restorePurchase?.(purchaseForm, m);
+    }
     form('confirm', async (p, f) => {
         const payload = {token: p.token.trim(), branchId: p.branchId};
         const r = await api('/api/staff/redemptions/confirm', payload, 'POST', operationKey(f, payload));
-        document.querySelector('#confirmation').innerHTML = `<h3>${r.replayed ? 'Este canje ya estaba confirmado: no entregues otro premio' : 'Entrega confirmada'}</h3><p>${esc(r.name)}</p><p class="small">Recibo único: ${esc(r.receipt)}</p>`;
-    });
+        if (!f.isConnected) return;
+        counterReceipt(r.replayed ? 'Este canje ya estaba confirmado' : 'Entrega confirmada', `<p>${esc(r.name)}</p><p>${r.replayed ? 'Comprueba si ya entregaste este premio.' : 'Ya puedes entregar el premio.'}</p><p class="small">Recibo único: ${esc(r.receipt)}</p>`);
+    }, f => f.elements.token.value.trim().length >= 32);
 }
 function renderPrograms(edit=null){const list=state.data.programs, p=edit?.config||{};const w=p.window||{};const b=p.bonuses?.[0];document.querySelector('#content').innerHTML=`<div class="grid"><section class="panel"><h2>${edit?'Editar promoción':'Crear promoción'}</h2><form id="program">${field('name','Nombre','text',p.name||'','required maxlength="120"')}<label>Qué acumula el cliente</label><select name="kind" ${edit?'disabled':''}>${Object.entries(kinds).map(([k,v])=>`<option value="${k}" ${p.kind===k?'selected':''}>${v}</option>`).join('')}</select><div data-kind="POINTS" class="row"><div>${field('unitAmount','Por cada monto de compra ('+esc(state.data.business.currency)+')','number',(p.unitMinor||100)/100,'min="0.01" step="any" data-money required')}</div><div>${field('pointsPerUnit','Puntos que acumula','number',p.pointsPerUnit||1,'min="1" required')}</div></div><div data-kind="CASHBACK">${field('cashback','Cashback (%)','number',(p.cashbackBps||500)/100,'min="0.01" max="100" step="0.01" required')}</div><div data-kind="STAMPS">${field('stampsPerPurchase','Sellos por compra','number',p.stampsPerPurchase||1,'min="1" max="100" required')}</div>${field('minimumAmount','Compra mínima ('+esc(state.data.business.currency)+')','number',(p.minimumSpendMinor||1)/100,'min="0.01" step="any" data-money required')}<p class="small">Cashback es saldo promocional para canjear. Los sellos se cuentan por compra registrada.</p><details ${edit?'open':''}><summary>Fechas, horarios y sucursales</summary><p class="small">Zona horaria: ${esc(state.data.business.timezone)}. Todas las fechas y horas corresponden a la zona del negocio.</p>${field('startsAt','Disponible desde','datetime-local',localDateTime(w.startsAt))}${field('endsAt','Finaliza el','datetime-local',localDateTime(w.endsAt))}<div class="row"><div>${field('localStart','Desde','time',w.localStart||'')}</div><div>${field('localEnd','Hasta','time',w.localEnd||'')}</div></div>${field('weekdays','Días: lunes=1, domingo=7','text',(w.weekdays||[1,2,3,4,5,6,7]).join(','),'required')}<label>Aplicar en sucursales (sin selección: todas)</label><select name="branches" multiple>${options(state.data.branches)}</select>${field('multiplier','Multiplicador de puntos / saldo / sellos','number',b?.multiplier||1,'min="1" max="10" required')}<p class="small">El multiplicador aplica durante esta promoción. Para bonos con horarios independientes, esta primera versión dispone de la API.</p></details><label class="check"><input name="active" type="checkbox" ${p.active!==false?'checked':''}>Promoción activa</label><button>${edit?'Guardar nueva versión':'Crear promoción'}</button></form></section><section class="panel"><h2>Promociones del negocio</h2><p>Al editar una promoción, las compras anteriores conservan sus reglas y sus saldos.</p><div class="list">${list.length?list.map(x=>`<div><span class="tag">${esc(kinds[x.config.kind])} · v${x.version}</span><h3>${esc(x.config.name)}</h3><p>${x.config.active?'Activa':'Pausada'}</p><button class="quiet" data-edit="${esc(x.id)}">Editar</button></div>`).join(''):'<p class="empty">Crea tu primera promoción.</p>'}</div></section></div>`;
  const typeSelect=document.querySelector('[name=kind]');const showKind=()=>document.querySelectorAll('[data-kind]').forEach(el=>el.style.display=el.dataset.kind===typeSelect.value?'':'none');typeSelect.onchange=showKind;showKind();
@@ -437,7 +620,11 @@ async function customerStart() {
     }
 }
 async function imageFromApi(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${state.token}`,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});if(!r.ok)throw new Error('No se pudo generar el código QR.');return URL.createObjectURL(await r.blob())}
-function rewardCost(r,balances){const kind=balances.find(b=>b.programId===r.programId)?.kind||state.customerPrograms?.find(p=>p.id===r.programId)?.config.kind;return kind==='CASHBACK'?(r.cost/100).toFixed(2)+' '+esc(state.business?.currency||state.data?.business.currency):r.cost+' '+esc(kinds[kind]||'unidades')}
+function rewardCost(reward, balances) {
+    const programs = state.slug ? state.customerPrograms : state.data?.programs;
+    const kind = balances.find(b => b.programId === reward.programId)?.kind || programs?.find(p => p.id === reward.programId)?.config.kind;
+    return esc(rewardUnits(reward.cost, kind, state.slug ? state.business?.currency : state.data?.business.currency));
+}
 async function customerCard() {
     const d = await api('/api/me');
     exit.hidden = false;

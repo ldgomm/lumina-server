@@ -596,3 +596,77 @@ input[data-money]{appearance:textfield;-moz-appearance:textfield}input[data-mone
 .counter-wallet-balances{margin:12px 0 20px}
 .counter-wallet-balances summary{cursor:pointer;color:#294767;font-weight:650}
 .counter-wallet-balances li{margin:6px 0}
+
+/* The camera and manual search stay usable side by side, or in reading order on a phone. */
+.panel.lookup-panel {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));
+    gap:clamp(18px,3vw,32px);
+    align-items:start;
+    padding:clamp(16px,2vw,26px);
+}
+.lookup-panel[hidden], .counter-legacy[hidden], #counterPriorityAction[hidden], .counter-camera-frame[hidden] { display:none }
+.counter-scan, .counter-manual { min-width:0 }
+.counter-scan {
+    align-self:stretch;
+    padding:clamp(18px,2.7vw,32px);
+    border-radius:14px;
+    background:linear-gradient(125deg,#132945,#193c56);
+    color:white;
+}
+.counter-scan-title { display:flex;gap:14px;align-items:center }
+.counter-scan-title h2, .counter-manual h2 { margin:0;font-size:clamp(1.18rem,2vw,1.48rem);line-height:1.25;letter-spacing:-.025em }
+.counter-scan-title h2 { color:white }
+.counter-scan>p,.counter-scan #scannerMount p { margin:12px 0 16px;color:#dceaf5;line-height:1.5;font-size:.94rem }
+.scan-mark {
+    position:relative;
+    display:inline-block;
+    flex:none;
+    width:34px;height:34px;
+    color:#91dfd0;
+    background:
+        linear-gradient(currentColor,currentColor) left top / 10px 3px,
+        linear-gradient(currentColor,currentColor) right top / 10px 3px,
+        linear-gradient(currentColor,currentColor) left bottom / 10px 3px,
+        linear-gradient(currentColor,currentColor) right bottom / 10px 3px,
+        linear-gradient(currentColor,currentColor) left top / 3px 10px,
+        linear-gradient(currentColor,currentColor) right top / 3px 10px,
+        linear-gradient(currentColor,currentColor) left bottom / 3px 10px,
+        linear-gradient(currentColor,currentColor) right bottom / 3px 10px;
+    background-repeat:no-repeat;
+}
+.scan-mark::after { content:"";position:absolute;inset:calc(50% - 1px) 5px auto;border-top:2px solid currentColor }
+.counter-scan #scanWallet {
+    background:#f2fffc;color:#12364a;border:1px solid #cfefe9;border-radius:10px;min-height:48px;
+    padding:12px 18px;margin:0;width:100%;text-align:center;font-size:1rem;font-weight:700;
+}
+.counter-scan #scanWallet:hover:enabled { background:white;box-shadow:0 0 0 2px #89d2c5 }
+.counter-scan #scanWallet:focus-visible,.counter-scan button:focus-visible { outline:3px solid #94e7d6;outline-offset:3px }
+.counter-scan #scanWallet:disabled { background:#cfdfdf;color:#304759;cursor:default }
+.counter-camera-frame { position:relative;overflow:hidden;background:#091726;border-radius:10px;margin:8px 0 }
+.counter-camera-frame video { display:block;width:100%;max-height:280px;aspect-ratio:4 / 3;object-fit:contain }
+.counter-camera-frame::after { content:"";position:absolute;inset:15% 24%;border:2px solid #b6f5e5;border-radius:10px;pointer-events:none }
+.counter-scan .scan-close,.counter-camera-help button { margin:4px 0 0;padding:10px 16px;border:1px solid #97b3c5;background:transparent;color:white;min-height:44px }
+.counter-camera-help { padding-top:8px }
+.counter-manual { padding:clamp(4px,1vw,12px) 0 }
+.lookup-panel #lookup { display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin:15px 0 0 }
+.lookup-panel #lookup label { display:block;margin:0 0 5px }
+.lookup-panel #lookup select,.lookup-panel #lookup input { width:100%;min-width:0;min-height:44px;margin:0;font:inherit;color:#162c47 }
+.lookup-panel #lookup select { background-color:white }
+.lookup-panel #lookupHint { display:block;margin:6px 0 0;color:#455b72;font-size:.83rem;line-height:1.45 }
+.lookup-panel #lookup .predictive-results { position:static;margin-top:5px;width:100%;max-height:230px }
+.lookup-panel #findCustomer { justify-self:start;min-height:44px;margin:0;padding:10px 22px }
+.counter-manual #lookup button:disabled,.customer-counter form button[type=submit]:disabled,.customer-counter form button:not([type]):disabled,.counter-legacy form button:disabled {
+    opacity:1;background:#e5eaf0;color:#536174;border-color:#d6dde6;box-shadow:none;cursor:not-allowed;
+}
+.counter-wallet-reward { display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;justify-content:space-between }
+.counter-wallet-reward>div>span { font-size:.84rem;font-weight:700;color:#425575 }
+.counter-wallet-reward.is-ready>div>span { color:#185c45 }
+#counterPriorityAction { width:auto;min-height:44px;flex:none;background:#16654f;color:white;margin:0;padding:10px 16px }
+.counter-customer-heading h2:focus { outline:none }
+.counter-customer-heading h2:focus-visible { outline:2px solid #53739b;outline-offset:3px }
+.customer-counter .wallet-recovery-callout { margin-top:24px }
+@media (max-width:600px) {
+    .lookup-panel #findCustomer,.counter-scan #scanWallet { width:100%;justify-self:stretch }
+    .counter-manual { padding:0 3px 3px }
+}

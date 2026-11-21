@@ -90,48 +90,45 @@
         const counter = document.querySelector('.customer-counter'), member = state.member;
         if (!counter || !member || counter.dataset.rewardsReady) return;
         counter.dataset.rewardsReady = 'true';
-        const amount = (value, kind) => kind === 'CASHBACK'
-            ? Math.trunc(value / 100) + '.' + String(value % 100).padStart(2, '0') + ' ' + state.data.business.currency
-            : value + ' ' + (kind === 'STAMPS' ? (value === 1 ? 'sello' : 'sellos') : (value === 1 ? 'punto' : 'puntos'));
-        // Only the member response defines visible rewards; the owner dashboard can include paused programs.
-        const rewards = member.rewards.filter(r => r.active).map(r => {
-            const program = state.data.programs.find(p => p.id === r.programId);
-            const balance = member.balances.find(b => b.programId === r.programId);
-            const kind = balance?.kind || program?.config.kind;
-            const available = balance?.available ?? 0;
-            const exact = Number.isSafeInteger(available) && available >= 0 && Number.isSafeInteger(r.cost) && r.cost > 0 && ['POINTS', 'STAMPS', 'CASHBACK'].includes(kind);
-            return {reward: r, name: balance?.name || program?.config.name || 'Promoción', kind, available, exact, ready: exact && available >= r.cost};
-        }).sort((a, b) => Number(b.ready) - Number(a.ready));
+        const amount = (value, kind) => rewardUnits(value, kind, state.data.business.currency);
+        const rewards = counterRewards(member);
         if (!rewards.length) return;
+        const mayChoose = reward => state.data.role === 'OWNER' || (state.data.permissions?.rewards !== false &&
+            (!reward.benefit || state.data.permissions?.purchases !== false));
         const ready = rewards.filter(r => r.ready).length;
         const section = document.createElement('section'); section.className = 'counter-rewards'; section.setAttribute('aria-labelledby', 'counterRewardsTitle');
         section.innerHTML = `<div class="counter-rewards-heading"><div><span class="eyebrow">Su próxima recompensa</span><h3 id="counterRewardsTitle">${ready ? ready + (ready === 1 ? ' opción con saldo suficiente' : ' opciones con saldo suficiente') : 'Cada visita lo acerca a un premio'}</h3></div><div class="counter-reward-filters" role="group" aria-label="Filtrar premios"><button type="button" data-reward-filter="all" aria-pressed="true">Todos (${rewards.length})</button><button type="button" data-reward-filter="ready" aria-pressed="false">Con saldo (${ready})</button></div></div><button type="button" class="quiet counter-jump" id="jumpToPurchase">Ir a la compra ↓</button><p class="small">El saldo de cada promoción se usa por separado. Sus premios son alternativas: elegir uno reduce el saldo para los demás. Caja verifica las condiciones al confirmar.</p><div class="counter-reward-grid"></div><button type="button" class="quiet" id="moreCounterRewards" hidden>Mostrar todos los premios</button><p id="counterRewardSelection" role="status" aria-live="polite"></p>`;
-        counter.querySelector('.counter-modes').before(section);
+        counter.querySelector('.counter-operation').after(section);
         let filter = 'all', expanded = false;
+        function prepare(id) {
+            if (counter.querySelector('form[aria-busy="true"]')) return;
+            const model = rewards.find(r => r.reward.id === id);
+            if (!model?.ready || !mayChoose(model.reward)) return;
+            const reward = model.reward;
+            counter.querySelector(`[data-counter-mode="${reward.benefit ? 'purchase' : 'redemption'}"]`).click();
+            if (reward.benefit && counter.querySelector('#purchase')) checkout(counter.querySelector('#purchase'), member);
+            const target = counter.querySelector(reward.benefit ? '#productPurchase' : '#counterChoose');
+            const choice = target?.elements[reward.benefit ? 'reward' : 'rewardId'];
+            if (!choice || ![...choice.options].some(o => o.value === reward.id && !o.disabled)) return;
+            choice.value = reward.id; choice.dispatchEvent(new Event('change', {bubbles: true}));
+            section.querySelector('#counterRewardSelection').textContent = `Seleccionado: ${reward.name}. ${reward.benefit ? 'Revisa los productos y el descuento antes de guardar.' : 'Revisa el canje y confirma con el titular.'} Aún no se ha descontado saldo.`;
+            target.scrollIntoView({behavior: 'smooth', block: 'start'}); choice.focus({preventScroll: true});
+        }
+        const priority = counter.querySelector('#counterPriorityAction');
+        if (priority && rewards[0]?.ready && mayChoose(rewards[0].reward)) {
+            priority.hidden = false; priority.onclick = () => prepare(priority.dataset.reward);
+        }
         const draw = () => {
             const filtered = rewards.filter(r => filter === 'all' || r.ready), visible = expanded ? filtered : filtered.slice(0, 2);
             section.querySelector('.counter-reward-grid').innerHTML = visible.map(model => {
                 const {reward: r, name, available, kind, ready, exact} = model;
                 const remaining = Math.max(0, r.cost - available);
                 const status = !exact ? 'Consulta el saldo exacto en caja' : ready ? 'Saldo suficiente' : `Falta${remaining === 1 && kind !== 'CASHBACK' ? '' : 'n'} ${amount(remaining, kind)}`;
-                return `<article class="counter-reward-card ${ready ? 'is-ready' : ''}"><p class="counter-reward-program">${esc(name)}</p><h4>${esc(r.name)}</h4><span class="counter-reward-status">${esc(status)}</span>${exact ? `<progress max="${r.cost}" value="${Math.min(available, r.cost)}" aria-label="${esc('Progreso para ' + r.name)}"></progress><p class="counter-reward-balance">Saldo: <strong>${esc(amount(available, kind))}</strong><br>Canje: ${esc(amount(r.cost, kind))}</p>` : ''}<p class="counter-reward-conditions">${esc(r.benefitText || (r.benefit ? 'El descuento se calcula al revisar los productos de la compra.' : 'Se entrega tras confirmar el canje en caja.'))}</p>${ready ? `<p class="small">Si eliges este premio, el saldo queda en ${esc(amount(available - r.cost, kind))}.</p><button type="button" ${(state.data.role!=='OWNER'&&(state.data.permissions?.rewards===false||r.benefit&&state.data.permissions?.purchases===false))?'disabled title="Necesita un usuario autorizado para esta operación"':''} data-select-counter-reward="${esc(r.id)}">${r.benefit ? 'Aplicar en una compra' : 'Preparar canje'}</button>` : ''}</article>`;
+                return `<article class="counter-reward-card ${ready ? 'is-ready' : ''}"><p class="counter-reward-program">${esc(name)}</p><h4>${esc(r.name)}</h4><span class="counter-reward-status">${esc(status)}</span>${exact ? `<progress max="${r.cost}" value="${Math.min(available, r.cost)}" aria-label="${esc('Progreso para ' + r.name)}"></progress><p class="counter-reward-balance">Saldo: <strong>${esc(amount(available, kind))}</strong><br>Canje: ${esc(amount(r.cost, kind))}</p>` : ''}<p class="counter-reward-conditions">${esc(r.benefitText || (r.benefit ? 'El descuento se calcula al revisar los productos de la compra.' : 'Se entrega tras confirmar el canje en caja.'))}</p>${ready ? `<p class="small">Si eliges este premio, el saldo queda en ${esc(amount(available - r.cost, kind))}.</p><button type="button" ${(!mayChoose(r))?'disabled title="Necesita un usuario autorizado para esta operación"':''} data-select-counter-reward="${esc(r.id)}">${r.benefit ? 'Aplicar en una compra' : 'Preparar canje'}</button>` : ''}</article>`;
             }).join('') || '<p class="empty-reward">Todavía no tiene saldo suficiente. En «Todos» puedes ver cuánto falta para cada premio.</p>';
             const more = section.querySelector('#moreCounterRewards'); more.hidden = filtered.length <= 2; more.textContent = expanded ? 'Mostrar menos' : `Mostrar los ${filtered.length} premios`;
             section.querySelectorAll('[data-reward-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.rewardFilter === filter)));
-            section.querySelectorAll('[data-select-counter-reward]').forEach(button => button.onclick = () => {
-                if (counter.querySelector('form[aria-busy="true"]')) return;
-                const model = rewards.find(r => r.reward.id === button.dataset.selectCounterReward);
-                if (!model?.ready) return;
-                const reward = model.reward;
-                counter.querySelector(`[data-counter-mode="${reward.benefit ? 'purchase' : 'redemption'}"]`).click();
-                if (reward.benefit && counter.querySelector('#purchase')) checkout(counter.querySelector('#purchase'), member);
-                const target = counter.querySelector(reward.benefit ? '#productPurchase' : '#counterChoose');
-                const choice = target?.elements[reward.benefit ? 'reward' : 'rewardId'];
-                if (!choice || ![...choice.options].some(o => o.value === reward.id && !o.disabled)) return;
-                choice.value = reward.id; choice.dispatchEvent(new Event('change', {bubbles: true}));
-                section.querySelector('#counterRewardSelection').textContent = `Seleccionado: ${reward.name}. ${reward.benefit ? 'Revisa los productos y el descuento antes de guardar.' : 'Revisa el canje y confirma con el titular.'} Aún no se ha descontado saldo.`;
-                target.scrollIntoView({behavior: 'smooth', block: 'start'}); choice.focus({preventScroll: true});
-            });
+            section.querySelectorAll('[data-select-counter-reward]').forEach(button => button.onclick = () => prepare(button.dataset.selectCounterReward));
         };
         section.querySelectorAll('[data-reward-filter]').forEach(button => button.onclick = () => {
             if (counter.querySelector('form[aria-busy="true"]')) return;
@@ -155,8 +152,9 @@
         button.onclick = () => checkout(f, state.member);
         if (state.data.programs.some(p => p.config.productGroup || p.config.countUnits)) checkout(f, state.member);
     }
-    function checkout(old, member) {
-        let rows = [{name: '', group: '', quantity: 1, unitMinor: 0}];
+    function checkout(old, member, draft) {
+        const previousAmount = old.elements.amount?.value || '';
+        let rows = draft?.rows || [{name: '', group: '', quantity: 1, priceInput: previousAmount}];
         const previousBranch = old.elements.branchId?.value, previousReceipt = old.elements.receipt?.value;
         old.closest('#counterPurchase')?.querySelector('#purchaseReview')?.remove();
         const panel = document.createElement('div'); old.replaceWith(panel);
@@ -167,11 +165,24 @@
             const value=row.group||'Sin categoría',custom=!choices.includes(value);
             return `<label>Categoría del producto<select data-group-choice aria-controls="productGroup${index}">${choices.map(g=>`<option value="${esc(g)}" ${value===g?'selected':''}>${esc(g)}</option>`).join('')}<option value="__custom" ${custom?'selected':''}>Otra categoría…</option></select></label><label data-custom-group ${custom?'':'hidden'}>Nombre de la categoría<input id="productGroup${index}" data-group maxlength="60" value="${esc(value)}" ${custom?'required':''}></label>`;
         };
-        let common = {branchId: previousBranch || state.data.branches[0]?.id || '', receipt: previousReceipt || '', reward: '', programs: selectedPurchasePrograms(old)};
+        let common = draft?.common || {branchId: previousBranch || state.data.branches[0]?.id || '', receipt: previousReceipt || '', reward: '', programs: selectedPurchasePrograms(old)};
         const readRows = f => [...f.querySelectorAll('[data-line]')].map(line => ({name: line.querySelector('[data-name]').value.trim(), group: line.querySelector('[data-group]').value.trim(), quantity: Number(line.querySelector('[data-quantity]').value), unitMinor: line.querySelector('[data-price]').value ? purchaseMinor(line.querySelector('[data-price]').value) : 0}));
         const keep = f => { rows = [...f.querySelectorAll('[data-line]')].map(line => ({name: line.querySelector('[data-name]').value, group: line.querySelector('[data-group]').value, quantity: line.querySelector('[data-quantity]').value, priceInput: line.querySelector('[data-price]').value})); common = {branchId: f.elements.branchId.value, receipt: f.elements.receipt.value, reward: f.elements.reward.value, programs: [...f.querySelectorAll('[name=program]:checked')].map(x => x.value)}; };
+        async function withUpdatedDiscount(request, node, allowEdit = false) {
+            try { return await request; }
+            catch (issue) {
+                if (node.elements.reward.value && ['CARD_CHANGED','REWARD_CHANGED','INSUFFICIENT_BALANCE','NOT_FOUND','SEPARATE_REDEMPTION'].includes(issue.code)) {
+                    issue.message = 'El saldo o el premio cambió. Actualiza la tarjeta para revisar el descuento. Tus productos siguen aquí.';
+                    issue.reviewAction = {label:'Actualizar saldo y descuento', allowEdit, run:() => old.refreshCustomer(node, (next, fresh) => {
+                        keep(node);
+                        checkout(next, fresh, {rows, common});
+                    })};
+                }
+                throw issue;
+            }
+        }
         const draw = () => {
-            panel.innerHTML = `<form id="productPurchase"><label for="checkoutBranch">Sucursal</label><select id="checkoutBranch" name="branchId" required>${options(state.data.branches, common.branchId)}</select>${field('receipt', 'Comprobante único', 'text', common.receipt, 'required maxlength="100"')}<datalist id="productGroups">${categories.map(g => `<option value="${esc(g)}">`).join('')}</datalist>${rows.map((r, i) => `<fieldset data-line><legend>Producto ${i + 1}</legend><label>Producto o servicio<input data-name required maxlength="100" value="${esc(r.name)}"></label>${groupControl(r,i)}<div class="row"><label>Cantidad<input data-quantity type="number" min="1" max="100" required value="${r.quantity}"></label>${field('linePrice' + i, 'Precio por unidad', 'number', r.priceInput ?? (r.unitMinor ? r.unitMinor / 100 : ''), 'data-price data-money min="0.01" max="10000000" step="any" required')}</div>${rows.length > 1 ? `<button type="button" class="quiet" data-remove="${i}">Quitar producto</button>` : ''}</fieldset>`).join('')}<button type="button" class="quiet" id="addProduct" ${rows.length >= 30 ? 'disabled' : ''}>Añadir producto</button>${purchasePromotionSelection(common.programs)}${select('reward', 'Premio para aplicar en esta compra', [['', 'Sin canje'], ...rewards.map(r => [r.id, r.name])], common.reward)}<p id="purchaseRewardDetails" class="counter-selected-benefit" hidden></p><div id="purchaseConsent"><label class="check"><input name="verified" type="checkbox">Verifiqué al titular.</label><label class="check"><input name="confirmed" type="checkbox">El cliente pidió este premio y acepta usar el saldo de esta promoción.</label></div><div class="checkout-subtotal"><span>Subtotal</span><strong id="checkoutSubtotal"></strong><small>El descuento se calcula al revisar la compra.</small></div><button>Revisar total y descuento</button></form><div id="receiptReview"></div>`;
+            panel.innerHTML = `<form id="productPurchase" data-require-valid><label for="checkoutBranch">Sucursal</label><select id="checkoutBranch" name="branchId" required>${options(state.data.branches, common.branchId)}</select>${field('receipt', 'Comprobante único', 'text', common.receipt, 'required maxlength="100"')}${previousAmount ? '<p class="small">El monto escrito pasó al primer producto. Puedes ajustar su precio antes de confirmar.</p>' : ''}<datalist id="productGroups">${categories.map(g => `<option value="${esc(g)}">`).join('')}</datalist>${rows.map((r, i) => `<fieldset data-line><legend>Producto ${i + 1}</legend><label>Producto o servicio<input data-name required maxlength="100" value="${esc(r.name)}"></label>${groupControl(r,i)}<div class="row"><label>Cantidad<input data-quantity type="number" min="1" max="100" required value="${r.quantity}"></label>${field('linePrice' + i, 'Precio por unidad', 'number', r.priceInput ?? (r.unitMinor ? r.unitMinor / 100 : ''), 'data-price data-money min="0.01" max="10000000" step="any" required')}</div>${rows.length > 1 ? `<button type="button" class="quiet" data-remove="${i}">Quitar producto</button>` : ''}</fieldset>`).join('')}<button type="button" class="quiet" id="addProduct" ${rows.length >= 30 ? 'disabled' : ''}>Añadir producto</button>${purchasePromotionSelection(common.programs)}${select('reward', 'Premio para aplicar en esta compra', [['', 'Sin canje'], ...rewards.map(r => [r.id, r.name])], common.reward)}<p id="purchaseRewardDetails" class="counter-selected-benefit" hidden></p><div id="purchaseConsent"><label class="check"><input name="verified" type="checkbox">Verifiqué al titular.</label><label class="check"><input name="confirmed" type="checkbox">El cliente pidió este premio y acepta usar el saldo de esta promoción.</label></div><div class="checkout-subtotal"><span>Subtotal</span><strong id="checkoutSubtotal"></strong><small>El descuento se calcula al revisar la compra.</small></div><button>Revisar total y descuento</button></form><div id="receiptReview"></div>`;
             const f = panel.querySelector('form'); let revision = 0;
             bindPurchasePromotionSelection(f);
             f.querySelectorAll('[data-group-choice]').forEach(select=>select.onchange=()=>{
@@ -196,7 +207,7 @@
             form('productPurchase', async (v, node) => {
                 const ticket = revision; const items = readRows(node); const reward = rewards.find(r => r.id === v.reward);
                 const payload = {memberId: member.member.id, branchId: v.branchId, receipt: v.receipt, currency: state.data.business.currency, amountMinor: items.reduce((s, x) => s + x.quantity * x.unitMinor, 0), items, programIds: selectedPurchasePrograms(node), rewardId: reward?.id || null, expectedRevision: member.member.revision, expectedRewardVersion: reward?.version || null, identityVerified: v.verified === 'on', customerConfirmed: v.confirmed === 'on'};
-                const quote = await api('/api/staff/purchases/quote', payload);
+                const quote = await withUpdatedDiscount(api('/api/staff/purchases/quote', payload), node, true);
                 if (ticket !== revision || !node.isConnected) return;
                 payload.amountMinor = quote.amountMinor;
                 if (quote.earningReview) payload.expectedEarningReview = quote.earningReview;
@@ -204,12 +215,23 @@
                 review.innerHTML = `<section class="panel"><h3>Confirmar compra</h3><p>Productos: ${money(quote.grossMinor)}<br>Descuento: ${money(quote.discountMinor)}<br><strong>Total pagado: ${money(quote.amountMinor)}</strong></p>${quote.rewardName ? `<p>Premio: ${esc(quote.rewardName)}</p>` : ''}${purchasePromotionReview(payload.programIds)}${purchaseEarningReview(quote)}<p>Confirma cuando el cobro o la entrega estén realizados en caja.</p><form id="finishPurchase"><button>${payload.rewardId ? 'Guardar compra y canje' : 'Guardar compra'}</button></form></section>`;
                 form('finishPurchase', async (_, confirm) => {
                     if (ticket !== revision) throw new Error('La compra cambió. Revisa el total otra vez.');
-                    const result = await api('/api/staff/purchases', payload, 'POST', operationKey(node, payload));
+                    const result = await withUpdatedDiscount(saveReviewedPurchase(node, payload), node);
+                    if (!node.isConnected || state.member !== member) return;
                     counterReceipt(result.replayed ? 'Esta compra ya estaba registrada' : 'Compra guardada', `<p>${esc(member.member.name)}</p><p>Total: <strong>${money(result.amountMinor)}</strong> · Descuento: ${money(result.discountMinor)}</p>${purchaseEarningsReceipt(result.earned, payload.programIds)}<p>${result.redemptionId ? 'El premio quedó canjeado en el mismo comprobante. No lo entregues otra vez.' : 'La tarjeta se actualizará con esta compra.'}</p><p class="small">Recibo: ${esc(result.purchaseId)}</p>`); notice('Comprobante guardado.');
                 });
             });
         };
         draw();
+        if (draft) {
+            const status = document.createElement('p');
+            status.className = 'counter-selected-benefit'; status.tabIndex = -1; status.setAttribute('role','status');
+            status.textContent = rewards.some(r => r.id === draft.common.reward)
+                ? 'Saldo actualizado. Revisa el descuento y confirma de nuevo con el cliente.'
+                : 'El premio anterior ya no está disponible. Revisa el total o elige otro premio.';
+            panel.prepend(status);
+            panel.querySelector('[name=receipt]').dispatchEvent(new Event('input',{bubbles:true}));
+            status.focus();
+        }
     }
 
         function walletColorContrast(a, b) {
@@ -1338,9 +1360,9 @@
                     if (!valid() || !closeCustomerDrawer()) return;
                     state.tab = 'sales'; renderMerchant();
                     const lookup = document.querySelector('#lookup');
-                    const option=document.createElement('option');option.value='memberId';option.textContent='Cliente seleccionado';lookup.elements.kind.append(option);lookup.elements.kind.value='memberId';lookup.elements.value.value=memberId;
+                    const option=document.createElement('option');option.value='memberId';option.hidden=true;option.textContent='Cliente seleccionado';lookup.elements.kind.append(option);lookup.elements.kind.value='memberId';lookup.elements.value.value=memberId;
                     if (recovery) lookup.dataset.recovery = d.member.id;
-                    lookup.requestSubmit();
+                    lookup.elements.value.dispatchEvent(new Event('input',{bubbles:true})); lookup.requestSubmit();
                 };
                 if(isOwner)dialog.querySelector('#serveCustomer').onclick = () => serve(false);
                 if(isOwner)dialog.querySelector('#recoverCustomerWallet').onclick = () => serve(true);

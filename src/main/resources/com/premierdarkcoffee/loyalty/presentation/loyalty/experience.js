@@ -4,7 +4,7 @@
     const pages = {
         administration: ['Centro de control', 'Administración en un solo lugar.', 'Pendientes, personas, locales y cuenta, con acceso directo a cada decisión.', 'grid'],
         overview: ['Resumen', 'Resumen de Wallet', 'Actividad registrada y accesos para el día a día.', 'home'],
-        sales: ['Caja', 'Caja', 'Busca la tarjeta, registra la operación y sigue con el próximo cliente.', 'scan'],
+        sales: ['Caja', 'Caja', 'Identifica al cliente para registrar su compra o canjear un premio.', 'scan'],
         radar: ['Radar de regreso', 'La próxima visita tiene una razón.', 'Ritmos de compra y oportunidades con una explicación clara.', 'spark'],
         customers: ['Mis clientes', 'Mis clientes', 'Compras, frecuencia y premios de todas tus sucursales.', 'people'],
         programs: ['Promociones', 'Promociones', 'Crea tus propias reglas y cambia cada promoción cuando lo necesites.', 'spark'],

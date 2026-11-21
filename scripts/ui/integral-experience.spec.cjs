@@ -63,7 +63,12 @@ const report={days:30,fromDate:'2026-10-11',throughDate:'2026-11-09',previousFro
    await page.locator('#changeCustomer').click();await page.locator('#operationDraftDialog').waitFor();await page.locator('#keepOperationDraft').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('#purchase [name=receipt]').inputValue(),'FICTICIO-001');
    await page.locator('#purchase button:not([type])').click();await page.locator('.earning-forecast').waitFor();assert.match(await page.locator('.earning-forecast').textContent(),/15 puntos/);assert.match(await page.locator('.earning-forecast').textContent(),/mínimo elegible de 20.00/);await fit();if(width===1440||width===390)await shot(width+'-purchase-review','.purchase-confirmation');
    failPurchase=true;await page.locator('#finishSimplePurchase button').click();await page.locator('#finishSimplePurchase .form-feedback:not([hidden])').waitFor();assert.equal(calls.at(-1).body.expectedEarningReview,'fiction-review');assert.equal(await page.locator('#purchase [name=receipt]').inputValue(),'FICTICIO-001');
-   failPurchase=false;await page.locator('#purchase button:not([type])').click();await page.locator('#finishSimplePurchase button').click();await page.locator('.counter-receipt').waitFor();
+   const saves=calls.filter(c=>c.url==='/api/staff/purchases').length;
+   assert.ok(await page.locator('#finishSimplePurchase button:not([type])').isDisabled());
+   failPurchase=false;await page.getByRole('button',{name:'Volver a revisar la compra'}).click();
+   await page.waitForFunction(()=>{const b=document.querySelector('#finishSimplePurchase button:not([type])');return b&&!b.disabled;});
+   assert.equal(calls.filter(c=>c.url==='/api/staff/purchases').length,saves);
+   await page.locator('#finishSimplePurchase button:not([type])').click();await page.locator('.counter-receipt').waitFor();
    if(width===1440){
     await page.locator('#nextCustomer').click();await page.locator('#value').fill('FAKE-QR');await page.locator('#lookup button:not([type])').click();await page.locator('#purchase').waitFor();
     await page.getByRole('button',{name:'Registrar productos y aplicar un descuento',exact:true}).click();await page.locator('#productPurchase [name=receipt]').fill('FICTICIO-002');

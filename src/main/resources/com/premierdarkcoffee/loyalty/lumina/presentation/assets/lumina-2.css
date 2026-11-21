@@ -107,7 +107,7 @@
 .lumina-loyalty .wallet-subscription-note { margin:10px auto; background:#e8f2ef; color:#16483f; border:1px solid #c8dfd5; border-radius:12px; width:calc(100% - 36px) }
 .lumina-loyalty .wallet-subscription-note a { color:#184c46 }
 .lumina-loyalty .wallet-menu-close { color:#233e62; background:white; border:1px solid #becfe0; margin-bottom:10px }
-.lumina-loyalty .lookup-panel { border-top:4px solid #36756b; padding:clamp(18px,2.5vw,30px) }
+.lumina-loyalty .lookup-panel { border:1px solid var(--line); padding:clamp(16px,2vw,26px) }
 .lumina-loyalty .join-station { display:grid; grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr); gap:clamp(20px,3vw,40px); background:white; border:1px solid var(--line); border-radius:18px; padding:clamp(18px,3vw,35px); align-items:center }
 .join-sign { background:#e8f3ef; color:#183e3c; padding:22px; border-radius:15px; display:grid; justify-items:center; text-align:center; gap:15px }
 .join-sign strong { font-size:1.25rem }
