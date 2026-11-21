@@ -57,7 +57,7 @@ export function openDatabase(path) {
   }
   transaction(()=>{
     db.exec('CREATE TABLE IF NOT EXISTS lumina_extensions(name TEXT PRIMARY KEY,checksum TEXT NOT NULL) STRICT');
-    for(const name of ['membership-calendar','subscription-periods','wallet-consent','commercial-prices']) {
+    for(const name of ['membership-calendar','subscription-periods','wallet-consent','commercial-prices','courtesy-video']) {
       const sql=readFileSync(new URL('./extensions/'+name+'.sql',import.meta.url),'utf8');
       const checksum=createHash('sha256').update(sql).digest('hex');
       const prior=db.prepare('SELECT checksum FROM lumina_extensions WHERE name=?').get(name);

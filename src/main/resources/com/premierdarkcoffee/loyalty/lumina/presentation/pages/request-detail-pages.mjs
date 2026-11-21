@@ -92,6 +92,7 @@ function pieceView({actor,base,request,piece,feedback}) {
 function nextStep({actor,company,request,pieces,visits,addPiece}) {
   const pending=pieces.filter(p=>p.status==='REVIEW'),approved=pieces.find(p=>p.status==='APPROVED');
   if(request.status==='CANCELLED')return ['Solicitud cancelada','Los archivos y el historial siguen disponibles.','#history','Ver historial'];
+  if(request.status==='DELIVERED'&&request.type==='COURTESY')return ['Video de cortesía entregado','Lúmina registró la entrega de tu video.','#deliverables','Consultar entrega'];
   if(request.status==='DELIVERED')return request.type==='VISIT'?['Visita realizada','Consulta la fecha real y las observaciones de la visita.','#visits','Ver visita']:['Trabajo entregado','Tus archivos están listos para consultar.','#deliverables','Ver entregas'];
   if(actor.kind==='AGENCY') {
     if(!agency(actor))return ['Consulta del negocio','Consulta los avances y las entregas de esta solicitud.','#deliverables','Ver entregables'];
@@ -150,7 +151,8 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
   const tabs=[...(work?[['deliverables','Entregables']]:[]),...(quoteBody?[['quote','Cotización']]:[]),...(visitBody?[['visits','Visitas']]:[]),['details','Solicitud'],['history','Historial']];
   const history=`<details class="disclosure detail-history" id="history"><summary>Historial de la solicitud <span>Últimos ${audit.length} movimientos</span></summary><div>${table(['Fecha','Responsable','Movimiento','Detalle'],audit.map(row=>[esc(timestamp(row.happened_at)),esc(row.actor_name),esc(row.action.replaceAll('_',' ')),esc(row.details)]),'Todavía no hay movimientos.')}</div></details>`;
   const panels=quoteBody+deliverables+visitBody+info+history;
-  return `<div class="request-detail" data-request-detail><p class="detail-back">${localLink(url(request.channel==='SOCIAL'?'/content':'/requests',request.channel==='SOCIAL'?{view:'requests'}:{}),'← Todas las solicitudes')}</p>
+  return `<div class="request-detail" data-request-detail><p class="detail-back">${request.type==='COURTESY'&&actor.kind==='OWNER'&&!can(actor,'SOCIAL')?localLink(actor.welcome_done?'/home':'/welcome','← Volver a mi negocio'):localLink(url(request.channel==='SOCIAL'?'/content':'/requests',request.channel==='SOCIAL'?{view:'requests'}:{}),'← Todas las solicitudes')}</p>
+    ${admin&&request.type==='COURTESY'&&!hold&&request.status!=='DELIVERED'?localLink('/admin/businesses/'+company.id+'/courtesy','Registrar entrega del video de cortesía','btn secondary'):''}
     ${feedback&&!panels.includes(' data-detail-error>')?recovery(feedback,base('')):''}
     <section class="delivery-next"><div><span class="eyebrow">${hold?'CONSULTA DEL HISTORIAL':'SIGUIENTE PASO'}</span><h2>${esc(heading)}</h2><p>${esc(explanation)}</p></div>${localLink(anchor,caption,'btn')}</section>${timeline}
     <nav class="detail-jumps" aria-label="Secciones de la solicitud">${tabs.map(([id,name])=>localLink('#'+id,name)).join('')}</nav>${panels}</div>`;

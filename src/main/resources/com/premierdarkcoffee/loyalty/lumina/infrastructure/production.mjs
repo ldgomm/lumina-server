@@ -31,7 +31,7 @@ export function productionGuard(env=process.env) {
   const current={'lumina/infrastructure/schema.sql':hash(readFileSync(new URL('schema.sql',folder)))};
   for(const file of readdirSync(new URL('migrations/',folder)).filter(f=>f.endsWith('.sql')))current['lumina/infrastructure/migrations/'+file]=hash(readFileSync(new URL('migrations/'+file,folder)));
   const expected=Object.fromEntries(Object.entries(seal.sql||{}).filter(([k])=>k.startsWith('lumina/infrastructure/')));
-  const extensions=['membership-calendar','subscription-periods','wallet-consent'].map(name=>{
+  const extensions=['membership-calendar','subscription-periods','wallet-consent','commercial-prices','courtesy-video'].map(name=>{
     const path='lumina/infrastructure/extensions/'+name+'.sql';
     const checksum=hash(readFileSync(new URL('extensions/'+name+'.sql',folder)));
     if(expected[path])current[path]=checksum;

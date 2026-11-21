@@ -19,20 +19,17 @@ export function requestForm(actor,url,courtesy = false,selected='',onlySocial=fa
   if (actor.kind==='AGENCY') return '';
   if(courtesy && actor.kind!=='OWNER')return '';
   if (courtesy) return form(url('/requests'),actor,`
-    ${hidden('request_key',values.request_key||uuid())}${hidden('type','COURTESY')}${hidden('channel','SOCIAL')}${hidden('service','VIDEO')}
-    ${input('title','¿Qué quieres mostrar en tu video?','text','required maxlength="150"',values.title||'')}
+    ${hidden('request_key',values.request_key||uuid())}${values.courtesy_revision?hidden('courtesy_revision',values.courtesy_revision):''}${hidden('type','COURTESY')}${hidden('channel','SOCIAL')}${hidden('service','VIDEO')}
+    ${input('title','¿Qué quieres mostrar en tu video?','text','required minlength="2" maxlength="150"',values.title||'')}
     ${textarea('brief','Cuéntanos tu idea','maxlength="4000" rows="3"',values.brief||'')}${contactField(values.phone)}
     ${button('Solicitar mi video gratis')}`);
   if(onlySocial)return composer(actor,url,{area:'SOCIAL',onlySocial:true,values});
   return Object.hasOwn(areas,selected)?composer(actor,url,{area:selected,values}):serviceChoices(actor,url);
 }
-export function homePage({actor,company,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash,overview,walletEntry}) {
-  if(actor.kind!=='AGENCY')return businessHome({actor,url,groups,videoRequested,videoDelivered,upcoming,courtesy,cash,overview,walletEntry,giftForm:actor.kind==='OWNER'?requestForm(actor,url,true,'',false,{phone:company.phone}):''});
+export function homePage({actor,company,url,groups,videoRequested,videoDelivered,upcoming,cash,overview,walletEntry}) {
+  if(actor.kind!=='AGENCY')return businessHome({actor,url,groups,videoRequested,videoDelivered,upcoming,cash,overview,walletEntry});
   const hasScopes = Object.keys(channels).some(channel=>can(actor,channel));
   const open = groups.filter(row=>!['CANCELLED','DELIVERED'].includes(row.status)).reduce((sum,row)=>sum+row.count,0);
-  const gift = actor.kind === 'OWNER' ? card('Tu video de cortesía',
-    courtesy ? `<p>${badge(courtesy.status)} ${localLink(url('/requests/'+courtesy.id),'Ver solicitud de cortesía')}</p>` : requestForm(actor,url,true),
-    courtesy ? 'Aquí puedes consultar el estado del video que solicitaste.' : '¡Bienvenido a Lúmina Digital! Tu primer video de cortesía es gratis. Cuéntanos qué quieres mostrar y prepararemos tu video.') : '';
   const approval = actor.kind === 'AGENCY' && !actor.readOnlyCompany && !company.approved ? card('Verifica el registro del negocio',
     `<p>Cédula terminada en <strong>${esc(company.document_hint)}</strong> · ${esc(company.phone)}</p>
     ${form(url('/businesses/verify'),actor,button('Marcar negocio verificado'))}`,
@@ -43,7 +40,6 @@ export function homePage({actor,company,url,groups,videoRequested,videoDelivered
       ${stat('Videos entregados',videoDelivered)}${stat('Próximas visitas',upcoming)}</section>` : ''}
     ${can(actor,'WALLET')?`<a class="wallet-entry-banner" href="${url('/wallet')}"><div><span class="eyebrow">LOYALTY / APPLE + GOOGLE</span><h2>Wallet, siempre a mano.</h2><p>Tarjetas, promociones y comunidad en un solo espacio.</p></div><span class="btn">Abrir Wallet →</span></a>`:''}
     ${can(actor,'SOCIAL')?`<a class="content-entry" href="${esc(url('/content'))}"><div><span class="eyebrow">MÓDULO DE CONTENIDO</span><h2>Tu producción, en un solo lugar.</h2><p>Solicitudes, grabaciones, aprobaciones, entregas y métricas.</p></div><span class="btn">Abrir Contenido →</span></a>`:''}
-    ${gift}
     <div class="card-grid">${hasScopes ? card('Producción y entregas',`<p>Consulta solicitudes, visitas, grabaciones, revisiones y enlaces de entrega.</p>
       <div class="actions">${localLink(url('/requests'),'Abrir solicitudes','btn')}${localLink(url('/calendar'),'Ver agenda','btn secondary')}</div>`) : ''}
     ${cash ? card('Loyalty · Caja',`<p>Sucursal asignada <strong>${esc(cash.branch_name)}</strong></p>${localLink('/cashier','Abrir Caja','btn')}`) : ''}

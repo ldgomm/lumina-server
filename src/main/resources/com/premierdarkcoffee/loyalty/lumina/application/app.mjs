@@ -14,6 +14,8 @@ import { serviceStatus } from '../businesses/service-status.mjs';
 import { businessStatusPage, collaboratorServicesPage } from '../presentation/pages/service-status-pages.mjs';
 import { walletHomeEntry, walletPaymentReminder, walletTrialReminder } from '../presentation/pages/wallet-reminders.mjs';
 import { welcomePage, servicesPage, inactiveServicePage } from '../presentation/pages/welcome-pages.mjs';
+import { courtesyState, markCourtesyDelivered, setCourtesyDisplay } from '../production/courtesy.mjs';
+import { courtesyNotice, courtesyOwnerPage, courtesyAdminPage } from '../presentation/pages/courtesy-pages.mjs';
 import { businessWorkSummary } from '../businesses/work-summary.mjs';
 import { businessDirectory } from '../businesses/directory.mjs';
 import { businessDirectoryPage } from '../presentation/pages/business-directory-pages.mjs';
@@ -59,7 +61,7 @@ import { accountPage, publicPage, identityMigrationPage } from '../presentation/
 import { invitePage, memberPage, newMemberPage, teamPage } from '../presentation/pages/team-pages.mjs';
 import { card, esc, localLink, page, pathFor } from '../presentation/pages/components.mjs';
 import { cookieFrom, json, readForm, readJson, redirect, securityHeaders, send, sessionCookie } from '../presentation/pages/http.mjs';
-import { homePage, requestForm, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
+import { homePage, requestDetail, requestsPage } from '../presentation/pages/production-pages.mjs';
 import { mapsPage, metricsPage } from '../presentation/pages/service-pages.mjs';
 import { cashierHtml, loyaltyWorkspaceHtml, walletPage, walletReportPage } from '../presentation/pages/wallet-pages.mjs';
 import { agencyOverview, agencyProduction, channelWorkspace } from '../presentation/pages/workspace-pages.mjs';
@@ -140,7 +142,8 @@ function getRequestPage(db,actor,company,url,request,feedback=null) {
   const plan = request.plan_id ? getPlan(db,request.plan_id) : null;
   const contracts = actor.kind === 'AGENCY' ? contractsFor(db,company.id) : [];
   return {title:request.title,description:'',
-    layout:request.channel==='SOCIAL'?'content':undefined,contentView:'requests',
+    layout:request.channel==='SOCIAL'&&(actor.kind!=='OWNER'||can(actor,'SOCIAL'))?'content':undefined,contentView:'requests',
+    omitCourtesy:request.type==='COURTESY',
     body:requestDetail({actor,company,url,request,quote,pieces,visits,audit,contracts,plan,feedback})};
 }
 
@@ -167,6 +170,10 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       const blocked=Boolean(businessState&&businessState!=='ACTIVE');
       const viewer=actor?{...actor,agencyWork,businessState,businessBlocked:blocked,
         readOnlyCompany:actor.kind==='AGENCY'&&Boolean(company)&&(!agencyWork||blocked)}:null;
+      if(status===200 && viewer?.kind==='OWNER' && viewer.document && !blocked && !view.omitCourtesy && view.layout!=='access') {
+        const state=courtesyState(db,viewer.company_id,viewer.id);
+        view={...view,body:courtesyNotice(viewer,state,req.url)+view.body};
+      }
       return send(res,status,(view.layout==='content'?contentShell:view.layout==='access'?accessShell:page)({actor:viewer,company,path,cash,...view}));
     };
     try {
@@ -398,6 +405,20 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         }
         return render({title:'Actualiza tu acceso',body:identityMigrationPage(actor)});
       }
+      if(path==='/courtesy'&&method==='GET') {
+        requireOwner(actor);company=companyFor(db,actor);
+        const state=courtesyState(db,company.id);
+        if(state.status==='requested')return redirect(res,'/requests/'+state.request.id);
+        return render(courtesyOwnerPage(actor,company,state));
+      }
+      if(path==='/courtesy/display'&&method==='POST') {
+        requireOwner(actor);
+        const compact=setCourtesyDisplay(db,actor,data.compact);
+        if(req.headers.accept==='application/json')return json(res,200,{compact});
+        const raw=data.return_to||'';
+        const destination=/^\/[a-z]/i.test(raw)&&!/[\\\x00-\x1f]/.test(raw)?new URL(raw,origin):null;
+        return redirect(res,destination?.origin===origin&&/^\/[a-z]/i.test(destination.pathname)?destination.pathname+destination.search:'/home');
+      }
       if(path==='/services'||path==='/services/activate'||path==='/welcome') {
         requireThat(actor.kind!=='AGENCY','Esta bienvenida pertenece al negocio y su equipo.',403);
         company=companyFor(db,actor);
@@ -453,6 +474,15 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         catch(error){if(!(error instanceof Problem))throw error;return render({title:'Mi cuenta y pagos',body:card('Saldo no disponible','<p>No pudimos consultar los cargos y pagos. Tus registros se conservan.</p>'+localLink('/billing','Reintentar','btn secondary'))+contractSummary(contracts,localDay())},503);}
         return render({title:'Mi cuenta y pagos',body:billingAccountPage(actor,account,'/billing','',{},{view,contracts,trial:inTrial()?trialChoice(db,company.id):null})});
       }
+      const adminCourtesy=path.match(/^\/admin\/businesses\/([0-9a-f-]{36})\/courtesy$/i);
+      if(adminCourtesy) {
+        requireAgency(actor);company=companyFor(db,actor,adminCourtesy[1]);
+        const show=(status=200,error='')=>render(courtesyAdminPage(actor,company,courtesyState(db,company.id),
+          operationState(db,company.id)==='ACTIVE',data,error),status);
+        if(method==='GET')return show();
+        try {markCourtesyDelivered(db,actor,company,data);return redirect(res,path);}
+        catch(issue){if(!(issue instanceof Problem)||![400,409].includes(issue.status))throw issue;return show(issue.status,issue.message);}
+      }
       const administrationTeam=path.match(/^\/admin\/businesses\/([0-9a-f-]{36})\/team(?:\/|$)/i);
       if(administrationTeam) {
         requireAgency(actor);company=companyFor(db,actor,administrationTeam[1]);
@@ -470,7 +500,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           let account=company.loyalty_tenant?null:emptyAccount(company,localDay());if(company.loyalty_tenant)try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
           const walletOnly=panel.view==='wallet';
           const commands=walletOnly?[]:db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id);
-          const details=walletOnly?{}:{work:businessWorkSummary(db,actor,company.id),serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:contractsFor(db,company.id)};
+          const details=walletOnly?{}:{courtesy:courtesyState(db,company.id),work:businessWorkSummary(db,actor,company.id),serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:contractsFor(db,company.id)};
           return render({title:walletOnly?'Cobros de Wallet · '+company.name:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),commands,account,issueText,data||{},{...details,view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',delete:'Negocio eliminado. Su historial se conserva.',restore:'Negocio restaurado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
         };
         if(method==='POST')try {
@@ -627,7 +657,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if(path==='/production')return render({title:'Producción',description:'Todos los clientes y servicios, con cada trabajo en su etapa.',body:agencyProduction(rows(),{q,state,channel,scope})});
         if(path==='/agency-calendar')return render({title:'Agenda',body:workdayAgenda({actor,data:agendaData(db,actor,null,target.searchParams),url:pathFor(actor,null),global:true})});
         const counts=db.get(`SELECT (SELECT count(*) FROM companies c WHERE ${operatingSql('c.id')}) AS companies,(SELECT count(*) FROM companies c WHERE approved=0 AND ${operatingSql('c.id')}) AS pending,
-          (SELECT count(*) FROM requests r WHERE ${operatingSql()} AND status NOT IN ('CANCELLED','DELIVERED')) AS open,(SELECT count(*) FROM pieces WHERE status='DELIVERED') AS delivered,
+          (SELECT count(*) FROM requests r WHERE ${operatingSql()} AND status NOT IN ('CANCELLED','DELIVERED')) AS open,((SELECT count(*) FROM pieces WHERE status='DELIVERED')+(SELECT count(*) FROM courtesy_deliveries WHERE request_id IS NULL)) AS delivered,
           (SELECT count(*) FROM requests r WHERE NOT ${operatingSql()} AND status NOT IN ('CANCELLED','DELIVERED')) AS blocked,
           (SELECT count(*) FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id WHERE ${operatingSql()} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?) AS visits`,now());
         const pipeline=db.all(`SELECT status,count(*) AS count FROM requests r WHERE ${operatingSql()} GROUP BY status`);
@@ -739,12 +769,12 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const groups = requestCounts(db,actor,company.id);
         const policy=requestAccessSql(actor);
         const videos=db.all(`SELECT r.quantity,(SELECT count(*) FROM pieces p WHERE p.company_id=r.company_id AND p.request_id=r.id AND p.status='DELIVERED') AS delivered
-          FROM requests r WHERE r.company_id=? AND ${policy.sql} AND r.service IN ('VIDEO','REEL','SHORT') AND r.type<>'VISIT' AND r.status<>'CANCELLED'`,company.id,...policy.params);
+          FROM requests r WHERE r.company_id=? AND ${policy.sql} AND r.service IN ('VIDEO','REEL','SHORT') AND r.type<>'VISIT' AND r.status<>'CANCELLED'
+          UNION ALL SELECT 0 AS quantity,1 AS delivered FROM courtesy_deliveries WHERE company_id=? AND request_id IS NULL AND ?<>'COLLABORATOR'`,company.id,...policy.params,company.id,actor.kind);
         const upcoming=db.get(`SELECT count(*) AS count FROM visits v JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
           WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
-        const courtesy = actor.kind==='OWNER' ? db.get("SELECT id,status FROM requests WHERE company_id=? AND type='COURTESY'",company.id) : null;
         return render({title:actor.kind==='AGENCY'?'Información del negocio':'Panel de trabajo',description:'Servicios y actividades del negocio.',
-          body:(actor.kind==='OWNER'?campaignBanner(listPlans(db),url):'')+homePage({actor,company,url,groups,upcoming,courtesy,cash,walletEntry:actor.kind==='OWNER'?walletHomeEntry(db,company):null,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
+          body:(actor.kind==='OWNER'?campaignBanner(listPlans(db),url):'')+homePage({actor,company,url,groups,upcoming,cash,walletEntry:actor.kind==='OWNER'?walletHomeEntry(db,company):null,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
             videoRequested:videos.reduce((sum,row)=>sum+row.quantity,0),videoDelivered:videos.reduce((sum,row)=>sum+row.delivered,0)})});
       }
       if (path==='/businesses/verify' && method==='POST') {
@@ -783,8 +813,13 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
             const id = createRequest(db,actor,company,data);
             return redirect(res,url('/requests/'+id));
           } catch(issue) {
+            if(issue instanceof Problem && [400,409].includes(issue.status) && actor.kind==='OWNER' && data.type==='COURTESY') {
+              const state=courtesyState(db,company.id);
+              if(state.status==='delivered')return redirect(res,'/courtesy');
+              if(state.status==='requested')return redirect(res,'/requests/'+state.request.id);
+              return render(courtesyOwnerPage(actor,company,state,data,issue.message),issue.status);
+            }
             if(!(issue instanceof Problem)||![400,409].includes(issue.status)||actor.kind==='AGENCY'||!Object.hasOwn(areas,data.channel)||!can(actor,data.channel,'REQUEST')||data.type==='PLAN')throw issue;
-            if(data.type==='COURTESY')return render({title:'Revisa tu video de cortesía',body:card('Tu video de cortesía',`<p class="notice" role="alert">${esc(issue.message)}</p>`+requestForm(actor,url,true,'',false,data))},issue.status);
             return render({layout:data.channel==='SOCIAL'?'content':undefined,contentView:'requests',title:'Revisa tu solicitud',body:newRequestPage({actor,url,area:data.channel,plans:actor.kind==='OWNER'?listPlans(db):[],contracts:actor.kind==='OWNER'?contractsFor(db,company.id):[],values:data,error:issue.message})},issue.status);
           }
         }

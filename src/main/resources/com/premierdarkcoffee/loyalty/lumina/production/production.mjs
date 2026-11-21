@@ -50,16 +50,14 @@ export function createRequest(db, actor, company, data) {
   if (type === 'QUOTE') requireThat(actor.kind !== 'COLLABORATOR','Solo el dueño puede solicitar cotizaciones.',403);
   const original=type==='PLAN'?'GENERAL':choice(data.channel,Object.keys(channels),'área');
   const channel=socialChannels.includes(original)?'SOCIAL':original;
-  if(Object.hasOwn(areas,channel))requireService(db,company.id,channel);
-  // Accept old area URLs/forms without turning a request into a publication plan.
-  // Keep the original scope check so legacy clients cannot bypass permissions.
-  if(socialChannels.includes(original)) requireAccess(actor,original,'REQUEST');
-  const service = type === 'PLAN' ? 'PLAN' : choice(data.service,formats[channel],'servicio del canal');
-  requireAccess(actor,channel,'REQUEST');
-  if (type === 'COURTESY') {
-    requireThat(channel==='SOCIAL' && ['VIDEO','REEL','SHORT'].includes(service),
-      'Elige un formato de video para la cortesía.');
+  if(type!=='COURTESY') {
+    if(Object.hasOwn(areas,channel))requireService(db,company.id,channel);
+    if(socialChannels.includes(original))requireAccess(actor,original,'REQUEST');
+    requireAccess(actor,channel,'REQUEST');
   }
+  const service = type === 'PLAN' ? 'PLAN' : choice(data.service,formats[channel],'servicio del canal');
+  if(type==='COURTESY')requireThat(channel==='SOCIAL' && ['VIDEO','REEL','SHORT'].includes(service),
+    'Elige un formato de video para la cortesía.');
   if (type === 'VISIT') requireThat(channel==='SOCIAL','Elige un canal de video para la visita.');
   const plan = type === 'PLAN' ? getPlan(db,data.plan) : null;
   requireThat(!plan || plan.published,'El plan ya no se ofrece.',409);
@@ -85,8 +83,16 @@ export function createRequest(db, actor, company, data) {
       return existing.id;
     }
     if (type === 'COURTESY') {
-      const prior = db.get("SELECT id FROM requests WHERE company_id=? AND type='COURTESY'",company.id);
-      if (prior) return prior.id;
+      const prior=db.get("SELECT id,status,revision FROM requests WHERE company_id=? AND type='COURTESY'",company.id);
+      if(prior) {
+        if(prior.status==='CANCELLED' && data.courtesy_revision===String(prior.revision)) {
+          db.run("UPDATE requests SET title=?,brief=?,contact_phone=?,status='NEW',revision=revision+1 WHERE id=?",title,brief,phone,prior.id);
+          event(db,actor,company.id,'REQUEST',prior.id,'CORTESIA_SOLICITADA_DE_NUEVO',title,channel);
+        }
+        return prior.id;
+      }
+      requireThat(!db.get('SELECT company_id FROM courtesy_deliveries WHERE company_id=?',company.id),
+        'Lúmina ya registró la entrega de tu video de cortesía.',409);
     }
     const id = requestKey;
     db.run(`INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,plan_id,requested_at,created_at,contact_phone)

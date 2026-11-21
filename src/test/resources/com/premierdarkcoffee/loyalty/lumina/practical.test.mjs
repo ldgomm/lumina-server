@@ -26,7 +26,7 @@ test('solicitudes simples precargan teléfono, conservan tres formatos sociales 
   assert.deepEqual([...page.body.matchAll(/name="service" value="([^"]+)"/g)].map(m=>m[1]),codes);
   assert.match(page.body,/<details class="request-options">/);assert.doesNotMatch(page.body,/name="platform/);
  }
- for(const path of ['/home','/content?view=requests','/content/recording'])assert.match((await w.client.get(path)).body,/name="phone"[^>]*value="\+593991234567"/);
+ for(const path of ['/courtesy','/content?view=requests','/content/recording'])assert.match((await w.client.get(path)).body,/name="phone"[^>]*value="\+593991234567"/);
 });
 
 test('teléfono de cada solicitud se conserva al cambiar el contacto del negocio y permite llamar',async t=>{

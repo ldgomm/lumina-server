@@ -54,6 +54,12 @@ function piecePreview(row,requestHref) {
 }
 export function pieceCards(rows,actor,resolveLink,{showCompany=false}={}) {
   return `<div class="piece-grid">${rows.map(row=>{
+    if(!row.request_id&&row.request_type==='COURTESY'){
+      const href=actor.kind==='AGENCY'?'/admin/businesses/'+row.company_id+'/courtesy':'/courtesy';
+      return `<article class="piece-summary"><div class="piece-summary-top"><span class="service-symbol">${icon('social')}</span>${workBadge(row)}</div>
+        ${showCompany?`<p class="eyebrow">${esc(row.company_name)}</p>`:''}<h3>Video de cortesía</h3>
+        <p class="piece-hint">Entrega registrada el ${esc(timestamp(row.created_at))}.</p>${localLink(href,'Consultar entrega →','btn secondary')}</article>`;
+    }
     const request={...row,id:row.request_id,channel:'SOCIAL',type:row.request_type,platforms:row.targets?row.targets.split(','):[]};
     const held=workHold(row);
     const review=!held&&row.status==='REVIEW'&&row.request_status==='PRODUCTION';

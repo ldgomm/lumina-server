@@ -92,6 +92,11 @@ test('collaborator sees one welcome with assigned active services and cannot act
  const r=await o.client.post('/team',data);assert.equal(r.status,201,r.body);const code=r.body.match(/<code class="secret">([^<]+)/)[1],member=w.session();assert.equal((await member.post('/activate',{code,document:data.document,password,phone:'0991234567'})).location,'/welcome');
  const welcome=await member.get('/welcome');assert.match(welcome.body,/Contenido/);assert.doesNotMatch(welcome.body,/Acceso asignado<\/span>.*Web|name="service"/);
  assert.equal((await member.post('/services/activate',{service:'WEB'})).status,403);assert.equal((await member.post('/welcome',{service:'WEB'})).status,403);assert.equal((await member.post('/welcome',{})).location,'/home');assert.equal((await member.get('/content')).status,200);assert.equal((await member.get('/services/web')).status,409);
+ assert.doesNotMatch(welcome.body,/class="courtesy-notice"/);
+ assert.equal((await member.get('/courtesy')).status,403);
+ assert.equal((await member.post('/courtesy/display',{compact:'1'})).status,403);
+ assert.equal((await member.post('/requests',giftForm())).status,403);
+ assert.equal((await member.post('/admin/businesses/'+o.id+'/courtesy',{request_id:'',revision:'0',confirm:'yes'})).status,403);
  const login=w.session();assert.equal((await login.post('/login',{document:data.document,password})).location,'/home');
 });
 test('Wallet selection stays pending and read-only until a published offer is accepted',async t=>{
@@ -141,4 +146,121 @@ test('accepting a quoted package activates its Wallet without another subscripti
 test('a confirmed manual service charge may prepare billing infrastructure but never enables Wallet',async t=>{
  const w=await world(t,{administration:async call=>({body:call.method==='POST'?{id:randomUUID()}:{today:'2026-11-14',business:{id:call.path.split('/')[4],name:'Prueba'},membership:null,summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0}})}),o=await signup(w);const base='/admin/businesses/'+o.id;
  assert.equal((await w.admin.get(base+'?view=charges')).status,200);assert.equal(w.native.registrations.size,0);assert.equal((await w.admin.post(base+'/charge',{requestKey:randomUUID(),description:'Video acordado con el negocio',amount:'20',dueOn:'2026-12-01',confirm:'yes'})).status,303);assert.equal(w.native.registrations.size,1);assert.equal(serviceState(w.db,o.id,'WALLET'),'INACTIVE');assert.equal((await o.client.get('/wallet')).location,'/plans/wallet');
+});
+
+const giftForm=()=>({type:'COURTESY',channel:'SOCIAL',service:'VIDEO',title:'Mostrar el taller del negocio',phone:'0991234567',request_key:randomUUID()});
+
+test('la bienvenida ofrece el video sin plan y conserva la vista compacta entre sesiones, inicio y Contenido',async t=>{
+ const w=await world(t),o=await signup(w),other=await signup(w,'second');
+ const first=await o.client.get('/welcome');
+ assert.match(first.body,/class="courtesy-notice"[^>]+data-compact="false"[^>]+data-status="available"/);
+ assert.match(first.body,/href="\/courtesy">Solicitar mi video/);
+ assert.equal((await o.client.post('/courtesy/display',{compact:'1',_csrf:'otra'})).status,403);
+ assert.equal((await o.client.post('/courtesy/display',{compact:'oculto'})).status,400);
+ for(const destination of ['//example.test','/home/..//example.test','https://example.test'])assert.equal((await o.client.post('/courtesy/display',{compact:'0',return_to:destination})).location,'/home');
+ const preference=await o.client.post('/courtesy/display',{compact:'1',return_to:'/welcome'});
+ assert.equal(preference.location,'/welcome');
+ const another=w.session();await another.post('/login',{document:o.data.document,password});
+ assert.match((await another.get('/welcome')).body,/data-compact="true"/);
+ assert.match((await other.client.get('/welcome')).body,/data-compact="false"/);
+ await o.client.post('/welcome',{service:'LATER'});
+ const home=await o.client.get('/home');assert.match(home.body,/id="courtesy-description" hidden/);assert.match(home.body,/href="\/courtesy">Solicitar mi video/);
+ assert.equal((await o.client.get('/content')).status,409);
+ const data=giftForm();
+ const error=await o.client.post('/requests',{...data,phone:'x'});assert.equal(error.status,400);assert.ok(error.body.includes(data.title));assert.ok(error.body.includes(data.request_key));
+ assert.equal((await o.client.post('/requests',{...data,service:'PHOTO'})).status,400);
+ const copies=await Promise.all([o.client.post('/requests',data),another.post('/requests',giftForm())]);
+ assert.equal(copies[0].status,303);assert.equal(copies[1].location,copies[0].location);
+ assert.equal(w.db.get('SELECT count(*) n FROM requests').n,1);
+ assert.equal(w.db.get('SELECT count(*) n FROM contracts').n,0);assert.equal(w.db.get('SELECT count(*) n FROM company_services').n,0);
+ assert.equal((await o.client.get('/courtesy')).location,copies[0].location);
+ assert.match((await o.client.get(copies[0].location)).body,/← Volver a mi negocio/);
+ await o.client.post('/services/activate',{service:'SOCIAL'});
+ const content=await o.client.get('/content');assert.match(content.body,/data-compact="true" data-status="requested"/);assert.match(content.body,/Ver mi solicitud/);
+ const expanded=await another.post('/courtesy/display',{compact:'0'},{headers:{Accept:'application/json'}});
+ assert.deepEqual(JSON.parse(expanded.body),{compact:false});
+ assert.match((await o.client.get('/home')).body,/data-compact="false" data-status="requested"/);
+ assert.match((await other.client.get('/welcome')).body,/data-status="available"/);
+});
+
+test('solo administración puede registrar una entrega externa sin crear pedidos, activar servicios ni repetirla',async t=>{
+ const w=await world(t),o=await signup(w),other=await signup(w,'separate');
+ const path='/admin/businesses/'+o.id+'/courtesy',form={request_id:'',revision:'0',confirm:'yes',video_url:'https://video.example.test/cortesia'};
+ assert.match((await w.admin.get('/admin/businesses/'+o.id)).body,/Gestionar cortesía/);
+ assert.equal((await o.client.post(path,form)).status,403);
+ assert.equal((await w.admin.post(path,{...form,confirm:''})).status,400);
+ assert.equal((await w.admin.post(path,{...form,video_url:'enlace inválido'})).status,400);
+ assert.equal(w.db.get('SELECT count(*) n FROM courtesy_deliveries').n,0);
+ assert.equal((await w.admin.post(path,form)).location,path);assert.equal((await w.admin.post(path,form)).location,path);
+ assert.equal(w.db.get("SELECT count(*) n FROM audit WHERE action='CORTESIA_ENTREGADA'").n,1);
+ assert.match((await w.admin.get(path)).body,/Video entregado/);
+ const welcome=await o.client.get('/welcome');assert.match(welcome.body,/data-status="delivered"/);assert.doesNotMatch(welcome.body,/Solicitar mi video/);
+ assert.match((await o.client.get('/courtesy')).body,/href="https:\/\/video.example.test\/cortesia"/);
+ assert.equal((await o.client.post('/requests',giftForm())).location,'/courtesy');
+ assert.equal(w.db.get('SELECT count(*) n FROM requests').n,0);assert.equal(w.db.get('SELECT count(*) n FROM company_services').n,0);
+ assert.doesNotMatch((await other.client.get('/welcome')).body,/video.example.test|data-status="delivered"/);
+ assert.equal((await other.client.get(path)).status,403);
+ await o.client.post('/welcome',{service:'SOCIAL'});
+ assert.match((await o.client.get('/home')).body,/<strong>1<\/strong><span>Videos entregados/);
+ assert.match((await o.client.get('/content')).body,/<span>Piezas entregadas<\/span><strong>1<\/strong>/);
+ const deliveries=await o.client.get('/content?view=deliveries&q=cortes%C3%ADa');
+ assert.equal(deliveries.status,200);assert.match(deliveries.body,/class="piece-summary"/);assert.match(deliveries.body,/Consultar entrega →/);
+ assert.doesNotMatch((await o.client.get('/content?view=deliveries&q=otra')).body,/class="piece-summary"/);
+ assert.match((await w.admin.get('/agency/content?view=deliveries')).body,/Consultar entrega →/);
+});
+
+test('una entrega registrada cierra el trabajo de cortesía exacto y conserva archivos e historial de borradores',async t=>{
+ const w=await world(t),o=await signup(w),path='/admin/businesses/'+o.id+'/courtesy';
+ const claim=await o.client.post('/requests',giftForm()),id=claim.location.split('/').at(-1),scope=q=>'/agency'+claim.location+q+'?company='+o.id;
+ const stale=await w.admin.post(path,{request_id:'',revision:'0',confirm:'yes'});
+ assert.equal(stale.status,409);assert.equal(w.db.get('SELECT count(*) n FROM courtesy_deliveries').n,0);
+ await w.admin.post('/agency/businesses/verify?company='+o.id,{});
+ assert.equal((await w.admin.post(scope('/state'),{revision:'1',status:'APPROVED'})).status,303);
+ assert.equal((await w.admin.post(scope('/pieces'),{revision:'2',title:'Borrador de la cortesía'})).status,303);
+ const draft=w.db.get('SELECT * FROM pieces WHERE request_id=?',id);
+ const link='https://media.example.test/borrador';
+ assert.equal((await w.admin.post(scope('/pieces/'+draft.id+'/evidence'),{revision:String(draft.revision),label:'Borrador',url:link})).status,303);
+ const beforeVisit=w.db.get('SELECT revision FROM requests WHERE id=?',id).revision;
+ assert.equal((await w.admin.post(scope('/visits'),{revision:String(beforeVisit),starts:'2099-06-10T10:00',place:'Local del negocio'})).status,303);
+ assert.match((await w.admin.get(scope(''))).body,/Registrar entrega del video/);
+ const revision=w.db.get('SELECT revision FROM requests WHERE id=?',id).revision;
+ const drop=await w.admin.post(path,{request_id:id,revision:String(revision),confirm:'yes',video_url:'https://media.example.test/final'});assert.equal(drop.location,path);
+ assert.equal(w.db.get('SELECT status FROM pieces WHERE id=?',draft.id).status,'CANCELLED');
+ assert.equal(w.db.get('SELECT url FROM evidence WHERE piece_id=?',draft.id).url,link);
+ assert.equal(w.db.get('SELECT status FROM visits WHERE request_id=?',id).status,'CANCELLED');
+ assert.equal(w.db.get("SELECT count(*) n FROM pieces WHERE request_id=? AND status='DELIVERED'",id).n,1);
+ assert.equal(w.db.get('SELECT status FROM requests WHERE id=?',id).status,'DELIVERED');
+ assert.match((await o.client.get(claim.location)).body,/1 de 1 entregados/);assert.match((await o.client.get('/courtesy')).body,/media.example.test\/final/);
+ assert.equal(w.db.get("SELECT count(*) n FROM audit WHERE action='PIEZA_APROBADA'").n,0);
+});
+
+test('el dueño puede revisar el video gratuito sin contratar Contenido y la entrega normal actualiza el aviso',async t=>{
+ const w=await world(t),o=await signup(w),other=await signup(w,'otra cuenta');
+ const claim=await o.client.post('/requests',giftForm()),id=claim.location.split('/').at(-1),scope=q=>'/agency'+claim.location+q+'?company='+o.id;
+ await w.admin.post('/agency/businesses/verify?company='+o.id,{});
+ await w.admin.post(scope('/state'),{revision:'1',status:'APPROVED'});
+ await w.admin.post(scope('/pieces'),{revision:'2',title:'Video de bienvenida'});
+ const piece=w.db.get('SELECT * FROM pieces WHERE request_id=?',id);
+ const revision=()=>String(w.db.get('SELECT revision FROM pieces WHERE id=?',piece.id).revision);
+ assert.equal((await w.admin.post(scope('/pieces/'+piece.id+'/edit'),{revision:revision(),status:'REVIEW'})).status,303);
+ assert.equal((await other.client.get(claim.location)).status,404);
+ assert.equal((await other.client.post(claim.location+'/pieces/'+piece.id+'/review',{revision:revision(),status:'APPROVED'})).status,404);
+ assert.equal((await o.client.post(claim.location+'/pieces/'+piece.id+'/review',{revision:revision(),status:'APPROVED'})).status,303);
+ assert.equal((await w.admin.post(scope('/pieces/'+piece.id+'/edit'),{revision:revision(),status:'DELIVERED'})).status,303);
+ assert.equal(w.db.get('SELECT count(*) n FROM courtesy_deliveries').n,0);
+ assert.match((await o.client.get('/welcome')).body,/data-status="delivered"/);
+ assert.match((await o.client.get('/courtesy')).body,/Consultar entrega y archivos/);
+ assert.match((await w.admin.get('/admin/businesses/'+o.id+'/courtesy')).body,/Video entregado/);
+ assert.equal((await o.client.get('/content')).status,409);
+});
+
+test('la cortesía cancelada se puede volver a pedir sin duplicarla ni reabrirla por un reintento antiguo',async t=>{
+ const w=await world(t),o=await signup(w),data=giftForm(),claim=await o.client.post('/requests',data),id=claim.location.split('/').at(-1);
+ const cancel=await w.admin.post('/agency'+claim.location+'/state?company='+o.id,{revision:'1',status:'CANCELLED',notes:'El negocio pospuso la grabación.'});assert.equal(cancel.status,303);
+ assert.equal((await o.client.post('/requests',data)).location,claim.location);assert.equal(w.db.get('SELECT status FROM requests WHERE id=?',id).status,'CANCELLED');
+ assert.match((await o.client.get('/welcome')).body,/Volver a solicitar/);
+ assert.match((await o.client.get('/courtesy')).body,/name="courtesy_revision" value="2"/);
+ const renewed=await o.client.post('/requests',{...giftForm(),courtesy_revision:'2',title:'Idea para otra fecha'});
+ assert.equal(renewed.location,claim.location);assert.equal(w.db.get('SELECT count(*) n FROM requests').n,1);
+ assert.equal(w.db.get('SELECT status FROM requests WHERE id=?',id).status,'NEW');assert.match((await o.client.get(renewed.location)).body,/Idea para otra fecha/);
 });

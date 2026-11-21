@@ -173,3 +173,30 @@ for(const toggle of document.querySelectorAll('[data-password-toggle]')) {
   window.addEventListener('pageshow',()=>setVisible(false));
   document.addEventListener('visibilitychange',()=>{if(document.hidden)setVisible(false);});
 }
+
+for(const form of document.querySelectorAll('form.courtesy-display')) {
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const notice=form.closest('.courtesy-notice');
+    const toggle=form.querySelector('button');
+    if(form.getAttribute('aria-busy')==='true')return;
+    form.setAttribute('aria-busy','true');
+    const error=notice.querySelector('.courtesy-error');
+    error.textContent='';
+    try {
+      const response=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body:new URLSearchParams(new FormData(form)),keepalive:true});
+      if(!response.ok)throw new Error();
+      const {compact}=await response.json();
+      if(typeof compact!=='boolean')throw new Error();
+      notice.dataset.compact=String(compact);
+      notice.querySelector('#courtesy-description').hidden=compact;
+      toggle.setAttribute('aria-expanded',String(!compact));
+      toggle.textContent=compact?'Ver más':'Minimizar';
+      form.elements.compact.value=compact?'0':'1';
+    } catch {
+      error.textContent='No se pudo guardar esta vista. Vuelve a intentarlo.';
+    } finally {
+      form.removeAttribute('aria-busy');
+    }
+  });
+}

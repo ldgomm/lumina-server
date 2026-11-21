@@ -14,7 +14,20 @@ function dom(html,scripts=['lumina.js','requests.js','packages.js']){
 }
 try{
  const world=await portal(t),admin=await agency(world),{client}=await owner(world,'Negocio ficticio','1');
- const home=dom((await client.get('/home')).body),gift=home.document.querySelector('.welcome-gift details');assert.equal(gift.open,false);assert.equal(gift.querySelector('[name=phone]').value,'+593991234567');gift.querySelector('[name=title]').dispatchEvent(new home.Event('invalid',{bubbles:false}));assert.equal(gift.open,true);checks.push('Courtesy stays compact; invalid optional fields reveal their form');
+ const home=dom((await client.get('/home')).body),gift=home.document.querySelector('.courtesy-notice');
+ const toggle=gift.querySelector('.courtesy-toggle'),claim=gift.querySelector('.courtesy-action');
+ home.fetch=async(_url,options)=>({ok:true,json:async()=>({compact:options.body.get('compact')==='1'})});
+ const changeGift=async()=>{toggle.click();await new Promise(resolve=>setImmediate(resolve));};
+ assert.equal(toggle.getAttribute('aria-expanded'),'true');await changeGift();
+ assert.equal(gift.dataset.compact,'true');assert.equal(gift.querySelector('#courtesy-description').hidden,true);
+ assert.equal(claim.textContent,'Solicitar mi video');assert.equal(claim.getAttribute('href'),'/courtesy');
+ assert.match(gift.querySelector('.courtesy-summary').textContent,/gratis/i);await changeGift();assert.equal(toggle.getAttribute('aria-expanded'),'true');
+ home.fetch=async()=>({ok:false});await changeGift();
+ assert.equal(gift.dataset.compact,'false');assert.equal(toggle.disabled,false);assert.match(gift.querySelector('[role=status]').textContent,/Vuelve a intentarlo/);
+ const claimPage=dom((await client.get('/courtesy')).body);
+ assert.equal(claimPage.document.querySelector('[name=phone]').value,'+593991234567');
+ assert.equal(claimPage.document.querySelector('[name=title]').required,true);
+ checks.push('La cortesía conserva su acción minimizada y recupera un fallo de guardado');
  for(const path of ['/home','/content']){
   const w=dom((await client.get(path)).body),d=w.document,menu=d.querySelector('.menu-toggle'),nav=d.querySelector('#workspace-nav'),close=nav.querySelector('.navigation-close'),backdrop=d.querySelector('.navigation-backdrop');
   const field=d.querySelector('input:not([type=hidden])');field.focus();d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(d.activeElement,field);

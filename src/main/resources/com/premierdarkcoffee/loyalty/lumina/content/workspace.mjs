@@ -28,6 +28,12 @@ export function contentData(db,actor,company,query) {
   Object.assign(counts,db.get(`SELECT count(*) AS pieces,coalesce(sum(${review}),0) AS review,
     coalesce(sum(p.status='DELIVERED'),0) AS delivered,coalesce(sum(${production}),0) AS production
     FROM ${pieceFrom} WHERE ${pieceWhere} AND p.status<>'CANCELLED'`,...params));
+  const directFrom=`FROM courtesy_deliveries r JOIN companies c ON c.id=r.company_id
+    WHERE r.request_id IS NULL AND (? IS NULL OR r.company_id=?) AND instr(lower('Video de cortesía '||c.name),lower(?))>0`;
+  const directParams=[company?.id||null,company?.id||null,q];
+  const direct=actor.kind==='COLLABORATOR'?0:db.get('SELECT count(*) AS n '+directFrom,...directParams).n;
+  counts.delivered+=direct;
+  counts.pieces+=direct;
   const platforms=socialChannels.filter(p=>can(actor,p));
   // Keep joins explicit: publications never multiply content-piece or allowance counts.
   const pubFrom=`publications pub JOIN pieces p ON p.id=pub.piece_id AND p.company_id=pub.company_id
@@ -37,7 +43,8 @@ export function contentData(db,actor,company,query) {
   let sql,values=[...params],title=view==='overview'?'Solicitudes recientes':contentViews[view];
   if(['production','reviews','deliveries'].includes(view)) {
     const state=view==='reviews'?review:view==='deliveries'?"p.status='DELIVERED'":production;
-    sql=`SELECT p.*,${requestBusinessSql},r.title AS request_title,r.type AS request_type,r.status AS request_status,c.name AS company_name,
+    sql=`SELECT p.id AS id,p.company_id,p.request_id,p.contract_id,p.title,p.service,p.status,p.recorded_at,p.observations,p.revision,p.created_at AS created_at,
+      ${requestBusinessSql},r.title AS request_title,r.type AS request_type,r.status AS request_status,c.name AS company_name,
       ((SELECT count(*) FROM evidence e WHERE e.company_id=p.company_id AND e.piece_id=p.id)
         +(SELECT count(DISTINCT f.asset_id) FROM content_files f WHERE f.company_id=p.company_id AND f.piece_id=p.id)) AS evidence_count,
       preview.id AS preview_id,preview.label AS preview_label,preview.media_type AS preview_type,preview.version AS preview_version,
@@ -45,7 +52,18 @@ export function contentData(db,actor,company,query) {
       FROM ${pieceFrom} LEFT JOIN content_files preview ON preview.id=(
         SELECT f.id FROM content_files f WHERE f.company_id=p.company_id AND f.piece_id=p.id
         ORDER BY f.created_at DESC,f.version DESC,f.id DESC LIMIT 1
-      ) WHERE ${pieceWhere} AND ${state} ORDER BY p.created_at DESC,p.id DESC`;
+      ) WHERE ${pieceWhere} AND ${state}`;
+    if(view==='deliveries'&&direct) {
+      // External handoffs share the ordered delivery list without creating a customer request.
+      sql+=` UNION ALL SELECT r.company_id AS id,r.company_id,NULL AS request_id,NULL AS contract_id,
+        'Video de cortesía' AS title,'VIDEO' AS service,'DELIVERED' AS status,NULL AS recorded_at,
+        '' AS observations,NULL AS revision,r.delivered_at AS created_at,${requestBusinessSql},
+        NULL AS request_title,'COURTESY' AS request_type,'DELIVERED' AS request_status,c.name AS company_name,
+        (r.video_url<>'') AS evidence_count,NULL AS preview_id,NULL AS preview_label,NULL AS preview_type,
+        NULL AS preview_version,NULL AS targets ${directFrom}`;
+      values.push(...directParams);
+    }
+    sql+=' ORDER BY created_at DESC,id DESC';
   } else if(view==='publications') {
     const platform=query.get('network')||'';
     requireThat(!platform||platforms.includes(platform),'No tienes acceso a esa plataforma.',403);

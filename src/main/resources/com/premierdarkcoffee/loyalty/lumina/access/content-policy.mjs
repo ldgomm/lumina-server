@@ -6,7 +6,7 @@ export function platformTargets(db,request) {
 export function canRequest(actor,request,action='VIEW') {
   if (actor.kind==='AGENCY') return action==='VIEW';
   if (actor.company_id!==request.company_id) return false;
-  if (actor.kind==='OWNER') return action==='VIEW'||can(actor,request.channel,action);
+  if (actor.kind==='OWNER') return action==='VIEW'||(request.type==='COURTESY'&&action==='APPROVE')||can(actor,request.channel,action);
   if (['PLAN','QUOTE','COURTESY'].includes(request.type)) return false;
   if(!can(actor,request.channel,action))return false;
   if (request.channel!=='SOCIAL') return can(actor,request.channel,action);

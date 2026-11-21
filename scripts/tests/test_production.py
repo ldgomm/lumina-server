@@ -49,7 +49,7 @@ class ProductionTests(unittest.TestCase):
         d=self.root/'backups/b';d.mkdir(mode=0o700);p.write_private(d/'wallet.dump','fictional')
         p.write_private(d/'agency.sqlite',(self.data/'agency.sqlite').read_bytes());m={'seal_sha':p.digest(json.dumps(seal,sort_keys=True)),'files':{'wallet.dump':p.digest('fictional'),'agency.sqlite':p.digest((d/'agency.sqlite').read_bytes())}};p.save_json(d/'backup.json',m)
         p.save_json(d/'verified.json',{'status':'RESTORE_PASS','checked':time.time(),'seal_sha':p.digest(json.dumps(seal,sort_keys=True)),'backup_manifest':p.digest((d/'backup.json').read_bytes())});return d
-    def test_price_migration_is_rehearsed_on_the_portal_and_can_be_retried(self):
+    def test_portal_price_and_courtesy_migrations_are_rehearsed_and_can_be_retried(self):
         path=self.data/'agency.sqlite'
         name='lumina/infrastructure/extensions/commercial-prices.sql'
         self.assertIn(name,p.MEMBERSHIP_SQL)
@@ -60,6 +60,12 @@ class ProductionTests(unittest.TestCase):
                 self.assertIn('quoted_other_minor',[row[1] for row in db.execute('PRAGMA table_info(package_order_lines)')])
                 saved=db.execute("SELECT checksum FROM lumina_extensions WHERE name='commercial-prices'").fetchone()
                 self.assertEqual(saved,(p.file_digest(p.SQL_ROOT/name),))
+                courtesy='lumina/infrastructure/extensions/courtesy-video.sql'
+                self.assertIn(courtesy,p.MEMBERSHIP_SQL)
+                self.assertNotIn('courtesy-video',p.pg_calendar_script())
+                self.assertEqual(db.execute("SELECT checksum FROM lumina_extensions WHERE name='courtesy-video'").fetchone(),(p.file_digest(p.SQL_ROOT/courtesy),))
+                self.assertEqual(db.execute('SELECT count(*) FROM courtesy_deliveries').fetchone(),(0,))
+                self.assertEqual(db.execute('SELECT count(*) FROM courtesy_display').fetchone(),(0,))
 
     def test_config_requires_explicit_private_data_and_origins(self):
         self.assertEqual(p.load_config(self.config)['native'],self.n)

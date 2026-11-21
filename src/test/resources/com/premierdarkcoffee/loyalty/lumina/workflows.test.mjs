@@ -50,7 +50,7 @@ test('al corregir una solicitud se conserva la clave y no se escribe un registro
 
 test('formularios de cortesía y grabación llevan claves nuevas y admiten solicitudes antiguas sin clave',async t=>{
   const w=await setup(t);
-  for(const path of ['/home','/content/recording'])assert.match((await w.client.get(path)).body,/name="request_key" value="[a-f0-9-]{36}"/);
+  for(const path of ['/courtesy','/content/recording'])assert.match((await w.client.get(path)).body,/name="request_key" value="[a-f0-9-]{36}"/);
   for(let i=0;i<2;i++)assert.equal((await w.client.post('/requests',idea)).status,303);
   assert.equal(w.db.get('SELECT count(*) n FROM requests').n,2);
 });
