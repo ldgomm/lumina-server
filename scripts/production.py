@@ -127,15 +127,16 @@ PG_CALENDAR = 'infrastructure/persistence/extensions/membership-calendar.sql'
 PORTAL_CALENDAR = 'lumina/infrastructure/extensions/membership-calendar.sql'
 
 MEMBERSHIP_EXTENSIONS = ('membership-calendar', 'subscription-periods', 'wallet-consent')
+PG_EXTENSIONS = (*MEMBERSHIP_EXTENSIONS, 'purchase-description')
 PORTAL_EXTENSIONS = (*MEMBERSHIP_EXTENSIONS, 'commercial-prices', 'courtesy-video', 'piece-reviews', 'video-comment-moments')
-MEMBERSHIP_SQL = tuple(PG_CALENDAR.replace('membership-calendar', name) for name in MEMBERSHIP_EXTENSIONS) + tuple(
+MEMBERSHIP_SQL = tuple(PG_CALENDAR.replace('membership-calendar', name) for name in PG_EXTENSIONS) + tuple(
     PORTAL_CALENDAR.replace('membership-calendar', name) for name in PORTAL_EXTENSIONS
 )
 
 def pg_calendar_script():
     operations = ["BEGIN; SELECT pg_advisory_xact_lock(6432001001);",
                   "CREATE TABLE IF NOT EXISTS lumina_extensions(name TEXT PRIMARY KEY,checksum TEXT NOT NULL);"]
-    for name in MEMBERSHIP_EXTENSIONS:
+    for name in PG_EXTENSIONS:
         body = (SQL_ROOT/PG_CALENDAR.replace('membership-calendar', name)).read_text()
         sha = digest(body.encode())
         operations.append(f"DO $calendar$ BEGIN IF NOT EXISTS(SELECT 1 FROM lumina_extensions WHERE name='{name}') THEN "

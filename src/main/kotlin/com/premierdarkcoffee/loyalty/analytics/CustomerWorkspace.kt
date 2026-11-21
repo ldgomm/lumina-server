@@ -66,7 +66,7 @@ fun LoyaltyService.customerWorkspace(s: Staff, memberId: String, query: Customer
             WITH events AS (
                 SELECT p.id,p.created_at AS at,'PURCHASE'::text AS kind,p.branch_id,
                     jsonb_build_object('id',p.id,'kind','PURCHASE','at',p.created_at,'branchId',p.branch_id,
-                      'branch',b.name,'receipt',p.receipt,'paidMinor',p.amount_minor,
+                      'branch',b.name,'receipt',p.receipt,'description',p.description,'paidMinor',p.amount_minor,
                       'grossMinor',coalesce(p.gross_minor,p.amount_minor+p.discount_minor),'discountMinor',p.discount_minor,
                       'items',p.items,'redemptionId',p.redemption_id) AS data
                 FROM purchases p JOIN branches b ON b.tenant_id=p.tenant_id AND b.id=p.branch_id

@@ -193,9 +193,9 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
       }
     }
     if (path==='/api/staff/members/lookup') return json(res,200,configuration.member||{member:{id:uuid(),name:'Cliente de prueba',cardCode:'ficticio',revision:0},balances:[],rewards:[]});
-    if (path==='/api/staff/purchases/quote' && data.branchId===p.branchId && p.permissions.purchases) return json(res,200,{amountMinor:data.amountMinor??data.items?.reduce((s,i)=>s+i.unitPriceMinor*i.quantity,0),grossMinor:data.amountMinor,discountMinor:0,earned:[]});
+    if (path==='/api/staff/purchases/quote' && data.branchId===p.branchId && p.permissions.purchases) return json(res,200,{amountMinor:data.amountMinor??data.items?.reduce((s,i)=>s+i.unitPriceMinor*i.quantity,0),grossMinor:data.amountMinor,description:data.description??null,discountMinor:0,earned:[]});
     if (path==='/api/staff/purchases' && data.branchId===p.branchId && p.permissions.purchases) {
-      return json(res,200,{purchaseId:uuid(),earned:[],recordedAt:new Date().toISOString(),amountMinor:data.amountMinor});
+      return json(res,200,{purchaseId:uuid(),earned:[],description:data.description??null,recordedAt:new Date().toISOString(),amountMinor:data.amountMinor});
     }
     if (path==='/api/staff/counter-redemptions' && data.branchId===p.branchId && p.permissions.rewards) {
       return json(res,200,{redemptionId:uuid(),name:'Premio de prueba',receipt:uuid(),replayed:false});

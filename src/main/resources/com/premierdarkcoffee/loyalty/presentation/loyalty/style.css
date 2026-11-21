@@ -673,6 +673,8 @@ input[data-money]{appearance:textfield;-moz-appearance:textfield}input[data-mone
 
 .purchase-reference{display:flex;flex-wrap:wrap;gap:.6rem 2rem;margin:1rem 0;text-align:left}
 .purchase-reference div{min-width:0}
+.purchase-reference ul{margin:0;padding-inline-start:1.25rem}
+.timeline-title strong{overflow-wrap:anywhere}
 .purchase-reference dt,.purchase-id summary{font-size:.875rem}
 .purchase-reference dd{font-weight:700;margin:0;overflow-wrap:anywhere}
 .purchase-id{margin:.75rem 0;text-align:left}

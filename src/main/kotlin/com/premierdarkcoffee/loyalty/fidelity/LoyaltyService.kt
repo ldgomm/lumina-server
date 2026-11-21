@@ -22,6 +22,7 @@ import com.premierdarkcoffee.loyalty.infrastructure.persistence.rows
 import com.premierdarkcoffee.loyalty.marketing.Benefit
 import com.premierdarkcoffee.loyalty.marketing.consumeReceiptReward
 import com.premierdarkcoffee.loyalty.marketing.idempotencyPayload
+import com.premierdarkcoffee.loyalty.marketing.normalizedReceipt
 import com.premierdarkcoffee.loyalty.marketing.prepareReceipt
 import com.premierdarkcoffee.loyalty.marketing.requireCounterReward
 import com.premierdarkcoffee.loyalty.shared.Confirm
@@ -51,7 +52,6 @@ import kotlinx.serialization.json.*
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.*
-import java.util.Locale
 
 class LoyaltyService(val db: Database, internal val pepper: String, val clock: Clock = Clock.systemUTC()) {
     val commercial = CommercialService(db, clock)
@@ -233,7 +233,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     fun purchase(s: Staff, input: Purchase, key: String): JsonObject {
         uuid(input.memberId); uuid(input.branchId); s.at(input.branchId); text(input.receipt,100)
         need(input.amountMinor in 0..1_000_000_000,"INVALID_AMOUNT","Monto de compra inválido.")
-        val normalized = input.copy(receipt=input.receipt.trim().uppercase(Locale.ROOT))
+        val normalized = input.normalizedReceipt()
         return db.tx { c -> authorizeStaff(c,s,required=purchaseOperations(input)); once(c,s.tenant,"purchase:${s.id}",key,normalized.idempotencyPayload()) {
         authorizeStaff(c,s,required=purchaseOperations(input)); commercial.requireActive(c, s.tenant);
         
@@ -248,7 +248,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             val at = now()
             // Lock the parent first, then read its immutable version in a new READ COMMITTED snapshot.
             // A joined locking query could miss a newly committed version after waiting on an editor.
-            val review = purchaseReview(c,s,input,calculation,at,tenant.second)
+            val review = purchaseReview(c,s,normalized,calculation,at,tenant.second)
             need(input.expectedEarningReview == null || input.expectedEarningReview == review.fingerprint,
                 "EARNING_REVIEW_CHANGED", "Cambió la tarjeta o una condición de la promoción. Revisa de nuevo antes de guardar; no se registró esta compra.", 409)
             // Expiry is part of this write, not an intervening operation. Validate the
@@ -256,7 +256,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             if (input.expectedEarningReview != null) releaseExpired(c,s.tenant,input.memberId)
             val redemption = consumeReceiptReward(c,s,input,calculation)
             val purchase = id()
-            c.exec("INSERT INTO purchases(tenant_id,id,member_id,branch_id,receipt,amount_minor,currency,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)",s.tenant,purchase,input.memberId,input.branchId,normalized.receipt,input.amountMinor,input.currency,s.id,
+            c.exec("INSERT INTO purchases(tenant_id,id,member_id,branch_id,receipt,description,amount_minor,currency,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",s.tenant,purchase,input.memberId,input.branchId,normalized.receipt,normalized.description,input.amountMinor,input.currency,s.id,
                 Timestamp.from(at))
             c.exec("UPDATE purchases SET gross_minor=?,discount_minor=?,items=?::jsonb,redemption_id=? WHERE tenant_id=? AND id=?",calculation.gross,calculation.discount,json.encodeToString(input.items),redemption,s.tenant,purchase)
             val earned = review.entries.filter { it.getValue("amount").jsonPrimitive.long > 0 }.map { entry ->
@@ -267,7 +267,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
                 obj("programId" to program,"version" to version,"kind" to entry.getValue("kind"),"amount" to amount)
             }
             changed(c,s.tenant,input.memberId); audit(c,s.tenant,s.id,"PURCHASE",purchase)
-            obj("purchaseId" to purchase,"earned" to earned,"recordedAt" to at,"grossMinor" to calculation.gross,"discountMinor" to calculation.discount,"amountMinor" to calculation.net,"redemptionId" to redemption)
+            obj("purchaseId" to purchase,"description" to normalized.description,"earned" to earned,"recordedAt" to at,"grossMinor" to calculation.gross,"discountMinor" to calculation.discount,"amountMinor" to calculation.net,"redemptionId" to redemption)
         } }
     }
     private fun programs(c: Connection, tenant: String, visibleOnly: Boolean = false) = c.rows("SELECT p.id,p.current_version,v.config::text FROM programs p JOIN program_versions v ON v.tenant_id=p.tenant_id AND v.program_id=p.id AND v.version=p.current_version WHERE p.tenant_id=? AND p.deleted_at IS NULL AND (NOT ? OR p.id IN (SELECT id FROM customer_programs WHERE tenant_id=?)) ORDER BY p.id",tenant,visibleOnly,tenant) { obj("id" to it.getString(1),"version" to it.getInt(2),"config" to json.parseToJsonElement(it.getString(3))) }

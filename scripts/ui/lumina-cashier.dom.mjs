@@ -52,10 +52,14 @@ try{
  const f=w.document.querySelector('#purchase'),generate=f.querySelector('[data-reference-for="receipt"] button');
  assert.equal(generate.textContent,'Generar folio');assert.equal(f.querySelector('[data-reference-for="receipt"] select'),null);
  generate.click();assert.match(f.elements.receipt.value,/^REF-[A-F0-9]{16}$/);
+ assert.equal(f.elements.description.required,false);
+ f.elements.description.value='Café y pan';
  f.elements.receipt.value='FIXTURE-ONE';generate.click();assert.equal(f.elements.receipt.value,'FIXTURE-ONE');f.elements.amount.value='20';f.requestSubmit([...f.querySelectorAll('button')].find(b=>b.type==='submit'));
  await settle(()=>w.document.querySelector('#finishSimplePurchase')&&!f.hasAttribute('aria-busy'));
+ assert.match(w.document.querySelector('#purchaseReview').textContent,/Café y pan/);
  const finish=w.document.querySelector('#finishSimplePurchase');finish.requestSubmit();await settle(()=>w.document.querySelector('.counter-receipt'));
  assert.match(w.document.querySelector('.counter-receipt').textContent,/Compra registrada/);assert.equal(native.calls.filter(c=>c.path==='/api/staff/purchases').length,1);assert.ok(native.calls.find(c=>c.path==='/api/staff/purchases').key);
+ assert.match(w.document.querySelector('.counter-receipt').textContent,/Café y pan/);
  checks.push('Actual cashier UI → authenticated portal → restricted native bridge: customer lookup, quote, confirmation and purchase receipt');
  w.eval('renderMerchant()');await lookup(w);w.document.querySelector('[data-counter-mode=redemption]').click();w.document.querySelector('#counterChoose').requestSubmit();await settle(()=>w.document.querySelector('#counterConfirm'));
  const confirm=w.document.querySelector('#counterConfirm');assert.equal(confirm.checkValidity(),false);confirm.elements.identityVerified.checked=true;confirm.elements.customerConfirmed.checked=true;confirm.requestSubmit();await settle(()=>w.document.querySelector('.counter-receipt'));

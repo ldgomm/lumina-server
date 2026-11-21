@@ -4,7 +4,7 @@ import com.premierdarkcoffee.loyalty.access.Security
 import java.sql.Connection
 
 object MembershipSchema {
-    private val migrations = listOf("membership-calendar", "subscription-periods", "wallet-consent").associateWith { name ->
+    private val migrations = listOf("membership-calendar", "subscription-periods", "wallet-consent", "purchase-description").associateWith { name ->
         requireNotNull(javaClass.getResource("/com/premierdarkcoffee/loyalty/infrastructure/persistence/extensions/$name.sql")).readText()
     }
     val checksum = Security.hash(migrations.getValue("membership-calendar"))

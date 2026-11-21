@@ -59,9 +59,15 @@ const report={days:30,fromDate:'2026-10-11',throughDate:'2026-11-09',previousFro
      await page.screenshot({path:path.join(evidence,width+'-premio-en-caja.png'),clip:box});
    }
 
+   const note=page.getByLabel('¿Qué vendiste? (opcional)',{exact:true});
+   assert.ok(await note.isVisible());assert.equal(await note.getAttribute('maxlength'),'160');
+   const title='Almuerzo para dos <para llevar>';
+   await note.fill(title);
    await page.locator('#purchase [name=receipt]').fill('FICTICIO-001');await page.locator('#purchase [name=amount]').fill('15.00');await page.locator('#purchase [name=program][value=p]').check();await page.locator('#purchase [name=program][value=s]').check();
    await page.locator('#changeCustomer').click();await page.locator('#operationDraftDialog').waitFor();await page.locator('#keepOperationDraft').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('#purchase [name=receipt]').inputValue(),'FICTICIO-001');
    await page.locator('#purchase button:not([type])').click();await page.locator('.earning-forecast').waitFor();assert.match(await page.locator('.earning-forecast').textContent(),/15 puntos/);assert.match(await page.locator('.earning-forecast').textContent(),/mínimo elegible de 20.00/);await fit();if(width===1440||width===390)await shot(width+'-purchase-review','.purchase-confirmation');
+   assert.ok((await page.locator('#purchaseReview .purchase-reference').textContent()).includes(title));
+   assert.equal(calls.filter(c=>c.url==='/api/staff/purchases/quote').at(-1).body.description,title);
    failPurchase=true;await page.locator('#finishSimplePurchase button').click();await page.locator('#finishSimplePurchase .form-feedback:not([hidden])').waitFor();assert.equal(calls.at(-1).body.expectedEarningReview,'fiction-review');assert.equal(await page.locator('#purchase [name=receipt]').inputValue(),'FICTICIO-001');
    const saves=calls.filter(c=>c.url==='/api/staff/purchases').length;
    assert.ok(await page.locator('#finishSimplePurchase button:not([type])').isDisabled());
@@ -69,14 +75,27 @@ const report={days:30,fromDate:'2026-10-11',throughDate:'2026-11-09',previousFro
    await page.waitForFunction(()=>{const b=document.querySelector('#finishSimplePurchase button:not([type])');return b&&!b.disabled;});
    assert.equal(calls.filter(c=>c.url==='/api/staff/purchases').length,saves);
    await page.locator('#finishSimplePurchase button:not([type])').click();await page.locator('.counter-receipt').waitFor();
+   assert.ok((await page.locator('.counter-receipt .purchase-reference').textContent()).includes(title));
+   assert.equal(calls.filter(c=>c.url==='/api/staff/purchases').at(-1).body.description,title);
    if(width===1440){
     await page.locator('#nextCustomer').click();await page.locator('#value').fill('FAKE-QR');await page.locator('#lookup button:not([type])').click();await page.locator('#purchase').waitFor();
-    await page.getByRole('button',{name:'Registrar productos y aplicar un descuento',exact:true}).click();await page.locator('#productPurchase [name=receipt]').fill('FICTICIO-002');
+    assert.equal(await note.inputValue(),'');await note.fill('Pedido para la mesa 4');
+    await page.getByRole('button',{name:'Detallar productos',exact:true}).click();
+    assert.equal(await note.inputValue(),'Pedido para la mesa 4');await page.locator('#productPurchase [name=receipt]').fill('FICTICIO-002');
     await page.locator('[data-name]').fill('Café');await page.locator('[data-group-choice]').selectOption('__custom');await page.locator('[data-group]').fill('café');await page.locator('[data-price]').fill('1.005');
     await page.locator('#addProduct').click();assert.equal(await page.locator('[data-price]').first().inputValue(),'1.005');await page.locator('[data-remove="1"]').click();
     const quoted=calls.filter(c=>c.url==='/api/staff/purchases/quote').length;await page.locator('#productPurchase button:not([type])').click();await page.locator('#productPurchase .form-feedback:not([hidden])').waitFor();assert.equal(calls.filter(c=>c.url==='/api/staff/purchases/quote').length,quoted);
     await page.locator('[data-price]').fill('1.25');await page.locator('#productPurchase button:not([type])').click();await page.locator('.earning-forecast').waitFor();assert.match(await page.locator('.earning-forecast').textContent(),/Solo se registra la compra/);assert.equal(calls.at(-1).body.amountMinor,125);
-    await page.locator('[data-tab=reports]').click();await page.locator('#operationDraftDialog').waitFor();await page.locator('#discardOperationDraft').click();
+    assert.equal(calls.at(-1).body.description,'Pedido para la mesa 4');
+    assert.ok((await page.locator('#receiptReview .purchase-reference').textContent()).includes('1 × Café'));
+    await page.locator('[data-tab=reports]').click();await page.locator('#operationDraftDialog').waitFor();
+    await page.locator('#keepOperationDraft').click();assert.equal(await note.inputValue(),'Pedido para la mesa 4');
+    await note.fill('Mesa 5');assert.equal(await page.locator('#finishPurchase').count(),0);
+    await page.locator('#productPurchase button:not([type])').click();await page.locator('#finishPurchase button').click();
+    await page.locator('.counter-receipt').waitFor();
+    const text=await page.locator('.counter-receipt .purchase-reference').textContent();
+    assert.ok(text.includes('Mesa 5')&&text.includes('1 × Café'));assert.equal(calls.at(-1).body.description,'Mesa 5');
+    await page.locator('[data-tab=reports]').click();
    }else await show('reports');await page.locator('.report-reading').waitFor();assert.match(await page.locator('.report-reading').textContent(),/66%/);assert.match(await page.locator('.report-reading').textContent(),/120 de 183/);await fit();if(width===1440||width===390)await shot(width+'-report-reading','.report-reading');
    await show('design');await page.locator('#walletDesign').waitFor();await page.locator('[data-studio-step="2"]').click();assert.equal(await page.locator('[name=automaticPriority]').inputValue(),'PROGRESS');await page.locator('[data-front-focus=REWARD]').click();await page.locator('[data-preview-provider=both]').click();await fit();
    if(width===1440){await page.locator('#saveDesign').click();await page.waitForFunction(()=>document.querySelector('#saveDesign').disabled);const saved=calls.filter(c=>c.url==='/api/staff/wallet-design'&&c.method==='PUT').at(-1);assert.equal(saved.body.design.automaticPriority,'PROGRESS');assert.equal(saved.body.design.featuredProgramId,null);}

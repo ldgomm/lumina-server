@@ -48,12 +48,14 @@ internal fun LoyaltyService.readManagementActivity(tenant: String, q: Management
         }
         val window=reportWindow(clock.instant(),business.third,q.days,q.fromDate,q.throughDate,q.asOf)
         val start=window.from;val until=window.until
+        val search=normalizedSearch(q.search)
         val result=c.one("""
             WITH scope AS (SELECT ?::text AS tenant,?::timestamptz AS since_at,?::timestamptz AS until_at), events AS (
-                SELECT p.id,p.created_at AS at,'PURCHASE'::text AS kind,p.actor_id,p.branch_id,m.name AS customer,p.receipt AS concept,
+                SELECT p.id,p.created_at AS at,'PURCHASE'::text AS kind,p.actor_id,p.branch_id,m.name AS customer,
+                  concat_ws(' ',p.receipt,p.description,(SELECT string_agg(item->>'name',' ') FROM jsonb_array_elements(p.items) AS lines(item))) AS concept,
                   coalesce(p.actor_name,nullif(s.display_name,''),'Usuario · '||right(p.actor_id,6)) AS actor,
                   jsonb_build_object('id',p.id,'kind','PURCHASE','at',p.created_at,'actorId',p.actor_id,'actorName',coalesce(p.actor_name,nullif(s.display_name,''),'Usuario · '||right(p.actor_id,6)),
-                    'historicalName',p.actor_name IS NOT NULL,'customerId',p.member_id,'customer',m.name,'branch',b.name,'receipt',p.receipt,'paidMinor',p.amount_minor,'discountMinor',p.discount_minor,'items',p.items,'redemptionId',p.redemption_id,
+                    'historicalName',p.actor_name IS NOT NULL,'customerId',p.member_id,'customer',m.name,'branch',b.name,'receipt',p.receipt,'concept',p.description,'paidMinor',p.amount_minor,'discountMinor',p.discount_minor,'items',p.items,'redemptionId',p.redemption_id,
                     'earnings',(SELECT coalesce(jsonb_agg(jsonb_build_object('name',v.config->>'name','kind',pg.kind,'amount',l.delta)),'[]'::jsonb) FROM ledger l JOIN programs pg ON pg.tenant_id=l.tenant_id AND pg.id=l.program_id JOIN program_versions v ON v.tenant_id=l.tenant_id AND v.program_id=l.program_id AND v.version=l.program_version WHERE l.tenant_id=p.tenant_id AND l.reference_id=p.id AND l.kind='EARN')) AS data
                 FROM purchases p JOIN scope x ON p.tenant_id=x.tenant AND p.created_at BETWEEN x.since_at AND x.until_at
                 JOIN members m ON m.tenant_id=p.tenant_id AND m.id=p.member_id JOIN branches b ON b.tenant_id=p.tenant_id AND b.id=p.branch_id
@@ -80,12 +82,12 @@ internal fun LoyaltyService.readManagementActivity(tenant: String, q: Management
                 WHERE (s.id IS NOT NULL OR a.actor_id='platform') AND a.action NOT IN ('PURCHASE','CONSUME','COUNTER_CONSUME_VERIFIED','PURCHASE_REWARD_CONFIRMED')
             ), filtered AS (
                 SELECT * FROM events WHERE (?='ALL' OR kind=? OR (?='OPERATIONS' AND kind IN ('PURCHASE','REWARD'))) AND (?::text IS NULL OR actor_id=?) AND (?::text IS NULL OR branch_id=?)
-                  AND position(? in translate(lower(concat_ws(' ',customer,concept,actor)),'áéíóúüñ','aeiouun'))>0
+                  AND (?='' OR position(? in translate(lower(concat_ws(' ',customer,concept,actor)),'áéíóúüñ','aeiouun'))>0)
             )
             SELECT (SELECT count(*) FROM filtered) AS total,
               (SELECT coalesce(jsonb_agg(t.data ORDER BY t.at DESC,t.kind,t.id),'[]'::jsonb)::text FROM (SELECT * FROM filtered ORDER BY at DESC,kind,id LIMIT ? OFFSET ?) t) AS items,
               (SELECT jsonb_build_object('purchases',count(*) FILTER(WHERE kind='PURCHASE'),'redemptions',count(*) FILTER(WHERE kind='REWARD'),'changes',count(*) FILTER(WHERE kind='ADMIN'),'paidMinor',coalesce(sum((data->>'paidMinor')::bigint),0))::text FROM filtered) AS summary
-        """.trimIndent(),tenant,Timestamp.from(start),Timestamp.from(until),q.kind,q.kind,q.kind,q.actorId,q.actorId,q.branchId,q.branchId,normalizedSearch(q.search),limit,q.offset) {
+        """.trimIndent(),tenant,Timestamp.from(start),Timestamp.from(until),q.kind,q.kind,q.kind,q.actorId,q.actorId,q.branchId,q.branchId,search,search,limit,q.offset) {
             val total=it.getLong("total"); val items=json.parseToJsonElement(it.getString("items")).jsonArray
             obj("total" to total,"items" to items,"summary" to json.parseToJsonElement(it.getString("summary")),"offset" to q.offset,"hasMore" to (q.offset.toLong()+items.size<total))
         }!!

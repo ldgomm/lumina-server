@@ -1,5 +1,9 @@
 package com.premierdarkcoffee.loyalty.marketing
 
+import com.premierdarkcoffee.loyalty.analytics.ManagementQuery
+import com.premierdarkcoffee.loyalty.analytics.activityExport
+import com.premierdarkcoffee.loyalty.analytics.customerWorkspace
+import com.premierdarkcoffee.loyalty.analytics.managementActivity
 import com.premierdarkcoffee.loyalty.access.Member
 import com.premierdarkcoffee.loyalty.access.Security
 import com.premierdarkcoffee.loyalty.access.Staff
@@ -195,6 +199,62 @@ class EngagementPostgresTest {
         db.tx{c->c.exec("INSERT INTO idempotency(tenant_id,operation,key,request_hash,response) VALUES(?,?,?,?,?::jsonb)",f.owner.tenant,"purchase:${f.owner.id}",retry,Security.hash(oldPayload.toString()),saved.toString())}
         assertEquals("original-receipt",service.purchase(f.owner,legacy,retry).str("purchaseId"));assertEquals(1,count("purchases",f))
     }
+    @Test fun `quick sale description survives review retry and private history`() {
+        val f = fixture()
+        val cashier = service.staff(service.newStaff(f.owner, NewStaff("CASHIER", f.a)).str("token"))
+        val detail = "Almuerzo para dos & café"
+        val sale = purchase(f).copy(items=emptyList(), programIds=emptySet(), description="  $detail  ")
+        val quote = service.receiptQuote(cashier, sale)
+        assertEquals(detail, quote.str("description"))
+        val reviewed = sale.copy(expectedEarningReview=quote.str("earningReview"))
+        val key = id()
+        val changed = assertFailsWith<Problem> { service.purchase(cashier, reviewed.copy(description="Otro pedido"), key) }
+        assertEquals("EARNING_REVIEW_CHANGED", changed.code)
+        val saved = service.purchase(cashier, reviewed, key)
+        assertEquals(detail, saved.str("description"))
+        val again = service.purchase(cashier, reviewed.copy(description=detail), key)
+        assertTrue(again.getValue("replayed").jsonPrimitive.boolean)
+        assertEquals(saved.str("purchaseId"), again.str("purchaseId"))
+        val conflict = assertFailsWith<Problem> { service.purchase(cashier, reviewed.copy(description="Otro pedido"), key) }
+        assertEquals("IDEMPOTENCY_CONFLICT", conflict.code)
+        assertEquals(1L, count("purchases", f))
+        val row = service.customerWorkspace(f.owner,f.member.id).getValue("timeline").jsonObject.getValue("items").jsonArray.single().jsonObject
+        assertEquals(detail, row.str("description"))
+        assertEquals(0, row.getValue("items").jsonArray.size)
+        val filter = ManagementQuery(kind="PURCHASE", search="almuerzo para dos")
+        val activity = service.managementActivity(f.owner.tenant, filter, f.owner).getValue("items").jsonArray.single().jsonObject
+        assertEquals(detail, activity.str("concept"))
+        assertTrue(service.activityExport(f.owner, filter).contains(detail))
+    }
+
+    @Test fun `optional description preserves legacy hashes products and promotion amounts`() {
+        val f = fixture()
+        val sale = purchase(f, quantity=2).copy(programIds=setOf(f.program))
+        val before = service.receiptQuote(f.owner, sale)
+        val blank = sale.copy(description="   ")
+        assertEquals(before.str("earningReview"), service.receiptQuote(f.owner, blank).str("earningReview"))
+        val oldFields = json.parseToJsonElement(json.encodeToString(sale)).jsonObject.filterKeys {
+            it != "expectedEarningReview" && it != "description"
+        }
+        assertEquals(JsonObject(oldFields).toString(), sale.idempotencyPayload())
+        val detail = "Pedido para llevar"
+        val described = sale.copy(description=detail)
+        val quote = service.receiptQuote(f.owner, described)
+        assertEquals(before.getValue("earnings"), quote.getValue("earnings"))
+        assertEquals(before.num("amountMinor"), quote.num("amountMinor"))
+        for (invalid in listOf("a".repeat(161), "Dos\nproductos")) {
+            assertEquals("INVALID_PURCHASE_DESCRIPTION",assertFailsWith<Problem> { service.receiptQuote(f.owner, sale.copy(description=invalid)) }.code)
+            assertEquals("INVALID_PURCHASE_DESCRIPTION",assertFailsWith<Problem> { service.purchase(f.owner, sale.copy(description=invalid), id()) }.code)
+        }
+        service.purchase(f.owner, described.copy(expectedEarningReview=quote.str("earningReview")), id())
+        val line = service.managementActivity(f.owner.tenant, ManagementQuery(search="producto",kind="PURCHASE"), f.owner).getValue("items").jsonArray.single().jsonObject
+        assertEquals(detail, line.str("concept"))
+        assertEquals("Producto", line.getValue("items").jsonArray.single().jsonObject.str("name"))
+        val unlabelled = service.purchase(f.owner, blank.copy(receipt=id()), id())
+        assertEquals(JsonNull, unlabelled.getValue("description"))
+        assertEquals(2L, count("purchases", f))
+    }
+
     @Test fun `promotion category and discount meaning cannot be overwritten by editing`() {
         val f=fixture();service.purchase(f.owner,purchase(f,5),id())
         assertFailsWith<Problem>{service.editProgram(f.owner,f.program,ProgramChange(1,Program("Otra",Kind.STAMPS,productGroup="pizza",countUnits=false)))}

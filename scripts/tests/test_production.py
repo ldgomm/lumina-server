@@ -54,6 +54,9 @@ class ProductionTests(unittest.TestCase):
         name='lumina/infrastructure/extensions/commercial-prices.sql'
         self.assertIn(name,p.MEMBERSHIP_SQL)
         self.assertNotIn('commercial-prices',p.pg_calendar_script())
+        self.assertIn('infrastructure/persistence/extensions/purchase-description.sql',p.MEMBERSHIP_SQL)
+        self.assertIn('ADD COLUMN description VARCHAR(160)',p.pg_calendar_script())
+        self.assertNotIn('purchase-description',p.PORTAL_EXTENSIONS)
         for _ in range(2):
             p.apply_portal_calendar(path)
             with sqlite3.connect(path) as db:

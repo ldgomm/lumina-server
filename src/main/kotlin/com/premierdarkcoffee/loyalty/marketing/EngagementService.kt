@@ -46,11 +46,20 @@ object EngagementMigration {
 }
 
 data class ReceiptCalculation(val gross:Long,val discount:Long,val reward:JsonObject?=null) { val net get()=gross-discount }
+internal fun Purchase.normalizedReceipt(): Purchase {
+    val detail = description?.trim()?.takeIf { it.isNotEmpty() }
+    need(detail == null || (detail.length <= 160 && detail.none { it.isISOControl() }),
+        "INVALID_PURCHASE_DESCRIPTION", "Escribe el detalle de la venta en una sola línea de hasta 160 caracteres.")
+    return copy(receipt = receipt.trim().uppercase(java.util.Locale.ROOT), description = detail)
+}
+
 fun Purchase.idempotencyPayload():String {
-    val encoded=JsonObject(json.parseToJsonElement(json.encodeToString(this)).jsonObject.filterKeys { it != "expectedEarningReview" || expectedEarningReview != null })
+    val encoded=JsonObject(json.parseToJsonElement(json.encodeToString(this)).jsonObject.filterKeys {
+        (it != "expectedEarningReview" || expectedEarningReview != null) && (it != "description" || description != null)
+    })
     // Keep the pre-v010 hash for an unchanged legacy request, including in-flight retries.
     val legacy=items.isEmpty() && programIds==null && rewardId==null && expectedRevision==null && expectedRewardVersion==null && !identityVerified && !customerConfirmed && expectedEarningReview==null
-    return if(legacy)JsonObject(encoded.filterKeys{it in setOf("memberId","branchId","receipt","amountMinor","currency")}).toString()else encoded.toString()
+    return if(legacy)JsonObject(encoded.filterKeys{it in setOf("memberId","branchId","receipt","amountMinor","currency","description")}).toString()else encoded.toString()
 }
 fun LoyaltyService.prepareReceipt(c:Connection,s:Staff,p:Purchase):ReceiptCalculation {
     need(p.items.size<=30 && p.items.sumOf{it.quantity}<=500,"TOO_MANY_ITEMS","Máximo 30 líneas y 500 unidades por comprobante.")
@@ -76,7 +85,8 @@ fun LoyaltyService.prepareReceipt(c:Connection,s:Staff,p:Purchase):ReceiptCalcul
     return ReceiptCalculation(gross,discount,reward)
 }
 
-fun LoyaltyService.receiptQuote(s:Staff,p:Purchase):JsonObject {
+fun LoyaltyService.receiptQuote(s:Staff,input:Purchase):JsonObject {
+    val p = input.normalizedReceipt()
     uuid(p.memberId); uuid(p.branchId); text(p.receipt,100); s.at(p.branchId)
     need(p.amountMinor in 0..1_000_000_000, "INVALID_AMOUNT", "Monto de compra inválido.")
     return db.tx { c ->authorizeStaff(c,s,required=purchaseOperations(p)); commercial.requireActive(c,s.tenant);branch(c,s.tenant,p.branchId);lockMember(c,s.tenant,p.memberId)
@@ -85,7 +95,7 @@ fun LoyaltyService.receiptQuote(s:Staff,p:Purchase):JsonObject {
         val calculated = prepareReceipt(c,s,p)
         val review = purchaseReview(c,s,p,calculated,clock.instant(),tenant.second)
         obj("grossMinor" to calculated.gross,"discountMinor" to calculated.discount,"amountMinor" to calculated.net,
-            "rewardName" to calculated.reward?.get("name"), "currency" to p.currency,
+            "rewardName" to calculated.reward?.get("name"), "currency" to p.currency, "description" to p.description,
             "earnings" to review.entries, "earningReview" to review.fingerprint,
             "note" to "La compra contará en el historial. Solo acumulan las promociones elegidas que cumplen sus condiciones.")
     }
@@ -170,5 +180,5 @@ fun LoyaltyService.customerInsights(s:Staff,offset:Int=0):JsonObject {s.owner();
 fun LoyaltyService.customerDetail(s:Staff,memberId:String):JsonObject {s.owner();return db.tx{c->lockMember(c,s.tenant,memberId);obj(
     "rewardProgress" to customerRewardProgress(c,s.tenant,memberId),
     "preferences" to (c.one("SELECT birthday,marketing_consent FROM member_preferences WHERE tenant_id=? AND member_id=?",s.tenant,memberId){obj("birthday" to it.getString(1),"marketingConsent" to it.getBoolean(2))}?:obj("birthday" to null,"marketingConsent" to false)),
-    "purchases" to c.rows("SELECT p.*,b.name AS branch_name FROM purchases p JOIN branches b ON b.tenant_id=p.tenant_id AND b.id=p.branch_id WHERE p.tenant_id=? AND p.member_id=? ORDER BY p.created_at DESC,p.id LIMIT 100",s.tenant,memberId){obj("id" to it.getString("id"),"at" to it.instant("created_at"),"paidMinor" to it.getLong("amount_minor"),"discountMinor" to it.getLong("discount_minor"),"branch" to it.getString("branch_name"),"items" to json.parseToJsonElement(it.getString("items")))},
+    "purchases" to c.rows("SELECT p.*,b.name AS branch_name FROM purchases p JOIN branches b ON b.tenant_id=p.tenant_id AND b.id=p.branch_id WHERE p.tenant_id=? AND p.member_id=? ORDER BY p.created_at DESC,p.id LIMIT 100",s.tenant,memberId){obj("id" to it.getString("id"),"at" to it.instant("created_at"),"paidMinor" to it.getLong("amount_minor"),"discountMinor" to it.getLong("discount_minor"),"branch" to it.getString("branch_name"),"description" to it.getString("description"),"items" to json.parseToJsonElement(it.getString("items")))},
     "rewards" to c.rows("SELECT reward_name,consumed_at FROM redemptions WHERE tenant_id=? AND member_id=? AND status='CONSUMED' ORDER BY consumed_at DESC,id LIMIT 100",s.tenant,memberId){obj("name" to it.getString(1),"at" to it.instant("consumed_at"))})}}

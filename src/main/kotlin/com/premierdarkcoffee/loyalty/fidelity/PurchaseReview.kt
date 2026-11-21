@@ -60,7 +60,7 @@ internal fun LoyaltyService.purchaseReview(c: Connection, staff: Staff, p: Purch
             "minimumSpendMinor" to config.minimumSpendMinor, "productGroup" to config.productGroup)
     }
     val revision = c.one("SELECT revision FROM members WHERE tenant_id=? AND id=?", staff.tenant, p.memberId) { it.getLong(1) }!!
-    val payload = p.copy(amountMinor = receipt.net, expectedEarningReview = null, receipt = p.receipt.trim().uppercase(java.util.Locale.ROOT))
+    val payload = p.copy(amountMinor = receipt.net, expectedEarningReview = null)
     val fingerprint = Security.hash(obj("purchase" to payload.idempotencyPayload(), "revision" to revision,
         "gross" to receipt.gross, "discount" to receipt.discount, "reward" to receipt.reward, "earnings" to entries).toString())
     return PurchaseReview(entries, fingerprint)
