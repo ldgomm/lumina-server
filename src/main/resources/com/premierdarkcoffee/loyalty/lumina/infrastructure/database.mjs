@@ -69,6 +69,7 @@ export function openDatabase(path) {
     }
   });
   return {
+    iterate: (sql, ...values) => db.prepare(sql).iterate(...values),
     all: (sql, ...values) => db.prepare(sql).all(...values),
     get: (sql, ...values) => db.prepare(sql).get(...values),
     run: (sql, ...values) => db.prepare(sql).run(...values),

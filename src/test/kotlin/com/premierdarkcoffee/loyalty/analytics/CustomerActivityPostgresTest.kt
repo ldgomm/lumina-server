@@ -132,6 +132,12 @@ class CustomerActivityPostgresTest {
         val r=activity(f,days=7)
         assertEquals(from.toString(),r.str("from"));assertEquals(2,r.summary().num("periodPurchases"));assertEquals(500,r.summary().num("periodSpentMinor"))
         assertEquals(3,r.rows().single().num("purchases"))
+        val midnight=Instant.parse("2026-11-05T05:00:00Z")
+        buy(f,time=midnight.minusSeconds(1));buy(f,time=midnight)
+        val today=activity(f,days=1)
+        assertEquals(midnight.toString(),today.str("from"))
+        assertEquals(2,today.summary().num("periodPurchases"))
+        assertEquals(400,today.summary().num("periodSpentMinor"))
     }
     @Test fun `inactivity uses calendar days and excludes clients who have never bought`() {
         val f=fixture();buy(f,time=Instant.parse("2026-10-07T04:59:59Z")) // Oct 6 local, 30 days ago

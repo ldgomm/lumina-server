@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { requestAccessSql } from '../access/content-policy.mjs';
 import { requireBusinessActor } from '../access/accounts.mjs';
-import { businessOverview, attentionRows } from './overview.mjs';
+import { businessOverview, attentionDestination, attentionRows } from './overview.mjs';
 import { expiryAlerts } from '../memberships/calendar.mjs';
 import { inclusiveEnd } from '../memberships/orders.mjs';
 import { integer, now, requireThat, text } from '../shared/domain.mjs';
@@ -14,10 +14,9 @@ export function notificationRows(db,actor,companyId,account=null) {
     let version;
     if(row.kind==='deliveries'){
       version=db.all("SELECT id,revision FROM pieces WHERE company_id=? AND request_id=? AND status='REVIEW' ORDER BY id",companyId,row.id);
-      row={...row,path:row.path+'#piece-'+version[0].id};
     }else if(row.kind==='quotes')version=db.get("SELECT id,revision FROM quotes WHERE company_id=? AND request_id=? AND status='OFFERED'",companyId,row.id);
     else version=db.get('SELECT revision FROM package_orders WHERE company_id=? AND id=?',companyId,row.id);
-    return {...row,key:row.kind+':'+row.id,fingerprint:fingerprint(version)};
+    return {...row,path:attentionDestination(row),key:row.kind+':'+row.id,fingerprint:fingerprint(version)};
   });
   const policy=requestAccessSql(actor),start=now(),end=new Date(Date.now()+7*86400000).toISOString();
   const visits=db.all(`SELECT v.id,v.revision,v.starts_at,v.place,r.title,r.id request_id FROM visits v

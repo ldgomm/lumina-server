@@ -37,6 +37,7 @@ import { canReadFidelityReport, centralPaths, managementSections, managementTitl
 import { managementPage, managementFramePage, managementDocument } from '../presentation/pages/management-pages.mjs';
 import { offerEditor } from '../presentation/pages/offer-editor.mjs';
 import { agendaData } from '../production/agenda.mjs';
+import { agencyProductionData } from '../production/agency-work.mjs';
 import { attentionPage, workdayAgenda } from '../presentation/pages/workday-pages.mjs';
 import { businessOverview, attentionData } from '../production/overview.mjs';
 import { requestAccessSql } from '../access/content-policy.mjs';
@@ -613,6 +614,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         const context=await walletPlanContext(db,wallets,actor,company);
         const {contracts,booked,active,legacy,error,account,pending}=context;
         if(path==='/plans/wallet/state') {
+          if(error)return json(res,503,{description:error});
           const reminder=walletPaymentReminder(account);
           const description=account?.access?.overdueSuspension?reminder.title:contracts.length?'Wallet incluida en '+contracts.map(c=>c.name).join(', '):active?'Wallet activa':legacy?'Tu acuerdo anterior se conserva.':'Elige un plan para activar Wallet.';
           return json(res,200,{active,reminder,kind:contracts.length?'CATALOG':legacy?'LEGACY':'NONE',description});
@@ -643,25 +645,20 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if (method==='GET' && ['/dashboard','/production','/agency-calendar'].includes(path)) {
         if(path==='/dashboard'&&actor.kind!=='AGENCY')return redirect(res,'/home');
         requireAgency(actor);
-        const q=text(target.searchParams.get('q')||'','búsqueda',0,100);
-        const state=target.searchParams.get('state')||'',channel=target.searchParams.get('channel')||'';
-        requireThat(!channel||Object.hasOwn(channels,channel),'Canal inválido.');
-        const scope=path==='/production'?(target.searchParams.get('scope')||'operating'):'operating';
-        requireThat(['operating','blocked'].includes(scope),'Vista de producción no disponible.');
-        const scopeSql=scope==='blocked'?`NOT ${operatingSql()}`:operatingSql();
-        const rows=()=>db.all(`SELECT r.*,${requestBusinessSql},c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id
-          WHERE ${scopeSql} AND (?='' OR instr(lower(r.title||' '||c.name),lower(?))>0) AND (?='' OR r.status=?) AND (?='' OR r.channel=?)
-          ORDER BY r.created_at DESC,r.id LIMIT 100`,q,q,state,state,channel,channel);
-        const visits=db.all(`SELECT v.*,r.title,c.name AS company_name FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id
-          JOIN companies c ON c.id=v.company_id WHERE ${operatingSql()} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=? ORDER BY v.starts_at,v.id LIMIT 100`,now());
-        if(path==='/production')return render({title:'Producción',description:'Todos los clientes y servicios, con cada trabajo en su etapa.',body:agencyProduction(rows(),{q,state,channel,scope})});
+        if(path==='/production')return render({title:'Producción',description:'Busca trabajos por cliente, servicio o etapa.',body:agencyProduction(agencyProductionData(db,actor,target.searchParams))});
         if(path==='/agency-calendar')return render({title:'Agenda',body:workdayAgenda({actor,data:agendaData(db,actor,null,target.searchParams),url:pathFor(actor,null),global:true})});
+        const instant=now();
+        const visits=db.all(`SELECT v.*,r.title,c.name AS company_name FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id
+          JOIN companies c ON c.id=v.company_id WHERE ${operatingSql()} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=? ORDER BY v.starts_at,v.id LIMIT 5`,instant);
+        const recent=db.all(`SELECT r.*,${requestBusinessSql},c.name AS company_name FROM requests r JOIN companies c ON c.id=r.company_id
+          WHERE ${operatingSql()} ORDER BY r.created_at DESC,r.id DESC LIMIT 6`);
         const counts=db.get(`SELECT (SELECT count(*) FROM companies c WHERE ${operatingSql('c.id')}) AS companies,(SELECT count(*) FROM companies c WHERE approved=0 AND ${operatingSql('c.id')}) AS pending,
           (SELECT count(*) FROM requests r WHERE ${operatingSql()} AND status NOT IN ('CANCELLED','DELIVERED')) AS open,((SELECT count(*) FROM pieces WHERE status='DELIVERED')+(SELECT count(*) FROM courtesy_deliveries WHERE request_id IS NULL)) AS delivered,
           (SELECT count(*) FROM requests r WHERE NOT ${operatingSql()} AND status NOT IN ('CANCELLED','DELIVERED')) AS blocked,
-          (SELECT count(*) FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id WHERE ${operatingSql()} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?) AS visits`,now());
+          (SELECT count(*) FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id WHERE ${operatingSql()} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at<?) AS missed,
+          (SELECT count(*) FROM visits v JOIN requests r ON r.id=v.request_id AND r.company_id=v.company_id WHERE ${operatingSql()} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?) AS visits`,instant,instant);
         const pipeline=db.all(`SELECT status,count(*) AS count FROM requests r WHERE ${operatingSql()} GROUP BY status`);
-        return render({title:'Vista general',description:'Todo lo que tu agencia tiene en marcha.',body:agencyOverview({counts,pipeline,visits:visits.slice(0,5),recent:rows().slice(0,6)})});
+        return render({title:'Jornada de la agencia',body:agencyOverview({counts,pipeline,visits,recent})});
       }
       if(method==='GET' && path.startsWith('/channels/')) {
         const channel=path.slice('/channels/'.length).toUpperCase();requireThat(Object.hasOwn(channels,channel),'Área no encontrada.',404);
@@ -773,7 +770,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           UNION ALL SELECT 0 AS quantity,1 AS delivered FROM courtesy_deliveries WHERE company_id=? AND request_id IS NULL AND ?<>'COLLABORATOR'`,company.id,...policy.params,company.id,actor.kind);
         const upcoming=db.get(`SELECT count(*) AS count FROM visits v JOIN requests r ON r.company_id=v.company_id AND r.id=v.request_id
           WHERE v.company_id=? AND ${policy.sql} AND v.status='SCHEDULED' AND r.status<>'CANCELLED' AND v.starts_at>=?`,company.id,...policy.params,now()).count;
-        return render({title:actor.kind==='AGENCY'?'Información del negocio':'Panel de trabajo',description:'Servicios y actividades del negocio.',
+        return render({title:actor.kind==='AGENCY'?'Información del negocio':'Mi jornada',
           body:(actor.kind==='OWNER'?campaignBanner(listPlans(db),url):'')+homePage({actor,company,url,groups,upcoming,cash,walletEntry:actor.kind==='OWNER'?walletHomeEntry(db,company):null,overview:actor.kind!=='AGENCY'?businessOverview(db,actor,company.id):null,
             videoRequested:videos.reduce((sum,row)=>sum+row.quantity,0),videoDelivered:videos.reduce((sum,row)=>sum+row.delivered,0)})});
       }

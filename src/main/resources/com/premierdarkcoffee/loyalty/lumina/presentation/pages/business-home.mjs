@@ -1,10 +1,12 @@
 import { taskPanel } from './task-panel.mjs';
-import { attentionRows, attentionKinds } from '../../production/overview.mjs';
+import { attentionRows, attentionKinds, attentionDestination } from '../../production/overview.mjs';
 import { can } from '../../access/accounts.mjs';
 import { areas } from '../../shared/domain.mjs';
 import { button, card, esc, form, hidden, localLink, timestamp } from './components.mjs';
 import { requestCards } from './request-composer.mjs';
 import { icon } from './icons.mjs';
+import { visitTime } from './visit-time.mjs';
+
 
 export function businessHome({actor,url,groups,upcoming,videoRequested,videoDelivered,cash,overview,walletEntry}) {
   const requestable=Object.keys(areas).filter(scope=>can(actor,scope,'REQUEST'));
@@ -15,25 +17,28 @@ export function businessHome({actor,url,groups,upcoming,videoRequested,videoDeli
     ...(can(actor,'SOCIAL')?[['social','Contenido','Producción, entregas y resultados.','/content']]:[]),
     ...['MAPS','WEB','BRAND'].filter(scope=>can(actor,scope)).map(scope=>({MAPS:['maps','Google Maps','Ubicaciones, reseñas y proyectos.','/services/maps'],WEB:['web','Web','Proyectos y entregas de tu sitio.','/services/web'],BRAND:['content','Diseño de marca','Logo e identidad de tu negocio.','/services/brand']}[scope])),
     ...(actor.kind==='OWNER'?[['plans','Paquetes y servicios','Precios, acuerdos y cupos disponibles.','/plans']]:[])];
-  const pending=`<section class="card attention-card"><div class="split"><h2>Necesita tu atención</h2>${actions.length?`<span class="attention-count">${actions.length}</span>`:''}</div>${actions.length?`<div class="attention-list">${actions.slice(0,5).map(a=>`<a href="${esc(url(a.path))}"><span><small>${esc(attentionKinds[a.kind])}</small><strong>${esc(a.title)}</strong></span>${icon('arrow')}</a>`).join('')}</div>${actions.length>5?`<p class="muted">Mostrando 5 de ${actions.length} pendientes. ${localLink(url('/attention'),'Ver todos los pendientes →')}</p>`:''}`:'<div class="all-clear">'+icon('check')+'<div><strong>Todo al día</strong><p>No tienes aprobaciones pendientes.</p></div></div>'}</section>`;
   const visit=overview.nextVisit;
-  const schedule=card('Próxima grabación',visit?`<div class="next-visit"><span class="service-symbol">${icon('calendar')}</span><div><strong>${esc(timestamp(visit.starts_at))}</strong><p>${esc(visit.title)}</p><small>${esc(visit.place)}</small></div></div><div class="actions">${localLink(url('/requests/'+visit.id),'Ver detalles →')}${localLink(url('/calendar'),'Ver agenda','btn secondary')}</div>`:'<p class="muted">Las grabaciones confirmadas aparecerán aquí.</p>'+localLink(url('/calendar'),'Ver agenda →'));
+  const time=visit && visitTime(visit.starts_at);
+  const when=visit && (time.relative?time.relative+' · '+time.time:timestamp(visit.starts_at));
+  const visitFocus=visit && {area:'studio',mark:'calendar',label:'Próxima grabación',title:visit.title,
+    description:[when,visit.place].filter(Boolean).join(' · '),href:url('/requests/'+visit.id)+'#visits',action:'Ver grabación'};
   const first=actions[0];
-  const counter=cash?'/cashier':actor.kind==='OWNER'&&can(actor,'WALLET')?url('/wallet',{section:'sales'}):null;
+  const counter=cash?'/cashier':actor.kind==='OWNER'&&can(actor,'WALLET')&&walletEntry?.counterAvailable?url('/wallet',{section:'sales'}):null;
   const newRequest=requestable.length?url('/requests/new',requestable.length===1?{area:requestable[0]}:{}):null;
   let focus;
   if(walletEntry?.choosePlan) {
     focus={area:'wallet',mark:'wallet',label:'Fin de la prueba gratuita',title:'¿Quieres continuar con Wallet?',
       description:'Elige mensual o anual para volver a usar tus tarjetas. Puedes decidir más adelante.',href:'/plans/wallet',action:'Elegir mi plan',
       dismissForm:form('/plans/wallet/choice',actor,hidden('choice','later')+button('Ahora no'),'task-dismiss')};
+  } else if(visitFocus && time.relative==='Hoy') {
+    focus=visitFocus;
   } else if(first) {
     const caption={deliveries:'Revisar entrega',quotes:'Revisar cotización',proposals:'Ver propuesta'}[first.kind];
-    const anchor={deliveries:first.review_piece_id?'#piece-'+first.review_piece_id:'#deliverables',quotes:'#quote',proposals:''}[first.kind];
     focus={area:'review',mark:'check',label:attentionKinds[first.kind],title:first.title,
-      description:'Este trabajo espera tu decisión para continuar.',href:url(first.path)+anchor,action:caption};
-  } else if(visit&&can(actor,'SOCIAL')) {
-    focus={area:'studio',mark:'calendar',label:'Próxima grabación',title:visit.title,
-      description:[timestamp(visit.starts_at),visit.place].filter(Boolean).join(' · '),href:url('/requests/'+visit.id)+'#visits',action:'Ver grabación'};
+      description:{deliveries:'Abre la pieza para aprobarla o pedir un ajuste.',quotes:'Revisa el precio y las condiciones de este trabajo.',proposals:'Revisa los servicios y el precio antes de decidir.'}[first.kind],
+      href:url(attentionDestination(first)),action:caption};
+  } else if(visitFocus) {
+    focus=visitFocus;
   } else if(counter) {
     focus={area:'wallet',mark:'wallet',label:'Wallet',title:'Atiende tu próxima venta',
       description:cash?'Registra compras y canjes en '+cash.branch_name+'.':'Identifica al cliente por su tarjeta y registra la compra o el canje.',href:counter,action:'Abrir caja'};
@@ -44,11 +49,20 @@ export function businessHome({actor,url,groups,upcoming,videoRequested,videoDeli
     const [mark,title,description,path]=modules[0];
     focus={area:'work',mark,label:'Tus servicios',title,description,href:url(path),action:'Abrir '+title};
   }
-  const showPending=actions.length>(walletEntry?.choosePlan?0:1);
-  const showVisit=visit&&can(actor,'SOCIAL')&&(first||walletEntry?.choosePlan);
-  return `${walletEntry?.checkPayment?'<aside class="card notice" data-wallet-reminder="home" role="status" aria-label="Pago de Wallet" hidden></aside><script defer src="/assets/wallet-subscription.js"></script>':''}${focus?taskPanel(focus):''}
-    ${(actor.kind==='OWNER'||newRequest&&focus?.href!==newRequest)?`<div class="workspace-tools">${newRequest&&focus?.href!==newRequest?localLink(newRequest,'Solicitar un servicio','btn secondary'):''}${actor.kind==='OWNER'?localLink('/team','Equipos y roles','btn secondary'):''}</div>`:''}
-    ${accessible&&(showPending||showVisit)?`<div class="home-overview">${showPending?pending:''}${showVisit?schedule:''}</div>`:''}
+  const others=focus?.area==='review'?actions.slice(1):actions;
+  const pending=others.length?`<section class="card attention-card"><div class="split"><h2>Necesita tu atención</h2><span class="attention-count">${others.length}</span></div>
+    <div class="attention-list">${others.slice(0,4).map(row=>`<a href="${esc(url(attentionDestination(row)))}"><span><small>${esc(attentionKinds[row.kind])}</small><strong>${esc(row.title)}</strong></span>${icon('arrow')}</a>`).join('')}</div>
+    ${localLink('/attention','Ver todos los pendientes →')}</section>`:'';
+  const schedule=visitFocus && focus!==visitFocus?card('Próxima grabación',`<div class="next-visit"><span class="service-symbol">${icon('calendar')}</span><div><strong>${esc(when)}</strong><p>${esc(visit.title)}</p><small>${esc(visit.place)}</small></div></div>${localLink(visitFocus.href,'Ver grabación →')}`):'';
+  const shortcuts=[
+    ...(counter && focus?.href!==counter?[[counter,'Abrir caja','wallet','data-wallet-counter']]:[]),
+    ...(actor.kind==='OWNER' && (can(actor,'WALLET')||walletEntry?.checkPayment) && !walletEntry?.choosePlan?[['/plans/wallet','Mi suscripción Wallet','plans','']]:[]),
+    ...(newRequest && focus?.href!==newRequest?[[newRequest,'Solicitar un servicio','content','']]:[]),
+    ...(actor.kind==='OWNER'?[['/team','Equipos y roles','clients','']]:[]),
+  ];
+  return `${walletEntry?.checkPayment?'<aside class="card notice" data-wallet-reminder="home" role="status" aria-label="Pago de Wallet" hidden></aside><script defer src="/assets/wallet-subscription.js"></script>':''}
+    <div class="daybook">${focus?taskPanel(focus):''}${shortcuts.length?`<nav class="daybook-tools" aria-label="Acciones frecuentes">${shortcuts.map(([href,title,mark,attr])=>`<a ${attr} href="${esc(href)}">${icon(mark)}<span>${esc(title)}</span>${icon('arrow')}</a>`).join('')}</nav>`:''}</div>
+    ${pending||schedule?`<div class="home-overview">${pending}${schedule}</div>`:''}
     ${modules.length?`<section class="service-launcher" aria-label="Accesos a tus servicios"><div class="launcher-heading"><h2>Tu espacio de trabajo</h2>${actor.kind==='OWNER'?localLink('/services','Gestionar servicios →'):''}</div><div class="home-modules">${modules.map(([mark,title,hint,path])=>`<a class="home-module" data-area="${mark}" aria-label="Abrir ${esc(title)}" href="${esc(url(path))}"><span class="service-symbol">${icon(mark)}</span><div><h3>${esc(title)}</h3><p>${esc(hint)}</p></div>${icon('arrow')}</a>`).join('')}</div></section>`:''}
     ${accessible?`<section class="home-activity" aria-label="Resumen de actividad">${[['Solicitudes abiertas',open],...(can(actor,'SOCIAL')?[['Videos solicitados',videoRequested],['Videos entregados',videoDelivered],['Próximas visitas',upcoming]]:[])].map(([label,n])=>`<div><strong>${n}</strong><span>${label}</span></div>`).join('')}</section>`:''}
     ${accessible?`<section class="card"><div class="split"><h2>Solicitudes recientes</h2>${localLink(url('/requests'),'Ver todas →')}</div>${requestCards(overview.recent,url,{actor})}</section>`:''}

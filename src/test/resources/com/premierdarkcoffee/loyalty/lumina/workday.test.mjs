@@ -24,6 +24,32 @@ function assertAgencyVisitCount(body,expected){
  assert.equal(Number(metric[1]),expected);
 }
 
+test('la jornada distingue la grabación de hoy de las tareas y las visitas que quedaron pendientes',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-21T23:00:00Z')});
+ const w=await setup(t),reviewed=await request(w,{title:'Foto para revisar'}),shoot=await request(w,{title:'Grabación de la tarde'});
+ review(w,reviewed.id);visit(w,shoot,{date:'2026-11-22T00:00:00.000Z'});
+ const first=async(client,path)=>(await client.get(path)).body.match(/class="task-action" href="([^"]+)"/)?.[1];
+ assert.equal(await first(w.client,'/home'),shoot.path+'#visits');
+ assert.equal(await first(w.admin,'/dashboard'),selected(shoot.path,w.id)+'#visits');
+ t.mock.timers.tick(2*3600_000);
+ assert.ok((await first(w.client,'/home')).startsWith(reviewed.path+'#piece-'));
+ assert.equal(await first(w.admin,'/dashboard'),'/agency-calendar?view=pending');
+});
+
+test('producción encuentra una solicitud anterior al límite histórico y conserva orden y filtros al paginar',async t=>{
+ const w=await setup(t);
+ const add=`INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,created_at)
+   VALUES(?,?,?,'CONTENT','SOCIAL','VIDEO',1,?,'','NEW',?)`;
+ const ownerId=actor(w).id;
+ for(let i=0;i<105;i++)w.db.run(add,uuid(),w.id,ownerId,'Fotografía '+String(i).padStart(3,'0'),new Date(Date.UTC(2025,0,1+i)).toISOString());
+ const path='/production?q=fotografia&scope=operating&state=NEW&channel=SOCIAL&sort=oldest';
+ const first=(await w.admin.get(path)).body,last=(await w.admin.get(path+'&page=999')).body;
+ assert.match(first,/Fotografía 000/);assert.doesNotMatch(first,/Fotografía 104/);assert.match(first,/1–20 de 105/);
+ assert.match(first,/q=fotografia&amp;state=NEW&amp;channel=SOCIAL&amp;scope=operating&amp;sort=oldest&amp;page=1/);
+ assert.match(last,/101–105 de 105/);assert.match(last,/Fotografía 104/);assert.doesNotMatch(last,/Fotografía 099/);
+ assert.equal((await w.client.get(path)).status,403);assert.equal((await w.admin.get('/production?sort=invalid')).status,400);
+});
+
 test('bandeja completa y paginada sin perder tareas del inicio',async t=>{
  const w=await setup(t);for(let i=0;i<23;i++){const r=await request(w,{title:'Entrega '+i});review(w,r.id);}
  const a=attentionData(w.db,actor(w),w.id),b=attentionData(w.db,actor(w),w.id,new URLSearchParams({page:'1'}));assert.equal(a.total,23);assert.equal(a.rows.length,20);assert.equal(b.rows.length,3);assert.equal(new Set([...a.rows,...b.rows].map(r=>r.id)).size,23);

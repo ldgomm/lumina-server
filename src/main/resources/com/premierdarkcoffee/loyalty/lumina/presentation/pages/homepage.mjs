@@ -1,3 +1,4 @@
+import { portalVersion } from '../../shared/domain.mjs';
 import { engagementGuide } from './engagement-guide.mjs';
 import { brandSocial } from './brand-social.mjs';
 import { icon } from './icons.mjs';
@@ -23,7 +24,7 @@ export function homepage({signedIn=false}={}) {
   const entry=signedIn?'/home':'/login', entryLabel=signedIn?'Ir a mi espacio':'Ingresar';
   const start=signedIn?'/home':'/register', startLabel=signedIn?'Ir a mi espacio':'Crear mi cuenta';
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Lúmina Digital · Contenido, marca y fidelización</title><meta name="application-name" content="Lúmina 2.0">
+    <title>Lúmina Digital · Contenido, marca y fidelización</title><meta name="application-name" content="Lúmina ${portalVersion}">
     <meta name="description" content="Contenido para redes, páginas web, Google Maps, diseño de marca y fidelización en Apple Wallet y Google Wallet para tu negocio.">
     <meta name="theme-color" content="#111f3a"><meta property="og:type" content="website"><meta property="og:title" content="Lúmina Digital · Estudio creativo"><meta property="og:description" content="De la primera foto a la próxima visita. Contenido, marcas y fidelización para negocios.">
     <link rel="icon" href="/assets/lumina-symbol.png"><link rel="stylesheet" href="/assets/homepage.css"><script defer src="/assets/homepage.js"></script></head>
@@ -32,7 +33,7 @@ export function homepage({signedIn=false}={}) {
     <details class="mobile-menu"><summary aria-label="Menú de navegación">${icon('menu')}<span class="sr-only">Menú</span></summary><nav aria-label="Navegación móvil">${nav}<a href="${start}">${startLabel}</a></nav></details></div></div></header>
     <main id="main"><section class="hero" aria-labelledby="hero-title"><div class="hero-copy"><p class="eyebrow">Estudio creativo y digital</p>
       <h1 id="hero-title">De la primera foto a la <em>próxima visita.</em></h1><p class="hero-description">Creamos el contenido que presenta tu negocio y la tarjeta que tus clientes llevan cuando vuelven.</p>
-      <div class="hero-actions"><a class="home-button primary" href="#services">Explorar servicios ${arrow}</a><a class="text-link" href="${entry}">${signedIn?'Abrir mi negocio':'Ya soy cliente'} ${arrow}</a></div></div>
+      <div class="hero-actions"><a class="home-button primary" href="${start}">${signedIn?'Abrir mi espacio':'Crear mi cuenta'} ${arrow}</a><a class="text-link" href="#services">Explorar servicios ${arrow}</a></div>${signedIn?'':'<p class="hero-courtesy">Con tu cuenta puedes pedir un video gratis para las redes de tu negocio.</p>'}</div>
       <figure class="studio-photo"><img src="/assets/studio.webp" srcset="/assets/studio-small.webp 640w, /assets/studio.webp 1200w" sizes="(max-width: 740px) 100vw, 52vw" width="1200" height="800" fetchpriority="high" alt="Una cámara encuadra un espresso de taza naranja en un set de fotografía azul."></figure>
     </section>
     <section class="home-container section services-section" id="services" aria-labelledby="services-title"><div class="section-lead"><p class="eyebrow">Servicios</p><h2 id="services-title">¿Qué quieres hacer<br> por tu negocio?</h2><p>Empieza por lo que necesitas hoy. Puedes combinar servicios más adelante.</p></div>
@@ -46,5 +47,5 @@ export function homepage({signedIn=false}={}) {
     ${engagementGuide()}
     <section class="home-container section questions-section" id="questions" aria-labelledby="questions-title"><div class="section-lead"><h2 id="questions-title">Preguntas<br> frecuentes.</h2></div><div class="questions-list">${questions.map(([q,a])=>`<details><summary>${q}<span class="disclosure-mark" aria-hidden="true"></span></summary><p>${a}</p></details>`).join('')}</div></section>
     <section class="contact-section" id="contact"><div class="home-container"><div><p class="eyebrow">Contacto</p><h2>Hablemos de<br> <em>tu negocio.</em></h2></div><div><a class="home-button primary" href="https://www.instagram.com/luminadigital360/" target="_blank" rel="noopener noreferrer">Escribir en Instagram ${arrow}<span class="sr-only"> (abre otra pestaña)</span></a><a class="text-link" href="${start}">${startLabel} ${arrow}</a><a href="/activate">Activar mi invitación de equipo</a></div></div></section>
-    </main><footer class="public-footer"><div class="home-container">${publicBrand()}${brandSocial()}<a href="#main">Volver arriba ↑</a><small>Lúmina Digital · 2.0</small></div></footer></body></html>`;
+    </main><footer class="public-footer"><div class="home-container">${publicBrand()}${brandSocial()}<a href="#main">Volver arriba ↑</a><small>Lúmina Digital · ${portalVersion}</small></div></footer></body></html>`;
 }

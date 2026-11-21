@@ -250,3 +250,36 @@ html:has(.content-app .courtesy-notice[data-compact="true"]) { --courtesy-top:96
   .courtesy-notice .courtesy-display { grid-column:1; justify-self:start; }
 }
 @media print { .courtesy-notice { display:none!important; } }
+
+.daybook { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; margin-bottom:24px; }
+.daybook:has(.task-panel:not([hidden])):has(.daybook-tools) { grid-template-columns:minmax(0,1.7fr) minmax(215px,1fr); }
+.daybook .task-panel { margin:0; min-width:0; }
+.daybook .task-panel::after { content:none; }
+.daybook .task-panel { background:linear-gradient(115deg,var(--task-bg) 65%,color-mix(in srgb,var(--task-bg) 87%,white)); }
+.daybook .task-body { padding:clamp(21px,2.7vw,37px); }
+.daybook .task-action { margin-top:16px; }
+.daybook-tools { display:flex; flex-direction:column; justify-content:center; align-self:stretch; overflow:hidden; min-width:0; border:1px solid #cfd9e6; border-radius:16px; background:#fff; }
+.daybook-tools a { flex:1; display:grid; grid-template-columns:23px minmax(0,1fr) 16px; align-items:center; gap:11px; padding:13px 16px; min-height:49px; color:#173855; text-decoration:none; font-weight:650; line-height:1.3; }
+.daybook-tools a+a { border-top:1px solid #e2e8ef; }
+.daybook-tools a svg:last-child { width:16px; color:#536c82; }
+.daybook-tools a:hover { background:#edf4ff; }
+.daybook-tools a:focus-visible { outline-offset:-4px; }
+.daybook-tools a[hidden],.daybook .task-panel[hidden] { display:none; }
+.daybook-tools:not(:has(a:not([hidden]))),.daybook:empty { display:none; }
+.signed-in .production-filters { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+.production-filters label { flex:1 1 140px; min-width:0; }
+.production-filters label:first-of-type { flex:2 1 210px; }
+.lumina-loyalty .overview-period h2 { margin:0 0 .5rem; }
+.lumina-loyalty .setup-checklist summary { cursor:pointer; min-height:44px; align-content:center; }
+.lumina-loyalty .setup-checklist summary > span { margin-inline-start:.6rem; color:#50657b; font-size:.92rem; }
+.lumina-loyalty .setup-checklist[open] summary { margin-bottom:12px; }
+@media(max-width:900px) {
+  .daybook:has(.task-panel:not([hidden])):has(.daybook-tools) { grid-template-columns:minmax(0,1fr); }
+  .daybook-tools { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .daybook-tools a { box-shadow:inset 0 -1px #e2e8ef; }
+  .daybook-tools a+a { border:0; }
+}
+@media(max-width:480px) {
+  .daybook-tools { grid-template-columns:minmax(0,1fr); }
+  .daybook-tools a { padding-block:10px; min-height:44px; }
+}

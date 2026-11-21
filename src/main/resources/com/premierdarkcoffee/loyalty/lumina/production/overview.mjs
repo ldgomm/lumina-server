@@ -28,6 +28,10 @@ export function businessOverview(db,actor,companyId) {
 }
 
 export const attentionKinds={deliveries:'Entregas por revisar',quotes:'Cotizaciones',proposals:'Propuestas de servicios'};
+export function attentionDestination(row) {
+  if(row.kind==='deliveries')return row.path+'#piece-'+row.review_piece_id;
+  return row.path+(row.kind==='quotes'?'#quote':'');
+}
 export function attentionRows(overview) {
   return [
     ...overview.reviews.map(r=>({...r,kind:'deliveries',path:'/requests/'+r.id})),

@@ -1,3 +1,4 @@
+import { portalVersion } from '../../shared/domain.mjs';
 import { esc } from './components.mjs';
 import { brandSocial } from './brand-social.mjs';
 
@@ -15,7 +16,7 @@ const stories={
 /** Public access presentation only. No account, company, token or session projections. */
 export function accessShell({title,description='',body,mode='login'}) {
   const [eyebrow,first,second,copy]=stories[mode]||stories.login;
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1f3a"><meta name="robots" content="noindex,follow"><title>${esc(title)} · Lúmina Digital</title><link rel="icon" href="/assets/lumina-symbol.png"><link rel="stylesheet" href="/assets/homepage.css"><link rel="stylesheet" href="/assets/access.css"><script defer src="/assets/lumina.js"></script><script type="module" src="/assets/identity.js"></script></head>
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1f3a"><meta name="application-name" content="Lúmina ${portalVersion}"><meta name="robots" content="noindex,follow"><title>${esc(title)} · Lúmina Digital</title><link rel="icon" href="/assets/lumina-symbol.png"><link rel="stylesheet" href="/assets/homepage.css"><link rel="stylesheet" href="/assets/access.css"><script defer src="/assets/lumina.js"></script><script type="module" src="/assets/identity.js"></script></head>
   <body class="public-access"><a class="skip-link" href="#main">Saltar al contenido</a><header class="public-header"><div class="home-container header-row">${publicBrand()}<a class="access-back" href="/">Volver a Lúmina ${publicArrow}</a></div></header>
     <main id="main" class="home-container access-layout access-${esc(mode)}">
       <aside class="access-story" aria-label="Tu espacio en Lúmina"><p class="eyebrow">${eyebrow}</p><h2>${first}<br><em>${second}</em></h2><p>${copy}</p>

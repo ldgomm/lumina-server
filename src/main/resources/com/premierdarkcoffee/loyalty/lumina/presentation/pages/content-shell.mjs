@@ -1,3 +1,4 @@
+import { portalVersion } from '../../shared/domain.mjs';
 import { brandSocial } from './brand-social.mjs';
 import { contentViews } from '../../content/workspace.mjs';
 import { can } from '../../access/accounts.mjs';
@@ -10,7 +11,7 @@ export function contentShell({actor,company,title,description='',body,contentVie
   const back=actor.kind==='AGENCY'?(company?'/home?company='+company.id:'/dashboard'):'/home';
   const context=company?.name||(actor.kind==='AGENCY'?'Producción de Lúmina':'Mi negocio');
   const mode=actor.businessBlocked?'Historial del negocio · Solo lectura':actor.readOnlyCompany?'Consulta del negocio · Solo lectura':actor.kind==='AGENCY'?'Producción de la agencia':label(actor.kind);
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="application-name" content="Lúmina 2.0"><meta name="theme-color" content="#0b1f3a"><meta name="lumina-csrf" content="${esc(actor.csrf)}">
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="application-name" content="Lúmina ${portalVersion}"><meta name="theme-color" content="#0b1f3a"><meta name="lumina-csrf" content="${esc(actor.csrf)}">
     <title>${esc(title)} · Contenido · Lúmina Digital</title><link rel="stylesheet" href="/assets/lumina.css"><link rel="stylesheet" href="/assets/modules.css"><link rel="stylesheet" href="/assets/content.css"><link rel="stylesheet" href="/assets/experience.css"><script defer src="/assets/lumina.js"></script><script defer src="/assets/requests.js"></script><link rel="stylesheet" href="/assets/central.css"><link rel="stylesheet" href="/assets/practical.css"><link rel="stylesheet" href="/assets/deliveries.css"><script defer src="/assets/deliveries.js"></script><link rel="stylesheet" href="/assets/lumina-2.css"><link rel="icon" href="/assets/lumina-symbol.png"></head>
     <body class="content-app"><a class="skip" href="#content">Saltar al contenido</a>
     <header class="content-header"><a class="content-brand" href="${esc(url('/content'))}"><img class="lumina-symbol" src="/assets/lumina-symbol.png" width="40" height="40" alt=""><strong>Contenido</strong><small class="module-chip">Lúmina Digital</small></a>

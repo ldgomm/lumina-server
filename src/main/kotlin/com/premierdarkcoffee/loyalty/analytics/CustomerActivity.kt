@@ -33,7 +33,7 @@ data class CustomerActivityQuery(
 ) {
     fun validate() {
         customerSortOrder(sort)
-        need(days in setOf(7, 30, 90), "INVALID_PERIOD", "Elige 7, 30 o 90 días.")
+        need(days in setOf(1, 7, 30, 90), "INVALID_PERIOD", "Elige hoy o los últimos 7, 30 o 90 días.")
         need(inactiveDays in 1..365, "INVALID_INACTIVITY", "Elige entre 1 y 365 días sin compras.")
         need(segment in setOf("ALL", "RETURNING", "READY", "NEAR", "INACTIVE", "NEW"), "INVALID_SEGMENT", "Filtro de clientes inválido.")
         need(search.length <= 100, "INVALID_SEARCH", "Busca por nombre con un máximo de 100 caracteres.")

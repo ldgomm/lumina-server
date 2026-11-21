@@ -1,6 +1,6 @@
 import { operatingSql, requestBusinessSql } from '../businesses/operation-state.mjs';
 import { can, requireAccess } from '../access/accounts.mjs';
-import { requestAccessSql } from '../access/content-policy.mjs';
+import { canRequest, requestAccessSql } from '../access/content-policy.mjs';
 import { integer, requireThat, socialChannels, text } from '../shared/domain.mjs';
 import { requestProgressSql, requestStages } from '../production/request-progress.mjs';
 
@@ -16,9 +16,9 @@ export function contentData(db,actor,company,query) {
   requireThat(Object.hasOwn(requestStages,filter),'Filtro de solicitudes no disponible.',400);
   const policy=requestAccessSql(actor);
   const scope=`r.channel='SOCIAL' AND ${policy.sql} AND (? IS NULL OR r.company_id=?)`;
-  const search="instr(lower(r.title||' '||r.brief||' '||c.name),lower(?))>0";
-  const where=`${scope} AND (?='' OR ${search} OR EXISTS(SELECT 1 FROM pieces found WHERE found.company_id=r.company_id AND found.request_id=r.id AND instr(lower(found.title),lower(?))>0))`;
-  const pieceWhere=`${scope} AND (?='' OR ${search} OR instr(lower(p.title),lower(?))>0)`;
+  const search="instr(search_text(r.title||' '||r.brief||' '||c.name),search_text(?))>0";
+  const where=`${scope} AND (?='' OR ${search} OR EXISTS(SELECT 1 FROM pieces found WHERE found.company_id=r.company_id AND found.request_id=r.id AND instr(search_text(found.title),search_text(?))>0))`;
+  const pieceWhere=`${scope} AND (?='' OR ${search} OR instr(search_text(p.title),search_text(?))>0)`;
   const params=[...policy.params,company?.id||null,company?.id||null,q,q,q];
   const from='requests r JOIN companies c ON c.id=r.company_id';
   const pieceFrom='pieces p JOIN requests r ON r.id=p.request_id AND r.company_id=p.company_id JOIN companies c ON c.id=r.company_id';
@@ -29,7 +29,7 @@ export function contentData(db,actor,company,query) {
     coalesce(sum(p.status='DELIVERED'),0) AS delivered,coalesce(sum(${production}),0) AS production
     FROM ${pieceFrom} WHERE ${pieceWhere} AND p.status<>'CANCELLED'`,...params));
   const directFrom=`FROM courtesy_deliveries r JOIN companies c ON c.id=r.company_id
-    WHERE r.request_id IS NULL AND (? IS NULL OR r.company_id=?) AND instr(lower('Video de cortesía '||c.name),lower(?))>0`;
+    WHERE r.request_id IS NULL AND (? IS NULL OR r.company_id=?) AND instr(search_text('Video de cortesía '||c.name),search_text(?))>0`;
   const directParams=[company?.id||null,company?.id||null,q];
   const direct=actor.kind==='COLLABORATOR'?0:db.get('SELECT count(*) AS n '+directFrom,...directParams).n;
   counts.delivered+=direct;
@@ -40,6 +40,20 @@ export function contentData(db,actor,company,query) {
     JOIN requests r ON r.id=p.request_id AND r.company_id=p.company_id JOIN companies c ON c.id=r.company_id`;
   const pubWhere=`${pieceWhere} AND p.status<>'CANCELLED' AND pub.channel IN (${platforms.map(()=>'?').join(',')||"''"})`;
   counts.publications=db.get(`SELECT count(*) AS total FROM ${pubFrom} WHERE ${pubWhere}`,...params,...platforms).total;
+  // Choose from the matching work before paginating the recent-request history.
+  let nextPiece=null;
+  if(view==='overview' && (counts.review || counts.production)) {
+    const provider=actor.kind==='AGENCY' && (!company || actor.agencyWork) && !actor.readOnlyCompany;
+    const candidates=db.iterate(`SELECT p.id,p.status,p.title,p.request_id,r.company_id,r.channel,r.type,r.title AS request_title,
+      (SELECT group_concat(platform) FROM request_platforms rp WHERE rp.company_id=r.company_id AND rp.request_id=r.id) AS targets
+      FROM ${pieceFrom} WHERE ${pieceWhere} AND (${review} ${provider?`OR (p.status='APPROVED' AND ${production})`:''})
+      ORDER BY CASE WHEN p.status='APPROVED' THEN 0 ELSE 1 END,p.created_at,p.id`,...params);
+    for(const row of candidates) {
+      const canDecide=row.status==='REVIEW' && canRequest(actor,{...row,platforms:row.targets?.split(',')||[]},'APPROVE');
+      if(!nextPiece || canDecide)nextPiece={...row,canDecide};
+      if(canDecide || actor.kind!=='COLLABORATOR' || !can(actor,'SOCIAL','APPROVE'))break;
+    }
+  }
   let sql,values=[...params],title=view==='overview'?'Solicitudes recientes':contentViews[view];
   if(['production','reviews','deliveries'].includes(view)) {
     const state=view==='reviews'?review:view==='deliveries'?"p.status='DELIVERED'":production;
@@ -82,5 +96,5 @@ export function contentData(db,actor,company,query) {
   const total=db.get(`SELECT count(*) AS total FROM (${sql})`,...values).total;
   const page=Math.min(requestedPage,Math.max(0,Math.ceil(total/20)-1));
   const rows=db.all(sql+' LIMIT 20 OFFSET ?',...values,page*20);
-  return {global:!company,view,q,page,total,filter,counts,title,platforms,platform:query.get('network')||'',rows,more:(page+1)*20<total};
+  return {global:!company,view,q,page,total,filter,counts,title,platforms,platform:query.get('network')||'',rows,nextPiece,more:(page+1)*20<total};
 }

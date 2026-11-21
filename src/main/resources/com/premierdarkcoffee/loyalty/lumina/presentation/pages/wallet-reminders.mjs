@@ -1,4 +1,4 @@
-import { inTrial, paidFrom, trialChoice } from '../../memberships/trial.mjs';
+import { inTrial, paidFrom, paidWallet, trialChoice } from '../../memberships/trial.mjs';
 import { localDay } from '../../shared/domain.mjs';
 import { displayAmount } from './components.mjs';
 
@@ -12,13 +12,13 @@ export function trialEnding(day = localDay()) {
 // Only a business that used the trial and has never made its next choice needs the invitation.
 export function walletHomeEntry(db, company, day = localDay()) {
   const choice = trialChoice(db, company.id);
-  if (inTrial(day)) return {trialEnding: choice.enabled && trialEnding(day)};
+  if (inTrial(day)) return {trial:choice.enabled, counterAvailable:choice.enabled, trialEnding:choice.enabled && trialEnding(day)};
   const chosePlan = db.get(`SELECT 1 FROM wallet_choices WHERE company_id=? AND legacy_until IS NOT NULL
     UNION ALL SELECT 1 FROM wallet_schedules WHERE company_id=? AND consent_on>=?
     UNION ALL SELECT 1 FROM package_orders o JOIN package_order_lines l ON l.order_id=o.id
     WHERE o.company_id=? AND date(o.accepted_at,'-5 hours')>=? AND l.wallet<>'NONE' LIMIT 1`,
     company.id, company.id, paidFrom, company.id, paidFrom);
-  return {choosePlan:choice.enabled && !choice.declined && !chosePlan,
+  return {choosePlan:choice.enabled && !choice.declined && !chosePlan, counterAvailable:paidWallet(db,company.id,day),
     checkPayment:Boolean(company.loyalty_tenant && chosePlan)};
 }
 

@@ -76,7 +76,9 @@ test('inicio reúne pendientes reales, propuesta y próxima visita con enlaces d
  const p=await offer(w),order=await w.client.post('/plans/request',{key:uuid(),['qty_'+p]:'1'}),line=w.db.get('SELECT * FROM package_order_lines');
  assert.equal((await w.admin.post(work(w,order.location+'/quote'),{revision:'1',terms:'Alcance de prueba completo',['price_'+line.id]:'25.50',['start_'+line.id]:localDay(),['end_'+line.id]:localDay()})).status,303);
  const view=businessOverview(w.db,actor(w),w.id);assert.equal(view.reviews.length,1);assert.equal(view.quotes.length,1);assert.equal(view.proposals.length,1);assert.equal(view.nextVisit.title,'Grabar la fachada');
- const page=await w.client.get('/home');assert.match(page.body,/Necesita tu atención/);assert.match(page.body,/attention-count">3/);assert.match(page.body,/href="\/wallet"/);assert.match(page.body,/href="\/content"/);assert.doesNotMatch(page.body,/wallet-entry-banner|content-entry/);
+ const page=await w.client.get('/home');assert.match(page.body,/Necesita tu atención/);assert.match(page.body,/attention-count">2/);assert.match(page.body,/href="\/wallet"/);assert.match(page.body,/href="\/content"/);assert.doesNotMatch(page.body,/wallet-entry-banner|content-entry/);
+ const featured=page.body.match(/class="task-action" href="([^"]+)"/)[1],remaining=page.body.match(/class="attention-list">([\s\S]*?)<\/div>/)[1];
+ assert.ok(!remaining.includes(featured));assert.equal((remaining.match(/<a /g)||[]).length,2);
  await w.client.post(quote.location+'/accept',{quote:w.db.get('SELECT id FROM quotes').id});assert.equal(businessOverview(w.db,actor(w),w.id).quotes.length,0);
 });
 

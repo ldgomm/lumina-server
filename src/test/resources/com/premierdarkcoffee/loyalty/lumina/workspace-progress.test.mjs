@@ -20,6 +20,21 @@ function evidence(w,p,label='Archivo final'){
 }
 const list=html=>html.split('<div data-content-list>')[1]||html;
 
+test('la pieza prioritaria respeta permisos, búsquedas y etapa incluso fuera de la primera página',async t=>{
+ const w=await setup(t),old=await request(w,{title:'Campaña original'}),id=piece(w,old,'REVIEW','Fotografía del taller');
+ w.db.run("UPDATE requests SET created_at='2025-01-01T12:00:00Z' WHERE id=?",old.id);
+ for(let i=0;i<21;i++)await request(w,{title:'Solicitud reciente '+i});
+ const primary=async(client,path)=>(await client.get(path)).body.match(/class="task-action" href="([^"]+)"/)?.[1];
+ assert.ok(!data(w).rows.some(row=>row.id===old.id));
+ assert.equal(await primary(w.client,'/content'),old.path+'#piece-'+id);
+ assert.equal(await primary(w.client,'/content?q=fotografia'),old.path+'#piece-'+id);
+ assert.equal(data(w,'view=reviews&q=fotografia').total,1);
+ const approved=piece(w,old,'APPROVED','Pieza aprobada');
+ assert.equal(await primary(w.admin,'/agency/content?company='+w.id),selected(old.path,w.id)+'#edit-'+approved);
+ assert.equal(await primary(w.admin,'/content?company='+w.id),old.path+'?company='+w.id+'#piece-'+id);
+ assert.equal(await primary(w.client,'/content'),old.path+'#piece-'+id);
+});
+
 test('la misma entrega pendiente tiene acceso directo desde Inicio, Solicitudes y Contenido',async t=>{
  const w=await setup(t),r=await request(w),p=piece(w,r);
  for(const path of ['/home','/requests','/content?view=requests']){const response=await w.client.get(path);assert.equal(response.status,200);assert.match(response.body,/1 entrega por revisar/);assert.ok(response.body.includes('href="'+r.path+'#piece-'+p+'"'));}
@@ -43,6 +58,7 @@ test('la revisión histórica respeta todas las plataformas asignadas a la misma
  for(const r of [single,common,shared])piece(w,r,'REVIEW',r.id);
  for(const [r,p] of [[single,'INSTAGRAM'],[shared,'INSTAGRAM'],[shared,'TIKTOK']])w.db.run('INSERT INTO request_platforms VALUES(?,?,?)',w.id,r.id,p);
  const m=await colleague(w,w.client,{name:'Equipo Instagram',document:documentFor('workspace-legacy'),'INSTAGRAM.VIEW':'yes','INSTAGRAM.APPROVE':'yes'});
+ assert.equal(data(w,'',m.session).nextPiece.request_id,single.id);
  const html=list((await m.session.get('/content?view=reviews')).body);assert.equal((html.match(/Revisar pieza/g)||[]).length,1);assert.match(html,/Instagram autorizado/);assert.match(html,/Pieza común/);
 });
 test('el avance cuenta entregables una vez aunque la pieza tenga varias publicaciones',async t=>{
