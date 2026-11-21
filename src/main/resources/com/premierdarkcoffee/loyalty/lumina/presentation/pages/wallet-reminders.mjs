@@ -1,4 +1,5 @@
 import { inTrial, paidFrom, paidWallet, trialChoice } from '../../memberships/trial.mjs';
+import { walletDues } from '../../memberships/wallet-balance.mjs';
 import { localDay } from '../../shared/domain.mjs';
 import { displayAmount } from './components.mjs';
 
@@ -24,24 +25,24 @@ export function walletHomeEntry(db, company, day = localDay()) {
 
 export function walletPaymentReminder(account) {
   if (!account) return null;
-  const overdue = account.access?.overdueSuspension;
-  // During an upgrade the Wallet service may answer with its earlier account format.
-  const first = account.walletBilling ? account.walletBilling.nextCut : (account.invoices || []).filter(row => row.walletDue && row.remainingMinor > 0)
-    .sort((a,b) => a.dueOn.localeCompare(b.dueOn))[0];
-  if (!first && !overdue) return null;
-  if (overdue && !(account.walletBilling ? account.walletBilling.overdueMinor > 0 : first?.status === 'OVERDUE')) {
-    return {type:'suspended', title:'Revisa el acceso a Wallet',
-      description:'Wallet está suspendida. Consulta tu cuenta para conocer el estado del negocio.',
-      href:'/billing', action:'Revisar mi cuenta'};
+  const {today,cut,overdueMinor,hasOverdue,suspendedForDebt,restricted,inactive}=walletDues(account);
+  if(restricted)return {type:'suspended',title:'Revisa el acceso a Wallet',
+    description:'Wallet está suspendida. Consulta tu cuenta para conocer el estado del negocio.',href:'/billing',action:'Revisar mi cuenta'};
+  if(!cut && !hasOverdue)return inactive?{type:'inactive',title:'Wallet está en pausa',
+    description:'Puedes consultar tus planes y elegir cuándo volver.',href:'/plans/wallet',action:'Ver mi suscripción'}:null;
+  const when=cut?.dueOn && /^\d{4}-\d{2}-\d{2}$/.test(cut.dueOn) ? date.format(new Date(cut.dueOn+'T12:00:00Z')) : '';
+  let type='payment', title='Tienes un pago de Wallet pendiente';
+  let detail=cut?.remainingMinor>0?'Quedan '+displayAmount(cut.remainingMinor)+' por pagar. ':'';
+  if(hasOverdue){
+    type=suspendedForDebt?'overdue':'late';
+    title=suspendedForDebt?'Wallet suspendida por falta de pago':'Tienes un pago vencido de Wallet';
+    detail=overdueMinor>0?'Saldo vencido de Wallet: '+displayAmount(overdueMinor)+'. ':'Hay pagos vencidos de Wallet. ';
+    detail+=suspendedForDebt?'Las tarjetas volverán a estar disponibles cuando Lúmina registre los pagos vencidos.':'Revisa los cargos y los pagos registrados.';
+  }else if(when){
+    if(cut.dueOn===today)title='Tu pago de Wallet vence hoy';
+    detail+=(cut.dueOn===today?'Vence hoy, ':'Paga hasta el ')+when+'.';
   }
-  const when = first?.dueOn && /^\d{4}-\d{2}-\d{2}$/.test(first.dueOn) ? date.format(new Date(first.dueOn+'T12:00:00Z')) : '';
-  const amount = overdue ? account.walletBilling?.overdueMinor : first?.walletCutMinor ?? first?.remainingMinor;
-  const amountText = amount > 0 ? displayAmount(amount) : '';
-  const description = overdue
-    ? (amountText ? 'Tienes '+amountText+' vencidos. ' : '')+'Las tarjetas volverán a estar disponibles cuando Lúmina registre los pagos vencidos.'
-    : [amountText && 'Quedan '+amountText+' por pagar', when && 'Paga hasta el '+when].filter(Boolean).join('. ')+'.';
-  return {type:overdue?'overdue':'payment', title:overdue?'Wallet suspendida por falta de pago':'Tienes un pago de Wallet pendiente',
-    description, href:'/billing?view=charges#pago-wallet', action:'Revisar pago'};
+  return {type,title,description:detail.trim(),href:'/billing?view=charges#pago-wallet',action:'Revisar pago'};
 }
 
 export function walletTrialReminder(enabled, day=localDay()) {

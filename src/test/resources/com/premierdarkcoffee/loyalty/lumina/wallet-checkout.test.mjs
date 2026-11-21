@@ -11,6 +11,7 @@ import {openDatabase} from '../../../../../../main/resources/com/premierdarkcoff
 import {getPlan} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/billing.mjs';
 import {localDay, priceFromInput} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 
+import {standardIds} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/trial.mjs';
 import {advanceCalendar,firstStatement,nextCut,expiryAlerts} from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/calendar.mjs';
 
 async function world(t,configuration={},date='2027-01-22T17:00:00Z') {
@@ -204,6 +205,7 @@ test('free Wallet has a single reversible choice and never creates a purchase in
  for(const date of ['2026-11-20T17:00:00Z','2026-12-31T23:00:00Z']){
   t.mock.timers.setTime(new Date(date).getTime());await signIn(w);
   const page=await w.client.get('/plans/wallet');
+  assert.match(page.body,/el cargo de enero se registra el 1 de febrero de 2027 y puedes pagarlo hasta el 15 de febrero de 2027/);
   assert.match(page.body,/Activar prueba gratuita/);assert.doesNotMatch(page.body,/Lealtad|qty_|4,99/);
   const catalog=await w.client.get('/plans');assert.doesNotMatch(catalog.body,new RegExp('qty_'+p));
   assert.equal((await w.client.post('/requests',{type:'PLAN',plan:p})).status,409);
@@ -368,4 +370,42 @@ test('installing over earlier prices reissues unsigned quotes once and preserves
      assert.notEqual(fresh.id,quote);assert.equal(fresh.amount_minor,1500);assert.equal(fresh.revision,2);
    } finally { db.close(); }
  }
+});
+
+test('el dueño puede regresar después de la prueba o de una baja y una suspensión real bloquea la confirmación',async t=>{
+ const inactive={state:'ACTIVE',effectiveState:'SUSPENDED',walletSubscriptionState:'INACTIVE',overdueSuspension:false};
+ let access=inactive;
+ const nativeAccount=async()=>({branchCount:1,access,membership:null,summary:{balanceMinor:0},
+   walletBilling:access.overdueSuspension?{overdueMinor:500,balanceMinor:500,nextCut:{remainingMinor:500,dueOn:'2027-02-15'}}:{overdueMinor:0,balanceMinor:0,nextCut:null}});
+ const w=await world(t,{account:nativeAccount},'2026-12-31T16:00:00Z'),[monthly,annual]=standardIds;
+ assert.equal((await w.client.post('/plans/wallet/choice',{choice:'start'})).status,303);
+ const tenant=w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant;
+ assert.ok(tenant);assert.equal(count(w,'contracts'),0);
+ t.mock.timers.setTime(new Date('2027-01-01T05:01:00Z').getTime());await signIn(w);
+ const plans=async()=>{const page=await w.client.get('/plans/wallet');assert.equal(page.status,200);return page.body;};
+ assert.match(await plans(),/Elegir plan mensual/);assert.match(await plans(),/Elegir plan anual/);
+ const info=JSON.parse((await w.client.get('/plans/wallet/state')).body);
+ assert.equal(info.active,false);assert.equal(info.reminder.href,'/plans/wallet');
+ const first=await selection(w,[monthly]);
+ for(const state of ['SUSPENDED','CLOSED']){
+   access={...inactive,state,effectiveState:state};
+   assert.doesNotMatch(await plans(),/Elegir plan mensual/);
+   const held=JSON.parse((await w.client.get('/plans/wallet/state')).body);
+   assert.equal(held.active,false);assert.equal(held.reminder.type,'suspended');
+   assert.equal((await w.client.post(first.path+'/accept',first.data)).status,423);assert.equal(count(w,'contracts'),0);
+ }
+ access=inactive;assert.equal((await w.client.post(first.path+'/accept',first.data)).status,303);
+ const initial=w.db.get('SELECT * FROM wallet_schedules');
+ assert.equal((await w.client.post('/plans/wallet/stop',{schedule:initial.id,confirm:'yes'})).status,303);
+ t.mock.timers.setTime(new Date('2027-02-17T16:00:00Z').getTime());await signIn(w);
+ assert.match(await plans(),/Elegir plan anual/);
+ const comeback=await selection(w,[annual]);
+ access={...inactive,walletSubscriptionState:'OVERDUE',overdueSuspension:true};
+ assert.doesNotMatch(await plans(),/Elegir plan anual/);
+ assert.equal((await w.client.post(comeback.path+'/accept',comeback.data)).status,423);
+ assert.equal(count(w,'wallet_schedules'),1);
+ access=inactive;assert.equal((await w.client.post(comeback.path+'/accept',comeback.data)).status,303);
+ const periods=w.db.all('SELECT starts_on,ends_before FROM wallet_schedules ORDER BY starts_on');
+ assert.equal(periods.length,2);assert.equal(periods[0].ends_before,'2027-02-01');assert.equal(periods[1].starts_on,'2027-02-17');
+ assert.equal(w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant,tenant);
 });

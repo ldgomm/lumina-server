@@ -39,6 +39,7 @@
 .owner-account .billing-overview-grid .card > p:last-of-type {margin-bottom:20px}
 .owner-account .owner-balance.attention {border-left:4px solid #a9591c}
 .owner-account .owner-balance-total {display:grid;gap:4px}
+.owner-account .owner-balance-cut {display:flex;flex-wrap:wrap;gap:.25rem .5rem}
 .owner-account .owner-balance-total > span {font-size:.9rem;color:#52657d}
 .owner-account .owner-balance-total > strong {font-size:clamp(1.75rem,4vw,2.5rem);line-height:1.15;color:#102744}
 .owner-account .owner-invoice .split {align-items:flex-start;flex-wrap:wrap;gap:8px}

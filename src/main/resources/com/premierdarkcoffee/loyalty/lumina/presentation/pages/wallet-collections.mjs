@@ -1,3 +1,4 @@
+import { walletDues } from '../../memberships/wallet-balance.mjs';
 import { maximumPaymentMinor } from '../../billing/payment-input.mjs';
 import { isId, localDay } from '../../shared/domain.mjs';
 import { badge, esc, localLink } from './components.mjs';
@@ -48,11 +49,15 @@ export function walletCollections(actor, company, account, error, values, option
     detail = `<h3>Sin cobros pendientes de Wallet</h3><p>${esc(next)}</p>`;
   } else {
     const late = cut.dueOn < account.today;
-    detail = `<p>${late ? 'Pago vencido el' : cut.dueOn === account.today ? 'El plazo de pago termina hoy,' : 'Fecha límite de pago'} <strong>${esc(billingDate(cut.dueOn))}</strong></p>
+    const {suspendedForDebt,overdueMinor}=walletDues(account);
+    const afterCut=late && suspendedForDebt ? Math.max(0,overdueMinor-cut.remainingMinor) : 0;
+    const notice=suspendedForDebt ? `<div class="billing-warning"><strong>Wallet está suspendida por mora.</strong>
+      ${afterCut ? `<p>Saldo vencido para reactivar Wallet: <strong>${money(overdueMinor)}</strong>. Después de registrar este vencimiento quedarán <strong>${money(afterCut)}</strong> vencidos.</p>` :
+      '<p>Revisa el ingreso antes de registrar el pago.</p>'}</div>` : '';
+    detail = `${notice}<p>${late ? 'Pago vencido el' : cut.dueOn === account.today ? 'El plazo de pago termina hoy,' : 'Fecha límite de pago'} <strong>${esc(billingDate(cut.dueOn))}</strong></p>
       <p class="billing-plan-price"><strong>${money(cut.remainingMinor)}</strong></p>
       <p>${cut.invoiceCount === 1 ? 'Un cargo de Wallet' : esc(cut.invoiceCount) + ' cargos de Wallet con el mismo vencimiento'}.</p>
-      ${balance.balanceMinor > cut.remainingMinor ? `<p>Quedan <strong>${money(balance.balanceMinor)}</strong> pendientes entre todos los vencimientos de Wallet. Se muestra primero el más antiguo.</p>` : ''}
-      ${account.access?.overdueSuspension ? `<p class="billing-warning">Wallet está suspendida por mora. ${balance.overdueMinor > cut.remainingMinor ? 'Los vencimientos atrasados suman <strong>'+money(balance.overdueMinor)+'</strong>.' : 'Revisa el ingreso antes de registrar el pago.'}</p>` : ''}`;
+      ${balance.balanceMinor > cut.remainingMinor ? `<p>Quedan <strong>${money(balance.balanceMinor)}</strong> pendientes entre todos los vencimientos de Wallet. Se muestra primero el más antiguo.</p>` : ''}`;
   }
   return `<div class="billing-workspace">${nav}${alert}
     <section class="card"><div class="split"><h2>${esc(company.name)}</h2>${heading}</div>${detail}</section>

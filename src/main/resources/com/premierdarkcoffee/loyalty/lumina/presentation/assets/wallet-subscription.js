@@ -12,7 +12,7 @@
     const message=unavailableNow?unavailable:result;
     const show = visible && message;
     slot.hidden = !show;
-    const suspended=Boolean(result && ['overdue','suspended'].includes(result.type));
+    const suspended=Boolean(result && ['overdue','suspended','inactive'].includes(result.type));
     if (counter) counter.hidden = suspended;
     if (shortcut) shortcut.hidden = suspended;
     if (!show) return;
@@ -21,7 +21,7 @@
     description.textContent = message.description;
     slot.dataset.urgency = message.type;
     slot.replaceChildren(title, description);
-    if (['/billing?view=charges#pago-wallet','/billing'].includes(message.href)) {
+    if (['/billing?view=charges#pago-wallet','/billing','/plans/wallet'].includes(message.href)) {
       const action = document.createElement('a');
       action.href = message.href;
       action.textContent = message.action;

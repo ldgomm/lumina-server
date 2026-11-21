@@ -4,6 +4,8 @@ import { resolve, dirname, join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 
+export const portalExtensions = ['membership-calendar','subscription-periods','wallet-consent','commercial-prices','courtesy-video','piece-reviews'];
+
 export function dataDirectory() {
   const folder = resolve(process.env.LUMINA_DATA_DIR || resolve(homedir(), '.lumina-digital', 'agency'));
   mkdirSync(folder, { recursive: true, mode: 0o700 });
@@ -57,7 +59,7 @@ export function openDatabase(path) {
   }
   transaction(()=>{
     db.exec('CREATE TABLE IF NOT EXISTS lumina_extensions(name TEXT PRIMARY KEY,checksum TEXT NOT NULL) STRICT');
-    for(const name of ['membership-calendar','subscription-periods','wallet-consent','commercial-prices','courtesy-video']) {
+    for(const name of portalExtensions) {
       const sql=readFileSync(new URL('./extensions/'+name+'.sql',import.meta.url),'utf8');
       const checksum=createHash('sha256').update(sql).digest('hex');
       const prior=db.prepare('SELECT checksum FROM lumina_extensions WHERE name=?').get(name);

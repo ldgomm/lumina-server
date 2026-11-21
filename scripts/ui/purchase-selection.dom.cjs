@@ -42,8 +42,17 @@ async function runEnv(detailed=false){
   assert.match(e.q('.purchase-selection-help').textContent,/sellos de visita/);
   assert.equal(e.calls.filter(c=>c.url.includes('purchases')).length,0);
   checks.push('Quick purchase: unchecked active promotions; lookup sends no purchase');
-  e.input('#receipt','TICKET-123');e.input('#amount','123');e.input('[value=points][name=program]',true,'change');
+  e.input('#receipt','TICKET-123');
+  for (const bad of ['0','0,00','1,234','1.000,50','10000000,01']) {
+   e.input('#amount',bad);assert.equal(e.q('#purchase button:not([type])').disabled,true,bad);
+  }
+  e.input('#amount','123,50');e.q('#amount').closest('.money-control').querySelector('[data-money-delta="1"]').click();
+  assert.equal(e.q('#amount').value,'124.50');
+  e.input('#amount','123,50');e.input('[value=points][name=program]',true,'change');
   e.submit('#purchase');await e.settle(()=>e.q('#finishSimplePurchase'));
+  assert.equal(e.calls.at(-1).payload.amountMinor,12350);
+  assert.deepEqual(e.all('#purchaseReview .purchase-reference dd').map(n=>n.textContent),['TICKET-123','Centro']);
+  assert.equal(e.w.document.activeElement,e.q('#purchaseReview h3'));
   assert.deepEqual(e.calls.at(-1).payload.programIds,['points']);assert.match(e.q('#purchaseReview').textContent,/Puntos de compras/);
   assert.equal(e.calls.filter(c=>c.url==='/api/staff/purchases').length,0);
   e.input('[value=cash][name=program]',true,'change');assert.equal(e.q('#finishSimplePurchase'),null);
@@ -54,6 +63,8 @@ async function runEnv(detailed=false){
   await e.settle(()=>e.q('#finishSimplePurchase .form-feedback:not([hidden])'));
   assert.equal(e.all('[name=program]:checked').length,2);assert.equal(e.q('#receipt').value,'TICKET-123');
   e.hold();e.submit('#finishSimplePurchase');await e.settle(e.pending);e.release(false);await e.settle(()=>e.q('.counter-receipt'));
+  assert.deepEqual(e.all('.counter-receipt .purchase-reference dd').map(n=>n.textContent),['TICKET-123','Centro']);
+  assert.equal(e.q('.purchase-id').open,false);assert.equal(e.q('.purchase-id code').textContent,'receipt');
   const saves=e.calls.filter(c=>c.url==='/api/staff/purchases');assert.equal(saves.length,2);assert.ok(saves[0].key);assert.equal(saves[0].key,saves[1].key);assert.deepEqual(saves[0].payload,saves[1].payload);
   assert.match(e.q('.purchase-earning-receipt').textContent,/Cashback del 5%/);assert.doesNotMatch(e.q('.purchase-earning-receipt').textContent,/Visitas y premio/);
   checks.push('One or several promotions; review invalidation; immutable in-flight request and idempotent retry');
@@ -73,7 +84,7 @@ async function runEnv(detailed=false){
   assert.equal(d.all('[name=program]:checked').length,0);assert.equal(d.q('.purchase-promotions').closest('details'),null);
   assert.deepEqual(d.all('[data-group-choice] option').map(n=>n.value),['cafe','Sin categoría','__custom']);
   d.input('[data-group-choice]','__custom','change');assert.equal(d.q('[data-custom-group]').hidden,false);d.input('[data-group]','Otra prueba');
-  d.input('#receipt','PRODUCTS-1');d.input('[data-name]','Café');d.input('[data-group-choice]','cafe','change');d.input('[data-price]','5');d.input('[name=program][value=visits]',true,'change');
+  d.input('#receipt','PRODUCTS-1');d.input('[data-name]','Café');d.input('[data-group-choice]','cafe','change');d.input('[data-price]','5,75');d.input('[name=program][value=visits]',true,'change');
   d.q('#addProduct').click();assert.equal(d.all('[name=program]:checked').length,1);d.q('[data-remove="1"]').click();assert.equal(d.all('[name=program]:checked').length,1);
   d.input('[name=program][value=points]',true,'change');d.submit('#productPurchase');await d.settle(()=>d.q('#finishPurchase'));
   assert.deepEqual(d.calls.at(-1).payload.programIds,['points','visits']);
@@ -82,6 +93,8 @@ async function runEnv(detailed=false){
   d.submit('#productPurchase');await d.settle(()=>d.q('#finishPurchase'));
   assert.deepEqual(d.calls.at(-1).payload.programIds,[]);assert.match(d.q('#receiptReview').textContent,/Solo registrar compra/);assert.equal(d.q('#finishPurchase button').textContent,'Guardar compra');
   d.submit('#finishPurchase');await d.settle(()=>d.q('.counter-receipt'));assert.deepEqual(d.calls.at(-1).payload.programIds,[]);
+  assert.equal(d.calls.at(-1).payload.amountMinor,575);
+  assert.deepEqual(d.all('.counter-receipt .purchase-reference dd').map(n=>n.textContent),['PRODUCTS-1','Norte']);
   checks.push('Itemized flow: unchecked and visible choices, redraw preservation, branch invalidation, clear-all, empty selection on save');
   await d.lookup();d.input('#receipt','ONE-STAMP');d.input('[data-name]','Café');d.input('[data-group-choice]','cafe','change');d.input('[data-price]','5');d.input('[name=program][value=visits]',true,'change');
   d.submit('#productPurchase');await d.settle(()=>d.q('#finishPurchase'));d.submit('#finishPurchase');await d.settle(()=>d.q('.counter-receipt'));

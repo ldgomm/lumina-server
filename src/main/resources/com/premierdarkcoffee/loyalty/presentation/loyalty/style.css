@@ -670,3 +670,11 @@ input[data-money]{appearance:textfield;-moz-appearance:textfield}input[data-mone
     .lookup-panel #findCustomer,.counter-scan #scanWallet { width:100%;justify-self:stretch }
     .counter-manual { padding:0 3px 3px }
 }
+
+.purchase-reference{display:flex;flex-wrap:wrap;gap:.6rem 2rem;margin:1rem 0;text-align:left}
+.purchase-reference div{min-width:0}
+.purchase-reference dt,.purchase-id summary{font-size:.875rem}
+.purchase-reference dd{font-weight:700;margin:0;overflow-wrap:anywhere}
+.purchase-id{margin:.75rem 0;text-align:left}
+.purchase-id code{display:block;overflow-wrap:anywhere;margin:.5rem 0}
+:is(#purchaseReview,#counterReview,#receiptReview) h3:focus-visible{outline:2px solid currentColor;outline-offset:3px}

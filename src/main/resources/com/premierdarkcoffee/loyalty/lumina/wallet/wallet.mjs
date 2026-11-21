@@ -1,6 +1,7 @@
 import { requireLiveTeamManager } from '../access/team-administration.mjs';
 import { requireOperating } from '../businesses/control.mjs';
 import { isManagementPath, managementRouteAllowed } from './management-policy.mjs';
+import { walletDues } from '../memberships/wallet-balance.mjs';
 import { createWalletOnboarding } from './onboarding.mjs';
 import { can, requireOwner } from '../access/accounts.mjs';
 import { seal, unseal } from '../access/security.mjs';
@@ -230,6 +231,9 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     const result=await account(actor);
     requireOperating(db,fresh.company_id);
     requireThat(current(actor).revision===before.revision,message,403);
+    const {restricted,suspendedForDebt}=walletDues(result);
+    requireThat(!suspendedForDebt,'Wallet tiene un pago vencido. Revisa el saldo en Mi cuenta antes de activar otro plan.',423);
+    requireThat(!restricted,'Wallet tiene una restricción de acceso. Revisa Mi cuenta antes de activar otro plan.',423);
     return result;
   }
   async function controlRemote(tenant,action,options={}) {

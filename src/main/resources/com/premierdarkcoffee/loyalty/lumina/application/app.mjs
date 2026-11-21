@@ -616,7 +616,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         if(path==='/plans/wallet/state') {
           if(error)return json(res,503,{description:error});
           const reminder=walletPaymentReminder(account);
-          const description=account?.access?.overdueSuspension?reminder.title:contracts.length?'Wallet incluida en '+contracts.map(c=>c.name).join(', '):active?'Wallet activa':legacy?'Tu acuerdo anterior se conserva.':'Elige un plan para activar Wallet.';
+          const description=reminder?reminder.title:contracts.length?'Wallet incluida en '+contracts.map(c=>c.name).join(', '):active?'Wallet activa':legacy?'Tu acuerdo anterior se conserva.':'Elige un plan para activar Wallet.';
           return json(res,200,{active,reminder,kind:contracts.length?'CATALOG':legacy?'LEGACY':'NONE',description});
         }
         return showWalletPlans(context);

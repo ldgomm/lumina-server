@@ -232,7 +232,13 @@ export function reviewPiece(db, actor, company, request, piece, data) {
   const status = choice(data.status,['APPROVED','PRODUCTION'],'decisión');
   const note = text(data.notes || '','observaciones',status === 'PRODUCTION' ? 5 : 0,1000);
   db.transaction(() => {
-    db.run('UPDATE pieces SET status=?,revision=revision+1 WHERE id=?',status,piece.id);
+    const updated = db.run(`UPDATE pieces SET status=?,revision=revision+1
+      WHERE company_id=? AND request_id=? AND id=? AND revision=? AND status='REVIEW'
+      AND EXISTS(SELECT 1 FROM requests WHERE company_id=? AND id=? AND status='PRODUCTION')`,
+      status,company.id,request.id,piece.id,piece.revision,company.id,request.id);
+    requireThat(updated.changes === 1,'La pieza cambió. Revisa su versión vigente.',409);
+    db.run(`INSERT INTO piece_reviews(company_id,piece_id,revision,decision,note,actor_id,actor_name,reviewed_at)
+      VALUES(?,?,?,?,?,?,?,?)`,company.id,piece.id,piece.revision,status,note,actor.id,actor.name,now());
     event(db,actor,company.id,'REQUEST',request.id,status === 'APPROVED' ? 'PIEZA_APROBADA' : 'CAMBIOS_SOLICITADOS',note ? piece.title+' · '+note : piece.title,request.channel);
   });
 }

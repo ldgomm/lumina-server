@@ -35,7 +35,7 @@ export async function walletPlanContext(db,wallets,actor,company) {
     account=await wallets.account(actor);
     const plan=account.membership?.plan;
     legacy=!contracts.length && Boolean(plan?.walletAgreement?.activationOn>=paidFrom && (plan.recurring||!plan.walletEndsOn||plan.walletEndsOn>today));
-    if(account.access?.effectiveState==='SUSPENDED')active=false;
+    if(account.access?.effectiveState && account.access.effectiveState!=='ACTIVE')active=false;
   }catch(issue){
     if(!(issue instanceof Problem))throw issue;
     error='No pudimos consultar el saldo de Wallet. Vuelve a intentarlo para verificar tu cuenta.';

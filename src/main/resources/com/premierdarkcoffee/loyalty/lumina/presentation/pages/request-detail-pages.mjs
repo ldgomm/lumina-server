@@ -59,7 +59,18 @@ function publicationView({actor,route,pub,piece,feedback,currentUrl}) {
       field(measurement,'notes','Observaciones','maxlength="1000" rows="2"')+button('Guardar medición'),measurement,currentUrl),measurement,'measure-'+pub.id):''}</article>`;
 }
 
-function pieceView({actor,base,request,piece,feedback}) {
+function reviewRecord(piece,nextReview) {
+  const [latest,...earlier]=piece.reviews||[];
+  if(!latest)return '';
+  const entry=row=>`<div class="delivery-review-entry"><strong>${row.decision==='APPROVED'?'Entrega aprobada':'Cambios solicitados'}</strong>
+    ${row.note?`<p class="prewrap">${esc(row.note)}</p>`:''}<small>${esc(row.actor_name)} · ${esc(timestamp(row.reviewed_at))}</small></div>`;
+  const current=latest.revision+1===piece.revision && latest.decision===piece.status;
+  return `<section class="delivery-review-record" aria-label="Revisiones del negocio"><h4>Última revisión del negocio</h4>${entry(latest)}
+    ${earlier.length?`<details><summary>Revisiones anteriores (${earlier.length})</summary>${earlier.map(entry).join('')}</details>`:''}
+    ${current&&nextReview?localLink('#piece-'+nextReview.id,'Revisar siguiente entrega','btn secondary'):''}</section>`;
+}
+
+function pieceView({actor,base,request,piece,feedback,nextReview}) {
   const prefix='/pieces/'+piece.id,route=suffix=>base(prefix+suffix),currentUrl=base('')+'#piece-'+piece.id;
   const edit=formState(feedback,prefix+'/edit'),attach=formState(feedback,prefix+'/evidence'),publish=formState(feedback,prefix+'/publication');
   const approve=formState(feedback,prefix+'/review',{status:'APPROVED'}),changes=formState(feedback,prefix+'/review',{status:'PRODUCTION'});
@@ -76,7 +87,7 @@ function pieceView({actor,base,request,piece,feedback}) {
     ${publicationBody}</div></details>`:'';
   return `<article class="delivery-card${review?' delivery-review':''}" id="piece-${piece.id}" aria-labelledby="title-${piece.id}">
     <div class="split"><h3 id="title-${piece.id}">${esc(piece.title)}</h3>${workHold(request)?`<span class="work-last-state">Última etapa: ${esc(label(piece.status))}</span>`:badge(piece.status)}</div>
-    ${piece.recorded_at?`<p class="muted">Grabado: ${esc(timestamp(piece.recorded_at))}</p>`:''}${piece.observations?`<p class="prewrap">${esc(piece.observations)}</p>`:''}${files}${deliveryFiles({actor,request,piece,route,base,editable,feedback})}
+    ${reviewRecord(piece,nextReview)}${piece.recorded_at?`<p class="muted">Grabado: ${esc(timestamp(piece.recorded_at))}</p>`:''}${piece.observations?`<p class="prewrap">${esc(piece.observations)}</p>`:''}${files}${deliveryFiles({actor,request,piece,route,base,editable,feedback})}
     ${review?`<section class="delivery-decision" aria-label="Revisar entregable"><h4>¿Está listo para entregar?</h4>
       ${operationForm(actor,route('/review'),hidden('status','APPROVED')+revisionField(approve,piece.revision)+button('Aprobar entrega'),approve,currentUrl,'approve-delivery')}
       ${operationPanel('Pedir cambios',operationForm(actor,route('/review'),hidden('status','PRODUCTION')+revisionField(changes,piece.revision)+
@@ -136,7 +147,9 @@ export function requestDetail({actor,company,url,request,quote,pieces,visits,aud
   const step=({NEW:0,REVIEW:1,QUOTED:1,APPROVED:1,SCHEDULED:1,PRODUCTION:2,DELIVERED:3})[request.status];
   const timeline=hold||step===undefined||!work?'':`<ol class="request-timeline" aria-label="Avance de la solicitud">${['Recibida','Coordinación','Producción','Entrega'].map((name,i)=>`<li${i===step?' aria-current="step"':''}><span>${i<step?'✓':i+1}</span>${name}</li>`).join('')}</ol>`;
   const rank=actor.kind==='AGENCY'?{APPROVED:0,PRODUCTION:1,REVIEW:2,DELIVERED:3,CANCELLED:4}:{REVIEW:0,DELIVERED:1,APPROVED:2,PRODUCTION:3,CANCELLED:4};
-  const allPieces=[...pieces].sort((a,b)=>rank[a.status]-rank[b.status]).map(piece=>pieceView({...context,piece})).join('');
+  const nextReview=!hold&&actor.kind!=='AGENCY'&&request.status==='PRODUCTION'&&canRequest(actor,request,'APPROVE')
+    ? pieces.find(piece=>piece.status==='REVIEW') : null;
+  const allPieces=[...pieces].sort((a,b)=>rank[a.status]-rank[b.status]).map(piece=>pieceView({...context,piece,nextReview})).join('');
   const deliverables=work?part('deliverables','Entregables',`<p class="detail-count">${hold?'Registro conservado · ':''}${pieces.filter(p=>p.status==='DELIVERED').length} de ${request.quantity} entregados${!hold&&pieces.some(p=>p.status==='REVIEW')?' · '+pieces.filter(p=>p.status==='REVIEW').length+' en revisión':''}</p>${allPieces||message('El trabajo aún no tiene archivos para entregar.')}
     ${addPiece?operationPanel('Crear entregable',operationForm(actor,base('/pieces'),revisionField(create,request.revision)+
       input('title','Nombre del entregable','text','required minlength="2" maxlength="150"',create.value('title',request.title))+

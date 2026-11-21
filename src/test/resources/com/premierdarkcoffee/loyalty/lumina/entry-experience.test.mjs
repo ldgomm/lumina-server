@@ -111,3 +111,34 @@ test('Wallet entry keeps a quiet owner link and shows only confirmed Wallet debt
  const suspended=walletPaymentReminder({walletBilling:{...bill,overdueMinor:499},access:{overdueSuspension:true}});
  assert.equal(suspended.type,'overdue');assert.match(suspended.description,/4,99/);
 });
+
+test('el importe para reactivar Wallet reúne solo saldos vencidos y respeta la fecha del negocio',async()=>{
+ const root='../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/';
+ const {walletPaymentReminder}=await import(root+'presentation/pages/wallet-reminders.mjs');
+ const {walletCheckoutPage}=await import(root+'presentation/pages/wallet-checkout-pages.mjs');
+ const {walletDues}=await import(root+'memberships/wallet-balance.mjs');
+ const {walletCollections}=await import(root+'presentation/pages/wallet-collections.mjs');
+ const account={today:'2027-04-16',access:{effectiveState:'SUSPENDED',overdueSuspension:true},
+   walletBilling:{nextCut:{remainingMinor:500,dueOn:'2027-03-15'},overdueMinor:1300,balanceMinor:1600}};
+ const banner=walletPaymentReminder(account);assert.equal(banner.type,'overdue');assert.match(banner.description,/13,00/);assert.doesNotMatch(banner.description,/16,00/);
+ const page=walletCheckoutPage({actor:{kind:'OWNER'},company:{id:'sample'},account,active:true});
+ assert.match(page,/Saldo vencido para reactivar Wallet<\/dt><dd>[^<]*13,00/);assert.match(page,/Por pagar en este vencimiento<\/dt><dd>[^<]*5,00/);assert.doesNotMatch(page,/16,00/);
+ const admin=walletCollections({kind:'AGENCY'}, {id:'negocio',name:'Tienda'},account,'',{},{});
+ assert.match(admin,/Saldo vencido para reactivar Wallet: <strong>[^<]*13,00/);
+ assert.match(admin,/quedarán <strong>[^<]*8,00/);assert.match(admin,/Registrar pago de [^<]*5,00/);
+ const future={...account,walletBilling:{nextCut:{remainingMinor:500,dueOn:account.today},overdueMinor:0,balanceMinor:500},access:{effectiveState:'ACTIVE'}};
+ assert.match(walletPaymentReminder(future).title,/vence hoy/i);assert.match(walletCheckoutPage({actor:{},company:{},account:future}),/Vence hoy<\/dt>/);
+ assert.equal(walletPaymentReminder({...account,access:{effectiveState:'ACTIVE'}}).type,'late');
+ const manual=walletPaymentReminder({walletBilling:{overdueMinor:0,nextCut:null},access:{effectiveState:'SUSPENDED'}});
+ assert.equal(manual.type,'suspended');assert.doesNotMatch(manual.description,/deuda|vencid|pago/);
+ const rows=[
+   {walletDue:true,remainingMinor:200,walletCutMinor:500,dueOn:'2027-03-15'},
+   {walletDue:true,remainingMinor:300,walletCutMinor:500,dueOn:'2027-03-15'},
+   {walletDue:false,remainingMinor:4000,dueOn:'2027-03-10'},
+   {walletDue:true,remainingMinor:1000,dueOn:'2027-03-20',status:'VOID'},
+   {walletDue:true,remainingMinor:800,dueOn:'2027-04-15'},
+   {walletDue:true,remainingMinor:300,dueOn:'2027-05-15'}];
+ const legacy={...account,walletBilling:null,invoices:rows,summary:{invoiceCount:rows.length}};
+ assert.equal(walletDues(legacy).overdueMinor,1300);assert.equal(walletDues(legacy).cut.remainingMinor,500);
+ assert.equal(walletDues({...legacy,offset:100}).overdueMinor,null);
+});

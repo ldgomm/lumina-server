@@ -59,7 +59,13 @@ try{
  assert.match(w.document.querySelector('.counter-receipt').textContent,/Canje confirmado/);assert.equal(native.calls.filter(c=>c.path==='/api/staff/counter-redemptions').length,1);
  checks.push('Direct reward redemption requires holder verification and consent, then produces its receipt');
  const purchases=await open({purchases:'yes'});await lookup(purchases);assert.equal(purchases.document.querySelector('[data-counter-mode=redemption]').hidden,true);assert.equal(purchases.document.querySelector('#counterPurchase').hidden,false);
+ const discount={...reward,id:'discount-first',name:'Descuento con compra',benefit:{percentBps:1000,scope:'ITEM',group:'cafe'}};
+ fixture.member.rewards.unshift(discount);
  const rewards=await open({rewards:'yes'});await lookup(rewards);assert.equal(rewards.document.querySelector('[data-counter-mode=purchase]').hidden,true);assert.equal(rewards.document.querySelector('#counterRedemption').hidden,false);
+ await settle(()=>rewards.document.querySelector('#counterPriorityAction')?.hidden===false);
+ assert.equal(rewards.document.querySelector('#counterPriorityAction').dataset.reward,reward.id);
+ assert.equal(rewards.document.querySelector('#rewardId').value,reward.id);
+ assert.equal(native.calls.filter(c=>c.path==='/api/staff/counter-redemptions').length,1);
  checks.push('Purchases-only and rewards-only roles retain useful operations without design, recovery or unauthorized controls');
  const seasonal=dom('<div></div>',world.origin+'/cashier');load(seasonal,'wallet-campaigns.js');
  const program=(name,extra={})=>({config:{name,kind:'STAMPS',active:true,blackFridayYear:2026,blackFridayMessage:'Condiciones propias',branchIds:[],...extra}});

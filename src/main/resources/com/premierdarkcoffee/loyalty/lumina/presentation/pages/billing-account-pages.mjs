@@ -1,3 +1,4 @@
+import { walletDues } from '../../memberships/wallet-balance.mjs';
 import { contractSummary } from './contract-summary.mjs';
 import { randomUUID } from 'node:crypto';
 import { inclusiveEnd } from '../../memberships/orders.mjs';
@@ -72,44 +73,46 @@ function agencySubscriptionSummary(account, base) {
     ${agreement ? `<p class="muted">Aceptado por ${esc(agreement.ownerName)}. Las nuevas sucursales se suman desde el siguiente corte.</p>` : ''}`);
 }
 function walletPayment(account) {
-  const cut = account.walletBilling?.nextCut;
-  const overdue = account.walletBilling?.overdueMinor || 0;
-  const suspended = account.access?.overdueSuspension;
-  if ((!cut || cut.remainingMinor <= 0) && !suspended) {
+  const {today,cut,overdueMinor:overdue,hasOverdue,suspendedForDebt,restricted}=walletDues(account);
+  const suspended=suspendedForDebt || restricted;
+  if ((!cut || cut.remainingMinor <= 0) && !hasOverdue && !suspended) {
     const message = account.walletBilling?.balanceMinor === 0 ? 'Wallet no tiene pagos pendientes.' : 'Revisa los cargos registrados del negocio para consultar tu pago.';
     return `<section class="card owner-wallet-paid" id="pago-wallet" tabindex="-1"><h2>Pagos de Wallet</h2><p>${message}</p></section>`;
   }
   const recorded = cut?.remainingMinor > 0;
-  const title = recorded ? 'Pago pendiente de Wallet' : 'Revisa el acceso a Wallet';
-  const deadline = recorded && cut.dueOn ? `<p>${cut.dueOn < account.today ? 'Venció el' : cut.dueOn === account.today ? 'Vence hoy,' : 'Pagar hasta el'} <strong>${esc(billingDate(cut.dueOn))}</strong>.</p>` : '';
+  const title = recorded || hasOverdue ? 'Pago pendiente de Wallet' : 'Revisa el acceso a Wallet';
+  const multipleOverdue=overdue>0 && (!recorded || overdue!==cut.remainingMinor);
+  const deadline = recorded && cut.dueOn ? `<p>${cut.dueOn < today ? 'Venció el' : cut.dueOn === today ? 'Vence hoy,' : 'Pagar hasta el'} <strong>${esc(billingDate(cut.dueOn))}</strong>.</p>` : '';
   let suspension = '';
   if (suspended) {
-    suspension = overdue > 0
+    suspension = suspendedForDebt
       ? '<p>Las tarjetas están suspendidas hasta que Lúmina registre los pagos vencidos de Wallet.</p>'
       : '<p>El acceso a Wallet está suspendido. Consulta con Lúmina qué registro necesita revisión.</p>';
   }
   return `<section class="card owner-balance${overdue > 0 || suspended ? ' attention' : ''}" id="pago-wallet" tabindex="-1"><h2>${title}</h2>
-    ${recorded ? `<p class="owner-balance-total"><span>Importe para este vencimiento</span><strong>${money(cut.remainingMinor)}</strong></p>` : ''}${deadline}${suspension}
-    ${overdue > 0 && overdue !== cut?.remainingMinor ? `<p>Saldo vencido de Wallet: <strong>${money(overdue)}</strong>.</p>` : ''}${localLink('/help?topic=payment', 'Consultar mi pago', 'btn secondary')}</section>`;
+    ${multipleOverdue ? `<p class="owner-balance-total"><span>${suspendedForDebt?'Saldo vencido para reactivar Wallet':'Saldo vencido de Wallet'}</span><strong>${money(overdue)}</strong></p>` : ''}
+    ${recorded ? `<p class="${multipleOverdue?'owner-balance-cut':'owner-balance-total'}"><span>${multipleOverdue?'Del vencimiento más antiguo':'Importe para este vencimiento'}</span> <strong>${money(cut.remainingMinor)}</strong></p>` : ''}${deadline}${suspension}
+    ${localLink('/help?topic=payment', 'Consultar mi pago', 'btn secondary')}</section>`;
 }
 function ownerBalance(account, base, view) {
   const {balanceMinor, overdueMinor, nextDueOn} = account.summary;
-  const suspended = view === 'overview' && account.access?.overdueSuspension;
-  const walletOverdue = account.walletBilling?.overdueMinor || 0;
+  const wallet=walletDues(account);
+  const suspended = view === 'overview' && (wallet.suspendedForDebt || wallet.restricted);
+  const walletOverdue = wallet.overdueMinor;
   if (!balanceMinor && !suspended) {
     return view === 'overview' ? card('Tu cuenta está al día', '<p>No tienes pagos pendientes.</p>') : '';
   }
   let title = overdueMinor > 0 ? 'Tienes un saldo vencido' : 'Tienes un pago pendiente', detail = '';
   if (suspended) {
-    title = walletOverdue > 0 ? 'Wallet suspendida por pago pendiente' : 'Revisa el acceso a Wallet';
-    detail = walletOverdue > 0 ? `<p>Saldo vencido de Wallet: <strong>${money(walletOverdue)}</strong>.</p>` : '<p>El acceso a Wallet está suspendido. Consulta el detalle o contacta a Lúmina.</p>';
+    title = wallet.suspendedForDebt ? 'Wallet suspendida por pago pendiente' : 'Revisa el acceso a Wallet';
+    detail = wallet.suspendedForDebt && walletOverdue > 0 ? `<p>Saldo vencido de Wallet: <strong>${money(walletOverdue)}</strong>.</p>` : '<p>El acceso a Wallet está suspendido. Consulta el detalle o contacta a Lúmina.</p>';
   } else if (overdueMinor > 0) {
     detail = `<p>El importe vencido es <strong>${money(overdueMinor)}</strong>.</p>`;
   } else if (nextDueOn) {
     detail = `<p>${nextDueOn === account.today ? 'El primer cargo pendiente vence hoy' : 'El primer cargo pendiente vence el ' + esc(billingDate(nextDueOn))}.</p>`;
   }
   let action = view === 'overview' ? localLink(base + '?view=charges' + (suspended ? '#pago-wallet' : ''), suspended ? 'Revisar Wallet' : 'Ver mis cargos', 'btn') : '';
-  if (view === 'charges' && !account.walletBilling?.nextCut && !account.access?.overdueSuspension) action = localLink('/help?topic=payment', 'Consultar mi pago', 'btn secondary');
+  if (view === 'charges' && !wallet.cut && !wallet.suspendedForDebt && !wallet.restricted) action = localLink('/help?topic=payment', 'Consultar mi pago', 'btn secondary');
   return `<section class="card owner-balance${suspended || overdueMinor > 0 ? ' attention' : ''}"><h2>${title}</h2>${balanceMinor > 0 ? `<p class="owner-balance-total"><span>Saldo pendiente del negocio</span><strong>${money(balanceMinor)}</strong></p>` : ''}${detail}${action}</section>`;
 }
 function ownerWallet(account, options) {

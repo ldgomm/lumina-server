@@ -44,7 +44,7 @@ test('wallet monthly and annual totals show exact per-branch calculation and one
    {id:'wallet',description:'Tarjetas de enero',walletDue:true,periodStart:'2027-01-22',periodEnd:'2027-02-01',dueOn:'2027-02-15',amountMinor:499,paidMinor:0,remainingMinor:499,status:'OVERDUE'}]};
  const charges=accountPage(actor,balance,'/billing','',{},{view:'charges'});
  const focused=charges.match(/id="pago-wallet"[^>]*>([\s\S]*?)<\/section>/)[1];
- assert.match(focused,/Importe para este vencimiento[^<]*<\/span><strong>[^<]*4[.,]99/);assert.match(focused,/15 feb 2027/);assert.doesNotMatch(focused,/204[.,]99/);assert.match(charges,/href="\/help\?topic=payment"/);
+ assert.match(focused,/Importe para este vencimiento[^<]*<\/span>\s*<strong>[^<]*4[.,]99/);assert.match(focused,/15 feb 2027/);assert.doesNotMatch(focused,/204[.,]99/);assert.match(charges,/href="\/help\?topic=payment"/);
  assert.ok(charges.indexOf('Tarjetas de enero')<charges.indexOf('Otro servicio'));
  assert.match(charges,/Período del 22 ene 2027 al 31 ene 2027/);
  const offPage=accountPage(actor,{...balance,offset:100,invoices:[balance.invoices[0]]},'/billing','',{},{view:'charges'});

@@ -99,3 +99,29 @@ test('activos de entrega se sirven y las visitas se completan sin mostrar entreg
  const w=await setup(t),r=await request(w,{type:'VISIT',preferred:'2020-04-01T10:00'});await w.admin.post(selected(r.path+'/visits',w.id),{starts:'2020-04-01T10:00',place:'Local del negocio'});const v=w.db.get('SELECT * FROM visits');await w.admin.post(selected(r.path+'/visits/close',w.id),{status:'DONE',visit:v.id,recorded:'2020-04-01T10:00'});assert.equal(req(w,r).status,'DELIVERED');
  const page=await w.client.get(r.path);assert.doesNotMatch(page.body,/href="#deliverables"|id="deliverables"/);assert.match(page.body,/href="#visits"/);for(const name of ['deliveries.js','deliveries.css']){const res=await w.client.get('/assets/'+name);assert.equal(res.status,200);assert.ok(res.body.length>100);}
 });
+
+test('cada revisión se guarda con su entregable aunque dos videos se llamen igual',async t=>{
+ const w=await setup(t),r=await reviewing(w);
+ assert.equal((await w.admin.post(selected(r.path+'/pieces',w.id),{title:r.p.title,revision:String(req(w,r).revision)})).status,303);
+ const other=w.db.get('SELECT * FROM pieces WHERE request_id=? AND id<>?',r.id,r.p.id);
+ assert.equal((await w.admin.post(selected(r.path+'/pieces/'+other.id+'/edit',w.id),{status:'REVIEW',revision:String(other.revision)})).status,303);
+ const note='Cambiar <cierre> en el video de la terraza.',send={status:'PRODUCTION',notes:note,revision:String(piece(w,r.p).revision)};
+ assert.equal((await w.client.post(r.piecePath+'/review',send)).status,303);
+ assert.equal((await w.client.post(r.piecePath+'/review',send)).status,409);
+ const reviews=()=>w.db.all('SELECT * FROM piece_reviews WHERE company_id=? AND piece_id=? ORDER BY revision DESC',w.id,r.p.id);
+ assert.equal(reviews().length,1);assert.equal(reviews()[0].note,note);
+ const card=(page,id)=>page.match(new RegExp('<article class="delivery-card[^"]*" id="piece-'+id+'"[\\s\\S]*?</article>'))[0];
+ for(const [client,path] of [[w.client,r.path],[w.admin,selected(r.path,w.id)]]){
+   const html=(await client.get(path)).body,first=card(html,r.p.id),second=card(html,other.id);
+   assert.match(first,/Cambiar &lt;cierre&gt;/);assert.doesNotMatch(second,/Cambiar &lt;cierre&gt;|Última revisión del negocio/);
+   if(client===w.client)assert.ok(first.includes('href="#piece-'+other.id+'">Revisar siguiente entrega'));
+   else assert.doesNotMatch(first,/Revisar siguiente entrega/);
+ }
+ assert.equal((await w.admin.post(selected(r.piecePath+'/edit',w.id),{status:'REVIEW',revision:String(piece(w,r.p).revision)})).status,303);
+ assert.equal((await w.client.post(r.piecePath+'/review',{status:'APPROVED',revision:String(piece(w,r.p).revision)})).status,303);
+ const done=card((await w.client.get(r.path)).body,r.p.id);
+ assert.match(done,/Entrega aprobada/);assert.match(done,/Revisiones anteriores \(1\)/);assert.equal(reviews().length,2);
+ const foreign=await owner(w,'Otro negocio de video','otherdelivery');
+ assert.equal((await foreign.client.get(r.path)).status,404);
+ const rec=reviews()[0];assert.throws(()=>w.db.run('INSERT INTO piece_reviews VALUES(?,?,?,?,?,?,?,?)',foreign.id,r.p.id,999,rec.decision,rec.note,rec.actor_id,rec.actor_name,rec.reviewed_at),/FOREIGN KEY/);
+});

@@ -42,7 +42,7 @@
   app.replaceChildren();const panel=document.createElement('section');panel.className='panel narrow';
   const title=document.createElement('h1');title.textContent='No pudimos abrir Caja';
   const description=document.createElement('p');description.textContent=issue.message;
-  const retry=document.createElement('a');retry.href='/wallet';retry.className='button';retry.textContent='Volver a intentar';
+  const retry=document.createElement('a');retry.href='/cashier';retry.className='button';retry.textContent='Volver a intentar';
   panel.append(title,description,retry);app.append(panel);exit.hidden=false;
  });
 })();

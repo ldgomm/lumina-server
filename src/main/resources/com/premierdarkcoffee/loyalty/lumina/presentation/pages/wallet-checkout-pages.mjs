@@ -1,6 +1,7 @@
 import { serviceName } from '../../memberships/catalog.mjs';
 import { inclusiveEnd } from '../../memberships/orders.mjs';
-import { firstStatement, nextCut, walletLine } from '../../memberships/calendar.mjs';
+import { firstStatement, nextCut, paidFrom, walletLine } from '../../memberships/calendar.mjs';
+import { walletDues } from '../../memberships/wallet-balance.mjs';
 import { standardIds } from '../../memberships/trial.mjs';
 import { localDay, uuid } from '../../shared/domain.mjs';
 import { button, check, disclosure, displayAmount, esc, form, hidden, localLink } from './components.mjs';
@@ -19,6 +20,7 @@ const fact = (label,value) => '<div><dt>'+esc(label)+'</dt><dd>'+esc(value)+'</d
 
 function trialPage(actor,trial,pending) {
   const end='31 de diciembre de 2026', benefit='Tus clientes guardan su tarjeta en Apple Wallet o Google Wallet y acumulan premios en tu negocio.';
+  const first=firstStatement(paidFrom,0);
   const action=trial.enabled
     ? pending?localLink('/plans/wallet','Actualizar estado','btn'):localLink('/wallet','Abrir Wallet','btn')
     : choiceForm(actor,'start','Activar prueba gratuita');
@@ -28,7 +30,8 @@ function trialPage(actor,trial,pending) {
     ${pending&&trial.enabled?'<p role="status">Estamos preparando el acceso a tus tarjetas.</p>':''}<div class="actions">${action}</div>
     </div><dl class="wallet-facts">${fact('Precio de la prueba',displayAmount(0))}${fact('Último día de la prueba',end)}</dl></section>
     <section class="wallet-next"><div class="wallet-mark">${icon('calendar')}</div><div><h3>El 1 de enero tú decides</h3>
-    <p>Para seguir usando Wallet, tendrás que elegir y confirmar un plan mensual o anual. También puedes dejarlo en pausa y volver más adelante.</p></div></section>
+    <p>Para seguir usando Wallet, tendrás que elegir y confirmar un plan mensual o anual. También puedes dejarlo en pausa y volver más adelante.</p>
+    ${disclosure('¿Cuándo se paga el primer mes?','<p>Si activas el plan mensual el '+esc(dayLabel(paidFrom))+', el cargo de enero se registra el '+esc(dayLabel(first.cut))+' y puedes pagarlo hasta el '+esc(dayLabel(first.due))+'. Si empiezas a mitad de mes, el primer cargo se calcula por los días de servicio.</p>')}</div></section>
     ${trial.enabled?disclosure('Desactivar la prueba','<p>Las tarjetas se pausarán. Si vuelves, tus clientes conservarán sus tarjetas y sus puntos.</p>'+choiceForm(actor,'stop','Desactivar prueba','secondary')):''}
     ${localLink('/wallet/benefits','Qué incluye Wallet')}</div>`;
 }
@@ -92,11 +95,9 @@ function openSelections(rows) {
 }
 
 function subscriptionSummary(actor,{current,booked,account,active,legacy,pending,error}) {
-  const contract=current[0],ledger=account?.walletBilling,open=ledger?.nextCut;
-  const overdue=Boolean(ledger?.overdueMinor>0);
-  const late=overdue&&account?.access?.overdueSuspension;
+  const contract=current[0];
+  const {today,cut:open,overdueMinor,hasOverdue:overdue,suspendedForDebt:late,restricted}=walletDues(account);
   const held=Boolean(open||overdue);
-  const restricted=!late&&(account?.access?.effectiveState==='SUSPENDED'||account?.access?.overdueSuspension);
   if(!contract&&!booked.length&&!legacy&&!active&&!held&&!restricted&&!pending)return '';
   const dates=booked.map(c=>'<p><strong>'+esc(c.name)+'</strong> comienza el '+esc(dayLabel(c.starts_on))+'.</p>').join('');
   let title=contract?.name||(legacy?'Tu acuerdo de Wallet':booked.length?'Cambio programado':'Tu Wallet');
@@ -127,8 +128,11 @@ function subscriptionSummary(actor,{current,booked,account,active,legacy,pending
   }else if(booked.length)text='Tu selección está confirmada.';
   const facts=[];
   if(held){
-    if(open)facts.push(fact('Por pagar en este vencimiento',displayAmount(open.remainingMinor)),fact(open.dueOn<localDay()?'Venció el':'Pagar hasta',dayLabel(open.dueOn)));
-    else if(overdue)facts.push(fact('Saldo vencido de Wallet',displayAmount(ledger.overdueMinor)));
+    if(overdueMinor>0)facts.push(fact(late?'Saldo vencido para reactivar Wallet':'Saldo vencido de Wallet',displayAmount(overdueMinor)));
+    if(open){
+      if(!overdueMinor || overdueMinor!==open.remainingMinor)facts.push(fact('Por pagar en este vencimiento',displayAmount(open.remainingMinor)));
+      facts.push(fact(open.dueOn<today?'Venció el':open.dueOn===today?'Vence hoy':'Pagar hasta',dayLabel(open.dueOn)));
+    }
   }else if(contract) {
     const price=contract.monthly_minor??contract.agreed_minor;
     if(price!=null){
@@ -150,7 +154,8 @@ export function walletCheckoutPage({actor,company,plans=[],contracts=[],orders={
   const current=contracts.filter(walletLine),schedule=current.find(c=>c.schedule_id);
   const ongoing=orders.rows.filter(o=>['REQUESTED','QUOTED','ACCEPTED'].includes(o.status)&&o.wallet);
   const existing=Boolean(current.length||booked.length||legacy);
-  const blocked=Boolean(pending||account?.access?.effectiveState==='SUSPENDED'||account?.access?.overdueSuspension||error);
+  const {restricted,suspendedForDebt}=walletDues(account);
+  const blocked=Boolean(pending || restricted || suspendedForDebt || error);
   const sections=[];
   if(selectionError)sections.push('<p class="notice" role="alert">'+esc(selectionError)+'</p>');
   sections.push(subscriptionSummary(actor,{current,booked,account,active,legacy,pending,error}));

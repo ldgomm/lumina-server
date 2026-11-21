@@ -2,6 +2,7 @@ import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { portalExtensions } from './database.mjs';
 
 const hash=value=>createHash('sha256').update(value).digest('hex');
 export const portalBindings=['LUMINA_ORIGIN','LUMINA_DATA_DIR','LUMINA_LOYALTY_ADMIN_TOKEN'];
@@ -31,7 +32,7 @@ export function productionGuard(env=process.env) {
   const current={'lumina/infrastructure/schema.sql':hash(readFileSync(new URL('schema.sql',folder)))};
   for(const file of readdirSync(new URL('migrations/',folder)).filter(f=>f.endsWith('.sql')))current['lumina/infrastructure/migrations/'+file]=hash(readFileSync(new URL('migrations/'+file,folder)));
   const expected=Object.fromEntries(Object.entries(seal.sql||{}).filter(([k])=>k.startsWith('lumina/infrastructure/')));
-  const extensions=['membership-calendar','subscription-periods','wallet-consent','commercial-prices','courtesy-video'].map(name=>{
+  const extensions=portalExtensions.map(name=>{
     const path='lumina/infrastructure/extensions/'+name+'.sql';
     const checksum=hash(readFileSync(new URL('extensions/'+name+'.sql',folder)));
     if(expected[path])current[path]=checksum;

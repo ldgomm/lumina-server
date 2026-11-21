@@ -10,7 +10,9 @@ export function fileDetails(db,company,piece) {
   const comments=db.all(`SELECT c.*,f.label AS file_label,f.version AS file_version FROM piece_comments c
     LEFT JOIN content_files f ON f.id=c.file_id AND f.company_id=c.company_id AND f.piece_id=c.piece_id
     WHERE c.company_id=? AND c.piece_id=? ORDER BY c.created_at DESC,c.id DESC LIMIT 100`,company,piece);
-  return {files,comments};
+  const reviews=db.all(`SELECT revision,decision,note,actor_name,reviewed_at FROM piece_reviews
+    WHERE company_id=? AND piece_id=? ORDER BY revision DESC`,company,piece);
+  return {files,comments,reviews};
 }
 export function canComment(actor,request) {
   return actor.kind==='AGENCY'?!actor.readOnlyCompany:
