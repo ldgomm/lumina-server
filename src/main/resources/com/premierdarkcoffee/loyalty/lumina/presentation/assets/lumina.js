@@ -175,27 +175,36 @@ for(const toggle of document.querySelectorAll('[data-password-toggle]')) {
 }
 
 for(const form of document.querySelectorAll('form.courtesy-display')) {
+  const notice=form.closest('.courtesy-notice');
+  const toggle=form.querySelector('.courtesy-toggle');
+  const details=document.getElementById(toggle.getAttribute('aria-controls'));
+  const error=notice.querySelector('.courtesy-error');
+  function showCompact(compact) {
+    notice.dataset.compact=String(compact);
+    details.hidden=compact;
+    toggle.setAttribute('aria-expanded',String(!compact));
+    form.elements.compact.value=compact?'0':'1';
+  }
   form.addEventListener('submit',async event=>{
     event.preventDefault();
-    const notice=form.closest('.courtesy-notice');
-    const toggle=form.querySelector('button');
     if(form.getAttribute('aria-busy')==='true')return;
+    const previous=notice.dataset.compact==='true';
+    const body=new URLSearchParams(new FormData(form));
     form.setAttribute('aria-busy','true');
-    const error=notice.querySelector('.courtesy-error');
+    toggle.setAttribute('aria-disabled','true');
     error.textContent='';
+    showCompact(body.get('compact')==='1');
     try {
-      const response=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body:new URLSearchParams(new FormData(form)),keepalive:true});
+      const response=await fetch(form.action,{method:'POST',headers:{Accept:'application/json'},body,keepalive:true});
       if(!response.ok)throw new Error();
       const {compact}=await response.json();
       if(typeof compact!=='boolean')throw new Error();
-      notice.dataset.compact=String(compact);
-      notice.querySelector('#courtesy-description').hidden=compact;
-      toggle.setAttribute('aria-expanded',String(!compact));
-      toggle.textContent=compact?'Ver más':'Minimizar';
-      form.elements.compact.value=compact?'0':'1';
+      showCompact(compact);
     } catch {
+      showCompact(previous);
       error.textContent='No se pudo guardar esta vista. Vuelve a intentarlo.';
     } finally {
+      toggle.removeAttribute('aria-disabled');
       form.removeAttribute('aria-busy');
     }
   });

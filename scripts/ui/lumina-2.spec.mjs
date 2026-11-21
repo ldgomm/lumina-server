@@ -81,6 +81,29 @@ try {
       await go(page,path);
       if(path==='/wallet'){await page.locator('.wallet-desk').waitFor();await page.locator('.overview-metrics').waitFor();}
       await fits(page);if(['negocio','contenido','wallet'].includes(name))await snap(page,name,width);
+      if(path==='/home' || path==='/content') {
+        const notice=page.getByRole('complementary',{name:'Video de cortesía'});
+        const details=notice.locator('#courtesy-description'),toggle=notice.getByRole('button');
+        const action=notice.getByRole('link',{name:'Solicitar mi video'});
+        const expanded=await notice.boundingBox();
+        await toggle.click();
+        await details.waitFor({state:'hidden'});
+        await notice.locator('button[aria-expanded="false"]:not([aria-disabled])').waitFor();
+        assert.equal(await notice.getByRole('heading').count(),0);
+        assert.match(await notice.innerText(),/Video gratis/);
+        const strip=await notice.boundingBox(),button=await toggle.boundingBox(),link=await action.boundingBox();
+        assert.ok(strip.height<=60 && strip.height<=expanded.height*0.65, 'Aviso compacto en '+path+' a '+width+' px');
+        assert.ok(Math.abs(button.y-link.y)<2 && button.x+button.width<=link.x, 'Controles en una sola fila');
+        assert.ok(button.height>=44 && link.height>=44);
+        await fits(page);
+        await page.reload();
+        assert.equal(await details.isVisible(),false);
+        await toggle.focus();
+        await page.keyboard.press('Enter');
+        await notice.locator('button[aria-expanded="true"]:not([aria-disabled])').waitFor();
+        assert.equal(await details.isVisible(),true);
+        assert.equal(await toggle.evaluate(el=>el===document.activeElement),true);
+      }
     }
   }
   const agencySession=await contextFor(admin);
@@ -124,6 +147,14 @@ try {
   const off=await contextFor(business.client,{javaScriptEnabled:false});
   await off.page.setViewportSize({width:320,height:750});
   for(const path of ['/','/home','/content','/services/brand']){await go(off.page,path);await fits(off.page);}
+  await go(off.page,'/home');
+  const gift=off.page.getByRole('complementary',{name:'Video de cortesía'});
+  await gift.getByRole('button',{name:/Minimizar/}).click();
+  await gift.getByRole('button',{name:/Video gratis/}).waitFor();
+  await go(off.page,'/content');
+  assert.equal(await gift.getByRole('heading').count(),0);
+  await gift.getByRole('link',{name:'Solicitar mi video'}).click();
+  assert.equal(new URL(off.page.url()).pathname,'/courtesy');
   assert.deepEqual(errors,[]);
   console.log('RESULTADO=LUMINA_2_BROWSER_PASS');
 } finally {

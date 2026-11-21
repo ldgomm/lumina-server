@@ -2,22 +2,45 @@ import { button, card, check, esc, external, form, hidden, input, localLink, tim
 import { requestForm } from './production-pages.mjs';
 import { icon } from './icons.mjs';
 
-const states={
-  available:{title:'Tu video de cortesía',detail:'Puedes pedirlo desde hoy sin contratar un plan de Contenido.',summary:'Gratis para tus redes',action:'Solicitar mi video'},
-  requested:{title:'Tu video de cortesía',detail:'Ya recibimos tu idea. Puedes consultar los avances y revisar tu video aquí.',summary:'Solicitud recibida',action:'Ver mi solicitud'},
-  cancelled:{title:'Tu video de cortesía',detail:'La solicitud anterior se canceló. Puedes volver a pedir tu video gratis.',summary:'Gratis para tus redes',action:'Volver a solicitar'},
-  delivered:{title:'Tu video de cortesía',detail:'Puedes consultar la entrega de tu video para redes cuando quieras.',summary:'Entregado',action:'Ver entrega'}
+const states = {
+  available: {
+    summary: 'Video gratis', title: 'Un video gratis para tus redes',
+    detail: 'Tu video de cortesía está incluido desde el registro, incluso sin un plan de Contenido.',
+    next: 'Cuéntanos qué quieres mostrar y confirma tu teléfono para que Lúmina te contacte.',
+    action: 'Solicitar mi video'
+  },
+  requested: {
+    summary: 'Video solicitado', title: 'Recibimos tu solicitud de video',
+    detail: 'Abre tu solicitud para seguir el avance y revisar el video cuando esté listo.',
+    action: 'Ver mi solicitud'
+  },
+  cancelled: {
+    summary: 'Video gratis', title: 'Tu video de cortesía sigue disponible',
+    detail: 'La solicitud anterior se canceló. Puedes volver a pedir el video gratis para tu negocio.',
+    action: 'Volver a solicitar'
+  },
+  delivered: {
+    summary: 'Video entregado', title: 'Tu video de cortesía ya se entregó',
+    detail: 'Puedes consultar el registro de entrega desde tu cuenta.',
+    action: 'Ver entrega'
+  }
 };
 
-export function courtesyNotice(actor,state,returnTo) {
-  const {compact,status}=state, copy=states[status];
-  const toggle=form('/courtesy/display',actor,hidden('compact',compact?'0':'1')+hidden('return_to',returnTo)+
-    `<button type="submit" class="courtesy-toggle" aria-controls="courtesy-description" aria-expanded="${!compact}">${compact?'Ver más':'Minimizar'}</button>`,'courtesy-display');
-  return `<aside class="courtesy-notice" aria-labelledby="courtesy-heading" data-compact="${compact}" data-status="${status}">
-    <span class="courtesy-symbol" aria-hidden="true">${icon(status==='delivered'?'check':'social')}</span>
-    <div class="courtesy-copy"><h2 id="courtesy-heading">${esc(copy.title)}</h2><span class="courtesy-summary">${esc(copy.summary)}</span>
-    <p id="courtesy-description"${compact?' hidden':''}>${esc(copy.detail)}</p></div>
-    <div class="courtesy-actions">${localLink('/courtesy',copy.action,'btn courtesy-action')}${toggle}</div>
+export function courtesyNotice(actor, state, returnTo) {
+  const {compact, status} = state;
+  const copy = states[status];
+  const toggle = form('/courtesy/display', actor, hidden('compact', compact ? '0' : '1') + hidden('return_to', returnTo) +
+    `<button type="submit" class="courtesy-toggle" aria-expanded="${!compact}" aria-controls="courtesy-description">
+      <span class="courtesy-summary">${esc(copy.summary)}<span class="sr-only">. Mostrar detalles del video de cortesía</span></span>
+      <span class="courtesy-minimize">Minimizar<span class="sr-only"> aviso del video de cortesía</span></span>
+      <span class="courtesy-chevron" aria-hidden="true"></span>
+    </button>`, 'courtesy-display');
+  return `<aside class="courtesy-notice" aria-label="Video de cortesía" data-compact="${compact}" data-status="${status}">
+    <div class="courtesy-details" id="courtesy-description"${compact ? ' hidden' : ''}>
+      <span class="courtesy-symbol" aria-hidden="true">${icon(status === 'delivered' ? 'check' : 'social')}</span>
+      <div><h2>${esc(copy.title)}</h2><p>${esc(copy.detail)}</p>${copy.next ? `<p>${esc(copy.next)}</p>` : ''}</div>
+    </div>
+    ${toggle}${localLink('/courtesy', copy.action, 'btn courtesy-action')}
     <span class="courtesy-error" role="status"></span></aside>`;
 }
 
