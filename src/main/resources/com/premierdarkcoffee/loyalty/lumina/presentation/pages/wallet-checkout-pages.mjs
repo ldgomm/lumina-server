@@ -1,8 +1,8 @@
+import { periodBranchCount, standardIds } from '../../memberships/trial.mjs';
 import { serviceName } from '../../memberships/catalog.mjs';
 import { inclusiveEnd } from '../../memberships/orders.mjs';
 import { firstStatement, nextCut, paidFrom, walletLine } from '../../memberships/calendar.mjs';
 import { walletDues } from '../../memberships/wallet-balance.mjs';
-import { standardIds } from '../../memberships/trial.mjs';
 import { localDay, uuid } from '../../shared/domain.mjs';
 import { button, check, disclosure, displayAmount, esc, form, hidden, localLink } from './components.mjs';
 import { contactField } from './contact.mjs';
@@ -26,7 +26,7 @@ function trialPage(actor,trial,pending) {
     : choiceForm(actor,'start','Activar prueba gratuita');
   return `<div class="wallet-flow"><section class="wallet-hero"><div>
     <div class="wallet-symbol">${icon('wallet')}</div><h2>${trial.enabled?'Tu prueba está activa':'Prueba Wallet gratis'}</h2>
-    <p>${trial.enabled?'Tus clientes conservarán sus tarjetas y sus puntos si decides continuar.':benefit}</p>
+    <p>${trial.enabled?'La prueba cubre todas tus sucursales. Si decides continuar, tus clientes conservarán sus tarjetas y sus puntos.':benefit}</p>
     ${pending&&trial.enabled?'<p role="status">Estamos preparando el acceso a tus tarjetas.</p>':''}<div class="actions">${action}</div>
     </div><dl class="wallet-facts">${fact('Precio de la prueba',displayAmount(0))}${fact('Último día de la prueba',end)}</dl></section>
     <section class="wallet-next"><div class="wallet-mark">${icon('calendar')}</div><div><h3>El 1 de enero tú decides</h3>
@@ -45,16 +45,18 @@ function offerCard(actor,company,plan,context) {
   const state=future?'Cambio programado':present?'Tu plan actual':locked?'Ya incluido o solicitado':'';
   const recurring=present?.schedule_id&&!present.stop_on;
   const unit=standard(plan),unitPrice=plan.price_minor,priced=unitPrice!=null;
+  const unknown=unit&&company.loyalty_tenant&&!(Number.isSafeInteger(branches)&&branches>0);
   const total=priced&&unit&&branches>1?unitPrice*branches:unitPrice;
   let description;
-  if(unit && branches>1)description=branchesLabel(branches)+' × '+displayAmount(unitPrice)+' por sucursal.';
+  if(unknown)description='Tarifa de '+displayAmount(unitPrice)+' por sucursal. Vuelve a consultar para confirmar cuántas se incluyen.';
+  else if(unit && branches>1)description=branchesLabel(branches)+' × '+displayAmount(unitPrice)+' por sucursal.';
   else if(unit)description='Por sucursal.';
   else description=plan.description;
   const explanation=plan.months===12&&unit&&annualSavings>0
     ? '<p class="wallet-saving">Ahorras '+money(annualSavings)+' al año por sucursal frente al plan mensual.</p>':'';
   const period=plan.term==='ONE_OFF'?'una sola vez':'/ '+interval(plan);
   let action='';
-  if(!future && !recurring && !locked) {
+  if(!unknown && !future && !recurring && !locked) {
     const when=(existing||plan.blockedNow)&&!plan.blockedNext?'NEXT_MONTH':'TODAY';
     const title=!priced?'Solicitar precio':present?'Revisar renovación':existing&&plan.months===12?'Cambiar a anual':existing?'Revisar cambio':unit?(plan.months===12?'Elegir plan anual':'Elegir plan mensual'):'Elegir este plan';
     action=form('/plans/request',actor,hidden('qty_'+plan.id,'1')+hidden('source','wallet')+hidden('start_when',when)+hidden('key',uuid())+
@@ -62,7 +64,7 @@ function offerCard(actor,company,plan,context) {
   } else if(locked && !future && !present)action='<p class="wallet-explain">'+esc(plan.blockedNext)+'</p>';
   const items=unit?'':'<ul>'+plan.items.map(i=>'<li>'+esc(i.service==='WALLET'?'Tarjetas de fidelización':i.quantity+' × '+serviceName(i.service))+'</li>').join('')+'</ul>';
   return `<article class="wallet-offer${state?' wallet-offer-held':''}"><div class="wallet-offer-head"><h3>${esc(plan.name)}</h3>${state?'<strong class="wallet-state">'+esc(state)+'</strong>':''}</div>
-    <p class="wallet-price">${priced?money(total):'Por cotizar'} ${priced?'<small>'+period+'</small>':''}</p>
+    <p class="wallet-price">${unknown?'Total por confirmar':priced?money(total):'Por cotizar'} ${priced&&!unknown?'<small>'+period+'</small>':''}</p>
     ${description?'<p>'+esc(description)+'</p>':''}${explanation}${items}${action}</article>`;
 }
 
@@ -78,7 +80,7 @@ function catalogue(actor,company,plans,filter,context,collapsed) {
   const nav=packs.length?`<nav class="wallet-tabs" aria-label="Servicios del plan"><a href="/plans/wallet?offers=wallet#planes-wallet"${packages?'':' aria-current="page"'}>Solo Wallet</a>
     <a href="/plans/wallet?offers=packages#planes-wallet"${packages?' aria-current="page"':''}>Wallet con otros servicios</a></nav>`:'';
   const options=packages&&packs.length?grid(packs):grid(standards)+(custom.length?disclosure('Otras ofertas de Wallet',grid(custom)):'');
-  const hint=packages?'El precio corresponde al paquete completo.':'Ambos planes incluyen tarjetas, puntos y premios. Puedes detener la renovación desde aquí.';
+  const hint=packages?'El precio corresponde al paquete completo.':'El total se calcula por sucursal. Si abres otra durante el período, se incluye en la siguiente renovación de tu plan.';
   const content=nav+'<p>'+hint+'</p>'+options;
   if(collapsed)return `<details class="disclosure wallet-options" id="planes-wallet"${filter==='all'?'':' open'}><summary>Comparar y cambiar de plan</summary><div>${content}</div></details>`;
   return '<section class="wallet-choices" id="planes-wallet"><h2>Elige tu plan de Wallet</h2>'+content+'</section>';
@@ -136,9 +138,9 @@ function subscriptionSummary(actor,{current,booked,account,active,legacy,pending
   }else if(contract) {
     const price=contract.monthly_minor??contract.agreed_minor;
     if(price!=null){
-      const count=standard(contract)?account?.branchCount||contract.initial_branches||1:1;
-      const caption=standard(contract)?'Tarifa para '+branchesLabel(count):'Precio acordado';
-      facts.push(fact(caption,displayAmount(price*count)+' / '+interval(contract)));
+      const count=standard(contract)?periodBranchCount(contract):1;
+      const caption=standard(contract)&&count!==null?'Tarifa para '+branchesLabel(count):'Tarifa del período';
+      facts.push(fact(caption,count===null?'Por confirmar':displayAmount(price*count)+' / '+interval(contract)));
     }
     if(account?.nextWalletChargeOn && !pending)facts.push(fact('Próximo cargo de Wallet',dayLabel(account.nextWalletChargeOn)));
   }
@@ -178,7 +180,7 @@ export function walletCheckoutPage({actor,company,plans=[],contracts=[],orders={
   return '<div class="wallet-flow">'+sections.join('')+'<nav class="wallet-links" aria-label="Más opciones">'+links.join('')+'</nav></div>';
 }
 
-export function walletReviewPage({actor,url,order,line,error,walletAvailable,walletScheduled}) {
+export function walletReviewPage({actor,url,order,line,error,walletAvailable,walletScheduled,comparison=''}) {
   const annual=line.months===12, perBranch=standard(line);
   const count=perBranch?(line.branchCount||order.initial_branches||1):1;
   const price=line.unit_minor*line.units;
@@ -205,7 +207,7 @@ export function walletReviewPage({actor,url,order,line,error,walletAvailable,wal
     '<dl class="wallet-facts">'+fact('Se registra el',dayLabel(walletBill.cut))+fact('Pagar hasta el',dayLabel(walletBill.due))+'</dl></section>':
     '<section class="wallet-next"><div><h3>Primer cargo del plan</h3><p>El primer período tiene un importe de '+money(0)+'.</p>'+nextYear+'</div></section>';
   const renewal=active?'Al confirmar elegiste una renovación '+(annual?'anual.':'mensual.')+' Puedes consultar su estado actual en Mi suscripción de Wallet.':
-    'El plan se renueva cada '+(annual?'año':'mes')+'. Puedes detener la renovación desde Mi suscripción de Wallet.';
+    'El plan se renueva cada '+(annual?'año':'mes')+'. '+(perBranch?'El total de cada renovación usa las sucursales registradas al empezar ese período. ':'')+'Puedes detener la renovación desde Mi suscripción de Wallet.';
   const conditions='<details class="disclosure"><summary>Leer las condiciones del plan</summary><div><p class="prewrap">'+esc(order.terms)+'</p></div></details>';
   const cta=previouslyAccepted?'Completar la activación':order.start_when==='NEXT_MONTH'||future?'Confirmar para el próximo período':'Aceptar y activar Wallet';
   let action;
@@ -223,6 +225,6 @@ export function walletReviewPage({actor,url,order,line,error,walletAvailable,wal
     (error?'<p class="notice" role="alert">'+esc(error)+'</p>':'')+
     '<section class="wallet-hero"><div><div class="wallet-symbol">'+icon(active?'check':'wallet')+'</div><h2>'+title+'</h2><p class="wallet-review-name">'+esc(line.name)+'</p><p>'+esc(description)+'</p></div>'+
     '<dl class="wallet-facts">'+fact(rate,displayAmount(total))+fact('Inicio del plan',dayLabel(line.starts_on))+'</dl></section>'+
-    (historical?'<p>Estos importes y fechas corresponden al acuerdo original.</p>':'')+bill+'<p class="wallet-renewal">'+esc(renewal)+' Lúmina registra el pago de tu negocio. No se realiza un débito bancario automático.'+
+    (historical?'<p>Estos importes y fechas corresponden al acuerdo original.</p>':'')+bill+comparison+'<p class="wallet-renewal">'+esc(renewal)+' Lúmina registra el pago de tu negocio. No se realiza un débito bancario automático.'+
     (!active&&walletBill.amount>0?' Si queda un saldo vencido de Wallet, las tarjetas se pausan a partir del día 16.':'')+'</p>'+conditions+action+'</div>';
 }

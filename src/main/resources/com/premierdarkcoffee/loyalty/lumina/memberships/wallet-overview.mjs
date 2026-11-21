@@ -1,6 +1,7 @@
 import { serviceState } from '../businesses/services.mjs';
 import { localDay, Problem } from '../shared/domain.mjs';
 import { contractsFor } from './billing.mjs';
+import { pricedContracts } from './cut-outlook.mjs';
 import { paidFrom } from './trial.mjs';
 
 // Open Wallet selections have their own queue. A later Content or Web order
@@ -27,7 +28,7 @@ export function openWalletOrders(db, companyId) {
 
 export async function walletPlanContext(db,wallets,actor,company) {
   const today=localDay();
-  const all=contractsFor(db,company.id,{walletSince:today});
+  const all=await pricedContracts(db,wallets,actor,company,contractsFor(db,company.id,{walletSince:today}));
   const contracts=all.filter(c=>c.starts_on<=today);
   const booked=all.filter(c=>c.starts_on>today);
   let active=serviceState(db,company.id,'WALLET')==='ACTIVE',legacy=false,error='',account=null;

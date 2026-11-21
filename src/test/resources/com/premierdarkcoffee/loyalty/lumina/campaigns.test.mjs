@@ -147,3 +147,13 @@ test('precios de campaña redondean el centavo por oferta antes de aplicar canti
  w.db.run('UPDATE plans SET price_minor=1999 WHERE id=?',special.id);
  assert.doesNotMatch((await w.client.get('/plans')).body,new RegExp(special.id));
 });
+
+test('la pestaña de Viernes Negro solo aparece a negocios mientras hay una oferta vigente',async t=>{
+ const w=await setup(t),tab=/href="[^"]*black-friday[^"]*"[^>]*>Viernes Negro<\/a>/;
+ assert.doesNotMatch((await w.client.get('/plans')).body,tab);
+ const c=await campaign(w),o=await order(w,c.id);
+ for(const path of ['/plans','/plans?view=agreements','/plans?view=orders',o.path])assert.match((await w.client.get(path)).body,tab);
+ t.mock.timers.setTime(boundary);
+ for(const path of ['/plans','/plans?view=agreements','/plans?view=orders',o.path])assert.doesNotMatch((await w.client.get(path)).body,tab);
+ assert.match((await w.admin.get('/plans')).body,tab);
+});

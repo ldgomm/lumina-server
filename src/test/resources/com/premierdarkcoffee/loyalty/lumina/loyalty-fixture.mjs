@@ -55,6 +55,11 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
     }
     if(req.headers.authorization==='Bearer '+platformToken && path.startsWith('/api/platform/')) {
       calls.push({path,method:req.method,role:'PLATFORM'});
+      if(configuration.outlook&&path.endsWith('/wallet-outlook')&&req.method==='GET')return json(res,200,configuration.outlook(path.split('/').at(-2)));
+      if(configuration.firstPurchases&&path==='/api/platform/wallet-first-purchases'&&req.method==='POST'){
+        let body='';for await(const chunk of req)body+=chunk;
+        return json(res,200,{rows:configuration.firstPurchases(JSON.parse(body).tenants)});
+      }
       if(configuration.administration&&/^\/api\/platform\/tenants\/[^/]+\/(access|account|payments|charges)(\/|$)/.test(path)){
         let raw='';for await(const chunk of req)raw+=chunk;
         const answer=await configuration.administration({path,url:new URL(req.url,'http://127.0.0.1'),method:req.method,payload:raw?JSON.parse(raw):null,key:req.headers['idempotency-key']});
@@ -130,9 +135,9 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
       return json(res,answer.status||200,answer.body);
     }
     if(req.method==='GET'&&/^\/api\/staff\/payments\/[^/]+$/.test(path)&&configuration.receipt&&p.role==='OWNER'){const result=await configuration.receipt(p.company,path.split('/').at(-1));return json(res,result.status||200,result.body);}
-    if(path==='/api/staff/lumina-subscription'&&req.method==='GET'&&p.role==='OWNER')return json(res,200,{accepted:false,legacy:false,recurring:false,endsOn:null,nextChargeOn:null});
+    if(path==='/api/staff/lumina-subscription'&&req.method==='GET'&&p.role==='OWNER')return json(res,200,{accepted:false,legacy:false,recurring:false,endsOn:null,nextChargeOn:null,branches:branches.get(p.company.id)});
     if(path==='/api/staff/account'&&configuration.account&&p.role==='OWNER')return json(res,200,await configuration.account(p.company,new URL(req.url,'http://127.0.0.1')));
-    if(req.method==='GET'&&path==='/api/staff/account'&&p.role==='OWNER')return json(res,200,{membership:null,summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0,offset:0,today:'2026-11-13'});
+    if(req.method==='GET'&&path==='/api/staff/account'&&p.role==='OWNER')return json(res,200,{branchCount:branches.get(p.company.id)?.length||1,membership:null,summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},invoices:[],payments:[],paymentCount:0,offset:0,today:'2026-11-13'});
     const b = branches.get(p.company.id);
     if (req.method==='GET' && path==='/api/staff/dashboard') return json(res,200,{
       business:p.company,enrollmentUrl:origin+'/join/'+p.company.slug,role:p.role,branchId:p.branchId,permissions:p.permissions,

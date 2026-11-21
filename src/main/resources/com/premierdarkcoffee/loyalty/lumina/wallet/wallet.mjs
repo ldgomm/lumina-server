@@ -236,6 +236,23 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     requireThat(!restricted,'Wallet tiene una restricción de acceso. Revisa Mi cuenta antes de activar otro plan.',423);
     return result;
   }
+  async function outlook(actor,company) {
+    const before=current(actor);
+    requireThat(before.kind==='AGENCY'||before.kind==='OWNER'&&before.company_id===company.id,message,403);
+    const tenant=db.get('SELECT loyalty_tenant FROM companies WHERE id=?',company.id)?.loyalty_tenant;
+    requireThat(isId(tenant)&&tenant===company.loyalty_tenant,message,403);
+    const forecast=await remote('/api/platform/tenants/'+tenant+'/wallet-outlook',{token:configured()});
+    requireThat(current(actor).revision===before.revision&&db.get('SELECT loyalty_tenant FROM companies WHERE id=?',company.id)?.loyalty_tenant===tenant,message,403);
+    return forecast;
+  }
+  async function firstPurchases(actor,tenants) {
+    const before=current(actor);
+    requireThat(before.kind==='AGENCY',message,403);
+    const result=await remote('/api/platform/wallet-first-purchases',{method:'POST',token:configured(),body:{tenants}});
+    requireThat(current(actor).revision===before.revision,message,403);
+    requireThat(Array.isArray(result.rows),'No se pudo comprobar la actividad de Wallet.',503);
+    return result.rows;
+  }
   async function controlRemote(tenant,action,options={}) {
     requireThat(isId(tenant)&&['access','account','payments','receipt','charges','reverse','void','wallet-calendar'].includes(action),'Acción inválida.');
     const suffix=action==='receipt'?'/payments/'+options.id:action==='reverse'?'/payments/'+options.id+'/reverse':action==='void'?'/charges/'+options.id+'/void':'/'+action;
@@ -274,7 +291,7 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
   }
   async function account(actor,offset=0){requireOwner(actor);const {item,fresh}=await validated(actor);const result=await remote('/api/staff/account?offset='+offset,{token:item.token});const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);return result;}
   async function receipt(actor,id){requireOwner(actor);requireThat(isId(id),'Pago no encontrado.',404);const {item,fresh}=await validated(actor);const result=await remote('/api/staff/payments/'+id,{token:item.token});const latest=current(actor);requireThat(latest.revision===fresh.revision&&latest.loyalty_tenant===item.tenant_id,message,403);return result;}
-  return {controlRemote,administration,teamAdministration,account,receipt,subscription,prepareActivation,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>{
+  return {outlook,firstPurchases,controlRemote,administration,teamAdministration,account,receipt,subscription,prepareActivation,ensureCompany,summary,proxy,asset,artwork,repair,validate:async actor=>{
     const {data}=await validated(actor);
     requireThat(!data.walletAccess||data.walletAccess.effectiveState==='ACTIVE','Wallet está suspendida. Revisa Mi cuenta y pagos para reactivarla.',423);
     return data;

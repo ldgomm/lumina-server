@@ -65,6 +65,55 @@ class WalletSubscriptionPostgresTest {
         db.tx{it.exec("UPDATE branches SET created_at=? WHERE tenant_id=? AND id=?",Timestamp.from(time.instant()),f.tenant,result.str("id"))}
         return result.str("id")
     }
+    @Test fun `forecast matches the issued catalog charge for two branches and both renewal cycles`() {
+        for ((months,unit) in listOf(1 to 500L,12 to 5000L)) {
+            time.value=Instant.parse("2027-01-01T15:00:00Z")
+            val f=fixture()
+            seedBranch(f)
+            val end=if(months==12)"2028-01-01" else "2027-02-01"
+            val terms=CatalogSchedule(id(),"Wallet", "2027-01-01",null,unit,end,months=months,consentOn="2027-01-01",perBranch=true,initialBranches=2)
+            val calendar=CatalogCalendar(f.registration.companyId,1,listOf(terms))
+            service.commercial.updateCalendar(f.tenant,calendar)
+            fun forecast()=service.commercial.walletOutlook(f.tenant)["lines"]!!.jsonArray
+            fun amount()=forecast().single().jsonObject["walletMinor"]!!.jsonPrimitive.long
+            time.value=Instant.parse("2027-01-22T15:00:00Z")
+            seedBranch(f)
+            repeat(2){assertEquals(unit*2,amount())}
+            assertEquals(2,forecast().single().jsonObject["branchCount"]!!.jsonPrimitive.int)
+            assertEquals(0,db.tx { c->c.one("SELECT count(*) FROM billing_invoices WHERE tenant_id=?",f.tenant){it.getInt(1)} })
+            time.value=Instant.parse("2027-02-01T05:00:00Z")
+            assertEquals(unit*2,balance(f))
+            assertTrue(db.tx { c->c.one("SELECT description FROM billing_invoices WHERE tenant_id=? AND wallet_due",f.tenant){it.getString(1)} }!!.contains("2 sucursales"))
+            if(months==12){
+                assertTrue(forecast().isEmpty())
+                time.value=Instant.parse("2028-01-01T05:00:00Z")
+            }
+            val secondEnd=if(months==12)"2029-01-01" else "2027-03-01"
+            service.commercial.updateCalendar(f.tenant,calendar.copy(revision=2,entries=listOf(terms.copy(billBefore=secondEnd))))
+            assertEquals(unit*3,amount())
+            assertEquals(3,forecast().single().jsonObject["branchNames"]!!.jsonArray.size)
+            time.value=Instant.parse(if(months==12)"2028-02-01T05:00:00Z" else "2027-03-01T05:00:00Z")
+            assertEquals(unit*5,balance(f))
+        }
+    }
+    @Test fun `preview preserves consent and rounding without posting any charge`() {
+        time.value=Instant.parse("2026-12-31T15:00:00Z")
+        val f=fixture()
+        val trial=CatalogCalendar(f.registration.companyId,1,emptyList(),true)
+        service.commercial.updateCalendar(f.tenant,trial)
+        val empty=service.commercial.walletOutlook(f.tenant)
+        assertEquals("2027-02-01",empty.str("cut"))
+        assertTrue(empty["lines"]!!.jsonArray.isEmpty())
+        time.value=Instant.parse("2027-01-22T15:00:00Z")
+        val monthly=CatalogSchedule(id(),"Wallet","2027-01-22",null,500L,"2027-02-01",consentOn="2027-01-22",perBranch=true,initialBranches=1)
+        service.commercial.updateCalendar(f.tenant,trial.copy(revision=2,entries=listOf(monthly)))
+        assertEquals(161L,service.commercial.walletOutlook(f.tenant)["lines"]!!.jsonArray.single().jsonObject["walletMinor"]!!.jsonPrimitive.long)
+        val withoutPurchase=service.commercial.firstPurchaseStates(WalletBusinessList(listOf(f.tenant)))["rows"]!!.jsonArray.single().jsonObject
+        assertTrue(withoutPurchase["active"]!!.jsonPrimitive.boolean)
+        assertFalse(withoutPurchase["purchased"]!!.jsonPrimitive.boolean)
+        time.value=Instant.parse("2027-02-01T05:00:00Z")
+        assertEquals(161L,balance(f))
+    }
     @Test fun `catalogue trial is free and January usage suspends on February sixteen only for unpaid Wallet`() {
         val f=fixture();val schedule=CatalogSchedule(id(),"Wallet y contenido","2026-11-22",null,499)
         val request=CatalogCalendar(f.registration.companyId,1,listOf(schedule),trialActive=true)

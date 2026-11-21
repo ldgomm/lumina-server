@@ -40,10 +40,22 @@ export function setChoice(db,actor,action){
 }
 // Show only the commercial part that was actually authorized. The original
 // amounts and signed terms remain available on the individual agreement.
+export function confirmedBranchCount(account) {
+  const count=account?.branchCount;
+  requireThat(Number.isSafeInteger(count)&&count>=1,'No pudimos confirmar cuántas sucursales tiene tu negocio. Vuelve a consultar antes de aceptar el precio de Wallet.',503);
+  return count;
+}
+export function periodBranchCount(c) {
+  if(!c.schedule_start||c.starts_on===c.schedule_start)return c.initial_branches||1;
+  return c.period_branches??null;
+}
 export function visibleContracts(contracts){
   return contracts.flatMap(c=>{
     if(!walletLine(c))return [c];
-    if((c.consent_on||c.accepted_on||'')>=paidFrom)return [{...c,agreed_minor:c.agreed_minor*(standardIds.includes(c.plan_id)?c.initial_branches||1:1)}];
+    if((c.consent_on||c.accepted_on||'')>=paidFrom){
+      const count=standardIds.includes(c.plan_id)?periodBranchCount(c):1;
+      return [{...c,agreed_minor:count===null?null:c.agreed_minor*count}];
+    }
     if(walletOnly(c))return [];
     const others=c.catalog_other_minor!=null?c.catalog_other_minor*(c.units||1):c.other_minor>0?c.other_minor:null;
     return [{...c,wallet:'NONE',items:c.items.filter(i=>i.service!=='WALLET'),agreed_minor:c.wallet==='GIFT'?c.agreed_minor:others}];

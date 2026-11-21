@@ -52,7 +52,7 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         plan.walletAgreement!=null || c.one(
             "SELECT EXISTS(SELECT 1 FROM lumina_business_registrations WHERE tenant_id=?)",tenant){it.getBoolean(1)}==true
 
-    private fun catalogTakesOver(c:Connection,tenant:String):LocalDate? = c.one(
+    internal fun catalogTakesOver(c:Connection,tenant:String):LocalDate? = c.one(
         "SELECT min(starts_on) FROM wallet_catalog_schedules WHERE tenant_id=? AND consent_on IS NOT NULL AND replaces_legacy AND (ends_before IS NULL OR starts_on<ends_before)",
         tenant){it.getDate(1)?.toLocalDate()}
 
@@ -67,7 +67,7 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         return listOfNotNull(pending,scheduled,legacy).minOrNull()?.let(::invoiceDate)
     }
     private fun paidAgreement(p:MembershipPlan) = p.walletAgreement?.activationOn?.let(::billingDate)?.let{it>=WALLET_PROMOTION_END}==true
-    private fun effective(c: Connection, tenant: String, access: JsonObject, date: LocalDate): JsonObject {
+    internal fun effective(c: Connection, tenant: String, access: JsonObject, date: LocalDate): JsonObject {
         val p = plan(c, tenant)
         val unpaidWallet = c.one("""SELECT EXISTS(SELECT 1 FROM billing_invoices WHERE tenant_id=? AND wallet_due
             AND voided_at IS NULL AND paid_minor<amount_minor AND due_on<?)""",tenant,Date.valueOf(date)) { it.getBoolean(1) }!!

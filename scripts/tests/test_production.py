@@ -71,6 +71,11 @@ class ProductionTests(unittest.TestCase):
                 self.assertNotIn('piece-reviews',p.pg_calendar_script())
                 self.assertEqual(db.execute("SELECT checksum FROM lumina_extensions WHERE name='piece-reviews'").fetchone(),(p.file_digest(p.SQL_ROOT/reviews),))
                 self.assertEqual(db.execute('SELECT count(*) FROM piece_reviews').fetchone(),(0,))
+                moments='lumina/infrastructure/extensions/video-comment-moments.sql'
+                self.assertIn(moments,p.MEMBERSHIP_SQL)
+                self.assertNotIn('video-comment-moments',p.pg_calendar_script())
+                self.assertEqual(db.execute("SELECT checksum FROM lumina_extensions WHERE name='video-comment-moments'").fetchone(),(p.file_digest(p.SQL_ROOT/moments),))
+                self.assertEqual(db.execute('SELECT count(*) FROM video_comment_moments').fetchone(),(0,))
 
     def test_config_requires_explicit_private_data_and_origins(self):
         self.assertEqual(p.load_config(self.config)['native'],self.n)

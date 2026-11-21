@@ -238,15 +238,25 @@ test('midnight in Ecuador requires fresh consent and a returning owner is billed
 });
 
 test('standard Wallet freezes the reviewed branch count and charges the displayed business total once',async t=>{
- let branches=2;
- const w=await world(t,{account:async()=>({branchCount:branches,membership:null,summary:{balanceMinor:0}})},'2027-01-01T04:59:00Z');
+ let branches=2,revision=0;
+ const w=await world(t,{outlook:()=>({cut:'2027-02-01',due:'2027-02-15',revision,branches,branchHistory:[],lines:[]}),
+   account:async()=>({branchCount:branches,membership:null,summary:{balanceMinor:0}}),
+   subscription:async()=>({body:{accepted:false,recurring:false,branches:Array.from({length:branches||0},(_,i)=>({name:'Sucursal '+(i+1)}))}})},'2027-01-01T04:59:00Z');
  await w.client.post('/plans/wallet/choice',{choice:'start'});
  t.mock.timers.setTime(Date.parse('2027-01-01T05:01:00Z'));
  const rate=await plan(w,{price:'4.99',name:'Lealtad'}),o=await selection(w,[rate]);
  assert.match(o.body,/10,00/);assert.match(o.body,/2 sucursales/);
+ const catalog=(await w.client.get('/plans?view=catalog')).body;
+ assert.match(catalog,new RegExp('id="offer-'+standardIds[0]+'"[^>]*data-price="1000"'));
+ assert.match(catalog,new RegExp('id="offer-'+standardIds[1]+'"[^>]*data-price="10000"'));
  assert.match(o.body,/Pagar hasta el<\/dt><dd>15 de febrero de 2027/);
  assert.match(o.body,/Se registra el<\/dt><dd>1 de febrero de 2027/);
  assert.match(o.body,/Precio mensual del negocio<\/dt><dd>[^<]*10,00/);
+ branches=undefined;
+ const uncertain=await w.client.get('/plans/wallet');
+ assert.match(uncertain.body,/Total por confirmar/);
+ assert.equal((await w.client.post(o.path+'/accept',o.data)).status,503);
+ assert.equal(count(w,'contracts'),0);
  branches=3;
  assert.equal((await w.client.post(o.path+'/accept',o.data)).status,409);
  const updated=await w.client.get(o.path);
@@ -257,6 +267,12 @@ test('standard Wallet freezes the reviewed branch count and charges the displaye
  assert.equal(w.db.get('SELECT initial_branches FROM wallet_schedules').initial_branches,3);
  assert.equal(count(w,'contracts'),1);
  assert.match((await w.client.get(o.path)).body,/15,00/);
+ revision=w.db.get('SELECT revision FROM wallet_calendar_sync WHERE company_id=?',w.id).revision;
+ assert.equal((await w.admin.post('/plans',{name:'Contenido mensual',term:'MONTHLY',VIDEO:'1',wallet:'NONE',price:'30'})).status,303);
+ const extra=w.db.get("SELECT id FROM plans WHERE name='Contenido mensual'").id;
+ const change=await selection(w,[extra],{start_when:'NEXT_MONTH'});
+ const compare=change.body.split('aria-label="Comparación de servicios"')[1];
+ assert.match(compare,/Tarifas desde el/);assert.match(compare,/45,00 por mes/);
 });
 test('trial bundles quote only other services and cannot authorize Wallet for January',async t=>{
  const w=await world(t,{},'2026-12-15T16:00:00Z'),p=await plan(w,{name:'Wallet y contenido',price:'24.99',VIDEO:'1',other_price:'20'});
@@ -408,4 +424,40 @@ test('el dueño puede regresar después de la prueba o de una baja y una suspens
  const periods=w.db.all('SELECT starts_on,ends_before FROM wallet_schedules ORDER BY starts_on');
  assert.equal(periods.length,2);assert.equal(periods[0].ends_before,'2027-02-01');assert.equal(periods[1].starts_on,'2027-02-17');
  assert.equal(w.db.get('SELECT loyalty_tenant FROM companies WHERE id=?',w.id).loyalty_tenant,tenant);
+});
+
+test('dueño y agencia ven el mismo corte, la cotización abierta y los cambios de sucursal sin emitir cargos',async t=>{
+ const forecast={cut:'2027-02-01',due:'2027-02-15',revision:0,branchHistory:[],lines:[{name:'Wallet mensual',from:'2027-01-01',through:'2027-01-31',walletMinor:1000,otherMinor:0,branchCount:2,branchNames:['Centro','Norte'],unitMinor:500,months:1}]};
+ const w=await world(t,{outlook:()=>forecast});
+ w.db.run('UPDATE companies SET loyalty_tenant=? WHERE id=?',w.native.business.id,w.id);
+ const res=await w.admin.post('/plans',{name:'Contenido a medida',term:'ONE_OFF',VIDEO:'1',wallet:'NONE',price:''});
+ assert.equal(res.status,303,res.body);
+ const id=w.db.get("SELECT id FROM plans WHERE name='Contenido a medida'").id;
+ const pending=await w.client.post('/plans/request',{key:randomUUID(),['qty_'+id]:'1'});
+ const before=w.db.all('SELECT * FROM contracts');
+ const page=await w.client.get(pending.location);
+ assert.equal(page.status,200,page.body);
+ const comparison=page.body.split('aria-label="Comparación de servicios"')[1];
+ assert.match(comparison,/Wallet mensual/);assert.match(comparison,/Contenido a medida/);
+ assert.match(comparison,/Corte del [^<]+<\/h3><strong>Por confirmar/);
+ assert.match(comparison,/fecha de cargo confirmada · [^<]*10,00/);
+ const admin=await w.admin.get('/businesses/wallet-outlook');
+ assert.equal(admin.status,200,admin.body);assert.match(admin.body,/2 sucursales × [^<]*5,00/);assert.match(admin.body,/Centro · Norte/);
+ assert.equal((await w.client.get('/businesses/wallet-outlook')).status,403);
+ assert.deepEqual(w.db.all('SELECT * FROM contracts'),before);
+ w.db.run('INSERT INTO wallet_calendar_sync(company_id,revision,sent) VALUES(?,2,1) ON CONFLICT(company_id) DO UPDATE SET revision=2,sent=1',w.id);
+ const unsynced=(await w.admin.get('/businesses/wallet-outlook')).body;assert.match(unsynced,/Por confirmar/);assert.doesNotMatch(unsynced,/2 sucursales ×/);
+});
+
+test('los acuerdos de una renovación usan el número histórico de sucursales al inicio del período',async()=>{
+ const {withPeriodBranches}=await import('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/cut-outlook.mjs');
+ const {visibleContracts}=await import('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/memberships/trial.mjs');
+ for(const [months,unit] of [[1,500],[12,5000]]){
+   const start=months===1?'2027-02-01':'2028-01-01';
+   const first={plan_id:standardIds[months===1?0:1],starts_on:'2027-01-01',schedule_start:'2027-01-01',initial_branches:2,agreed_minor:unit,consent_on:'2027-01-01',wallet:'INCLUDED',items:[{service:'WALLET'}]};
+   const later={...first,starts_on:start};
+   const rows=withPeriodBranches([first,later],{available:true,branchHistory:[{on:'2027-01-02',count:2},{on:'2027-01-23',count:1},{on:'2028-02-01',count:1}]});
+   assert.deepEqual(visibleContracts(rows).map(c=>c.agreed_minor),[2*unit,3*unit]);
+   assert.equal(visibleContracts([later])[0].agreed_minor,null);
+ }
 });

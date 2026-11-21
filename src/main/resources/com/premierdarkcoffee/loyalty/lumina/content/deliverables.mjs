@@ -7,7 +7,8 @@ import { getPiece, getRequest } from '../production/production.mjs';
 
 export function fileDetails(db,company,piece) {
   const files=db.all('SELECT * FROM content_files WHERE company_id=? AND piece_id=? ORDER BY created_at DESC,version DESC,id',company,piece);
-  const comments=db.all(`SELECT c.*,f.label AS file_label,f.version AS file_version FROM piece_comments c
+  const comments=db.all(`SELECT c.*,m.seconds,f.label AS file_label,f.version AS file_version FROM piece_comments c
+    LEFT JOIN video_comment_moments m ON m.comment_id=c.id
     LEFT JOIN content_files f ON f.id=c.file_id AND f.company_id=c.company_id AND f.piece_id=c.piece_id
     WHERE c.company_id=? AND c.piece_id=? ORDER BY c.created_at DESC,c.id DESC LIMIT 100`,company,piece);
   const reviews=db.all(`SELECT revision,decision,note,actor_name,reviewed_at FROM piece_reviews
@@ -48,13 +49,20 @@ export function commentPiece(db,actor,company,request,piece,data) {
   requireOperating(db,company.id);
   if(actor.kind!=='AGENCY')requireService(db,company.id,request.channel);
   const body=text(data.comment,'comentario',1,2000),fileId=data.file||null;
+  const raw=data.seconds??'';
+  const seconds=raw===''?null:Number(raw);
+  requireThat(seconds===null||(/^\d+$/.test(raw)&&Number.isSafeInteger(seconds)&&fileId),'Selecciona un momento del video.');
   requireThat(isId(data.request_key),'Abre de nuevo el formulario de comentarios.');
   return db.transaction(()=>{
-    const prior=db.get('SELECT * FROM piece_comments WHERE request_key=?',data.request_key);
-    if(prior){requireThat(prior.company_id===company.id&&prior.piece_id===piece.id&&prior.actor_id===actor.id&&prior.body===body&&prior.file_id===fileId,'Este comentario ya se envió con otros datos.',409);return;}
-    requireThat(!fileId||db.get('SELECT id FROM content_files WHERE id=? AND piece_id=? AND company_id=?',fileId,piece.id,company.id),'Archivo no encontrado.',404);
+    const prior=db.get('SELECT c.*,m.seconds FROM piece_comments c LEFT JOIN video_comment_moments m ON m.comment_id=c.id WHERE c.request_key=?',data.request_key);
+    if(prior){requireThat(prior.company_id===company.id&&prior.piece_id===piece.id&&prior.actor_id===actor.id&&prior.body===body&&prior.file_id===fileId&&prior.seconds===seconds,'Este comentario ya se envió con otros datos.',409);return;}
+    const file=fileId&&db.get('SELECT media_type FROM content_files WHERE id=? AND piece_id=? AND company_id=?',fileId,piece.id,company.id);
+    requireThat(!fileId||file,'Archivo no encontrado.',404);
+    requireThat(seconds===null||file.media_type.startsWith('video/'),'Ese momento debe pertenecer a un video.');
     requireThat(request.status!=='CANCELLED'&&piece.status!=='CANCELLED','Esta entrega está cancelada.',409);
-    db.run('INSERT INTO piece_comments VALUES(?,?,?,?,?,?,?,?,?)',uuid(),company.id,piece.id,fileId,actor.id,actor.name,body,data.request_key,now());
+    const id=uuid();
+    db.run('INSERT INTO piece_comments VALUES(?,?,?,?,?,?,?,?,?)',id,company.id,piece.id,fileId,actor.id,actor.name,body,data.request_key,now());
+    if(seconds!==null)db.run('INSERT INTO video_comment_moments(comment_id,seconds) VALUES(?,?)',id,seconds);
     event(db,actor,company.id,'REQUEST',request.id,'COMENTARIO_ENTREGA',piece.title,request.channel);
   });
 }

@@ -2,7 +2,7 @@ import { walletDues } from '../../memberships/wallet-balance.mjs';
 import { contractSummary } from './contract-summary.mjs';
 import { randomUUID } from 'node:crypto';
 import { inclusiveEnd } from '../../memberships/orders.mjs';
-import { inTrial, paidFrom, walletLine } from '../../memberships/trial.mjs';
+import { periodBranchCount, standardIds, inTrial, paidFrom, walletLine } from '../../memberships/trial.mjs';
 import { localDay } from '../../shared/domain.mjs';
 import { badge, button, card, check, displayAmount, esc, form, hidden, input, localLink, number, select, table, textarea } from './components.mjs';
 
@@ -129,6 +129,11 @@ function ownerWallet(account, options) {
   const chargeDate = nextCharge ? `<p>Próximo cargo de Wallet el <strong>${esc(billingDate(nextCharge))}</strong>.</p>` : '';
   if (current || next) {
     let service = current ? `<p>Tu plan: <strong>${esc(current.name)}</strong>.</p>` : '';
+    if(current&&standardIds.includes(current.plan_id)){
+      const count=periodBranchCount(current),unit=current.monthly_minor??current.agreed_minor;
+      service+=count===null||unit==null?'<p>Tarifa del período por confirmar.</p>':
+        '<p>'+count+' '+(count===1?'sucursal':'sucursales')+' × '+money(unit)+' = <strong>'+money(unit*count)+'</strong> por '+(current.months===12?'año':'mes')+'.</p>';
+    }
     if (next) service += `<p><strong>${esc(next.name)}</strong> comienza el ${esc(billingDate(next.starts_on))}.</p>`;
     else if (current.stop_on) service += `<p>La renovación está desactivada. Puedes usar tu plan hasta el ${esc(billingDate(inclusiveEnd(current.stop_on)))}.</p>`;
     return card('Mi suscripción de Wallet', service + chargeDate + action('Gestionar mi suscripción'));

@@ -49,7 +49,10 @@ try{
  const originalLeave=w.loyaltyOperationLeave;let protectedLeave=false;w.loyaltyOperationLeave=()=>{protectedLeave=true;};account.click();assert.equal(protectedLeave,true);w.loyaltyOperationLeave=originalLeave;
  checks.push('Mi cuenta keeps the pending-operation guard; no sign-out control appears inside Caja');
 
- const f=w.document.querySelector('#purchase');f.elements.receipt.value='FIXTURE-ONE';f.elements.amount.value='20';f.requestSubmit([...f.querySelectorAll('button')].find(b=>b.type==='submit'));
+ const f=w.document.querySelector('#purchase'),generate=f.querySelector('[data-reference-for="receipt"] button');
+ assert.equal(generate.textContent,'Generar folio');assert.equal(f.querySelector('[data-reference-for="receipt"] select'),null);
+ generate.click();assert.match(f.elements.receipt.value,/^REF-[A-F0-9]{16}$/);
+ f.elements.receipt.value='FIXTURE-ONE';generate.click();assert.equal(f.elements.receipt.value,'FIXTURE-ONE');f.elements.amount.value='20';f.requestSubmit([...f.querySelectorAll('button')].find(b=>b.type==='submit'));
  await settle(()=>w.document.querySelector('#finishSimplePurchase')&&!f.hasAttribute('aria-busy'));
  const finish=w.document.querySelector('#finishSimplePurchase');finish.requestSubmit();await settle(()=>w.document.querySelector('.counter-receipt'));
  assert.match(w.document.querySelector('.counter-receipt').textContent,/Compra registrada/);assert.equal(native.calls.filter(c=>c.path==='/api/staff/purchases').length,1);assert.ok(native.calls.find(c=>c.path==='/api/staff/purchases').key);

@@ -20,7 +20,7 @@ fun nextCalendarCut(day: LocalDate): LocalDate = day.withDayOfMonth(1).plusMonth
 internal fun invoiceDate(start: LocalDate): LocalDate = nextCalendarCut(walletPaidFrom(start))
 internal fun walletPeriodEnd(start:LocalDate,months:Int):LocalDate =
     if(start.dayOfMonth==1 && start>=WALLET_PROMOTION_END)start.plusMonths(months.toLong()) else nextCalendarCut(start)
-private fun periodFee(fee:Long, start:LocalDate, end:LocalDate, months:Int):Long {
+internal fun periodFee(fee:Long, start:LocalDate, end:LocalDate, months:Int):Long {
     if(end==start.plusMonths(months.toLong()) && start.dayOfMonth==1)return fee
     val divisor=start.lengthOfMonth().toLong()*months
     return (Math.multiplyExact(fee,ChronoUnit.DAYS.between(start,end))+divisor/2)/divisor
@@ -99,6 +99,20 @@ private fun CommercialService.uncoveredStart(c:Connection,tenant:String,start:Lo
     return uncovered
 }
 
+internal fun catalogBranchCount(c:Connection,tenant:String,row:CatalogSchedule,start:LocalDate,activation:LocalDate):Long {
+    if(!row.perBranch)return 1
+    if(start==activation)return row.initialBranches.toLong()
+    return c.one("SELECT count(*) FROM branches b JOIN tenants t ON t.id=b.tenant_id WHERE b.tenant_id=? AND b.created_at<=(?::date::timestamp AT TIME ZONE t.timezone)",tenant,Date.valueOf(start)){it.getLong(1)}!!
+}
+
+internal fun catalogWalletFee(row:CatalogSchedule,start:LocalDate,end:LocalDate,from:LocalDate,branches:Long):Long {
+    if(from>=end || row.consentOn==null || start<billingDate(row.consentOn))return 0
+    val fee=Math.multiplyExact(row.feeMinor-row.otherMinor,branches)
+    if(from==start)return periodFee(fee,start,end,row.months)
+    val days=ChronoUnit.DAYS.between(start,walletPeriodEnd(start,row.months))
+    return (Math.multiplyExact(fee,ChronoUnit.DAYS.between(from,end))+days/2)/days
+}
+
 internal fun CommercialService.syncCatalog(c:Connection,tenant:String,today:LocalDate) {
     val rows=c.rows("""SELECT id,name,next_start,ends_before,fee_minor,bill_before,replaces_legacy,months,other_minor,consent_on,per_branch,initial_branches,starts_on FROM wallet_catalog_schedules
         WHERE tenant_id=? AND next_start<bill_before AND next_start<? AND (ends_before IS NULL OR next_start<ends_before) ORDER BY next_start,id""",
@@ -117,17 +131,13 @@ internal fun CommercialService.syncCatalog(c:Connection,tenant:String,today:Loca
             if(end>limit)break // The portal has not committed the full coverage period yet.
             val due=Date.valueOf(nextCalendarCut(start).withDayOfMonth(15))
             val from=if(row.replacesLegacy && row.consentOn!=null && start>=WALLET_PROMOTION_END)uncoveredStart(c,tenant,start,end) else start
-            val fee=if(from<end && row.consentOn!=null && start>=billingDate(row.consentOn)) {
-                val branches=if(!row.perBranch)1L else if(start==activation)row.initialBranches.toLong()
-                    else c.one("SELECT count(*) FROM branches b JOIN tenants t ON t.id=b.tenant_id WHERE b.tenant_id=? AND b.created_at<=(?::date::timestamp AT TIME ZONE t.timezone)",tenant,Date.valueOf(start)){it.getLong(1)}!!
-                val wallet=Math.multiplyExact(row.feeMinor-row.otherMinor,branches)
-                if(from==start)periodFee(wallet,start,end,row.months)
-                else (wallet*ChronoUnit.DAYS.between(from,end)+ChronoUnit.DAYS.between(start,boundary)/2)/ChronoUnit.DAYS.between(start,boundary)
-            } else 0L
+            val branches=catalogBranchCount(c,tenant,row,start,activation)
+            val fee=catalogWalletFee(row,start,end,from,branches)
+            val locations=if(row.perBranch) " · $branches "+(if(branches==1L)"sucursal" else "sucursales") else ""
             if(fee>0) c.exec("""INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,
                 calendar_id,calendar_start,period_end,wallet_due,created_at) VALUES(?,?,?,?,?,?,?,?,?,TRUE,?)
                 ON CONFLICT(tenant_id,calendar_id,calendar_start) WHERE calendar_id IS NOT NULL DO NOTHING""",
-                tenant,id(),"${row.name} · Wallet · $from a ${end.minusDays(1)}",fee,currency,due,
+                tenant,id(),"${row.name} · Wallet · $from a ${end.minusDays(1)}$locations",fee,currency,due,
                 row.id,Date.valueOf(start),Date.valueOf(end),Timestamp.from(clock.instant()))
             val other=periodFee(row.otherMinor,start,end,row.months)
             if(other>0)c.exec("""INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,

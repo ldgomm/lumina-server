@@ -1,3 +1,4 @@
+import { agencyFollowUpLinks } from './agency-follow-up.mjs';
 import { businessStates } from '../../businesses/control.mjs';
 import { operationLabels } from '../../businesses/operation-state.mjs';
 import { badge, button, esc, hidden, input, localLink, number, select } from './components.mjs';
@@ -9,7 +10,7 @@ export function businessDirectoryPage({ rows, total, page, more, counts, q, stat
   const countKeys = ['', 'ACTIVE', 'STOPPED', 'ARCHIVED'];
   const countsByState = [counts.total, counts.active, counts.stopped, counts.archived];
   return `<section class="card business-directory">
-    <form method="get" action="/businesses" class="directory-filter">
+    ${agencyFollowUpLinks}<form method="get" action="/businesses" class="directory-filter">
       ${hidden('state',state)}
       <div class="directory-search">${input('q','Buscar negocio o contacto','search','maxlength="100" placeholder="Nombre, cédula, RUC o teléfono"',q)}${button('Buscar','secondary')}</div>
       <details class="directory-options"${verification || !['','ACTIVE','STOPPED','ARCHIVED'].includes(state) || sort!=='ATTENTION'?' open':''}><summary>Más filtros</summary><div>

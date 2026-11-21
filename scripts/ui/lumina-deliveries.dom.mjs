@@ -1,5 +1,6 @@
 // Real portal HTML and shipped scripts; layout and device checks are separate.
 import assert from 'node:assert/strict';
+import {deliveryFiles} from '../../src/main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/delivery-files.mjs';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import {agency,owner,portal} from '../../src/test/resources/com/premierdarkcoffee/loyalty/lumina/helpers.mjs';
@@ -34,5 +35,20 @@ try{
  const invalid=await admin.post(selected(piecePath+'/measure',a.id),{publication:pub.id,observed:'2020-01-02T10:00',views:'-4',likes:'0',notes:'Dato pendiente'});assert.equal(invalid.status,400);const m=render(invalid.body,selected(piecePath+'/measure',a.id)),md=m.document,error=md.querySelector('[data-detail-error]');for(let el=error;el;el=el.parentElement)if(el.tagName==='DETAILS')assert.equal(el.open,true);assert.equal(error.closest('form').elements.likes.value,'0');assert.equal(error.closest('form').elements.notes.value,'Dato pendiente');assert.equal(md.activeElement,error);checks.push('Nested metrics validation preserves zero values and opens every collapsed parent');
  for(const doc of [d,fd,sd,production.document,md])for(const link of doc.querySelectorAll('.detail-jumps a,.delivery-next a'))assert.ok(doc.getElementById(link.getAttribute('href').slice(1)),'Missing target '+link.getAttribute('href'));
  for(const doc of [d,fd,sd])assert.equal(doc.querySelectorAll('.delivery-card form input[name=channel]').length,0);assert.deepEqual(errors,[]);checks.push('Every shortcut has a destination and reviewing content never asks for a social network');
+ const file={asset_id:'reel',label:'Reel para redes',media_type:'video/webm',byte_size:3500,created_at:'2027-01-08T16:00:00Z'};
+ const earlier={...file,id:'sample-v1',version:1},latest={...file,id:'sample-v2',version:2};
+ const timed={actor_name:'Dueña',body:'Corrige este título.',created_at:file.created_at,file_id:earlier.id,file_label:file.label,file_version:1,seconds:12};
+ const media=render(deliveryFiles({actor:{kind:'AGENCY',csrf:'test'},request:{status:'PRODUCTION'},piece:{id:'muestra',files:[earlier,latest],comments:[timed]},base:p=>p,route:p=>p}),path);
+ const panel=media.document.querySelector('[data-delivery-review]'),form=panel.querySelector('[data-moment-form]'),older=panel.querySelector('#video-sample-v1'),newer=panel.querySelector('#video-sample-v2');
+ for(const player of [older,newer]){player.pause=()=>{};player.load=()=>{};player.scrollIntoView=()=>{};}
+ const capture=panel.querySelector('[data-capture-moment="sample-v2"]');
+ assert.equal(capture.hidden,false);newer.currentTime=18.7;capture.click();
+ assert.equal(form.elements.seconds.value,'18');assert.equal(form.elements.file.value,latest.id);assert.equal(media.document.activeElement,form.elements.comment);
+ assert.match(form.querySelector('[role=status]').textContent,/00:18/);form.elements.file.value=earlier.id;form.elements.file.dispatchEvent(new media.Event('change'));assert.equal(form.elements.seconds.value,'');
+ newer.currentTime=0;capture.click();assert.equal(form.elements.seconds.value,'0');
+ form.querySelector('[data-clear-moment]').click();assert.equal(form.elements.seconds.value,'');
+ older.closest('details').open=false;panel.querySelector('[data-jump-file]').click();assert.equal(older.closest('details').open,true);assert.equal(older.preload,'metadata');
+ older.dispatchEvent(new media.Event('loadedmetadata'));assert.equal(older.currentTime,12);assert.equal(newer.currentTime,0);assert.deepEqual(errors,[]);
+ checks.push('Timed comments select their exact video version, retain second zero, clear on a file change, and seek after the old video loads');
  console.log(JSON.stringify({status:'LUMINA_DELIVERIES_DOM_PASS',checks},null,2));
 }finally{for(const close of cleanup.reverse())await close();}

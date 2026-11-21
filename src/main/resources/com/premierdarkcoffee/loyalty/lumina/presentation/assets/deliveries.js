@@ -48,3 +48,54 @@ for(const panel of document.querySelectorAll('[data-piece-preview]')){
     if(media){media.src=link.href;mount.append(media);}
   });
 }
+
+for (const panel of document.querySelectorAll('[data-delivery-review]')) {
+  const form=panel.querySelector('[data-moment-form]');
+  const field=form?.elements.seconds;
+  function showMoment() {
+    const note=form.querySelector('[data-draft-moment]');
+    note.hidden=field.value==='';
+    if(!note.hidden){
+      const seconds=Number(field.value);
+      const time=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
+      note.querySelector('[role=status]').textContent='Comentario en '+time;
+    }
+  }
+  if(form){
+    showMoment();
+    const clear=()=>{field.value='';showMoment();};
+    form.elements.file?.addEventListener('change',clear);
+    form.querySelector('[data-clear-moment]').addEventListener('click',()=>{clear();form.elements.comment.focus();});
+    for(const capture of panel.querySelectorAll('[data-capture-moment]')){
+      const player=document.getElementById('video-'+capture.dataset.captureMoment);
+      capture.hidden=false;
+      capture.addEventListener('click',()=>{
+        player.pause();
+        form.closest('details').open=true;
+        form.elements.file.value=capture.dataset.captureMoment;
+        field.value=String(Math.floor(player.currentTime||0));
+        showMoment();
+        form.elements.comment.focus();
+      });
+    }
+  }
+  for(const link of panel.querySelectorAll('[data-jump-file]'))link.addEventListener('click',event=>{
+    if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+    const player=document.getElementById('video-'+link.dataset.jumpFile);
+    if(!player||!panel.contains(player))return;
+    event.preventDefault();
+    for(let parent=player.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
+    player.pause();
+    const seconds=Number(link.dataset.seconds);
+    if(player.readyState>=1)player.currentTime=seconds;
+    else{
+      // An older video may have preload=none. The last selected moment wins
+      // even when several comments are opened while its metadata loads.
+      player.onloadedmetadata=()=>{player.onloadedmetadata=null;player.currentTime=seconds;};
+      player.preload='metadata';
+      if(player.networkState===0||player.networkState===3)player.load();
+    }
+    player.focus();
+    player.scrollIntoView({block:'center'});
+  });
+}

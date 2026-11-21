@@ -177,7 +177,12 @@ async function run() {
         assert.equal(await page.locator('#openWalletRecovery').count(),0);
         const review=page.locator('#purchase button:not([type])'); assert.ok(await review.isDisabled());
         await page.locator('#receipt').fill('   ');await page.locator('#amount').fill('5');assert.ok(await review.isDisabled());
-        await page.locator('#receipt').fill('CAJA-01');assert.ok(await review.isEnabled());
+        const folio=page.getByRole('button',{name:'Generar folio',exact:true});
+        assert.equal(await page.locator('[data-reference-for="receipt"] select').count(),0);
+        await folio.click();assert.match(await page.locator('#receipt').inputValue(),/^REF-[A-F0-9]{16}$/);
+        assert.ok(await review.isEnabled());
+        await page.locator('#receipt').fill('CAJA-01');await folio.click();
+        assert.equal(await page.locator('#receipt').inputValue(),'CAJA-01');assert.ok(await review.isEnabled());
         await open('cashier');await page.locator('.counter-legacy summary').click();const legacy=page.locator('#confirm');
         assert.ok(await legacy.locator('button').isDisabled());await legacy.locator('#token').fill('x'.repeat(32));
         await legacy.evaluate(f=>{f.requestSubmit();f.requestSubmit();});await page.locator('.counter-receipt').waitFor();

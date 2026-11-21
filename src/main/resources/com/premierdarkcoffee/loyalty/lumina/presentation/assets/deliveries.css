@@ -10,3 +10,7 @@
 .delivery-review-entry small{display:block;margin-top:.25rem;color:var(--muted,#4e5f72)}
 .delivery-review-record details,.delivery-review-record .btn{margin-top:.75rem}
 .delivery-review-record details .delivery-review-entry{margin-top:.7rem}
+
+.delivery-player { display: grid; gap: .5rem; justify-items: start; }
+.delivery-player [hidden], [data-draft-moment][hidden] { display: none; }
+.video-time-link { display: inline-block; margin: .4rem 0; font-variant-numeric: tabular-nums; }

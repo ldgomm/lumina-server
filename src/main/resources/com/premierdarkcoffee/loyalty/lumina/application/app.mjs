@@ -1,3 +1,7 @@
+import { accountOutlook, planComparison, pricedContracts } from '../memberships/cut-outlook.mjs';
+import { agencyCut, followUp } from '../businesses/follow-up.mjs';
+import { agencyOutlookPage, followUpPage } from '../presentation/pages/agency-follow-up.mjs';
+import { planComparisonPanel } from '../presentation/pages/plan-comparison.mjs';
 import { requestProgressSql } from '../production/request-progress.mjs';
 import { operationState, operatingSql, requestBusinessSql } from '../businesses/operation-state.mjs';
 import { teamAdministrator } from '../access/team-administration.mjs';
@@ -30,7 +34,7 @@ import { legalProfile, saveLegalProfile } from '../billing/subscription.mjs';
 import { subscriptionPage, legalProfilePage } from '../presentation/pages/subscription-pages.mjs';
 import { openWalletOrders, walletPlanContext } from '../memberships/wallet-overview.mjs';
 import { walletCheckoutPage } from '../presentation/pages/wallet-checkout-pages.mjs';
-import { inTrial, paidFrom, paidWallet, setChoice, standardIds, trialChoice, trialOffer } from '../memberships/trial.mjs';
+import { confirmedBranchCount, inTrial, paidFrom, paidWallet, setChoice, standardIds, trialChoice, trialOffer } from '../memberships/trial.mjs';
 import { advanceCalendar, stopSchedule, syncCalendars, expiryAlerts } from '../memberships/calendar.mjs';
 import { includesWallet, walletCheckout, validateWalletCheckout, confirmWalletCheckout } from '../memberships/wallet-checkout.mjs';
 import { canReadFidelityReport, centralPaths, managementSections, managementTitles } from '../wallet/management-policy.mjs';
@@ -469,7 +473,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
       if(path==='/billing'&&method==='GET') {
         requireOwner(actor);company=companyFor(db,actor);
         const {offset,view}=billingView();
-        const contracts=contractsFor(db,company.id);
+        const contracts=await pricedContracts(db,wallets,actor,company,contractsFor(db,company.id));
         let account;
         try{account=company.loyalty_tenant?await wallets.account(actor,offset):emptyAccount(company,localDay());}
         catch(error){if(!(error instanceof Problem))throw error;return render({title:'Mi cuenta y pagos',body:card('Saldo no disponible','<p>No pudimos consultar los cargos y pagos. Tus registros se conservan.</p>'+localLink('/billing','Reintentar','btn secondary'))+contractSummary(contracts,localDay())},503);}
@@ -501,7 +505,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           let account=company.loyalty_tenant?null:emptyAccount(company,localDay());if(company.loyalty_tenant)try{account=await wallets.administration(actor,company.id,'account',{offset:panel.offset});}catch(error){issueText=issueText||error.message;}
           const walletOnly=panel.view==='wallet';
           const commands=walletOnly?[]:db.all('SELECT * FROM business_commands WHERE company_id=? ORDER BY created_at DESC LIMIT 50',company.id);
-          const details=walletOnly?{}:{courtesy:courtesyState(db,company.id),work:businessWorkSummary(db,actor,company.id),serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:contractsFor(db,company.id)};
+          const details=walletOnly?{}:{courtesy:courtesyState(db,company.id),work:businessWorkSummary(db,actor,company.id),serviceStatus:serviceStatus(db,actor,company.id,{nativeAccess:account?.access??null}),contracts:await pricedContracts(db,wallets,actor,company,contractsFor(db,company.id))};
           return render({title:walletOnly?'Cobros de Wallet · '+company.name:'Administrar negocio',body:controlPage(actor,company,businessControl(db,company.id),commands,account,issueText,data||{},{...details,view:panel.view,action:method==='POST'?administration[2]:'',notice:{charge:'Cargo registrado.',reverse:'Registro de pago revertido.',void:'Cargo anulado.',state:'Estado actualizado.',delete:'Negocio eliminado. Su historial se conserva.',restore:'Negocio restaurado.',retry:'Sincronización confirmada.'}[target.searchParams.get('saved')]||''})},status);
         };
         if(method==='POST')try {
@@ -711,6 +715,14 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return render(accountView({error:error.message}),error.status);
         }
       }
+      if(path==='/businesses/wallet-outlook'||path==='/businesses/follow-up'){
+        requireAgency(actor);
+        requireThat(method==='GET','Esta consulta es de solo lectura.',405);
+        const forecast=path.endsWith('wallet-outlook');
+        const info=forecast?await agencyCut(db,wallets,actor,target.searchParams):await followUp(db,wallets,actor,target.searchParams);
+        actor=getSession(db,cookie);requireThat(actor?.kind==='AGENCY','La sesión de la agencia cambió.',403);
+        return render({title:forecast?'Previsión de cobros de Wallet':'Seguimiento de negocios',body:forecast?agencyOutlookPage(info):followUpPage(info)});
+      }
       if (path==='/businesses' && method==='GET') {
         requireAgency(actor);
         return render({title:'Clientes',description:'Negocios, estados y contactos en un solo lugar.',body:businessDirectoryPage(businessDirectory(db,actor,target.searchParams))});
@@ -878,22 +890,23 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           const contracts = company ? contractsFor(db,company.id) : [];
           const view=target.searchParams.get('view')||'catalog';
           if(view==='catalog'&&actor.kind==='OWNER'){
-            let native=null,unavailable=false;
+            let native=null,unavailable=false,branches=company.loyalty_tenant?null:1;
             if(!inTrial() && company.loyalty_tenant && plans.some(p=>p.wallet!=='NONE'))try {
               const status=await wallets.subscription(actor);
+              if(Array.isArray(status.branches)&&status.branches.length)branches=status.branches.length;
               if(status.agreement?.activationOn>=paidFrom || status.legacy&&status.recurring&&status.startsOn>=paidFrom)native={membership:{coveredUntil:status.coveredUntil,nextChargeOn:status.nextChargeOn,
                 plan:{recurring:status.recurring,walletEndsOn:status.endsOn,intervalMonths:status.intervalMonths||(status.cycle==='ANNUAL'?12:1)}}};
             } catch(issue) {
               if(!(issue instanceof Problem) || ![404,503].includes(issue.status))throw issue;
               unavailable=true;
             }
-            plans=withEligibility(db,company.id,plans.map(p=>trialOffer(p)).filter(Boolean),native?.membership);
+            plans=withEligibility(db,company.id,plans.map(p=>trialOffer(p)).filter(Boolean),native?.membership).map(p=>standardIds.includes(p.id)?{...p,registeredBranches:branches}:p);
             if(unavailable)plans=plans.map(p=>p.wallet==='NONE'?p:{...p,blockedNow:'No se pudo consultar tu Wallet. Vuelve a intentarlo.',blockedNext:'No se pudo consultar tu Wallet. Vuelve a intentarlo.'});
           }
           requireThat(['catalog','agreements','orders'].includes(view),'Vista no encontrada.',404);
           const orders=ordersFor(db,actor,company,integer(target.searchParams.get('page')||'0','página',{min:0,max:100000}),target.searchParams.get('history')==='trial');
           return render({title:'Paquetes y servicios',description:'Combina servicios mensuales y trabajos puntuales, con cada precio y cupo claro.',
-            body:packagesPage({actor,company,url,plans,contracts,orders,view})});
+            body:packagesPage({actor,company,url,plans,contracts:view==='agreements'&&company?await pricedContracts(db,wallets,actor,company,contracts):contracts,orders,view})});
         }
         if(method==='POST'&&path==='/plans/request') {
           try{
@@ -930,7 +943,18 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           const [,id,action]=orderMatch;
           const order=getOrder(db,actor,company,id);
           const currentBranches=async()=>order.lines.some(l=>standardIds.includes(l.plan_id))&&['REQUESTED','QUOTED'].includes(order.status)&&company.loyalty_tenant?
-            (actor.kind==='AGENCY'?await wallets.administration(actor,company.id,'account'):await wallets.account(actor)).branchCount||1:order.initial_branches||1;
+            confirmedBranchCount(actor.kind==='AGENCY'?await wallets.administration(actor,company.id,'account'):await wallets.account(actor)):order.initial_branches||1;
+          const reviewPage=async(candidate,options={})=>{
+            const reviewed=walletCheckout(db,candidate,await currentBranches())||candidate;
+            let comparison='';
+            if(actor.kind==='OWNER'&&!reviewed.trial_archive&&['REQUESTED','QUOTED','ACCEPTED'].includes(reviewed.status)){
+              const outlook=await accountOutlook(db,wallets,actor,company);
+              comparison=planComparisonPanel(planComparison(db,company,reviewed,outlook));
+            }
+            return orderPage({actor,company,url,order:reviewed,comparison,...options,
+              campaignLive:actor.kind==='OWNER'&&listPlans(db).some(p=>p.campaign&&trialOffer(p)),
+              audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)});
+          };
           if(method==='GET'&&!action){
             let walletAvailable=false,walletScheduled=false;
             if(actor.kind==='OWNER' && order.status==='ACTIVE' && includesWallet(order)){
@@ -944,7 +968,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
               }
             }
             return render({title:order.lines.length===1&&includesWallet(order)?'Mi plan de Wallet':'Tu combinación de servicios',
-            body:orderPage({actor,company,url,walletAvailable,walletScheduled,order:walletCheckout(db,order,await currentBranches())||order,audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})});
+            body:await reviewPage(order,{walletAvailable,walletScheduled})});
           }
           if(method==='POST'&&action) {
             try {
@@ -957,7 +981,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
                   const reviewed=validateWalletCheckout(db,actor,company,id,data,branches);
                   if(latest.status!=='ACTIVE'&&includesWallet(latest)) {
                     const account=await wallets.prepareActivation(actor);
-                    branches=account.branchCount||1;
+                    if(latest.lines.some(line=>standardIds.includes(line.plan_id)))branches=confirmedBranchCount(account);
                     const raw=account.membership?.plan;
                     const previous=raw && (raw.walletAgreement?.activationOn||raw.startedOn||paidFrom)>=paidFrom?raw:null;
                     const coveredUntil=previous?.walletEndsOn || account.membership?.coveredUntil || account.membership?.nextChargeOn;
@@ -993,9 +1017,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
             } catch(issue) {
               if (!(issue instanceof Problem) || ![400,409,503].includes(issue.status)) throw issue;
               const refreshed=getOrder(db,actor,company,id);
-              return render({title:refreshed.lines.length===1&&includesWallet(refreshed)?'Mi plan de Wallet':'Revisa tu propuesta',body:orderPage({actor,company,url,order:walletCheckout(db,refreshed,await currentBranches())||refreshed,
-                values:action==='quote'?data:{revision:data.revision},error:issue.message,
-                audit:db.all("SELECT * FROM audit WHERE company_id=? AND subject='ORDER' AND subject_id=? ORDER BY seq DESC LIMIT 100",company.id,id)})},issue.status);
+              return render({title:refreshed.lines.length===1&&includesWallet(refreshed)?'Mi plan de Wallet':'Revisa tu propuesta',body:await reviewPage(refreshed,{values:action==='quote'?data:{revision:data.revision},error:issue.message})},issue.status);
             }
           }
         }

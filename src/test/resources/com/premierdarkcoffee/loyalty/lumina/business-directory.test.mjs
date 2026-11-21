@@ -43,3 +43,17 @@ test('directory rejects invalid filters and renders names and searches as text',
  const {db}=fixture(t,3);for(const values of [{state:'DELETE'},{sort:'name; DROP TABLE companies'},{page:'-1'},{page:'1e2'},{verification:'TRUE'}])assert.throws(()=>businessDirectory(db,actor,query(values)));
  const html=businessDirectoryPage(businessDirectory(db,actor,query({q:'<Taller & Sol>'})));assert.match(html,/&lt;Taller &amp; Sol&gt;/);assert.doesNotMatch(html,/<Taller/);assert.match(html,/Limpiar filtros/);
 });
+
+test('el seguimiento distingue la primera compra, la cortesía pendiente y los datos no disponibles',async t=>{
+ const {db,ids}=fixture(t,10),{followUp}=await import('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/businesses/follow-up.mjs');
+ const tenants=[0,4,8].map(i=>{const tenant=randomUUID();db.run('UPDATE companies SET loyalty_tenant=? WHERE id=?',tenant,ids[i]);db.run("INSERT INTO company_services(company_id,service,status,activated_at) VALUES(?,'WALLET','ACTIVE','2026-11-01T12:00:00Z')",ids[i]);return tenant;});
+ const remote={firstPurchases:async()=>[{tenant:tenants[0],active:true,purchased:false},{tenant:tenants[1],active:false,purchased:true}]};
+ const wallet=await followUp(db,remote,actor,query({view:'wallet'}));
+ assert.deepEqual(wallet.rows.map(r=>r.id),[ids[0]]);assert.equal(wallet.unavailable,1);
+ const req=randomUUID(),owner=db.get("SELECT id FROM accounts WHERE company_id=? AND kind='OWNER'",ids[4]).id;
+ db.run("INSERT INTO requests(id,company_id,owner_id,type,channel,service,quantity,title,brief,status,created_at) VALUES(?,?,?,'COURTESY','SOCIAL','VIDEO',1,'Mi video','Datos','NEW','2026-11-04T12:00:00Z')",req,ids[4],owner);
+ assert.deepEqual((await followUp(db,remote,actor,query({view:'courtesy'}))).rows.map(r=>r.request),[req]);
+ db.run("UPDATE requests SET status='DELIVERED' WHERE id=?",req);
+ assert.equal((await followUp(db,remote,actor,query({view:'courtesy'}))).total,0);
+ await assert.rejects(followUp(db,remote,{kind:'OWNER'},query({})),e=>e.status===403);
+});

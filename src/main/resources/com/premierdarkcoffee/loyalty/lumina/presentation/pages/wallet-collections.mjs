@@ -19,7 +19,7 @@ export function walletCollections(actor, company, account, error, values, option
   const cut = balance?.nextCut;
   const retrying = options.action === 'payment' && values.walletCut === 'yes' && isId(values.invoiceId) && isId(values.requestKey);
   const state = account && walletStatus(account);
-  const nav = `<div class="actions">${localLink('/businesses','← Negocios')}${localLink(base,'Administrar negocio')}${localLink(base+'?view=payments','Ver pagos y comprobantes')}</div>`;
+  const nav = `<div class="actions">${localLink('/businesses','← Negocios')}${localLink(base,'Administrar negocio')}${localLink(base+'?view=payments','Ver pagos y comprobantes')}${localLink('/businesses/wallet-outlook?company='+company.id,'Previsión del próximo corte')}</div>`;
   const heading = state ? badge(state, state === 'Pago vencido' ? 'warning' : '') : '';
   const alert = error ? `<p class="notice" role="alert">${esc(error)}</p>` : '';
   const settle = cut && {id: cut.invoiceId, walletCutMinor: cut.remainingMinor};

@@ -53,3 +53,19 @@
 }
 .owner-account #pago-wallet {scroll-margin-block-start:6rem}
 .owner-account .owner-wallet-paid:not(:target) {display:none}
+
+.plan-compare-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
+.plan-compare-columns section { border: 1px solid #d9e3ef; border-radius: 12px; padding: 1rem; overflow-wrap: anywhere; }
+.plan-compare-columns h3, .cut-summary h3, .follow-up-row h3 { margin: 0 0 .4rem; }
+.plan-compare-columns ul { padding-inline-start: 1.2rem; }
+.plan-compare-columns small, .outlook-line span, .outlook-line small { display: block; }
+.cut-summary { background: #edf3fa; color: #142540; border-radius: 12px; padding: 1rem; margin-top: 1rem; }
+.cut-summary > strong { font-size: 1.35rem; }
+.cut-summary p { margin: .35rem 0 0; }
+.outlook-business, .follow-up-row { border-top: 1px solid #d9e3ef; padding-block: 1rem; overflow-wrap: anywhere; }
+.outlook-line { border-inline-start: 3px solid #a5bdda; margin: .6rem 0 1rem; padding-inline-start: .8rem; }
+.follow-up-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
+.follow-up-row p { margin: 0; }
+@media(max-width:620px) { .plan-compare-columns { grid-template-columns: 1fr; } }
+
+.plan-rates{margin-block:1.1rem}.plan-rates ul{display:flex;flex-wrap:wrap;gap:.4rem 1.5rem;list-style:none;margin:.3rem 0;padding:0}.plan-rates li{font-weight:650}

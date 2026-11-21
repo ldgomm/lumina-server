@@ -138,3 +138,23 @@ test('content cards count one asset per version family, not each revision',async
  const actor={...w.db.get("SELECT * FROM accounts WHERE company_id=? AND kind='OWNER'",w.id),grants:[]};
  const data=contentData(w.db,actor,w.db.get('SELECT * FROM companies WHERE id=?',w.id),new URLSearchParams({view:'production'}));assert.equal(data.rows[0].evidence_count,1);
 });
+
+test('el comentario abre el segundo exacto de su versión y conserva el momento al reintentar',async t=>{
+ const w=await setup(t);
+ const video=Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypisom'),Buffer.alloc(20)]);
+ assert.equal((await w.upload({name:'cocina.mp4',bytes:video})).status,303);
+ const first=files(w)[0];
+ const key=uuid(),data={request_key:key,file:first.id,seconds:'12',comment:'Cambia el precio que aparece aquí.'};
+ for(let attempt=0;attempt<2;attempt++)assert.equal((await w.client.post(w.path+'/comment',data)).status,303);
+ assert.equal((await w.client.post(w.path+'/comment',{...data,seconds:'13'})).status,409);
+ assert.equal((await w.upload({name:'cocina.mp4',bytes:video,values:{asset:first.asset_id}})).status,303);
+ const detail=(await w.admin.get(selected(w.requestPath,w.id))).body;
+ assert.ok(detail.includes('data-jump-file="'+first.id+'" data-seconds="12">Ver 00:12</a>'));
+ assert.ok(detail.includes('controls playsinline preload="none" id="video-'+first.id+'"'));
+ assert.ok(detail.includes('?company='+w.id+'#t=12'));
+ assert.equal((await w.upload()).status,303);
+ const photo=files(w).find(f=>f.media_type.startsWith('image/'));
+ for(const [file,seconds] of [[first.id,'-1'],[first.id,'abc'],[photo.id,'12'],['','0']])assert.equal((await w.client.post(w.path+'/comment',{...data,request_key:uuid(),file,seconds})).status,400);
+ assert.equal((await w.client.post(w.path+'/comment',{...data,request_key:uuid(),seconds:'0'})).status,303);
+ assert.equal(w.db.get('SELECT count(*) n FROM video_comment_moments').n,2);
+});
