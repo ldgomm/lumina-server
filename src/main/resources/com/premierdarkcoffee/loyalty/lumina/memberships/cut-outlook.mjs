@@ -5,18 +5,18 @@ import { contractsFor } from './billing.mjs';
 
 export const upcomingCut=(today=localDay())=>nextCut(today<paidFrom?paidFrom:today);
 
-export async function accountOutlook(db,wallets,actor,company,today=localDay()) {
-  const cut=upcomingCut(today);
+export async function accountOutlook(db,wallets,actor,company,today=localDay(),selectedCut=null) {
+  const cut=selectedCut||upcomingCut(today);
   const unknown={cut,lines:[],available:false};
   if(!company.loyalty_tenant) {
     const scheduled=db.get('SELECT 1 FROM wallet_schedules WHERE company_id=? AND consent_on>=? LIMIT 1',company.id,paidFrom);
-    return {cut,lines:[],available:!scheduled};
+    return {cut,lines:[],available:!scheduled,referenceAvailable:!scheduled,bills:[]};
   }
   try {
-    const forecast=await wallets.outlook(actor,company);
+    const forecast=await wallets.outlook(actor,company,selectedCut);
     const stored=db.get('SELECT revision FROM wallet_calendar_sync WHERE company_id=?',company.id);
     if(forecast.cut!==cut || !Array.isArray(forecast.lines) || !Number.isSafeInteger(forecast.revision) ||
-       (stored && stored.revision!==forecast.revision))return unknown;
+       (cut===upcomingCut(today) && stored && stored.revision!==forecast.revision))return unknown;
     return {...forecast,available:true};
   } catch(e){
     if(!(e instanceof Problem)||![404,409,502,503].includes(e.status))throw e;

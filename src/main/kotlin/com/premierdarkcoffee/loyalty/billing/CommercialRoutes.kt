@@ -85,7 +85,7 @@ fun Route.commercialRoutes(service: LoyaltyService, platformToken: String) {
                     ), input) })
             }
 
-            get("/wallet-outlook") { call.respond(io { commercial.walletOutlook(call.parameters["tenant"]!!) }) }
+            get("/wallet-outlook") { call.respond(io { commercial.walletOutlook(call.parameters["tenant"]!!,call.request.queryParameters["cut"]) }) }
             get("/account") { call.respond(io { commercial.account(call.parameters["tenant"]!!, offset = call.offset()) }) }
             get("/metrics") { call.respond(io { commercial.metrics(call.parameters["tenant"]!!, call.days()) }) }
             get("/return-radar") { val query=call.radarQuery(); call.respond(io { service.returnRadar(call.parameters["tenant"]!!,query) }) }

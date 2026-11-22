@@ -118,6 +118,8 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         obj("state" to state.getValue("effectiveState"), "canOperate" to (state.getValue("effectiveState").jsonPrimitive.content == "ACTIVE"))
     }
     internal fun sync(c: Connection, tenant: String, date: LocalDate) {
+        captureCut(c,tenant,date)
+        issueBranchAdditions(c,tenant,date)
         syncCatalog(c,tenant,date)
         syncOpeningPeriods(c,tenant,date)
         val p = plan(c, tenant) ?: return
@@ -152,7 +154,8 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
             c.rows("""SELECT tenant_id FROM billing_memberships WHERE (config->>'recurring')::boolean AND next_on<=?
                 UNION SELECT tenant_id FROM wallet_opening_periods WHERE NOT billed AND starts_on<date_trunc('month',?::date)::date
                 UNION SELECT tenant_id FROM wallet_catalog_schedules WHERE next_start<bill_before AND next_start<=date_trunc('month',?::date)::date
-                AND (ends_before IS NULL OR next_start<ends_before)""",tomorrow,tomorrow,tomorrow) { it.getString(1) }
+                AND (ends_before IS NULL OR next_start<ends_before)
+                UNION SELECT tenant_id FROM wallet_branch_additions WHERE invoice_id IS NULL AND amount_minor>0 AND cut_on<=?""",tomorrow,tomorrow,tomorrow,tomorrow) { it.getString(1) }
         }
         var failures = 0
         tenants.forEach { tenant -> try { db.tx { c -> lock(c, tenant); sync(c, tenant, today(c, tenant)) } } catch (_: Exception) { failures++ } }

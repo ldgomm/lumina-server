@@ -1,5 +1,8 @@
 package com.premierdarkcoffee.loyalty.businesses
 
+import com.premierdarkcoffee.loyalty.billing.branchOffer
+import com.premierdarkcoffee.loyalty.billing.recordBranchAddition
+
 import com.premierdarkcoffee.loyalty.access.Staff
 import com.premierdarkcoffee.loyalty.access.authorizeStaff
 import com.premierdarkcoffee.loyalty.access.team
@@ -40,7 +43,7 @@ object AdministrationMigration {
     }
 }
 
-@Serializable data class ManagedBranch(val name: String, val code: String) {
+@Serializable data class ManagedBranch(val name: String, val code: String, @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER) val acceptedBranchQuote: String? = null) {
     fun normalized() = copy(name=name.trim(), code=code.trim())
     fun validate() {
         need(name.length in 2..120 && name.none { it.isISOControl() }, "INVALID_BRANCH_NAME", "Escribe un nombre de sucursal de 2 a 120 caracteres.")
@@ -112,7 +115,7 @@ fun LoyaltyService.branchDirectory(s: Staff, q: BranchDirectoryQuery = BranchDir
         }
         val subscription=commercial.plan(c,s.tenant)
         obj("business" to business,"items" to items,"total" to total,"offset" to q.offset,"hasMore" to (q.offset+items.size<total),"from" to since,"asOf" to at,"days" to 30,
-            "walletRecurring" to (subscription?.first?.walletAgreement!=null && subscription.first.recurring),
+            "branchOffer" to commercial.branchOffer(c,s.tenant), "walletRecurring" to (subscription?.first?.walletAgreement!=null && subscription.first.recurring),
             "walletIntervalMonths" to (subscription?.first?.intervalMonths?:1),
             "walletUnitMinor" to (subscription?.first?.feeMinor?:com.premierdarkcoffee.loyalty.billing.WALLET_BRANCH_PRICE))
     }
@@ -123,10 +126,12 @@ fun LoyaltyService.createManagedBranch(s: Staff, input: ManagedBranch, key: Stri
     return db.tx { c ->
         authorizeStaff(c,s,true)
         once(c,s.tenant,"managed-branch-create:${s.id}",key,json.encodeToString(branch)) {
+            commercial.lock(c,s.tenant)
             commercial.requireActive(c,s.tenant)
             need(c.one("SELECT id FROM branches WHERE tenant_id=? AND code=?",s.tenant,branch.code){it.getString(1)}==null,"BRANCH_CODE_EXISTS","Ya hay una sucursal con ese código. Elige otro.",409)
             val target=id()
-            c.exec("INSERT INTO branches(tenant_id,id,name,code,updated_at) VALUES(?,?,?,?,?)",s.tenant,target,branch.name,branch.code,Timestamp.from(clock.instant()))
+            c.exec("INSERT INTO branches(tenant_id,id,name,code,updated_at,created_at) VALUES(?,?,?,?,?,?)",s.tenant,target,branch.name,branch.code,Timestamp.from(clock.instant()),Timestamp.from(clock.instant()))
+            commercial.recordBranchAddition(c,s.tenant,target,branch.name,s.id,branch.acceptedBranchQuote)
             teamAudit(c,s,target,"CREATE_BRANCH",obj("name" to branch.name,"code" to branch.code))
             obj("id" to target,"name" to branch.name,"code" to branch.code,"version" to 1)
         }

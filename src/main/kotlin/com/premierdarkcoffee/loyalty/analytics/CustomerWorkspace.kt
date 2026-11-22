@@ -68,7 +68,7 @@ fun LoyaltyService.customerWorkspace(s: Staff, memberId: String, query: Customer
                     jsonb_build_object('id',p.id,'kind','PURCHASE','at',p.created_at,'branchId',p.branch_id,
                       'branch',b.name,'receipt',p.receipt,'description',p.description,'paidMinor',p.amount_minor,
                       'grossMinor',coalesce(p.gross_minor,p.amount_minor+p.discount_minor),'discountMinor',p.discount_minor,
-                      'items',p.items,'redemptionId',p.redemption_id) AS data
+                      'items',p.items,'redemptionId',p.redemption_id,'corrected',EXISTS(SELECT 1 FROM purchase_corrections cc WHERE cc.tenant_id=p.tenant_id AND cc.purchase_id=p.id)) AS data
                 FROM purchases p JOIN branches b ON b.tenant_id=p.tenant_id AND b.id=p.branch_id
                 WHERE p.tenant_id=? AND p.member_id=? AND p.created_at<=?
                 UNION ALL

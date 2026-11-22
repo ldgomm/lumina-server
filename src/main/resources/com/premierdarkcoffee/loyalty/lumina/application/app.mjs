@@ -1,12 +1,12 @@
 import { accountOutlook, planComparison, pricedContracts } from '../memberships/cut-outlook.mjs';
-import { agencyCut, followUp } from '../businesses/follow-up.mjs';
+import { agencyCut, followUp, recordContact } from '../businesses/follow-up.mjs';
 import { agencyOutlookPage, followUpPage } from '../presentation/pages/agency-follow-up.mjs';
 import { planComparisonPanel } from '../presentation/pages/plan-comparison.mjs';
 import { requestProgressSql } from '../production/request-progress.mjs';
 import { operationState, operatingSql, requestBusinessSql } from '../businesses/operation-state.mjs';
 import { teamAdministrator } from '../access/team-administration.mjs';
 import { teamRoutes } from './team-routes.mjs';
-import { fileDetails, saveFile, commentPiece } from '../content/deliverables.mjs';
+import { fileDetails, saveFile, commentPiece, trackCorrection, resolveComment } from '../content/deliverables.mjs';
 import { contractSummary } from '../presentation/pages/contract-summary.mjs';
 import { notificationFilters, notificationReturn, notifications, seeNotification, reopenNotification } from '../production/notifications.mjs';
 import { calendarVisit, visitCalendar } from '../production/calendar-file.mjs';
@@ -132,7 +132,7 @@ const operations = {
   '/visits':addVisit, '/visits/close':finishVisit, '/pieces':addPiece,
 };
 const pieceOperations = {
-  edit:editPiece, review:reviewPiece, evidence:addEvidence, publication:addPublication, measure:addSocialMetric, comment:commentPiece,
+  edit:editPiece, review:reviewPiece, evidence:addEvidence, publication:addPublication, measure:addSocialMetric, comment:commentPiece, track:trackCorrection, resolve:resolveComment,
 };
 function getRequestPage(db,actor,company,url,request,feedback=null) {
   const pieces = db.all('SELECT * FROM pieces WHERE company_id=? AND request_id=? ORDER BY created_at,id',company.id,request.id)
@@ -715,13 +715,18 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return render(accountView({error:error.message}),error.status);
         }
       }
+      if(path==='/businesses/follow-up/contact'&&method==='POST'){
+        requireAgency(actor);
+        await recordContact(db,wallets,actor,data);
+        return redirect(res,'/businesses/follow-up?'+new URLSearchParams({view:data.kind,q:String(data.q||'').slice(0,100),page:/^\d{1,5}$/.test(data.page)?data.page:'0'})+'#case-'+data.company);
+      }
       if(path==='/businesses/wallet-outlook'||path==='/businesses/follow-up'){
         requireAgency(actor);
         requireThat(method==='GET','Esta consulta es de solo lectura.',405);
         const forecast=path.endsWith('wallet-outlook');
         const info=forecast?await agencyCut(db,wallets,actor,target.searchParams):await followUp(db,wallets,actor,target.searchParams);
         actor=getSession(db,cookie);requireThat(actor?.kind==='AGENCY','La sesión de la agencia cambió.',403);
-        return render({title:forecast?'Previsión de cobros de Wallet':'Seguimiento de negocios',body:forecast?agencyOutlookPage(info):followUpPage(info)});
+        return render({title:forecast?'Cierre y previsión de Wallet':'Seguimiento de negocios',body:forecast?agencyOutlookPage(info):followUpPage(info,actor)});
       }
       if (path==='/businesses' && method==='GET') {
         requireAgency(actor);
@@ -853,7 +858,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
           return await fileStore.serve(req,res,file);
         }
         if (method==='POST') {
-          const pieceMatch = rest.match(/^\/pieces\/([^/]+)\/(edit|review|evidence|publication|measure|comment)$/);
+          const pieceMatch = rest.match(/^\/pieces\/([^/]+)\/(edit|review|evidence|publication|measure|comment|track|resolve)$/);
           try {
             if (Object.hasOwn(operations,rest)) operations[rest](db,actor,company,request,data);
             else if (pieceMatch && isId(pieceMatch[1])) {

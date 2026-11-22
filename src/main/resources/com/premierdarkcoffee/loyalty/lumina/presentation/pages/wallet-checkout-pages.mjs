@@ -80,7 +80,7 @@ function catalogue(actor,company,plans,filter,context,collapsed) {
   const nav=packs.length?`<nav class="wallet-tabs" aria-label="Servicios del plan"><a href="/plans/wallet?offers=wallet#planes-wallet"${packages?'':' aria-current="page"'}>Solo Wallet</a>
     <a href="/plans/wallet?offers=packages#planes-wallet"${packages?' aria-current="page"':''}>Wallet con otros servicios</a></nav>`:'';
   const options=packages&&packs.length?grid(packs):grid(standards)+(custom.length?disclosure('Otras ofertas de Wallet',grid(custom)):'');
-  const hint=packages?'El precio corresponde al paquete completo.':'El total se calcula por sucursal. Si abres otra durante el período, se incluye en la siguiente renovación de tu plan.';
+  const hint=packages?'El precio corresponde al paquete completo.':'El total se calcula por sucursal. Al abrir una sucursal verás el importe proporcional hasta la renovación. Se registra el día 1 del mes siguiente.';
   const content=nav+'<p>'+hint+'</p>'+options;
   if(collapsed)return `<details class="disclosure wallet-options" id="planes-wallet"${filter==='all'?'':' open'}><summary>Comparar y cambiar de plan</summary><div>${content}</div></details>`;
   return '<section class="wallet-choices" id="planes-wallet"><h2>Elige tu plan de Wallet</h2>'+content+'</section>';

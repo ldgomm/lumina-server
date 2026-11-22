@@ -22,9 +22,7 @@ private fun outlookLine(name:String,start:LocalDate,end:LocalDate,months:Int,uni
     obj("name" to name,"from" to start,"through" to end.minusDays(1),"months" to months,"unitMinor" to unit,
         "branchCount" to branches,"branchNames" to branchNames,"walletMinor" to wallet,"otherMinor" to other)
 
-fun CommercialService.walletOutlook(tenant:String):JsonObject = db.tx { c ->
-    c.exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-    val day=today(c,tenant)
+internal fun CommercialService.forecast(c:java.sql.Connection,tenant:String,day:LocalDate):JsonObject {
     val month=maxOf(day.withDayOfMonth(1),WALLET_PROMOTION_END)
     val cut=month.plusMonths(1)
     val roster=c.rows("SELECT b.name,(b.created_at AT TIME ZONE t.timezone) AS opened FROM branches b JOIN tenants t ON t.id=b.tenant_id WHERE b.tenant_id=? ORDER BY b.created_at,b.id",tenant) {
@@ -77,12 +75,16 @@ fun CommercialService.walletOutlook(tenant:String):JsonObject = db.tx { c ->
         val amount=periodFee(Math.multiplyExact(old.feeMinor,branches.toLong()),start,end,old.intervalMonths)
         lines+=outlookLine(old.name,start,end,old.intervalMonths,old.feeMinor,branches.toLong(),amount,0,emptyList())
     }
+    lines+=c.rows("SELECT * FROM wallet_branch_additions WHERE tenant_id=? AND cut_on=? ORDER BY from_on,branch_id",tenant,Date.valueOf(cut)){
+        outlookLine("Alta de "+it.getString("branch_name"),it.getDate("from_on").toLocalDate(),it.getDate("ends_before").toLocalDate(),it.getInt("months"),
+            it.getLong("unit_minor"),1L,it.getLong("amount_minor"),0,listOf(it.getString("branch_name")))
+    }
     val history=roster.groupingBy { (_,opened) ->
         if(opened.toLocalTime()==java.time.LocalTime.MIDNIGHT)opened.toLocalDate() else opened.toLocalDate().plusDays(1)
     }.eachCount().map { (effective,count)->obj("on" to effective,"count" to count) }
     val legacyActive=legacy!=null && legacy.first.walletAgreement?.activationOn?.let(::billingDate)?.let{it in WALLET_PROMOTION_END..day}==true &&
         (transfer==null || day<transfer) && (legacy.first.recurring || legacy.first.walletEndsOn?.let(::billingDate)?.let{day<it}==true)
-    obj("branchHistory" to history,"legacyActive" to legacyActive,"cut" to cut,"due" to cut.withDayOfMonth(15),"revision" to revision,"branches" to roster.size,"lines" to lines)
+    return obj("branchHistory" to history,"legacyActive" to legacyActive,"cut" to cut,"due" to cut.withDayOfMonth(15),"revision" to revision,"branches" to roster.size,"lines" to lines)
 }
 
 @Serializable data class WalletBusinessList(val tenants:List<String>)
@@ -101,4 +103,31 @@ fun CommercialService.firstPurchaseStates(input:WalletBusinessList):JsonObject =
         val active=!purchased && state=="ACTIVE" && effective(c,id,obj("state" to state),today(c,id))["effectiveState"]?.jsonPrimitive?.content=="ACTIVE"
         obj("tenant" to id,"purchased" to purchased,"active" to active)
     })
+}
+
+internal fun CommercialService.captureCut(c:java.sql.Connection,tenant:String,day:LocalDate) {
+    val outlook=forecast(c,tenant,day)
+    c.exec("""INSERT INTO wallet_cut_previews VALUES(?,?,?::jsonb,?)
+        ON CONFLICT(tenant_id,cut_on) DO UPDATE SET lines=excluded.lines,observed_on=excluded.observed_on
+        WHERE wallet_cut_previews.lines<>excluded.lines""",tenant,Date.valueOf(outlook.getValue("cut").jsonPrimitive.content),
+        outlook.getValue("lines").toString(),Date.valueOf(day))
+}
+
+fun CommercialService.walletOutlook(tenant:String, requested:String?=null):JsonObject = db.tx { c ->
+    c.exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+    val day=today(c,tenant)
+    val upcoming=nextCalendarCut(maxOf(day,WALLET_PROMOTION_END))
+    val cut=requested?.let(::billingDate)?:upcoming
+    need(cut.dayOfMonth==1 && cut>=WALLET_PROMOTION_END.plusMonths(1) && cut<=upcoming,"INVALID_CUT","Selecciona un corte disponible.")
+    val live=cut==upcoming
+    val prior=if(!live)c.one("SELECT lines::text,observed_on FROM wallet_cut_previews WHERE tenant_id=? AND cut_on=?",tenant,Date.valueOf(cut)){
+        json.parseToJsonElement(it.getString(1)).jsonArray to it.getDate(2).toLocalDate()
+    } else null
+    val outlook=if(live)forecast(c,tenant,day) else obj("cut" to cut,"due" to cut.withDayOfMonth(15),"revision" to 0,"lines" to (prior?.first?:JsonArray(emptyList())))
+    if(requested==null)return@tx outlook
+    val bills=c.rows("""SELECT id,description,amount_minor,paid_minor,voided_at FROM billing_invoices
+        WHERE tenant_id=? AND wallet_due AND due_on>=? AND due_on<? ORDER BY description,id""",tenant,Date.valueOf(cut),Date.valueOf(cut.plusMonths(1))){
+        obj("name" to it.getString("description"),"issued" to it.getLong("amount_minor"),"paid" to it.getLong("paid_minor"),"void" to (it.getTimestamp("voided_at")!=null))
+    }
+    JsonObject(outlook+obj("referenceAvailable" to (live||prior!=null),"observedOn" to (if(live)day else prior?.second),"bills" to bills))
 }

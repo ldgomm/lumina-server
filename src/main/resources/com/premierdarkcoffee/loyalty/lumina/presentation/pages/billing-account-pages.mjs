@@ -70,7 +70,7 @@ function agencySubscriptionSummary(account, base) {
     ${branches!==null?`<p class="billing-branch-calculation"><strong>${branches} ${branches===1?'sucursal':'sucursales'}</strong> × ${money(plan.feeMinor)} = <strong>${money(total)} / ${interval}</strong></p>`:''}
     <p>${agreement ? money(plan.feeMinor) + ' por sucursal · ' : ''}${plan.recurring ? 'Próximo cargo: <strong>' + esc(billingDate(membership.nextChargeOn)) + '</strong>' : '<strong>Renovación desactivada</strong>'}</p>
     ${!plan.recurring && plan.walletEndsOn ? `<p>La suscripción finaliza el ${esc(billingDate(inclusiveEnd(plan.walletEndsOn)))}.</p>` : ''}
-    ${agreement ? `<p class="muted">Aceptado por ${esc(agreement.ownerName)}. Las nuevas sucursales se suman desde el siguiente corte.</p>` : ''}`);
+    ${agreement ? `<p class="muted">Aceptado por ${esc(agreement.ownerName)}. Al añadir una sucursal, el dueño ve y acepta su importe proporcional. Se registra el primer día del mes siguiente.</p>` : ''}`);
 }
 function walletPayment(account) {
   const {today,cut,overdueMinor:overdue,hasOverdue,suspendedForDebt,restricted}=walletDues(account);

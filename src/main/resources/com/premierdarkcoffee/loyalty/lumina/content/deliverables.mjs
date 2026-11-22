@@ -7,10 +7,13 @@ import { getPiece, getRequest } from '../production/production.mjs';
 
 export function fileDetails(db,company,piece) {
   const files=db.all('SELECT * FROM content_files WHERE company_id=? AND piece_id=? ORDER BY created_at DESC,version DESC,id',company,piece);
-  const comments=db.all(`SELECT c.*,m.seconds,f.label AS file_label,f.version AS file_version FROM piece_comments c
+  const comments=db.all(`SELECT c.*,m.seconds,f.label AS file_label,f.version AS file_version, f.asset_id, x.comment_id AS correction, x.resolved_file, x.resolved_name, x.resolved_at, fixed.version AS resolved_version, fixed.label AS resolved_label FROM piece_comments c
+    LEFT JOIN piece_corrections x ON x.comment_id=c.id
+    LEFT JOIN content_files fixed ON fixed.id=x.resolved_file
     LEFT JOIN video_comment_moments m ON m.comment_id=c.id
     LEFT JOIN content_files f ON f.id=c.file_id AND f.company_id=c.company_id AND f.piece_id=c.piece_id
-    WHERE c.company_id=? AND c.piece_id=? ORDER BY c.created_at DESC,c.id DESC LIMIT 100`,company,piece);
+    WHERE c.company_id=? AND c.piece_id=? AND ((x.comment_id IS NOT NULL AND x.resolved_file IS NULL) OR c.id IN (SELECT id FROM piece_comments WHERE company_id=c.company_id AND piece_id=c.piece_id ORDER BY created_at DESC,id DESC LIMIT 100))
+    ORDER BY (x.comment_id IS NOT NULL AND x.resolved_file IS NULL) DESC,c.created_at DESC,c.id DESC`,company,piece);
   const reviews=db.all(`SELECT revision,decision,note,actor_name,reviewed_at FROM piece_reviews
     WHERE company_id=? AND piece_id=? ORDER BY revision DESC`,company,piece);
   return {files,comments,reviews};
@@ -54,15 +57,49 @@ export function commentPiece(db,actor,company,request,piece,data) {
   requireThat(seconds===null||(/^\d+$/.test(raw)&&Number.isSafeInteger(seconds)&&fileId),'Selecciona un momento del video.');
   requireThat(isId(data.request_key),'Abre de nuevo el formulario de comentarios.');
   return db.transaction(()=>{
-    const prior=db.get('SELECT c.*,m.seconds FROM piece_comments c LEFT JOIN video_comment_moments m ON m.comment_id=c.id WHERE c.request_key=?',data.request_key);
-    if(prior){requireThat(prior.company_id===company.id&&prior.piece_id===piece.id&&prior.actor_id===actor.id&&prior.body===body&&prior.file_id===fileId&&prior.seconds===seconds,'Este comentario ya se envió con otros datos.',409);return;}
+    const prior=db.get('SELECT c.*,m.seconds,x.requested AS originally_requested FROM piece_comments c LEFT JOIN piece_corrections x ON x.comment_id=c.id LEFT JOIN video_comment_moments m ON m.comment_id=c.id WHERE c.request_key=?',data.request_key);
+    if(prior){requireThat(prior.company_id===company.id&&prior.piece_id===piece.id&&prior.actor_id===actor.id&&prior.body===body&&prior.file_id===fileId&&prior.seconds===seconds&&Boolean(prior.originally_requested)===(data.correction==='yes'),'Este comentario ya se envió con otros datos.',409);return;}
     const file=fileId&&db.get('SELECT media_type FROM content_files WHERE id=? AND piece_id=? AND company_id=?',fileId,piece.id,company.id);
     requireThat(!fileId||file,'Archivo no encontrado.',404);
     requireThat(seconds===null||file.media_type.startsWith('video/'),'Ese momento debe pertenecer a un video.');
     requireThat(request.status!=='CANCELLED'&&piece.status!=='CANCELLED','Esta entrega está cancelada.',409);
+    if(data.correction==='yes')requireThat(request.status==='PRODUCTION'&&piece.status!=='DELIVERED','Esta entrega ya no está en producción.',409);
     const id=uuid();
     db.run('INSERT INTO piece_comments VALUES(?,?,?,?,?,?,?,?,?)',id,company.id,piece.id,fileId,actor.id,actor.name,body,data.request_key,now());
+    if(data.correction==='yes')db.run('INSERT INTO piece_corrections(comment_id) VALUES(?)',id);
     if(seconds!==null)db.run('INSERT INTO video_comment_moments(comment_id,seconds) VALUES(?,?)',id,seconds);
     event(db,actor,company.id,'REQUEST',request.id,'COMENTARIO_ENTREGA',piece.title,request.channel);
+  });
+}
+
+export function trackCorrection(db,actor,company,request,piece,data) {
+  requireThat(actor.kind==='AGENCY'&&actor.agencyWork&&!actor.readOnlyCompany,'Solo el equipo de producción puede dar seguimiento a una observación.',403);
+  requireThat(isId(data.comment_id),'Abre el comentario que deseas seguir.');
+  db.transaction(()=>{
+    requireOperating(db,company.id);
+    const comment=db.get('SELECT id FROM piece_comments WHERE id=? AND company_id=? AND piece_id=?',data.comment_id,company.id,piece.id);
+    requireThat(comment,'Comentario no encontrado.',404);
+    if(db.get('SELECT 1 FROM piece_corrections WHERE comment_id=?',comment.id))return;
+    requireThat(request.status==='PRODUCTION'&&!['DELIVERED','CANCELLED'].includes(piece.status),'La entrega ya salió de producción.',409);
+    db.run('INSERT INTO piece_corrections(comment_id,requested) VALUES(?,0)',comment.id);
+    event(db,actor,company.id,'REQUEST',request.id,'CORRECCION_SOLICITADA',piece.title,request.channel);
+  });
+}
+
+export function resolveComment(db,actor,company,request,piece,data) {
+  requireThat(actor.kind==='AGENCY'&&actor.agencyWork&&!actor.readOnlyCompany,'Solo el equipo de producción puede resolver una corrección.',403);
+  requireThat(isId(data.comment_id)&&isId(data.file),'Elige la versión corregida.');
+  db.transaction(()=>{
+    requireOperating(db,company.id);
+    const comment=db.get(`SELECT c.*,x.resolved_file,f.asset_id,f.version FROM piece_comments c
+      JOIN piece_corrections x ON x.comment_id=c.id LEFT JOIN content_files f ON f.id=c.file_id
+      WHERE c.id=? AND c.company_id=? AND c.piece_id=?`,data.comment_id,company.id,piece.id);
+    requireThat(comment,'Corrección no encontrada.',404);
+    if(comment.resolved_file){requireThat(comment.resolved_file===data.file,'Esta corrección ya se vinculó a otra versión.',409);return;}
+    requireThat(piece.status!=='CANCELLED'&&['PRODUCTION','DELIVERED'].includes(request.status),'Esta entrega ya no admite seguimiento.',409);
+    const fixed=db.get('SELECT * FROM content_files WHERE id=? AND company_id=? AND piece_id=?',data.file,company.id,piece.id);
+    requireThat(fixed&&(comment.file_id?fixed.asset_id===comment.asset_id&&fixed.version>comment.version:fixed.created_at>=comment.created_at),'Selecciona una versión posterior de esta entrega.');
+    db.run('UPDATE piece_corrections SET resolved_file=?,resolved_by=?,resolved_name=?,resolved_at=? WHERE comment_id=?',fixed.id,actor.id,actor.name,now(),comment.id);
+    event(db,actor,company.id,'REQUEST',request.id,'CORRECCION_RESUELTA',fixed.label+' · versión '+fixed.version,request.channel);
   });
 }

@@ -192,6 +192,7 @@ export async function fakeLoyalty(t,webFolder = null,configuration = {}) {
         return json(res,200,{id:target.id,version:++target.version,token:issue(target),credentialIssued:true});
       }
     }
+    if(req.method==='POST'&&p.role==='OWNER'&&/^\/api\/staff\/activity\/[0-9a-f-]{36}\/correction(?:\/preview)?$/.test(path))return json(res,200,{review:'fixture',canSave:true});
     if (path==='/api/staff/members/lookup') return json(res,200,configuration.member||{member:{id:uuid(),name:'Cliente de prueba',cardCode:'ficticio',revision:0},balances:[],rewards:[]});
     if (path==='/api/staff/purchases/quote' && data.branchId===p.branchId && p.permissions.purchases) return json(res,200,{amountMinor:data.amountMinor??data.items?.reduce((s,i)=>s+i.unitPriceMinor*i.quantity,0),grossMinor:data.amountMinor,description:data.description??null,discountMinor:0,earned:[]});
     if (path==='/api/staff/purchases' && data.branchId===p.branchId && p.permissions.purchases) {

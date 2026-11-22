@@ -61,9 +61,40 @@ class WalletSubscriptionPostgresTest {
         db.tx { c->c.exec("INSERT INTO branches(tenant_id,id,name,code,created_at) VALUES(?,?,?,?,?)",f.tenant,id(),"Sucursal previamente registrada",id().take(8),Timestamp.from(time.instant())) }
     }
     private fun branch(f:Fixture):String {
-        val result=service.newBranch(f.staff,NewBranch("Local adicional",id().take(8)))
+        val shown=db.tx{c->service.commercial.branchOffer(c,f.tenant)?.str("hash")}
+        val result=service.newBranch(f.staff,NewBranch("Local adicional",id().take(8),shown))
         db.tx{it.exec("UPDATE branches SET created_at=? WHERE tenant_id=? AND id=?",Timestamp.from(time.instant()),f.tenant,result.str("id"))}
         return result.str("id")
+    }
+    @Test fun `branch opening quote and closing reconcile monthly and annual through payment and retry`() {
+        for((months,unit,prorated) in listOf(Triple(1,500L,161L),Triple(12,5000L,4712L))) {
+            time.value=Instant.parse("2027-01-01T15:00:00Z");val f=fixture()
+            val terms=CatalogSchedule(id(),"Wallet","2027-01-01",null,unit,if(months==1)"2027-02-01" else "2028-01-01",months=months,consentOn="2027-01-01",perBranch=true)
+            service.commercial.updateCalendar(f.tenant,CatalogCalendar(f.registration.companyId,1,listOf(terms)))
+            time.value=Instant.parse("2027-01-22T16:00:00Z")
+            val preview=db.tx{service.commercial.branchOffer(it,f.tenant)}!!
+            assertEquals(prorated,preview.getValue("amountMinor").jsonPrimitive.long)
+            assertEquals(unit*2,preview.getValue("renewalMinor").jsonPrimitive.long)
+            assertFailsWith<Problem>{service.newBranch(f.staff,NewBranch("Nueva","N"))}
+            branch(f)
+            fun close()=service.commercial.walletOutlook(f.tenant,"2027-02-01")
+            fun sum(key:String,field:String)=close().getValue(key).jsonArray.sumOf{it.jsonObject.getValue(field).jsonPrimitive.long}
+            assertEquals(unit+prorated,sum("lines","walletMinor"));assertEquals(0L,sum("bills","issued"))
+            time.value=Instant.parse("2027-02-01T05:00:00Z");repeat(2){service.commercial.sweep()}
+            assertEquals(unit+prorated,sum("bills","issued"));assertEquals(unit+prorated,sum("lines","walletMinor"))
+            val bill=invoices(f).first{it.jsonObject.getValue("amountMinor").jsonPrimitive.long==prorated}.jsonObject
+            service.commercial.pay(f.tenant,RecordPayment(bill.str("id"),100,"Pago parcial","TRANSFER","2027-02-01"),id())
+            assertEquals(100L,sum("bills","paid"));assertEquals(unit+prorated-100,balance(f))
+        }
+    }
+    @Test fun `a branch opened at the renewal instant appears once in the branch census`() {
+        val f=fixture();accept(f)
+        time.value=Instant.parse("2027-02-01T05:00:00Z")
+        val offered=db.tx{c->service.commercial.branchOffer(c,f.tenant)}!!
+        assertTrue(offered.getValue("inBase").jsonPrimitive.boolean);assertEquals(500L,offered.getValue("amountMinor").jsonPrimitive.long)
+        branch(f);assertEquals(500L,balance(f))
+        time.value=Instant.parse("2027-03-01T05:00:00Z");service.commercial.sweep()
+        assertEquals(1500L,balance(f));assertEquals(2,invoices(f).size)
     }
     @Test fun `forecast matches the issued catalog charge for two branches and both renewal cycles`() {
         for ((months,unit) in listOf(1 to 500L,12 to 5000L)) {
@@ -323,15 +354,15 @@ class WalletSubscriptionPostgresTest {
         val f=fixture();seedBranch(f);accept(f)
         time.value=Instant.parse("2027-01-15T12:00:00Z");branch(f)
         time.value=Instant.parse("2027-03-01T12:00:00Z");service.commercial.sweep();service.commercial.sweep()
-        assertEquals(2,invoices(f).size);assertEquals(2500L,balance(f)) // January had two branches and February had three.
-        assertEquals(setOf(1000L,1500L),invoices(f).map{it.jsonObject.getValue("amountMinor").jsonPrimitive.long}.toSet())
+        assertEquals(3,invoices(f).size);assertEquals(2774L,balance(f)) // Two full branches in January, 17/31 of the third, then three in February.
+        assertEquals(setOf(1000L,274L,1500L),invoices(f).map{it.jsonObject.getValue("amountMinor").jsonPrimitive.long}.toSet())
     }
     @Test fun `midmonth signup bills only its days and counts a new branch at the first cut`() {
         time.value=Instant.parse("2027-03-19T12:00:00Z");val f=fixture();accept(f);assertEquals(0L,balance(f))
         branch(f);assertEquals(0L,balance(f));time.value=Instant.parse("2027-04-01T05:00:00Z")
-        assertEquals(210L,balance(f)) // 13 of 31 March days.
-        assertEquals(1,invoices(f).size);assertTrue(invoices(f).all { it.jsonObject.str("dueOn")=="2027-04-15" })
-        time.value=Instant.parse("2027-05-01T05:00:00Z");assertEquals(1210L,balance(f))
+        assertEquals(420L,balance(f)) // Both locations operated 13 of 31 March days.
+        assertEquals(2,invoices(f).size);assertTrue(invoices(f).all { it.jsonObject.str("dueOn")=="2027-04-15" })
+        time.value=Instant.parse("2027-05-01T05:00:00Z");assertEquals(1420L,balance(f))
     }
     @Test fun `cancel trial preserves card identities and issues no January charge`() {
         time.value=Instant.parse("2026-12-10T15:00:00Z")
@@ -375,8 +406,10 @@ class WalletSubscriptionPostgresTest {
         val january=invoices(f).single().jsonObject
         service.commercial.pay(f.tenant,RecordPayment(january.str("id"),10000L,"January","TRANSFER","2027-02-01"),id())
         time.value=Instant.parse("2027-06-15T12:00:00Z");branch(f);service.commercial.sweep();assertEquals(0L,balance(f))
+        time.value=Instant.parse("2027-07-01T05:00:00Z");repeat(2){service.commercial.sweep()}
+        assertEquals(2740L,db.tx{c->c.one("SELECT sum(amount_minor-paid_minor) FROM billing_invoices WHERE tenant_id=?",f.tenant){it.getLong(1)}})
         time.value=Instant.parse("2028-02-01T05:00:00Z");service.commercial.sweep();service.commercial.sweep()
-        assertEquals(15000L,balance(f));assertEquals(2,invoices(f).size)
+        assertEquals(17740L,balance(f));assertEquals(3,invoices(f).size) // 200/365 of the prior year plus the renewal for three branches.
     }
     @Test fun `monthly to annual change begins after the paid calendar month`() {
         time.value=Instant.parse("2027-03-19T12:00:00Z");val f=fixture();accept(f);assertEquals(0L,balance(f))

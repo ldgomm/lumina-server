@@ -7,7 +7,7 @@ import { checkSelection } from './coverage.mjs';
 import { dirtyCalendar, inTrial, standardFor, standardIds, trialMessage } from './trial.mjs';
 import { getPlan, purchasePlan } from './billing.mjs';
 
-export const walletCalendarTerms='Wallet es gratis hasta el 31 de diciembre de 2026 inclusive. Enero se cobra el 1 de febrero de 2027. Después, el cargo mensual se registra el día 1 por el mes terminado. La prueba termina sin renovación automática. El dueño elige el plan desde enero. Si empiezas a mitad de mes, pagas los días usados. La tarifa anual se registra una vez, al cierre de su primer mes completo. Puedes pagar hasta el día 15 inclusive. Desde el 16, un saldo vencido de Wallet pausa el servicio y las tarjetas hasta registrar el pago.';
+export const walletCalendarTerms='Wallet es gratis hasta el 31 de diciembre de 2026 inclusive. Enero se cobra el 1 de febrero de 2027. Después, el cargo mensual se registra el día 1 por el mes terminado. La prueba termina sin renovación automática. El dueño elige el plan desde enero. Si empiezas a mitad de mes, pagas los días usados. La tarifa anual se registra una vez, al cierre de su primer mes completo. En planes por sucursal, antes de añadir un local el dueño acepta el importe proporcional desde su apertura hasta el fin del período. Se registra el día 1 del mes siguiente. Puedes pagar hasta el día 15 inclusive. Desde el 16, un saldo vencido de Wallet pausa el servicio y las tarjetas hasta registrar el pago.';
 const commercial = (actor,company) => {
   requireThat(actor.kind==='AGENCY'||actor.kind==='OWNER'&&actor.company_id===company.id,'Tu acceso no incluye contrataciones.',403);
 };

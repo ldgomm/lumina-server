@@ -127,8 +127,8 @@ PG_CALENDAR = 'infrastructure/persistence/extensions/membership-calendar.sql'
 PORTAL_CALENDAR = 'lumina/infrastructure/extensions/membership-calendar.sql'
 
 MEMBERSHIP_EXTENSIONS = ('membership-calendar', 'subscription-periods', 'wallet-consent')
-PG_EXTENSIONS = (*MEMBERSHIP_EXTENSIONS, 'purchase-description')
-PORTAL_EXTENSIONS = (*MEMBERSHIP_EXTENSIONS, 'commercial-prices', 'courtesy-video', 'piece-reviews', 'video-comment-moments')
+PG_EXTENSIONS = (*MEMBERSHIP_EXTENSIONS, 'purchase-description', 'wallet-operations')
+PORTAL_EXTENSIONS = (*MEMBERSHIP_EXTENSIONS, 'commercial-prices', 'courtesy-video', 'piece-reviews', 'video-comment-moments', 'agency-follow-through')
 MEMBERSHIP_SQL = tuple(PG_CALENDAR.replace('membership-calendar', name) for name in PG_EXTENSIONS) + tuple(
     PORTAL_CALENDAR.replace('membership-calendar', name) for name in PORTAL_EXTENSIONS
 )

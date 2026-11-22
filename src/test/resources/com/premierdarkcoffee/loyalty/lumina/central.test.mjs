@@ -59,6 +59,12 @@ test('API de Wallet rechaza gestión común y contratación; API central conserv
  for(const path of ['account','operations','metrics','business-profile','branch-directory','activity','administration'])assert.equal((await api(w,w.client,'/wallet-api/api/staff/'+path)).status,403,path);
  assert.equal((await api(w,w.client,'/management-api/api/staff/metrics')).status,200);
  for(const prefix of ['/management-api','/wallet-api'])for(const [method,path,payload] of [['POST','/api/staff/credentials',{}],['PUT','/api/platform/tenants/'+w.l.business.id+'/membership',{}],['POST','/api/staff/team/'+uuid()+'/actions',{}]])assert.equal((await api(w,w.client,prefix+path,method,payload)).status,403);
+ const correction='/api/staff/activity/'+uuid()+'/correction';
+ for(const suffix of ['', '/preview']){
+   assert.equal((await api(w,w.client,'/management-api'+correction+suffix,'POST',{}, {'Idempotency-Key':uuid()})).status,200);
+   assert.equal((await api(w,w.client,'/wallet-api'+correction+suffix,'POST',{})).status,403);
+   assert.equal((await api(w,w.admin,'/management-api'+correction+suffix,'POST',{})).status,403);
+ }
  const foreign=await owner(w,'Negocio ajeno','2');assert.equal((await api(w,w.client,'/management-api/api/staff/metrics','GET',undefined,{'X-Lumina-Company':foreign.id})).status,403);
  assert.equal((await api(w,w.admin,'/management-api/api/staff/metrics')).status,403);
 });
@@ -66,6 +72,7 @@ test('API de Wallet rechaza gestión común y contratación; API central conserv
 test('permisos de informes se aplican desde Lúmina sin exponer cargos, equipo ni datos de otros negocios',async t=>{
  const w=await setup(t),a=await colleague(w,w.client,{name:'Análisis',document:'1749844500','WALLET.VIEW':'yes','WALLET_REPORTS.VIEW':'yes'});
  assert.equal((await a.session.get('/management/reports')).status,200);assert.equal((await a.session.get('/management')).status,403);assert.equal((await a.session.get('/management/view?section=reports')).status,403);
+ for(const suffix of ['', '/preview'])assert.equal((await api(w,a.session,'/management-api/api/staff/activity/'+uuid()+'/correction'+suffix,'POST',{})).status,403);
  const before=w.l.calls.length;for(const path of ['account','operations','team','business-profile','branch-directory'])assert.equal((await api(w,a.session,'/management-api/api/staff/'+path)).status,403);assert.equal(w.l.calls.length,before);
  w.db.run('DELETE FROM grants WHERE account_id=? AND scope=?',a.id,'WALLET_REPORTS');assert.equal((await a.session.get('/management/reports')).status,403);assert.equal((await api(w,a.session,'/management-api/api/staff/metrics')).status,403);
 });

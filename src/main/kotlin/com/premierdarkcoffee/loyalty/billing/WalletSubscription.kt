@@ -17,7 +17,7 @@ import java.sql.Connection
 import java.sql.Timestamp
 import java.time.*
 
-const val WALLET_TERMS_VERSION = "wallet-2026-11-20-v5"
+const val WALLET_TERMS_VERSION = "wallet-2026-11-21-v6"
 const val WALLET_BRANCH_PRICE = 500L
 const val WALLET_ANNUAL_PRICE = 5000L
 fun walletUnitPrice(cycle:String):Long {
@@ -57,7 +57,7 @@ Negocio contratante: $business. Inicio: $activation. Sucursales registradas: $br
 
 3. Tarifa y cargo automático. La tarifa final es USD $price por $period por sucursal registrada, con los impuestos aplicables incluidos. Con $branchCount sucursal(es), el total por período inicial es USD ${java.math.BigDecimal.valueOf(Math.multiplyExact(branchCount.toLong(),unit),2).toPlainString()}. Al aceptar, el representante autoriza la renovación ${if(annual)"anual" else "mensual"} y el registro automático del cargo en la cuenta del negocio mientras mantenga la suscripción. No hace falta una nueva orden cada $period. ${if(annual)"El año se paga en un solo cargo de USD 50,00 por sucursal, no en doce cuotas; son doce meses de servicio." else "Puedes elegir la modalidad anual antes de aceptar."} Esto no autoriza débitos en cuentas bancarias ni tarjetas de pago. Un registro de cuenta no sustituye la factura tributaria que corresponda emitir.
 
-4. Períodos y sucursales. El uso mensual se cobra el día 1 por el mes que acaba de terminar. Enero de 2027 se cobra el 1 de febrero de 2027. En la modalidad anual se registra un solo cargo al cierre del primer mes completo del año contratado. Si el servicio de pago comienza a mitad de mes, el primer corte cobra únicamente los días usados hasta fin de mes. Para el tramo inicial se divide la tarifa entre los meses de la modalidad y los días reales del mes. Se incluyen las sucursales registradas al inicio de cada período. Puedes pagar hasta el día 15 inclusive. Desde el 16, si queda saldo de Wallet, se suspenden las operaciones y las tarjetas hasta que Lúmina registre el pago completo. Servicios de contenido, web, diseño y trabajos adicionales solo se contratan por separado con su propio precio.
+4. Períodos y sucursales. El uso mensual se cobra el día 1 por el mes que acaba de terminar. Enero de 2027 se cobra el 1 de febrero de 2027. En la modalidad anual se registra un solo cargo al cierre del primer mes completo del año contratado. Si el servicio de pago comienza a mitad de mes, el primer corte cobra únicamente los días usados hasta fin de mes. Para el tramo inicial se divide la tarifa entre los meses de la modalidad y los días reales del mes. Cada renovación incluye las sucursales registradas al inicio del período. Para una nueva sucursal, el dueño revisa y acepta el importe proporcional desde el alta hasta la renovación. Ese cargo se registra el primer día del mes siguiente. Puedes pagar hasta el día 15 inclusive. Desde el 16, si queda saldo de Wallet, se suspenden las operaciones y las tarjetas hasta que Lúmina registre el pago completo. Servicios de contenido, web, diseño y trabajos adicionales solo se contratan por separado con su propio precio.
 
 5. Cancelación. El dueño puede desactivar la renovación desde Paquetes y servicios → Wallet, sin penalidad. La solicitud queda registrada inmediatamente y el servicio continúa hasta el final del período vigente; durante la promoción, hasta el 31 de diciembre de 2026. No se emiten períodos posteriores. Para terminación inmediata, devolución o corrección de un cargo, escribe al contacto del proveedor: se aplicarán los derechos y ajustes que correspondan por servicios efectivamente prestados. Esta opción no limita derechos de devolución, reclamación ni terminación reconocidos por la ley. Los saldos legítimamente pendientes no se borran al cancelar.
 
@@ -142,6 +142,7 @@ fun LoyaltyService.cancelWalletSubscription(s:Staff,input:WalletCancelInput,key:
             val version=current.second+1
             commercial.savePlan(c,s.tenant,current.first.copy(recurring=false,nextChargeOn=current.third.toString(),walletEndsOn=end),version)
             c.exec("INSERT INTO audit_events(id,tenant_id,actor_id,action,target_id,created_at) VALUES(?,?,?,'WALLET_SUBSCRIPTION_CANCELLED',?,?)",id(),s.tenant,s.id,version.toString(),Timestamp.from(commercial.clock.instant()))
+            commercial.captureCut(c,s.tenant,date)
             obj("version" to version,"endsOn" to end)
         }
     }

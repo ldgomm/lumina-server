@@ -11,7 +11,7 @@ import { delegatedRouteAllowed, walletSections } from './access-policy.mjs';
 const id = '[0-9a-fA-F-]{36}';
 const ownerReads = new RegExp(`^/api/staff/(dashboard|access|administration|branch-directory|team|activity(?:\\.csv)?|operations|wallet-health|wallet-design|business-profile|metrics|return-radar|customer-activity|customer-suggestions|customer-events|customer-insights(?:/${id})?|customer-workspace/${id}|birthday-settings|account|member-suggestions|programs/${id}/deletion-preview)$`);
 const ownerWrites = {
-  POST:new RegExp(`^/api/staff/(branches|branch-directory|credentials|programs|promotion-templates|promotion-setups|rewards|members/lookup|wallet/restore|purchases(?:/quote)?|counter-redemptions|redemptions/confirm|customer-events|business-profile/requests|team/${id}/actions|wallet-health/${id}/(?:APPLE|GOOGLE)/retry|notices/${id}/read)$`),
+  POST:new RegExp(`^/api/staff/(branches|branch-directory|credentials|programs|promotion-templates|promotion-setups|rewards|members/lookup|activity/${id}/correction(?:/preview)?|wallet/restore|purchases(?:/quote)?|counter-redemptions|redemptions/confirm|customer-events|business-profile/requests|team/${id}/actions|wallet-health/${id}/(?:APPLE|GOOGLE)/retry|notices/${id}/read)$`),
   PUT:new RegExp(`^/api/staff/(wallet-design|business-profile|birthday-settings|programs/${id}|rewards/${id}|team/${id}|branch-directory/${id}|customer-insights/${id}/preferences|customer-workspace/${id}/(?:contact|profile))$`),
   DELETE:new RegExp(`^/api/staff/(programs/${id}|credentials/${id}|customer-events/${id}|customer-workspace/${id})$`),
 };
@@ -236,12 +236,12 @@ export function createWalletWorkspace({db,key,origin,integration={}}) {
     requireThat(!restricted,'Wallet tiene una restricción de acceso. Revisa Mi cuenta antes de activar otro plan.',423);
     return result;
   }
-  async function outlook(actor,company) {
+  async function outlook(actor,company,cut=null) {
     const before=current(actor);
     requireThat(before.kind==='AGENCY'||before.kind==='OWNER'&&before.company_id===company.id,message,403);
     const tenant=db.get('SELECT loyalty_tenant FROM companies WHERE id=?',company.id)?.loyalty_tenant;
     requireThat(isId(tenant)&&tenant===company.loyalty_tenant,message,403);
-    const forecast=await remote('/api/platform/tenants/'+tenant+'/wallet-outlook',{token:configured()});
+    const forecast=await remote('/api/platform/tenants/'+tenant+'/wallet-outlook'+(cut?'?cut='+encodeURIComponent(cut):''),{token:configured()});
     requireThat(current(actor).revision===before.revision&&db.get('SELECT loyalty_tenant FROM companies WHERE id=?',company.id)?.loyalty_tenant===tenant,message,403);
     return forecast;
   }

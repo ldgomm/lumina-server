@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 export const uuid = randomUUID;
-export const portalVersion = '3.2.1';
+export const portalVersion = '3.3';
 export const now = () => new Date().toISOString();
 export const zone = 'America/Guayaquil';
 export const areas = Object.freeze({ SOCIAL: 'Contenido para redes', WALLET: 'Fidelización digital · Wallet', MAPS: 'Google Maps', WEB: 'Web', BRAND: 'Diseño de marca' });

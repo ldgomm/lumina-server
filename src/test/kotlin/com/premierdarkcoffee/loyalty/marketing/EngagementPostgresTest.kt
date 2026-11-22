@@ -16,6 +16,8 @@ import com.premierdarkcoffee.loyalty.infrastructure.persistence.Database
 import com.premierdarkcoffee.loyalty.infrastructure.persistence.exec
 import com.premierdarkcoffee.loyalty.infrastructure.persistence.one
 import com.premierdarkcoffee.loyalty.fidelity.LoyaltyService
+import com.premierdarkcoffee.loyalty.fidelity.SaleCorrection
+import com.premierdarkcoffee.loyalty.fidelity.correctSale
 import com.premierdarkcoffee.loyalty.fidelity.description
 import com.premierdarkcoffee.loyalty.shared.Kind
 import com.premierdarkcoffee.loyalty.shared.Lookup
@@ -198,6 +200,49 @@ class EngagementPostgresTest {
         val saved=obj("purchaseId" to "original-receipt","replayed" to false)
         db.tx{c->c.exec("INSERT INTO idempotency(tenant_id,operation,key,request_hash,response) VALUES(?,?,?,?,?::jsonb)",f.owner.tenant,"purchase:${f.owner.id}",retry,Security.hash(oldPayload.toString()),saved.toString())}
         assertEquals("original-receipt",service.purchase(f.owner,legacy,retry).str("purchaseId"));assertEquals(1,count("purchases",f))
+    }
+    @Test fun `a legacy sale can correct its description and retains the original gross and receipt`() {
+        val f=fixture();val buy=Purchase(f.member.id,f.a,id(),600,"USD",programIds=emptySet(),description="Almuerzo")
+        val sale=service.purchase(f.owner,buy,id()).str("purchaseId")
+        db.tx{it.exec("UPDATE purchases SET review_programs=NULL,gross_minor=NULL WHERE tenant_id=? AND id=?",f.owner.tenant,sale)}
+        val input=SaleCorrection(0,"El pedido era para llevar",600,description="Almuerzo para llevar")
+        val preview=service.correctSale(f.owner,sale,input)
+        assertTrue(preview.getValue("historical").jsonPrimitive.boolean)
+        assertEquals(600L,preview.getValue("before").jsonObject.num("grossMinor"))
+        service.correctSale(f.owner,sale,input.copy(review=preview.str("review")),id())
+        val saved=service.managementActivity(f.owner.tenant,ManagementQuery(kind="PURCHASE"),f.owner).getValue("items").jsonArray.single().jsonObject
+        assertEquals("Almuerzo para llevar",saved.str("concept"));assertEquals(buy.receipt.uppercase(),saved.str("receipt"))
+        assertEquals("Almuerzo",saved.getValue("corrections").jsonArray.single().jsonObject.str("previousDetail"))
+    }
+    @Test fun `owner previews corrects and replays a sale with a permanent original and one ledger adjustment`() {
+        val f=fixture();val bought=purchase(f,4);val sale=service.purchase(f.owner,bought,id()).str("purchaseId")
+        val fix=SaleCorrection(0,"Se anotaron cuatro productos y fueron dos",2000,listOf(bought.items.single().copy(quantity=2)))
+        val cashier=service.staff(service.newStaff(f.owner,NewStaff("CASHIER",f.a)).str("token"))
+        assertFailsWith<Problem>{service.correctSale(cashier,sale,fix)}
+        assertFailsWith<Problem>{service.correctSale(fixture().owner,sale,fix)}
+        val preview=service.correctSale(f.owner,sale,fix)
+        assertEquals(4L,balance(f));assertTrue(preview.getValue("canSave").jsonPrimitive.boolean)
+        val confirmed=fix.copy(review=preview.str("review"));val key=id()
+        service.correctSale(f.owner,sale,confirmed,key)
+        assertTrue(service.correctSale(f.owner,sale,confirmed,key).getValue("replayed").jsonPrimitive.boolean)
+        assertEquals(2L,balance(f));assertEquals(1,count("purchase_corrections",f))
+        val row=service.managementActivity(f.owner.tenant,ManagementQuery(kind="PURCHASE"),f.owner).getValue("items").jsonArray.single().jsonObject
+        val audit=row.getValue("corrections").jsonArray.single().jsonObject
+        assertEquals(4000L,audit.num("before"));assertEquals(2000L,audit.num("after"));assertEquals(fix.reason,audit.str("reason"));assertEquals(2000L,row.num("paidMinor"))
+        assertFailsWith<Problem>{service.correctSale(f.owner,sale,confirmed,id())}
+    }
+    @Test fun `correcting a receipt preserves redeemed rewards and prevents spending the same points twice`() {
+        val f=fixture();val buy=purchase(f,5);val original=service.purchase(f.owner,buy,id()).str("purchaseId")
+        val redemption=service.purchase(f.owner,redeem(f),id()).str("purchaseId")
+        val reduction=SaleCorrection(0,"Cantidad incorrecta",2000,listOf(buy.items.single().copy(quantity=2)))
+        val denied=service.correctSale(f.owner,original,reduction)
+        assertFalse(denied.getValue("canSave").jsonPrimitive.boolean)
+        assertFailsWith<Problem>{service.correctSale(f.owner,original,reduction.copy(review=denied.str("review")),id())}
+        val changed=SaleCorrection(0,"El producto tenía otro precio",1250,listOf(buy.items.single().copy(quantity=1,unitMinor=1250)))
+        val quote=service.correctSale(f.owner,redemption,changed)
+        assertEquals(1250L,quote.getValue("after").jsonObject.num("discountMinor"))
+        service.correctSale(f.owner,redemption,changed.copy(review=quote.str("review")),id())
+        assertEquals(1,count("redemptions",f));assertEquals(0L,balance(f))
     }
     @Test fun `quick sale description survives review retry and private history`() {
         val f = fixture()

@@ -2,7 +2,7 @@
 (async()=>{
  const section=document.querySelector('meta[name=lumina-wallet-section]').content;
  const destinations={administration:'/management',business:'/management/business',branches:'/management/branches',team:'/team',activity:'/management/activity',operations:'/management/operations',account:'/plans?view=agreements',reports:'/management/reports'};
- const filterKeys=['days','branchId','actorId','fromDate','throughDate','kind'];
+ const filterKeys=['days','branchId','actorId','fromDate','throughDate','kind','q'];
  const go=(tab,filters={})=>{const target=new URL(destinations[tab]||'/wallet/management?section='+encodeURIComponent(tab),location.origin);for(const key of filterKeys)if(filters[key]!=null)target.searchParams.set(key,String(filters[key]));const path=target.pathname+target.search;window.loyaltyAdminLeave(()=>{if(parent!==window)parent.location.assign(path);else location.assign(path);});};
  try{
   state.token='lumina-delegated-wallet-session';state.data=await api('/api/staff/dashboard');state.member=null;state.tab=section;

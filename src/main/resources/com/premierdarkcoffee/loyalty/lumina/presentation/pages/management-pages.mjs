@@ -8,7 +8,7 @@ export function managementPage() {
 }
 export function managementFramePage(slug,params=new URLSearchParams()) {
  const section=Object.entries(managementSections).find(([,value])=>value===slug)?.[0];
- const query=new URLSearchParams({section:section});for(const key of ['days','branchId','actorId','fromDate','throughDate','kind']){const value=params.get(key);if(value&&value.length<=80)query.set(key,value);}
+ const query=new URLSearchParams({section:section});for(const key of ['days','branchId','actorId','fromDate','throughDate','kind','q']){const value=params.get(key);if(value&&value.length<=(key==='q'?100:80))query.set(key,value);}
  return `<p>${localLink('/management','← Administración de Lúmina')}</p>${slug==='history'?card('Cargos y pagos de Wallet',`<p>Consulta los cargos de tu suscripción y los acuerdos anteriores de Wallet.</p><p>Toda contratación nueva se realiza desde Paquetes y servicios.</p>${localLink('/plans/wallet','Ver mi suscripción Wallet','btn')}`):''}<iframe class="management-frame" title="${esc(managementTitles[slug])}" src="/management/view?${esc(query.toString())}" data-management-frame></iframe><p class="muted" data-frame-status role="status"></p>`;
 }
 export function managementDocument(actor,company,section) {

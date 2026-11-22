@@ -19,6 +19,7 @@ import com.premierdarkcoffee.loyalty.businesses.branchDirectory
 import com.premierdarkcoffee.loyalty.businesses.createManagedBranch
 import com.premierdarkcoffee.loyalty.businesses.editManagedBranch
 import com.premierdarkcoffee.loyalty.fidelity.LoyaltyService
+import com.premierdarkcoffee.loyalty.fidelity.correctSale
 import com.premierdarkcoffee.loyalty.shared.Problem
 import com.premierdarkcoffee.loyalty.shared.id
 import com.premierdarkcoffee.loyalty.shared.json
@@ -53,6 +54,8 @@ private suspend fun ApplicationCall.activityCsv(service: LoyaltyService, s: Staf
 
 fun Route.managementRoutes(service: LoyaltyService, platformToken: String) {
     route("/api/staff") {
+        post("/activity/{id}/correction/preview") { val s=io { service.staff(call.bearer()) };val p=call.body<com.premierdarkcoffee.loyalty.fidelity.SaleCorrection>();call.respond(io { service.correctSale(s,call.parameters["id"]!!,p) }) }
+        post("/activity/{id}/correction") { val s=io { service.staff(call.bearer()) };val p=call.body<com.premierdarkcoffee.loyalty.fidelity.SaleCorrection>();call.respond(io { service.correctSale(s,call.parameters["id"]!!,p,call.key()) }) }
         get("/administration") { val s=io { service.staff(call.bearer()) };call.respond(io { service.administration(s) }) }
         get("/branch-directory") { val s=io { service.staff(call.bearer()) };val q=call.branchDirectoryQuery();call.respond(io { service.branchDirectory(s,q) }) }
         post("/branch-directory") { val s=io { service.staff(call.bearer()) };val input=call.body<ManagedBranch>();call.respond(HttpStatusCode.Created,io { service.createManagedBranch(s,input,call.key()) }) }

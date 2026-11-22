@@ -4,7 +4,7 @@ import { resolve, dirname, join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 
-export const portalExtensions = ['membership-calendar','subscription-periods','wallet-consent','commercial-prices','courtesy-video','piece-reviews','video-comment-moments'];
+export const portalExtensions = ['membership-calendar','subscription-periods','wallet-consent','commercial-prices','courtesy-video','piece-reviews','video-comment-moments','agency-follow-through'];
 
 export function dataDirectory() {
   const folder = resolve(process.env.LUMINA_DATA_DIR || resolve(homedir(), '.lumina-digital', 'agency'));

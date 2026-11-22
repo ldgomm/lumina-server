@@ -101,8 +101,9 @@ private fun CommercialService.uncoveredStart(c:Connection,tenant:String,start:Lo
 
 internal fun catalogBranchCount(c:Connection,tenant:String,row:CatalogSchedule,start:LocalDate,activation:LocalDate):Long {
     if(!row.perBranch)return 1
-    if(start==activation)return row.initialBranches.toLong()
-    return c.one("SELECT count(*) FROM branches b JOIN tenants t ON t.id=b.tenant_id WHERE b.tenant_id=? AND b.created_at<=(?::date::timestamp AT TIME ZONE t.timezone)",tenant,Date.valueOf(start)){it.getLong(1)}!!
+    if(start==activation && row.consentOn==row.startsOn)return row.initialBranches.toLong()
+    val count=c.one("SELECT count(*) FROM branches b JOIN tenants t ON t.id=b.tenant_id WHERE b.tenant_id=? AND b.created_at<=(?::date::timestamp AT TIME ZONE t.timezone)",tenant,Date.valueOf(start)){it.getLong(1)}!!
+    return if(start==activation)maxOf(count,row.initialBranches.toLong()) else count
 }
 
 internal fun catalogWalletFee(row:CatalogSchedule,start:LocalDate,end:LocalDate,from:LocalDate,branches:Long):Long {

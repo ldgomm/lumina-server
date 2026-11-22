@@ -22,6 +22,7 @@ import com.premierdarkcoffee.loyalty.infrastructure.persistence.rows
 import com.premierdarkcoffee.loyalty.marketing.Benefit
 import com.premierdarkcoffee.loyalty.marketing.consumeReceiptReward
 import com.premierdarkcoffee.loyalty.marketing.idempotencyPayload
+import com.premierdarkcoffee.loyalty.billing.recordBranchAddition
 import com.premierdarkcoffee.loyalty.marketing.normalizedReceipt
 import com.premierdarkcoffee.loyalty.marketing.prepareReceipt
 import com.premierdarkcoffee.loyalty.marketing.requireCounterReward
@@ -115,9 +116,10 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
     }
     fun newBranch(s: Staff, input: NewBranch): JsonObject { s.owner(); text(input.name); text(input.code,40)
         return db.tx { c ->
-        authorizeStaff(c,s); commercial.requireActive(c, s.tenant);
+        authorizeStaff(c,s); commercial.lock(c,s.tenant); commercial.requireActive(c, s.tenant);
          val branchId = id()
-            c.exec("INSERT INTO branches(tenant_id,id,name,code) VALUES(?,?,?,?)",s.tenant,branchId,input.name.trim(),input.code.trim())
+            c.exec("INSERT INTO branches(tenant_id,id,name,code,created_at) VALUES(?,?,?,?,?)",s.tenant,branchId,input.name.trim(),input.code.trim(),Timestamp.from(clock.instant()))
+            commercial.recordBranchAddition(c,s.tenant,branchId,input.name.trim(),s.id,input.acceptedBranchQuote)
             audit(c,s.tenant,s.id,"CREATE_BRANCH",branchId); obj("id" to branchId,"name" to input.name)
         }
     }
@@ -258,7 +260,7 @@ class LoyaltyService(val db: Database, internal val pepper: String, val clock: C
             val purchase = id()
             c.exec("INSERT INTO purchases(tenant_id,id,member_id,branch_id,receipt,description,amount_minor,currency,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",s.tenant,purchase,input.memberId,input.branchId,normalized.receipt,normalized.description,input.amountMinor,input.currency,s.id,
                 Timestamp.from(at))
-            c.exec("UPDATE purchases SET gross_minor=?,discount_minor=?,items=?::jsonb,redemption_id=? WHERE tenant_id=? AND id=?",calculation.gross,calculation.discount,json.encodeToString(input.items),redemption,s.tenant,purchase)
+            c.exec("UPDATE purchases SET gross_minor=?,discount_minor=?,items=?::jsonb,redemption_id=?,review_programs=?::jsonb WHERE tenant_id=? AND id=?",calculation.gross,calculation.discount,json.encodeToString(input.items),redemption,obj("programs" to review.entries,"zone" to tenant.second.id).toString(),s.tenant,purchase)
             val earned = review.entries.filter { it.getValue("amount").jsonPrimitive.long > 0 }.map { entry ->
                 val program = entry.getValue("programId").jsonPrimitive.content
                 val version = entry.getValue("version").jsonPrimitive.int

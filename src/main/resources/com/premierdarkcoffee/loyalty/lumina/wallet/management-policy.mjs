@@ -8,6 +8,6 @@ export function managementRouteAllowed(actor,method,path) {
   if(actor.kind==='COLLABORATOR')return method==='GET'&&path==='/api/staff/metrics'&&canReadFidelityReport(actor);
   if(actor.kind!=='OWNER')return false;
   if(method==='GET')return /^\/api\/staff\/(dashboard|access|account|branch-directory|business-profile|activity(?:\.csv)?|operations|metrics|return-radar)$/.test(path);
-  if(method==='POST')return /^\/api\/staff\/(branch-directory|business-profile\/requests|notices\/[0-9a-f-]{36}\/read)$/.test(path);
+  if(method==='POST')return /^\/api\/staff\/(branch-directory|business-profile\/requests|activity\/[0-9a-f-]{36}\/correction(?:\/preview)?|notices\/[0-9a-f-]{36}\/read)$/.test(path);
   return method==='PUT'&&/^\/api\/staff\/(business-profile|branch-directory\/[0-9a-f-]{36})$/.test(path);
 }

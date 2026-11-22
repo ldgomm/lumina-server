@@ -57,3 +57,24 @@ test('el seguimiento distingue la primera compra, la cortesía pendiente y los d
  assert.equal((await followUp(db,remote,actor,query({view:'courtesy'}))).total,0);
  await assert.rejects(followUp(db,remote,{kind:'OWNER'},query({})),e=>e.status===403);
 });
+
+test('la agencia registra un solo contacto por envío y concilia importes de todas las páginas',async t=>{
+ const {db,ids}=fixture(t,16);
+ const {followUp,recordContact,agencyCut}=await import('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/businesses/follow-up.mjs');
+ const agent={kind:'AGENCY',id:randomUUID(),name:'Agencia'};
+ db.run("INSERT INTO accounts(id,name,email,document,kind) VALUES(?,?,?,?,'AGENCY')",agent.id,agent.name,'edicion@example.test',documentFor('edicion@example.test'));
+ const tenant=randomUUID();db.run('UPDATE companies SET loyalty_tenant=? WHERE id=?',tenant,ids[0]);
+ db.run("INSERT INTO company_services(company_id,service,status,activated_at) VALUES(?,'WALLET','ACTIVE','2026-11-01T12:00:00Z')",ids[0]);
+ const remote={firstPurchases:async()=>[{tenant,active:true,purchased:false}],outlook:async(_actor,_company,cut)=>({cut,revision:0,lines:[{walletMinor:661}],bills:[{issued:661,paid:161},{issued:99,paid:0,void:true}]})};
+ const input={kind:'wallet',company:ids[0],case_id:tenant,request_key:randomUUID(),note:'Se acordó una demostración',next_on:'2090-03-12'};
+ await recordContact(db,remote,agent,input);await recordContact(db,remote,agent,input);
+ await assert.rejects(recordContact(db,remote,agent,{...input,note:'Distinto'}),e=>e.status===409);
+ await assert.rejects(recordContact(db,remote,agent,{...input,request_key:randomUUID()}),e=>e.status===409);
+ await assert.rejects(recordContact(db,remote,{kind:'OWNER'},input),e=>e.status===403);
+ const report=await followUp(db,remote,agent,query({view:'wallet'}));assert.equal(report.rows[0].contacts.length,1);assert.equal(report.rows[0].contacts[0].actor_name,'Agencia');
+ await assert.rejects(recordContact(db,remote,agent,{...input,previous:input.request_key,request_key:randomUUID(),next_on:'2001-01-01'}),e=>e.status===400);
+ for(const page of ['0','1']){
+   const cut=await agencyCut(db,remote,agent,query({page}));assert.equal(cut.total,16);assert.equal(cut.rows.length,page==='0'?12:4);
+   assert.deepEqual(cut.amounts,{expected:661,issued:661,paid:161,pending:500,unknownExpected:0,unknownBills:0});
+ }
+});
