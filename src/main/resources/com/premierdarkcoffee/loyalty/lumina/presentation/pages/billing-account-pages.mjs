@@ -10,6 +10,19 @@ export const paymentMethods = Object.freeze({ TRANSFER: 'Transferencia', CASH: '
 export const invoiceStates = Object.freeze({ OPEN: 'Pendiente', PARTIAL: 'Pago parcial', PAID: 'Pagado', OVERDUE: 'Vencido', VOID: 'Anulado' });
 export const money = value => esc(displayAmount(value));
 export const billingDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value + 'T12:00:00Z')) : '—';
+export function upcomingWalletCharge(day, addition, formatDate = billingDate) {
+  const hasAddition = addition && /^\d{4}-\d{2}-\d{2}$/.test(addition.cutOn) &&
+    Number.isSafeInteger(addition.amountMinor) && addition.amountMinor > 0 &&
+    Number.isSafeInteger(addition.branchCount) && addition.branchCount > 0;
+  const date = day && (!hasAddition || day !== addition.cutOn)
+    ? '<p>Próximo cargo de Wallet el <strong>' + esc(formatDate(day)) + '</strong>.</p>' : '';
+  if (!hasAddition) return date;
+  const branches = addition.branchCount === 1 ? 'una sucursal' : number(addition.branchCount) + ' sucursales';
+  const deadline = /^\d{4}-\d{2}-\d{2}$/.test(addition.dueOn)
+    ? ' El plazo de pago termina el <strong>' + esc(formatDate(addition.dueOn)) + '</strong>.' : '';
+  return date + '<p>El cargo del <strong>' + esc(formatDate(addition.cutOn)) + '</strong> incluye <strong>' +
+    money(addition.amountMinor) + '</strong> por la apertura de ' + branches + '.' + deadline + '</p>';
+}
 const invoiceStatus = row => badge(invoiceStates[row.status] || row.status, row.status === 'PAID' ? 'success' : row.status === 'OVERDUE' ? 'warning' : '');
 const receiptPath = (base, id) => base + '/payments/' + id;
 function navigation(base, view) {
@@ -61,14 +74,16 @@ function agencySubscriptionSummary(account, base) {
   const state=account.access?.walletSubscriptionState;
   if(account.today<'2027-01-01' || state==='INACTIVE')return card('Wallet',account.today<'2027-01-01'?
     '<p><strong>Prueba gratuita hasta el 31 de diciembre de 2026.</strong> El dueño podrá elegir un plan desde enero. Importe de Wallet durante la prueba: $0,00.</p>'+(state==='TRIAL'?'<p>Prueba activa.</p>':state==='INACTIVE'?'<p>Prueba desactivada.</p>':''):
-    '<p>Sin suscripción activa. El dueño puede elegir mensual o anual cuando quiera volver.</p>');
-  if (!plan) return card('Wallet', `${account.nextWalletChargeOn?'<p>Próximo cargo de Wallet el <strong>'+esc(billingDate(account.nextWalletChargeOn))+'</strong>.</p>':localLink(base+'?view=wallet','Ver el estado de Wallet')}`);
+    '<p>Sin suscripción activa. El dueño puede elegir mensual o anual cuando quiera volver.</p>' + upcomingWalletCharge(account.nextWalletChargeOn, account.nextBranchCharge));
+  if (!plan) return card('Wallet', upcomingWalletCharge(account.nextWalletChargeOn, account.nextBranchCharge) || localLink(base+'?view=wallet','Ver el estado de Wallet'));
   const total = membership.branchMonthlyMinor ?? plan.feeMinor;
   const branches=agreement&&plan.feeMinor>0&&Number.isSafeInteger(total/plan.feeMinor)?total/plan.feeMinor:null;
   const interval = plan.intervalMonths === 12 ? 'año' : plan.intervalMonths === 1 ? 'mes' : `${plan.intervalMonths} meses`;
-  return card(plan.name, `<p class="muted">${plan.recurring?'Tarifa para el próximo corte':'Última tarifa acordada'}</p><p class="billing-plan-price"><strong>${money(total)}</strong> / ${interval}${agreement ? ' en total' : ''}</p>
+  const nextDate = Object.hasOwn(account, 'nextWalletChargeOn') ? account.nextWalletChargeOn : membership.nextChargeOn;
+  const next = agreement || account.nextBranchCharge ? upcomingWalletCharge(nextDate, account.nextBranchCharge) : '';
+  return card(plan.name, `<p class="muted">${plan.recurring?'Tarifa del plan':'Última tarifa acordada'}</p><p class="billing-plan-price"><strong>${money(total)}</strong> / ${interval}${agreement ? ' en total' : ''}</p>
     ${branches!==null?`<p class="billing-branch-calculation"><strong>${branches} ${branches===1?'sucursal':'sucursales'}</strong> × ${money(plan.feeMinor)} = <strong>${money(total)} / ${interval}</strong></p>`:''}
-    <p>${agreement ? money(plan.feeMinor) + ' por sucursal · ' : ''}${plan.recurring ? 'Próximo cargo: <strong>' + esc(billingDate(membership.nextChargeOn)) + '</strong>' : '<strong>Renovación desactivada</strong>'}</p>
+    ${next}${!plan.recurring ? '<p><strong>Renovación desactivada</strong></p>' : !next && !agreement && membership.nextChargeOn ? '<p>Próximo cargo el <strong>' + esc(billingDate(membership.nextChargeOn)) + '</strong>.</p>' : ''}
     ${!plan.recurring && plan.walletEndsOn ? `<p>La suscripción finaliza el ${esc(billingDate(inclusiveEnd(plan.walletEndsOn)))}.</p>` : ''}
     ${agreement ? `<p class="muted">Aceptado por ${esc(agreement.ownerName)}. Al añadir una sucursal, el dueño ve y acepta su importe proporcional. Se registra el primer día del mes siguiente.</p>` : ''}`);
 }
@@ -126,7 +141,7 @@ function ownerWallet(account, options) {
   const current = walletContracts.find(c => c.starts_on <= today && today < c.ends_before);
   const next = walletContracts.filter(c => c.starts_on > today).sort((a,b) => a.starts_on.localeCompare(b.starts_on))[0];
   const nextCharge = Object.hasOwn(account, 'nextWalletChargeOn') ? account.nextWalletChargeOn : membership?.nextChargeOn;
-  const chargeDate = nextCharge ? `<p>Próximo cargo de Wallet el <strong>${esc(billingDate(nextCharge))}</strong>.</p>` : '';
+  const chargeDate = upcomingWalletCharge(nextCharge, account.nextBranchCharge);
   if (current || next) {
     let service = current ? `<p>Tu plan: <strong>${esc(current.name)}</strong>.</p>` : '';
     if(current&&standardIds.includes(current.plan_id)){

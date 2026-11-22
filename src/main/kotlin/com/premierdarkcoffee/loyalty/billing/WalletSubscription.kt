@@ -152,9 +152,11 @@ fun LoyaltyService.walletSubscriptionStatus(s:Staff):JsonObject {s.owner();retur
     val branches=walletBranches(c,s.tenant)
     val date=commercial.today(c,s.tenant)
     val authorized=agreement?.activationOn?.let(::billingDate)?.let{it>=WALLET_PROMOTION_END}==true
+    val addition=nextBranchCharge(c,s.tenant)
     obj("today" to date,"version" to (current?.second?:0),"accepted" to (agreement!=null),"legacy" to (current!=null&&agreement==null),
         "recurring" to (authorized && current?.first?.recurring==true),"trialUntil" to if(agreement!=null && date<WALLET_PROMOTION_END)"2026-12-31" else null,
-        "endsOn" to current?.first?.walletEndsOn,"coveredUntil" to current?.takeIf{authorized}?.let{coveredUntil(it,date)},"nextChargeOn" to commercial.nextWalletCharge(c,s.tenant,current),
+        "endsOn" to current?.first?.walletEndsOn,"coveredUntil" to current?.takeIf{authorized}?.let{coveredUntil(it,date)},"nextChargeOn" to commercial.nextWalletCharge(c,s.tenant,current,addition),
+        "nextBranchCharge" to addition?.summary(),
         "cycle" to if(current?.first?.intervalMonths==12)"ANNUAL" else "MONTHLY","intervalMonths" to (current?.first?.intervalMonths?:1),"periodMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"unitMinor" to (current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"monthlyMinor" to Math.multiplyExact(branches.size.toLong(),current?.first?.feeMinor?:WALLET_BRANCH_PRICE),"branches" to branches,
         "agreement" to agreement?.let { json.encodeToJsonElement(it) })
 }}

@@ -2,7 +2,7 @@ import { walletDues } from '../../memberships/wallet-balance.mjs';
 import { maximumPaymentMinor } from '../../billing/payment-input.mjs';
 import { isId, localDay } from '../../shared/domain.mjs';
 import { badge, esc, localLink } from './components.mjs';
-import { billingDate, money, paymentForm } from './billing-account-pages.mjs';
+import { billingDate, money, paymentForm, upcomingWalletCharge } from './billing-account-pages.mjs';
 
 function walletStatus(account) {
   const state = account.access?.walletSubscriptionState;
@@ -46,7 +46,9 @@ export function walletCollections(actor, company, account, error, values, option
     else if (state === 'OVERDUE') next = 'Revisa el estado del negocio y su cuenta general antes de solicitar un pago.';
     else if (account.nextWalletChargeOn && state !== 'LEGACY') next = 'El próximo cargo de Wallet se registrará el '+billingDate(account.nextWalletChargeOn)+'.';
     else if (state === 'INACTIVE') next = 'El dueño puede elegir su plan desde Mi suscripción cuando quiera volver.';
-    detail = `<h3>Sin cobros pendientes de Wallet</h3><p>${esc(next)}</p>`;
+    const forecast = account.today >= '2027-01-01' && state !== 'OVERDUE' && account.nextBranchCharge
+      ? upcomingWalletCharge(account.nextWalletChargeOn, account.nextBranchCharge) : '';
+    detail = '<h3>Sin cobros pendientes de Wallet</h3>' + (forecast || '<p>'+esc(next)+'</p>');
   } else {
     const late = cut.dueOn < account.today;
     const {suspendedForDebt,overdueMinor}=walletDues(account);

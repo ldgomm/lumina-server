@@ -12,6 +12,18 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 private data class BranchTerms(val key:String,val first:LocalDate,val stop:LocalDate?,val months:Int,val unit:Long,val openingSnapshot:Boolean,val fixed:Boolean=false)
+private fun branchPaymentDue(cutOn: LocalDate) = cutOn.withDayOfMonth(15)
+
+internal data class UpcomingBranchCharge(val cutOn: LocalDate, val count: Int, val amountMinor: Long) {
+    fun summary() = obj("cutOn" to cutOn, "dueOn" to branchPaymentDue(cutOn), "branchCount" to count, "amountMinor" to amountMinor)
+}
+
+internal fun nextBranchCharge(c: Connection, tenant: String): UpcomingBranchCharge? = c.one(
+    """SELECT cut_on, count(*) AS locations, sum(amount_minor) AS amount FROM wallet_branch_additions
+       WHERE tenant_id=? AND invoice_id IS NULL AND amount_minor>0
+       GROUP BY cut_on ORDER BY cut_on LIMIT 1""", tenant
+) { UpcomingBranchCharge(it.getDate("cut_on").toLocalDate(), it.getInt("locations"), it.getLong("amount")) }
+
 internal fun CommercialService.branchOffer(c:Connection,tenant:String,excludeBranch:String?=null):JsonObject? {
     val day=today(c,tenant)
     if(day<WALLET_PROMOTION_END)return null
@@ -73,7 +85,7 @@ internal fun CommercialService.issueBranchAdditions(c:Connection,tenant:String,d
         val invoice=id()
         c.exec("""INSERT INTO billing_invoices(tenant_id,id,description,amount_minor,currency,due_on,wallet_due,created_at)
            SELECT ?,?,?,?,currency,?,TRUE,? FROM tenants WHERE id=?""",tenant,invoice,"Sucursal "+value("name")+" · "+value("from")+" a "+value("through"),value("amount").toLong(),
-           Date.valueOf(billingDate(value("cut")).withDayOfMonth(15)),Timestamp.from(clock.instant()),tenant)
+           Date.valueOf(branchPaymentDue(billingDate(value("cut")))),Timestamp.from(clock.instant()),tenant)
         c.exec("UPDATE wallet_branch_additions SET invoice_id=? WHERE tenant_id=? AND branch_id=?",invoice,tenant,value("branch"))
     }
 }

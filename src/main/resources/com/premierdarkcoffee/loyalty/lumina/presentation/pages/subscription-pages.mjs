@@ -3,6 +3,7 @@ import { button, card, check, displayAmount, esc, form, hidden, input, localLink
 import { inTrial, paidFrom } from '../../memberships/trial.mjs';
 import { inclusiveEnd } from '../../memberships/orders.mjs';
 import { localDay } from '../../shared/domain.mjs';
+import { upcomingWalletCharge } from './billing-account-pages.mjs';
 
 const date = day => new Intl.DateTimeFormat('es-EC', {dateStyle:'long', timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'));
 export function subscriptionPage(actor, status, offer = null, error = '', enabled = true) {
@@ -32,8 +33,8 @@ export function subscriptionPage(actor, status, offer = null, error = '', enable
   }
   const price = (renewing || covered) && Number.isSafeInteger(total)
     ? `<p class="billing-plan-price"><strong>${esc(displayAmount(total))}</strong> / ${period}</p>${Number.isSafeInteger(status.unitMinor) && status.branches?.length ? `<p>${status.branches.length} ${status.branches.length === 1 ? 'sucursal' : 'sucursales'} × ${esc(displayAmount(status.unitMinor))} por sucursal.</p>` : ''}` : '';
-  const upcoming = (renewing || covered) && status.nextChargeOn
-    ? `<p>Próximo cargo de Wallet el <strong>${esc(date(status.nextChargeOn))}</strong>.</p>` : '';
+  const upcoming = renewing || covered
+    ? upcomingWalletCharge(status.nextChargeOn, status.nextBranchCharge, date) : '';
   let action = localLink('/plans/wallet', historicalTrial && inTrial(today) ? 'Ver mi prueba' : 'Ver mi suscripción de Wallet', 'btn');
   if (enabled && (renewing || covered)) action = localLink('/wallet','Abrir Wallet','btn');
   else if (!enabled && covered) action = form('/plans/wallet/resume',actor,hidden('confirm','yes')+button('Activar mi Wallet'));

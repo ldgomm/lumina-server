@@ -56,15 +56,17 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         "SELECT min(starts_on) FROM wallet_catalog_schedules WHERE tenant_id=? AND consent_on IS NOT NULL AND replaces_legacy AND (ends_before IS NULL OR starts_on<ends_before)",
         tenant){it.getDate(1)?.toLocalDate()}
 
-    internal fun nextWalletCharge(c:Connection,tenant:String,p:Triple<MembershipPlan,Int,LocalDate>?):LocalDate? {
+    internal fun nextWalletCharge(c:Connection,tenant:String,p:Triple<MembershipPlan,Int,LocalDate>?,
+                                  addition: UpcomingBranchCharge? = nextBranchCharge(c,tenant)):LocalDate? {
         val pending=c.one("""SELECT min(starts_on) FROM wallet_opening_periods o JOIN billing_plan_versions v ON v.tenant_id=o.tenant_id AND v.version=o.version WHERE o.tenant_id=? AND NOT o.billed AND (v.config->'walletAgreement'->>'activationOn')>='2027-01-01' AND starts_on>=?""",
             tenant,Date.valueOf(WALLET_PROMOTION_END)){it.getDate(1)?.toLocalDate()}
         val scheduled=c.one("""SELECT min(greatest(next_start,?::date)) FROM wallet_catalog_schedules WHERE tenant_id=?
             AND consent_on IS NOT NULL AND fee_minor>other_minor AND (ends_before IS NULL OR greatest(next_start,?::date)<ends_before)""",
             Date.valueOf(WALLET_PROMOTION_END),tenant,Date.valueOf(WALLET_PROMOTION_END)){it.getDate(1)?.toLocalDate()}
         val transfer=if(p!=null)catalogTakesOver(c,tenant) else null
-        val legacy=p?.takeIf{(!calendarPlan(c,tenant,it.first) || paidAgreement(it.first)) && it.first.recurring && it.first.feeMinor>0 && (transfer==null || it.third<transfer)}?.third
-        return listOfNotNull(pending,scheduled,legacy).minOrNull()?.let(::invoiceDate)
+        val legacy=p?.takeIf{paidAgreement(it.first) && it.first.recurring && it.first.feeMinor>0 && (transfer==null || it.third<transfer)}?.third
+        val planCut=listOfNotNull(pending,scheduled,legacy).minOrNull()?.let(::invoiceDate)
+        return listOfNotNull(planCut, addition?.cutOn).minOrNull()
     }
     private fun paidAgreement(p:MembershipPlan) = p.walletAgreement?.activationOn?.let(::billingDate)?.let{it>=WALLET_PROMOTION_END}==true
     internal fun effective(c: Connection, tenant: String, access: JsonObject, date: LocalDate): JsonObject {
@@ -380,6 +382,9 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         need(offset in 0..1_000_000, "INVALID_PAGE", "Página inválida.")
         val access = lock(c, tenant); val date = today(c, tenant); sync(c, tenant, date)
         val p = plan(c, tenant)
+        val addition = nextBranchCharge(c, tenant)
+        val nextWallet = nextWalletCharge(c, tenant, p, addition)
+        val usesCalendar = p != null && calendarPlan(c, tenant, p.first)
         val business = c.one("SELECT * FROM tenants WHERE id=?", tenant) { obj("id" to tenant, "name" to it.getString("name"), "slug" to it.getString("slug"), "currency" to it.getString("currency"), "timezone" to it.getString("timezone"), "joinedAt" to it.instant("created_at"), "tenureDays" to maxOf(0, ChronoUnit.DAYS.between(it.instant("created_at").atZone(ZoneId.of(it.getString("timezone"))).toLocalDate(), date))) }!!
         val summary = c.one("SELECT coalesce(sum(amount_minor-paid_minor) FILTER(WHERE voided_at IS NULL),0) AS balance, coalesce(sum(amount_minor-paid_minor) FILTER(WHERE voided_at IS NULL AND due_on<?),0) AS overdue, min(due_on) FILTER(WHERE voided_at IS NULL AND amount_minor>paid_minor) AS next_due,count(*) AS total FROM billing_invoices WHERE tenant_id=?", Date.valueOf(date), tenant) {
             obj("balanceMinor" to it.getLong("balance"), "overdueMinor" to it.getLong("overdue"), "nextDueOn" to it.getDate("next_due")?.toString(), "invoiceCount" to it.getLong("total"))
@@ -389,8 +394,9 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
         }
         obj("business" to business, "today" to date.toString(), "access" to effective(c, tenant, access, date), "summary" to summary,
             "walletBilling" to walletBilling(c, tenant, date),
-            "branchCount" to c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){it.getInt(1)}, "nextWalletChargeOn" to nextWalletCharge(c,tenant,p),
-            "membership" to p?.let { obj("version" to it.second, "plan" to json.encodeToJsonElement(it.first), "coveredUntil" to coveredUntil(it,date), "nextChargeOn" to (if(calendarPlan(c,tenant,it.first))nextWalletCharge(c,tenant,it) else it.third)?.toString(), "nextDueOn" to (if(calendarPlan(c,tenant,it.first))nextWalletCharge(c,tenant,it)?.withDayOfMonth(15) else it.third.plusDays(it.first.dueDays.toLong()))?.toString(), "branchMonthlyMinor" to if(it.first.walletAgreement!=null)Math.multiplyExact(it.first.feeMinor,c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){r->r.getLong(1)}!!)else null) },
+            "branchCount" to c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){it.getInt(1)},
+            "nextWalletChargeOn" to nextWallet, "nextBranchCharge" to addition?.summary(),
+            "membership" to p?.let { obj("version" to it.second, "plan" to json.encodeToJsonElement(it.first), "coveredUntil" to coveredUntil(it,date), "nextChargeOn" to (if(usesCalendar) nextWallet else it.third), "nextDueOn" to (if(usesCalendar) nextWallet?.withDayOfMonth(15) else it.third.plusDays(it.first.dueDays.toLong())), "branchMonthlyMinor" to if(it.first.walletAgreement!=null)Math.multiplyExact(it.first.feeMinor,c.one("SELECT count(*) FROM branches WHERE tenant_id=?",tenant){r->r.getLong(1)}!!)else null) },
             "invoices" to c.rows("""SELECT i.*,sum(CASE WHEN wallet_due AND voided_at IS NULL THEN amount_minor-paid_minor ELSE 0 END)
                 OVER(PARTITION BY due_on) AS wallet_cut FROM billing_invoices i WHERE tenant_id=? ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET ?""",tenant,offset){
                 JsonObject(invoice(it,date)+("walletCutMinor" to JsonPrimitive(it.getLong("wallet_cut"))))
@@ -413,7 +419,7 @@ class CommercialService(val db: Database, val clock: Clock = Clock.systemUTC()) 
                 val p = plan(c, tenant)
                 obj("id" to tenant, "name" to r.getString("name"), "slug" to r.getString("slug"), "currency" to r.getString("currency"), "joinedAt" to r.instant("created_at"), "clients" to r.getLong("clients"), "state" to a.getValue("effectiveState"), "ruc" to r.getString("ruc"), "legalName" to r.getString("legal_name"), "city" to r.getString("city"),
                     "pendingProfileRequests" to c.one("SELECT count(*) FROM business_profile_requests WHERE tenant_id=? AND status='PENDING'",tenant) { it.getInt(1) },
-                    "nextChargeOn" to if (p?.first?.recurring == true) (if(calendarPlan(c,tenant,p.first))nextWalletCharge(c,tenant,p) else p.third)?.toString() else null,
+                    "nextChargeOn" to if (p != null && !calendarPlan(c,tenant,p.first)) p.third.takeIf { p.first.recurring } else nextWalletCharge(c,tenant,p),
                     "balanceMinor" to c.one("SELECT coalesce(sum(amount_minor-paid_minor),0) FROM billing_invoices WHERE tenant_id=? AND voided_at IS NULL", tenant) { it.getLong(1) })
             }!!
         }, "nextOffset" to if (ids.size > 50) offset + 50 else null)

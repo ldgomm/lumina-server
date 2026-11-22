@@ -7,6 +7,7 @@ import { localDay, uuid } from '../../shared/domain.mjs';
 import { button, check, disclosure, displayAmount, esc, form, hidden, localLink } from './components.mjs';
 import { contactField } from './contact.mjs';
 import { icon } from './icons.mjs';
+import { upcomingWalletCharge } from './billing-account-pages.mjs';
 
 const dateFormat = new Intl.DateTimeFormat('es-EC', { dateStyle:'long', timeZone:'UTC' });
 const dayLabel = day => dateFormat.format(new Date(day+'T12:00:00Z'));
@@ -100,7 +101,7 @@ function subscriptionSummary(actor,{current,booked,account,active,legacy,pending
   const contract=current[0];
   const {today,cut:open,overdueMinor,hasOverdue:overdue,suspendedForDebt:late,restricted}=walletDues(account);
   const held=Boolean(open||overdue);
-  if(!contract&&!booked.length&&!legacy&&!active&&!held&&!restricted&&!pending)return '';
+  if(!contract&&!booked.length&&!legacy&&!active&&!held&&!restricted&&!pending&&!account?.nextBranchCharge)return '';
   const dates=booked.map(c=>'<p><strong>'+esc(c.name)+'</strong> comienza el '+esc(dayLabel(c.starts_on))+'.</p>').join('');
   let title=contract?.name||(legacy?'Tu acuerdo de Wallet':booked.length?'Cambio programado':'Tu Wallet');
   let text='';
@@ -142,10 +143,11 @@ function subscriptionSummary(actor,{current,booked,account,active,legacy,pending
       const caption=standard(contract)&&count!==null?'Tarifa para '+branchesLabel(count):'Tarifa del período';
       facts.push(fact(caption,count===null?'Por confirmar':displayAmount(price*count)+' / '+interval(contract)));
     }
-    if(account?.nextWalletChargeOn && !pending)facts.push(fact('Próximo cargo de Wallet',dayLabel(account.nextWalletChargeOn)));
   }
+  const nextCharge = !held && !restricted && !pending && !error
+    ? upcomingWalletCharge(account?.nextWalletChargeOn, account?.nextBranchCharge, dayLabel) : '';
   return `<section class="wallet-hero${held?' wallet-payment':''}"><div><div class="wallet-symbol">${icon(held?'clock':'wallet')}</div><h2>${esc(title)}</h2>
-    ${text?'<p>'+esc(text)+'</p>':''}${contract?.stop_on&&!booked.length?'<p>La renovación está desactivada. Mantienes el plan hasta el '+esc(dayLabel(inclusiveEnd(contract.stop_on)))+'.</p>':''}${dates}
+    ${text?'<p>'+esc(text)+'</p>':''}${nextCharge}${contract?.stop_on&&!booked.length?'<p>La renovación está desactivada. Mantienes el plan hasta el '+esc(dayLabel(inclusiveEnd(contract.stop_on)))+'.</p>':''}${dates}
     <div class="actions">${action}${held&&active&&!late&&!restricted&&!pending?localLink('/wallet','Abrir Wallet','btn secondary'):''}</div></div>
     ${facts.length?'<dl class="wallet-facts">'+facts.join('')+'</dl>':''}</section>`;
 }

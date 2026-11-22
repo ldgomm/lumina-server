@@ -124,6 +124,7 @@ class CommercialPostgresTest {
         time.value = Instant.parse("2027-03-31T12:00:00Z"); account(f); account(f)
         val a = account(f); assertEquals(3, a.getValue("invoices").jsonArray.size)
         assertEquals("2027-04-30", a.getValue("membership").jsonObject.str("nextChargeOn")); assertEquals(3000L, balance(f))
+        assertEquals(JsonNull, a["nextWalletChargeOn"])
     }
     @Test fun `plan changes preserve issued prices and require current version`() {
         val f = fixture(); billing.configure(f.tenant, MembershipChange(0, plan()))

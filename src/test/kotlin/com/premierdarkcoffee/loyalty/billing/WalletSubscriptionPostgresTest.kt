@@ -406,10 +406,63 @@ class WalletSubscriptionPostgresTest {
         val january=invoices(f).single().jsonObject
         service.commercial.pay(f.tenant,RecordPayment(january.str("id"),10000L,"January","TRANSFER","2027-02-01"),id())
         time.value=Instant.parse("2027-06-15T12:00:00Z");branch(f);service.commercial.sweep();assertEquals(0L,balance(f))
+        assertEquals("2027-07-01", status(f).str("nextChargeOn"))
+        val beforeCut = service.commercial.ownerAccount(f.staff)
+        assertEquals("2027-07-01", beforeCut.str("nextWalletChargeOn"))
+        assertEquals("2027-07-15", beforeCut.getValue("membership").jsonObject.str("nextDueOn"))
+        assertEquals(2740L, beforeCut.getValue("nextBranchCharge").jsonObject.getValue("amountMinor").jsonPrimitive.long)
         time.value=Instant.parse("2027-07-01T05:00:00Z");repeat(2){service.commercial.sweep()}
+        assertEquals(JsonNull, service.commercial.ownerAccount(f.staff)["nextBranchCharge"])
+        assertEquals("2028-02-01", status(f).str("nextChargeOn"))
         assertEquals(2740L,db.tx{c->c.one("SELECT sum(amount_minor-paid_minor) FROM billing_invoices WHERE tenant_id=?",f.tenant){it.getLong(1)}})
         time.value=Instant.parse("2028-02-01T05:00:00Z");service.commercial.sweep();service.commercial.sweep()
         assertEquals(17740L,balance(f));assertEquals(3,invoices(f).size) // 200/365 of the prior year plus the renewal for three branches.
+    }
+    @Test fun `the same branch cutoff reaches the owner and agency after cancelling an annual catalog renewal`() {
+        val f = fixture()
+        val terms = CatalogSchedule(id(), "Wallet anual", "2027-01-01", null, 5000, "2028-01-01",
+            months = 12, consentOn = "2027-01-01", perBranch = true)
+        val calendar = CatalogCalendar(f.registration.companyId, 1, listOf(terms))
+        service.commercial.updateCalendar(f.tenant, calendar)
+        time.value = Instant.parse("2027-02-01T12:00:00Z")
+        val initial = invoices(f).single().jsonObject
+        service.commercial.pay(f.tenant, RecordPayment(initial.str("id"), 5000, "Año pagado", "TRANSFER", "2027-02-01"), id())
+        time.value = Instant.parse("2027-06-15T12:00:00Z")
+        branch(f)
+        time.value = Instant.parse("2027-06-16T12:00:00Z")
+        branch(f)
+        service.commercial.updateCalendar(f.tenant, calendar.copy(revision = 2, entries = listOf(terms.copy(endsBefore = "2028-01-01"))))
+        val account = service.commercial.ownerAccount(f.staff)
+        val adjustment = account.getValue("nextBranchCharge").jsonObject
+        assertEquals("2027-07-01", account.str("nextWalletChargeOn"))
+        assertEquals("2027-07-01", adjustment.str("cutOn"))
+        assertEquals("2027-07-15", adjustment.str("dueOn"))
+        assertEquals(2, adjustment.getValue("branchCount").jsonPrimitive.int)
+        assertEquals(5466L, adjustment.getValue("amountMinor").jsonPrimitive.long)
+        val directory = service.commercial.businesses("lumina-" + f.registration.companyId.replace("-", ""))
+        assertEquals("2027-07-01", directory.getValue("items").jsonArray.single().jsonObject.str("nextChargeOn"))
+        assertEquals(0L, balance(f))
+        time.value = Instant.parse("2027-07-01T05:00:00Z")
+        repeat(2) { service.commercial.sweep() }
+        val afterCut = service.commercial.ownerAccount(f.staff)
+        val issued = afterCut.getValue("walletBilling").jsonObject.getValue("nextCut").jsonObject
+        assertEquals(adjustment.str("dueOn"), issued.str("dueOn"))
+        assertEquals(5466L, afterCut.getValue("walletBilling").jsonObject.getValue("balanceMinor").jsonPrimitive.long)
+        assertEquals(JsonNull, afterCut["nextBranchCharge"])
+        assertEquals(JsonNull, afterCut["nextWalletChargeOn"])
+        time.value = Instant.parse("2027-07-16T04:59:59Z")
+        assertTrue(service.commercial.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
+        time.value = Instant.parse("2027-07-16T05:00:00Z")
+        assertFalse(service.commercial.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
+        val bill = issued.str("invoiceId")
+        service.commercial.pay(f.tenant, RecordPayment(bill, 1000, "Abono", "CASH", "2027-07-16"), id())
+        assertEquals(4466L, balance(f))
+        assertFalse(service.commercial.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
+        val payment = RecordPayment(bill, 4466, "Saldo de las dos sucursales", "TRANSFER", "2027-07-16", walletCut = true)
+        val key = id()
+        repeat(2) { service.commercial.pay(f.tenant, payment, key) }
+        assertTrue(service.commercial.publicAccess(f.tenant).getValue("canOperate").jsonPrimitive.boolean)
+        assertEquals(0L, balance(f))
     }
     @Test fun `monthly to annual change begins after the paid calendar month`() {
         time.value=Instant.parse("2027-03-19T12:00:00Z");val f=fixture();accept(f);assertEquals(0L,balance(f))

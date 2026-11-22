@@ -5,6 +5,9 @@ import { fakeLoyalty } from './loyalty-fixture.mjs';
 import { analytics } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/analytics/reporting.mjs';
 import { effectiveAccessSummary } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/access/access-summary.mjs';
 import { accountPage } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/billing-account-pages.mjs';
+import { walletCheckoutPage } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/wallet-checkout-pages.mjs';
+import { walletCollections } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/wallet-collections.mjs';
+import { subscriptionPage } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/pages/subscription-pages.mjs';
 import { uuid, localDay } from '../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/shared/domain.mjs';
 const selected=(path,id)=>'/agency'+path+'?company='+id;
 async function setup(t){const w=await portal(t),admin=await agency(w),o=await owner(w,'Cuenta y resultados','insights');await admin.post(selected('/businesses/verify',o.id));const actor={...w.db.get("SELECT * FROM accounts WHERE company_id=? AND kind='OWNER'",o.id),grants:[]};return {...w,...o,admin,actor};}
@@ -17,6 +20,32 @@ async function publication(w){
 }
 const report=w=>analytics(w.db,w.actor,w.id,{from:'2020-01-02',to:'2020-01-10'});
 const measure=(w,r,observed,extra={})=>w.admin.post(selected(r.path+'/measure',w.id),{publication:r.pub.id,observed,...extra});
+
+test('dueño y agencia distinguen el proporcional por nuevas sucursales de la tarifa anual y de los cargos ya emitidos', () => {
+ const owner={kind:'OWNER'}, agency={kind:'AGENCY'}, company={id:uuid(),name:'Café de prueba'};
+ const agreement={activationOn:'2027-01-01',ownerName:'Dueña'};
+ const account={today:'2027-06-16', nextWalletChargeOn:'2027-07-01',
+   nextBranchCharge:{cutOn:'2027-07-01',dueOn:'2027-07-15',amountMinor:5466,branchCount:2},
+   membership:{branchMonthlyMinor:15000,nextChargeOn:'2027-07-01',plan:{walletAgreement:agreement,name:'Wallet anual',recurring:true,feeMinor:5000,intervalMonths:12}},
+   summary:{balanceMinor:0,overdueMinor:0,invoiceCount:0},payments:[],invoices:[],
+   access:{walletSubscriptionState:'ACTIVE'},walletBilling:{balanceMinor:0,overdueMinor:0,nextCut:null}};
+ const renders = [
+   a=>accountPage(owner,a), a=>accountPage(agency,a,'/admin/businesses/'+company.id),
+   a=>walletCheckoutPage({actor:owner,company,account:a,active:true,legacy:true}),
+   a=>walletCollections(agency,company,a,'',{},{}),
+   a=>subscriptionPage(owner,{today:a.today,agreement,accepted:true,recurring:true,cycle:'ANNUAL',periodMinor:15000,nextChargeOn:a.nextWalletChargeOn,nextBranchCharge:a.nextBranchCharge})
+ ];
+ for (const render of renders) {
+   const text=render(account).replace(/<[^>]+>/g,'');
+   assert.match(text,/El cargo del 1 (?:jul|de julio de) 2027 incluye [^\d]{0,8}54[.,]66 por la apertura de 2 sucursales/);
+   assert.match(text,/El plazo de pago termina el 15 (?:jul|de julio de) 2027/);
+   const after=render({...account,nextBranchCharge:null,nextWalletChargeOn:'2028-02-01',
+     membership:{...account.membership,nextChargeOn:'2028-02-01'}});
+   assert.doesNotMatch(after,/54[.,]66|por la apertura de/);
+ }
+ assert.match(accountPage(owner,account),/150[.,]00/);
+ assert.match(accountPage(owner,account),/Tu cuenta está al día/);
+});
 
 test('business account lists active combined and individual agreements with actual prices and remaining units',async t=>{
  const w=await setup(t);
