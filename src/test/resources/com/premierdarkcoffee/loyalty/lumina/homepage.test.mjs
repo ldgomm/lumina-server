@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { get as httpGet } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
 import { portal, agency, owner, colleague, password } from './helpers.mjs';
@@ -15,6 +16,8 @@ test('public homepage presents the five services without login or account creati
  assert.equal((response.body.match(/<h1\b/g)||[]).length,1);
  for(const id of ['content','web','maps','brand','loyalty'])assert.match(response.body,new RegExp('id="service-'+id+'"'));
  assert.match(response.body,/href="\/login"/);assert.match(response.body,/href="\/register"/);
+ assert.match(response.body,/<a\b[^>]*href="\/register"[^>]*>\s*Pedir mi video gratis/);
+ assert.match(response.body,/video de cortesía por negocio/i);assert.match(response.body,/sin contratar un plan de Contenido/i);
  assert.doesNotMatch(response.body,/name="password"|method="post"|lumina-csrf|Configurar la agencia/);assert.doesNotMatch(response.body,retired);
  assert.deepEqual(snapshot(w.db),before);assert.equal(response.headers.get('set-cookie'),null);
 });
@@ -23,10 +26,35 @@ test('homepage assets are public, typed, same-origin and served under restrictiv
  assert.match(response.headers.get('content-security-policy'),/default-src 'none'/);
  assert.doesNotMatch(response.headers.get('content-security-policy'),/unsafe-inline|unsafe-eval/);
  assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(response.headers.get('x-frame-options'),'DENY');
- for(const [,path] of response.body.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)){
-  const resource=await client.get(path);assert.equal(resource.status,200,path);assert.notEqual(resource.headers.get('content-type'),'text/html; charset=utf-8');
+ const paths=new Set([...response.body.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map(match=>match[1]));
+ for(const [,candidates] of response.body.matchAll(/srcset="([^"]+)"/g)){
+  for(const candidate of candidates.split(','))paths.add(candidate.trim().split(/\s+/)[0]);
  }
- assert.match((await client.get('/assets/homepage.css')).headers.get('content-type'),/text\/css/);
+ for(const path of paths){
+  assert.ok(path.startsWith('/assets/'),path);
+  const resource=await client.get(path);assert.equal(resource.status,200,path);assert.notEqual(resource.headers.get('content-type'),'text/html; charset=utf-8');
+  if(path.endsWith('.webp'))assert.equal(resource.headers.get('content-type'),'image/webp',path);
+ }
+ assert.ok(paths.has('/assets/portada.webp'));assert.ok(paths.has('/assets/portada-small.webp'));
+ assert.ok(paths.has('/assets/portada.css'));
+ assert.match((await client.get('/assets/portada.css')).headers.get('content-type'),/text\/css/);
+ const sharePath='/assets/portada-social.jpg';
+ const image=await fetch(w.origin+sharePath);
+ assert.equal(image.status,200);assert.equal(image.headers.get('content-type'),'image/jpeg');
+ assert.deepEqual(Buffer.from(await image.arrayBuffer()).subarray(0,3),Buffer.from([0xff,0xd8,0xff]));
+ const host='agency.example.test',configured=await portal(t,undefined,{}, {publicOrigin:'https://'+host});
+ const requestWithHost=value=>new Promise((resolve,reject)=>{
+  httpGet(configured.origin+'/',{headers:{Host:value,'X-Forwarded-Host':'alias.example.test'}},res=>{
+   let body='';res.setEncoding('utf8');res.on('data',chunk=>{body+=chunk;});
+   res.on('end',()=>resolve({status:res.statusCode,body}));res.on('error',reject);
+  }).on('error',reject);
+ });
+ const share=await requestWithHost(host);
+ assert.equal(share.status,200);assert.ok(share.body.includes('property="og:image" content="https://'+host+sharePath+'"'));
+ assert.match(share.body,/property="og:image:width" content="1200"/);assert.match(share.body,/property="og:image:height" content="630"/);
+ assert.doesNotMatch(share.body,/alias\.example\.test/);
+ const alternate=await requestWithHost('alias.example.test');
+ assert.equal(alternate.status,400);assert.doesNotMatch(alternate.body,/property="og:image"|alias\.example\.test/);
 });
 test('public homepage links and section anchors resolve without private destinations',async t=>{
  const w=await portal(t),client=w.session(),response=await client.get('/');
@@ -48,7 +76,8 @@ test('login stays a dedicated page and failed submissions keep the login form',a
 test('signed-in agency owner and collaborator can view the homepage without account leakage',async t=>{
  const w=await portal(t),admin=await agency(w),business=await owner(w,'Private company',1),member=await colleague(w,business.client,{name:'Private member',document:'1712423381','SOCIAL.VIEW':'yes'});
  for(const client of [admin,business.client,member.session]){
-  const before=snapshot(w.db),response=await client.get('/');assert.equal(response.status,200);assert.match(response.body,/href="\/home">Ir a mi espacio/);
+  const before=snapshot(w.db),response=await client.get('/');assert.equal(response.status,200);assert.match(response.body,/<a\b[^>]*href="\/home"[^>]*>\s*Ir a mi espacio/);
+  assert.doesNotMatch(response.body,/href="\/(?:register|login)"/);
   assert.doesNotMatch(response.body,/Private company|Private member|1712423381|name="_csrf"|lumina-csrf/);
   assert.deepEqual(snapshot(w.db),before);assert.equal((await client.get('/login')).location,'/home');
  }
@@ -110,9 +139,17 @@ test('runtime route literals use English outside the explicit legacy compatibili
  }
 });
 test('homepage remains usable without scripts and provides native disclosure, focus and reduced-motion support',async t=>{
- const w=await portal(t),page=await w.session().get('/'),css=await w.session().get('/assets/homepage.css');
- assert.doesNotMatch(page.body,/<script(?! defer src="\/assets\/homepage.js")|\sonclick=|style="|localStorage|sessionStorage/);
- assert.match(page.body,/<html lang="es">/);assert.match(page.body,/class="skip-link" href="#main"/);assert.equal((page.body.match(/<details\b/g)||[]).length,11);
- assert.match(css.body,/prefers-reduced-motion/);assert.match(css.body,/:focus-visible/);assert.match(css.body,/@media\(max-width:540px\)/);
- assert.match(page.body,/class="studio-photo"/);assert.match(page.body,/srcset="[^"]*studio-small\.webp 640w/);assert.match(page.body,/alt="Una cámara encuadra/);assert.match(page.body,/Diseño ilustrativo/);
+ const w=await portal(t),page=await w.session().get('/'),css=await w.session().get('/assets/portada.css');
+ assert.doesNotMatch(page.body,/\sonclick=|style="|localStorage|sessionStorage/);
+ for(const [script] of page.body.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)){
+  assert.match(script,/\bdefer\b/);assert.match(script,/src="\/assets\/[^"]+\.js"[^>]*><\/script>/);
+ }
+ assert.match(page.body,/<html\b[^>]*lang="es"/);assert.match(page.body,/<a\b[^>]*href="#main"/);assert.match(page.body,/<main\b[^>]*id="main"/);
+ assert.match(page.body,/<details\b[^>]*class="[^"]*\bmobile-menu\b[^"]*"[^>]*>\s*<summary\b/);
+ const faq=page.body.match(/<section\b[^>]*id="questions"[^>]*>[\s\S]*?<\/section>/)?.[0];
+ assert.ok(faq,'native FAQ');assert.match(faq,/<details\b[^>]*>\s*<summary\b[^>]*>[\s\S]+?<\/summary>\s*<[a-z]/);
+ assert.match(css.body,/prefers-reduced-motion/);assert.match(css.body,/:focus-visible/);
+ const hero=page.body.match(/<img\b[^>]*src="\/assets\/portada\.webp"[^>]*>/)?.[0];
+ assert.ok(hero,'responsive hero image');assert.match(page.body,/<source\b(?=[^>]*media="[^"]*max-width)(?=[^>]*srcset="[^"]*portada-small\.webp)[^>]*>/);
+ assert.match(hero,/\bwidth="\d+"/);assert.match(hero,/\bheight="\d+"/);
 });

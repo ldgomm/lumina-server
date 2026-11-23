@@ -64,9 +64,19 @@ try {
   const guest=await contextFor(null);
   for(const width of widths){
     await guest.page.setViewportSize({width,height:width<500?844:900});
-    await go(guest.page,'/');await guest.page.locator('.studio-photo img').evaluate(img=>img.decode());
+    await go(guest.page,'/');
+    const heroFile=await guest.page.locator('.hero-photo img').evaluate(async img=>{
+      await img.decode();
+      return new URL(img.currentSrc).pathname;
+    });
+    assert.equal(heroFile,width<=650?'/assets/portada-small.webp':'/assets/portada.webp');
     await fits(guest.page);await snap(guest.page,'inicio',width);
-    await guest.page.locator('#service-web summary').click();assert.ok(await guest.page.locator('#service-web').evaluate(el=>el.open));
+    const question=guest.page.locator('#questions details').first();
+    await question.locator('summary').click();assert.ok(await question.evaluate(el=>el.open));
+    await guest.page.getByRole('button',{name:'Simular una visita'}).click();
+    assert.match(await guest.page.locator('[data-visit-status]').textContent(),/Premio disponible/);
+    await guest.page.locator('.hero a[href="/register"]').click();
+    assert.equal(new URL(guest.page.url()).pathname,'/register');
     await go(guest.page,'/login');await fits(guest.page);
   }
   const {page,context}=await contextFor(business.client);

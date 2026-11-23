@@ -81,6 +81,10 @@ import { withEligibility, legacySelection } from '../memberships/coverage.mjs';
 import { ordersFor, getOrder, submitOrder, offerOrder, acceptOrder, activateOrder, cancelOrder, inclusiveEnd } from '../memberships/orders.mjs';
 
 const assets = {
+  '/assets/portada-social.jpg':['portada-social.jpg','image/jpeg'],
+  '/assets/portada.webp':['portada.webp','image/webp'],
+  '/assets/portada-small.webp':['portada-small.webp','image/webp'],
+  '/assets/portada.css':['portada.css','text/css; charset=utf-8'],
   '/assets/studio.webp':['studio.webp','image/webp'],
   '/assets/studio-small.webp':['studio-small.webp','image/webp'],
   '/assets/lumina-2.css':['lumina-2.css','text/css; charset=utf-8'],
@@ -102,6 +106,9 @@ const assets = {
   '/assets/account.css': ['account.css','text/css; charset=utf-8'],
   '/assets/team.css': ['team.css','text/css; charset=utf-8'],
   '/assets/team.js': ['team.js','text/javascript; charset=utf-8'],
+  '/assets/lumina-symbol-small.webp': ['lumina-symbol-small.webp','image/webp'],
+  '/assets/instagram-small.webp': ['instagram-small.webp','image/webp'],
+  '/assets/tiktok-small.webp': ['tiktok-small.webp','image/webp'],
   '/assets/instagram.webp': ['instagram.webp','image/webp'],
   '/assets/tiktok.jpg': ['tiktok.jpg','image/jpeg'],
   '/assets/practical.css': ['practical.css','text/css; charset=utf-8'],
@@ -212,7 +219,7 @@ export function createPortal({ db, key, loyaltyUrl, publicOrigin = null, integra
         res.setHeader('Set-Cookie',sessionCookie(createSession(db,id),trusted.protocol==='https:'));
         return redirect(res,destination);
       };
-      if (method==='GET' && path==='/') return send(res,200,homepage({signedIn:Boolean(actor)}));
+      if (method==='GET' && path==='/') return send(res,200,homepage({signedIn:Boolean(actor),origin:trusted.origin}));
       if (path==='/coming-soon') throw new Problem('Página no encontrada.',404);
       const publicPaths = ['/login','/register','/activate','/setup','/legacy-login'];
       if (method==='GET' && publicPaths.includes(path)) {

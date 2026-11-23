@@ -3,7 +3,7 @@ import { esc } from './components.mjs';
 import { brandSocial } from './brand-social.mjs';
 
 export const publicArrow = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-export const publicBrand = () => '<a class="home-brand" href="/" aria-label="Lúmina Digital, inicio"><img src="/assets/lumina-symbol.png" alt="" width="42" height="42"><span>Lúmina<span class="brand-subtitle">DIGITAL</span></span></a>';
+export const publicBrand = (compact = false) => `<a class="home-brand" href="/" aria-label="Lúmina Digital, inicio"><img src="/assets/${compact ? 'lumina-symbol-small.webp' : 'lumina-symbol.png'}" alt="" width="42" height="42"><span>Lúmina<span class="brand-subtitle">DIGITAL</span></span></a>`;
 
 const stories={
   login:['TU ESPACIO EN LÚMINA','Las ideas crecen.','El trabajo fluye.','Contenido, proyectos y clientes que vuelven. Todo lo que tienes en marcha, desde tu cuenta.'],

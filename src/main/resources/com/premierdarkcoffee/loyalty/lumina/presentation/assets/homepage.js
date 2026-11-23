@@ -14,3 +14,16 @@
     if (menu.open && !menu.contains(event.target)) menu.open = false;
   });
 })();
+
+(() => {
+  const button = document.querySelector('[data-visit-demo]');
+  if (!button) return;
+  const example = button.closest('.wallet-exhibit');
+  const status = example.querySelector('[data-visit-status]');
+  button.hidden = false;
+  button.addEventListener('click', () => {
+    const ready = example.classList.toggle('reward-ready');
+    status.textContent = ready ? 'Premio disponible · 5 de 5 sellos' : '4 de 5 sellos';
+    button.textContent = ready ? 'Volver a probar' : 'Simular una visita';
+  });
+})();
