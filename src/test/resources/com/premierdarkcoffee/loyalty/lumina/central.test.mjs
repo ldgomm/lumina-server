@@ -100,7 +100,31 @@ test('cancelar un servicio no revoca Wallet ni los demás contratos y el histori
  assert.equal((await w.client.get('/wallet')).status,200);assert.deepEqual(w.db.all('SELECT * FROM wallet_access'),before);const page=await w.client.get('/management/history');assert.match(page.body,/acuerdos anteriores de Wallet/);assert.match(page.body,/Toda contratación nueva/);assert.doesNotMatch(page.body,/membership.*form|name="price"/);
 });
 
-test('logos se sirven como imágenes originales en acceso, Lúmina, Contenido y Wallet',async t=>{
- const w=await setup(t);for(const name of ['lumina-logo.png','lumina-symbol.png']){const r=await fetch(w.origin+'/assets/'+name);assert.equal(r.headers.get('content-type'),'image/png');const bytes=Buffer.from(await r.arrayBuffer()),file=readFileSync(new URL('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/assets/'+name,import.meta.url));assert.equal(createHash('sha256').update(bytes).digest('hex'),createHash('sha256').update(file).digest('hex'));}
- assert.match((await w.session().get('/')).body,/lumina-symbol.png/);for(const path of ['/home','/content','/wallet'])assert.match((await w.client.get(path)).body,/lumina-symbol.png/);
+test('la portada usa el símbolo WebP y el acceso, Lúmina, Contenido y Wallet conservan el PNG', async t => {
+  const w = await setup(t);
+  const assets = new URL('../../../../../../main/resources/com/premierdarkcoffee/loyalty/lumina/presentation/assets/', import.meta.url);
+  for (const [name, mime] of [
+    ['lumina-logo.png', 'image/png'],
+    ['lumina-symbol.png', 'image/png'],
+    ['lumina-symbol-small.webp', 'image/webp'],
+  ]) {
+    const response = await fetch(w.origin + '/assets/' + name);
+    assert.equal(response.status, 200, name);
+    assert.equal(response.headers.get('content-type'), mime, name);
+    const served = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
+    const original = createHash('sha256').update(readFileSync(new URL(name, assets))).digest('hex');
+    assert.equal(served, original, name);
+  }
+
+  const guest = w.session();
+  for (const session of [guest, w.client]) {
+    const page = await session.get('/');
+    assert.equal(page.status, 200);
+    assert.match(page.body, /<img\b[^>]*\bsrc="\/assets\/lumina-symbol-small\.webp"/);
+  }
+  for (const [session, path] of [[guest, '/login'], [w.client, '/home'], [w.client, '/content'], [w.client, '/wallet']]) {
+    const page = await session.get(path);
+    assert.equal(page.status, 200, path);
+    assert.match(page.body, /<img\b[^>]*\bsrc="\/assets\/lumina-symbol\.png"/, path);
+  }
 });
